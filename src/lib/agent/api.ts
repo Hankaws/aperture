@@ -1,0 +1,28 @@
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
+import type { AgentInput, AgentResult } from "./types";
+
+export const getAiStatus = createServerFn({ method: "POST" }).handler(async () => {
+  return { available: Boolean(process.env.XAI_API_KEY) };
+});
+
+export const runAgent = createServerFn({ method: "POST" })
+  .validator((input: AgentInput) => input)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<AgentResult> => {
+    const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
+    const input = sanitizeAgentInput(data);
+    if ("error" in input) return { ok: false, error: input.error };
+    const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
+    const resolved = await resolveModel(context.userId, input.source);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    const { runAgentLoop } = await import("./loop.server");
+    const result = await runAgentLoop(input, {
+      provider: resolved.provider,
+      apiKey: resolved.apiKey,
+    });
+    if (result.ok) {
+      await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
+    }
+    return result;
+  });

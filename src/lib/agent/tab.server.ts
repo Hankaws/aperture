@@ -1,0 +1,130 @@
+type Cfg = { provider: "grok" | "openai" | "anthropic"; apiKey: string };
+
+/** Cheap, low-latency models only. Never grok-4.5 / grok-4.6 / sonnet / gpt-4o. */
+function modelOf(provider: Cfg["provider"]) {
+  if (provider === "openai") return "gpt-4o-mini";
+  if (provider === "anthropic") return "claude-haiku-4-5";
+  return "grok-4-1-fast-non-reasoning";
+}
+
+type CacheEntry = { text: string; at: number };
+
+const TAB_CACHE_MAX = 160;
+const TAB_CACHE_TTL = 10 * 60_000;
+
+function tabCache(): Map<string, CacheEntry> {
+  const g = globalThis as typeof globalThis & { __apertureTabCache?: Map<string, CacheEntry> };
+  g.__apertureTabCache ??= new Map();
+  return g.__apertureTabCache;
+}
+
+export function tabCacheKey(path: string, prefix: string, suffix: string): string {
+  return `${path}\n${prefix.slice(-480)}\n${suffix.slice(0, 120)}`;
+}
+
+export function tabCacheGet(key: string): string | null {
+  const cache = tabCache();
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > TAB_CACHE_TTL) {
+    cache.delete(key);
+    return null;
+  }
+  cache.delete(key);
+  cache.set(key, hit);
+  return hit.text;
+}
+
+export function tabCacheSet(key: string, text: string) {
+  const cache = tabCache();
+  cache.set(key, { text, at: Date.now() });
+  while (cache.size > TAB_CACHE_MAX) {
+    const first = cache.keys().next().value;
+    if (first === undefined) break;
+    cache.delete(first);
+  }
+}
+
+function cleanCompletion(text: string, prefix: string, suffix: string): string {
+  let next = text.replace(/\r/g, "");
+  if (next.startsWith("```")) {
+    next = next.replace(/^```[a-zA-Z0-9]*\n?/, "").replace(/```[\s\S]*$/, "");
+  }
+  const line = (next.split("\n")[0] ?? "").replace(/^\s+/, "").slice(0, 160);
+  if (!line) return "";
+  if (suffix.startsWith(line)) return "";
+  const lastLine = prefix.split("\n").pop() ?? "";
+  if (lastLine.endsWith(line)) return "";
+  return line;
+}
+
+export async function completeTab(
+  cfg: Cfg,
+  input: { path: string; prefix: string; suffix: string },
+  signal?: AbortSignal,
+): Promise<string> {
+  const prefix = input.prefix.slice(-2400);
+  const suffix = input.suffix.slice(0, 280);
+  const prompt = [
+    "You complete code at the cursor. Return ONLY the characters to insert.",
+    "Do not repeat PREFIX. Do not use markdown. One line max. No explanation.",
+    `File: ${input.path}`,
+    "PREFIX:",
+    prefix,
+    "SUFFIX:",
+    suffix || "(end of file)",
+  ].join("\n");
+
+  if (cfg.provider === "anthropic") {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: modelOf("anthropic"),
+        max_tokens: 40,
+        temperature: 0.05,
+        stop_sequences: ["\n"],
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal,
+    });
+    if (!res.ok) throw new Error("Tab unavailable");
+    const data = (await res.json()) as { content?: Array<{ text?: string }> };
+    return cleanCompletion(data.content?.map((b) => b.text ?? "").join("") ?? "", prefix, suffix);
+  }
+
+  const base = cfg.provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
+  const models =
+    cfg.provider === "openai"
+      ? ["gpt-4o-mini"]
+      : ["grok-4-1-fast-non-reasoning", "grok-4.1-fast-non-reasoning"];
+  let lastError: Error | null = null;
+  for (const model of models) {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.05,
+        max_tokens: 40,
+        stop: ["\n"],
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal,
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return cleanCompletion(data.choices?.[0]?.message?.content ?? "", prefix, suffix);
+    }
+    lastError = new Error("Tab unavailable");
+    if (res.status === 401 || res.status === 403) break;
+  }
+  throw lastError ?? new Error("Tab unavailable");
+}

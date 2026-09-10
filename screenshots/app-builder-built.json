@@ -1,0 +1,40 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 4109,
+      "bodyTextHash": "532dff7ad5af4f9a8ea3b2f2a9e87bd4a0ff0ea9cde3f9e62ba7d6ac096828c5",
+      "bodyTextPrefix": "Aperture Pricing Editor Models Sign in Start free THE AI CODE ED",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 4009,
+      "bodyTextHash": "b17382bb4a1048328d8294ef2cfc01233567c5efd3831c0fd6defc6dd5cfb4a2",
+      "bodyTextPrefix": "Aperture Pricing Sign in Start free THE AI CODE EDITOR See the w",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": true,
+  "baselineReasons": [
+    "desktop: body text replaced (similar length, page start changed)"
+  ]
+}

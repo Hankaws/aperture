@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8081/app",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 557,
+      "bodyTextHash": "785470d90536f252e3b9b17dee55349cd7fb57fbd66452898dfb5f580ebf2cd6",
+      "bodyTextPrefix": "Aperture AI editor HARBOR-API src lib routes index.ts router.ts ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/editor-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 486,
+      "bodyTextHash": "50be55532531218649c6dcc5303e421eb6f80d300f2cee8945a8293ba39724c7",
+      "bodyTextPrefix": "Aperture HARBOR-API src lib routes index.ts router.ts store.ts t",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/editor-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/editor-built.json"
+}

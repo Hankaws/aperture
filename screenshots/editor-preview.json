@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8080/app",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 665,
+      "bodyTextHash": "b6edab4ffce7f8b91255cd36849794ad0e89d2fe66e5590d1d52f947cd88909f",
+      "bodyTextPrefix": "Aperture AI editor HARBOR-API src lib routes index.ts router.ts ",
+      "horizontalOverflow": false,
+      "consoleErrors": [
+        "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https://react.dev/link/hydration-mismatch \n\n  ...\n    <Suspense fallback={null}>\n      <MatchImpl routeId=\"/app\">\n        <MatchView router={{...}} match={{id:\"/app/app\", ...}}>\n          <SafeFragment>\n            <SafeFragment fallback={null}>\n              <CatchBoundary getResetKey={function getResetKey} errorComponent={function AppErrorComponent} ...>\n                <SafeFragment fallback={function fallback}>\n                  <MatchInnerImpl match={{id:\"/app/app\", ...}}>\n                    <Lazy>\n                      <AppEditor>\n                        <IdeShell>\n                          <div className=\"flex h-dvh...\">\n                            <header>\n                            <div>\n                            <StatusBar>\n                            <OpenProjectHost>\n                              <input>\n                              <input\n                                ref={{current:null}}\n                                type=\"file\"\n                                accept=\".zip,application/zip\"\n                                className=\"hidden\"\n                                onChange={function onChange}\n-                               style={{caret-color:\"transparent\"}}\n                              >\n                            ...\n"
+      ],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/editor-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 791,
+      "bodyTextHash": "8ec5858faffb6ad71fc573e25d0c67c672507fcbb9abb3e59b384a4bce876a80",
+      "bodyTextPrefix": "Aperture Sign in README.md store.ts 1 2 3 4 5 6 7 8 9 10 11 12 1",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/editor-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/editor-preview.json"
+}

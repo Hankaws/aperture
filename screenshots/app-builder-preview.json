@@ -1,0 +1,40 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 4055,
+      "bodyTextHash": "fb3b3837b39117a11332ccc52032b6fb9706b64b3dc96a35ff3712223fe9d054",
+      "bodyTextPrefix": "Aperture Pricing Editor Models THE AI CODE EDITOR See the whole ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [
+        "Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\nhttps://react.dev/link/hydration-mismatch\n\n  ...\n    <SafeFragment>\n      <SafeFragment fallback={null}>\n        <CatchBoundary getResetKey={function getResetKey} errorComponent={function AppErrorComponent} ...>\n          <SafeFragment fallback={function fallback}>\n            <MatchInnerImpl match={{id:\"//\",ssr:true, ...}}>\n              <Lazy>\n                <Landing>\n                  <div className=\"min-h-dvh ...\">\n                    <SiteNav>\n                    <main>\n                    <SiteFooter>\n                      <footer className=\"border-t b...\">\n                        <div className=\"mx-auto fl...\">\n                          <span>\n                          <nav className=\"flex flex-...\">\n                            <a>\n                            <a>\n                            <a>\n                            <a>\n                            <SignedOut>\n+                             <a\n+                               href=\"/login?next=%2Fapp\"\n+                               ref={{current:null}}\n+                               onClick={function}\n+                               onBlur={function}\n+                               onFocus={function}\n+                               onMouseEnter={function}\n+                               onMouseLeave={function}\n+                               onTouchStart={function}\n+                               target={undefined}\n+                               className=\"hover:text-fg\"\n+                             >\n"
+      ],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Aperture",
+      "hasCanvas": false,
+      "bodyTextLen": 4009,
+      "bodyTextHash": "b17382bb4a1048328d8294ef2cfc01233567c5efd3831c0fd6defc6dd5cfb4a2",
+      "bodyTextPrefix": "Aperture Pricing Sign in Start free THE AI CODE EDITOR See the w",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [
+        "Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\nhttps://react.dev/link/hydration-mismatch\n\n  ...\n    <SafeFragment>\n      <SafeFragment fallback={null}>\n        <CatchBoundary getResetKey={function getResetKey} errorComponent={function AppErrorComponent} ...>\n          <SafeFragment fallback={function fallback}>\n            <MatchInnerImpl match={{id:\"//\",ssr:true, ...}}>\n              <Lazy>\n                <Landing>\n                  <div className=\"min-h-dvh ...\">\n                    <SiteNav>\n                    <main>\n                    <SiteFooter>\n                      <footer className=\"border-t b...\">\n                        <div className=\"mx-auto fl...\">\n                          <span>\n                          <nav className=\"flex flex-...\">\n                            <a>\n                            <a>\n                            <a>\n                            <a>\n                            <SignedOut>\n+                             <a\n+                               href=\"/login?next=%2Fapp\"\n+                               ref={{current:null}}\n+                               onClick={function}\n+                               onBlur={function}\n+                               onFocus={function}\n+                               onMouseEnter={function}\n+                               onMouseLeave={function}\n+                               onTouchStart={function}\n+                               target={undefined}\n+                               className=\"hover:text-fg\"\n+                             >\n"
+      ],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

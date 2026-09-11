@@ -16,7 +16,8 @@ export function abortJob(id: string) {
   controllers().delete(id);
 }
 
-export async function runJob(id: string, userId: string, input: AgentInput, agentId: string | null) {
+export async function runJob(id: string, userId: string, raw: AgentInput, agentId: string | null) {
+  const input: AgentInput = { ...raw, phase: raw.phase ?? "skip" };
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   const ctrl = new AbortController();

@@ -11,14 +11,20 @@ export function SiteNav() {
           <span className="text-sm font-medium tracking-tight">Aperture</span>
         </Link>
         <nav className="flex items-center gap-4 text-sm text-muted">
+          <a href="/#how" className="hidden hover:text-fg sm:inline">
+            How
+          </a>
+          <a href="/#code" className="hidden hover:text-fg sm:inline">
+            Code
+          </a>
+          <a href="/#why" className="hidden hover:text-fg sm:inline">
+            Why
+          </a>
           <Link to="/pricing" className="hover:text-fg">
             Pricing
           </Link>
           <Link to="/app" className="hidden hover:text-fg sm:inline">
             Editor
-          </Link>
-          <Link to="/settings" search={{ tab: "models" }} className="hidden hover:text-fg sm:inline">
-            Models
           </Link>
         </nav>
         <div className="ml-auto min-w-0">

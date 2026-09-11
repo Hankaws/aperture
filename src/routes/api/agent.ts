@@ -62,7 +62,11 @@ export const Route = createFileRoute("/api/agent")({
         const stream = new ReadableStream({
           async start(controller) {
             const emit = (event: AgentStreamEvent) => {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              } catch {
+                // stream already closed
+              }
             };
             try {
               if (input.agentId) {
@@ -87,12 +91,18 @@ export const Route = createFileRoute("/api/agent")({
                 }
               }
             } catch (error) {
-              if (!request.signal.aborted) {
-                const message = error instanceof Error ? error.message : "Agent failed";
-                emit({ type: "error", error: message });
-              }
+              const aborted =
+                request.signal.aborted ||
+                (error instanceof Error && (error.name === "AbortError" || error.message === "This operation was aborted"));
+              if (aborted) return;
+              const message = error instanceof Error ? error.message : "Agent failed";
+              emit({ type: "error", error: message });
             } finally {
-              controller.close();
+              try {
+                controller.close();
+              } catch {
+                // already closed
+              }
             }
           },
         });

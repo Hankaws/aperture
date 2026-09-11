@@ -59,7 +59,7 @@ export function HelpDialog() {
     [`${mod}P`, "Go to file"],
     [`${mod}S`, "Download project zip"],
     [`${mod}K`, "Inline edit on the selection"],
-    [`${mod}I`, "Focus Composer"],
+    [`${mod}I`, "Focus Agent"],
     ["Tab", "Accept ghost-text (Pro)"],
     [`${mod}B`, "Toggle file tree"],
     [`${mod}L`, "Toggle agent panel"],
@@ -72,7 +72,7 @@ export function HelpDialog() {
     "Apply is not final — Undo this run restores the files from before that Composer send.",
     "Open GitHub from the file tree — public repos, signed in.",
     "Type @ in Composer to attach a file or folder.",
-    "Composer posts a plan before the first diff. Claude Code, Codex, and OpenCode (Pro) stream into the same cards.",
+    "Agent plans first, then waits. Click Build it to allow edits. Build now (next to send) skips the gate for a one-file fix. Ask never writes.",
     "Session cap is on by default. Raise it under Settings → Limits.",
     "Tab ghost-text is on Pro (fast model, daily hosted cap). Background jobs: 1 on Pro, 3 on Team.",
   ];

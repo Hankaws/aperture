@@ -193,8 +193,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw) as PersistShape;
-          if (parsed.files && Object.keys(parsed.files).length > 0) {
-            const nextFiles = parsed.files;
+          const storedFiles = parsed.files && Object.keys(parsed.files).length > 0 ? parsed.files : null;
+          const nextFiles = storedFiles ?? get().files;
+          if (nextFiles && Object.keys(nextFiles).length > 0) {
             const nextTabs = parsed.openTabs?.length
               ? parsed.openTabs.filter((p) => nextFiles[p] !== undefined)
               : [Object.keys(nextFiles)[0]!];
@@ -317,7 +318,21 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
-    setSelection: (selection) => set({ selection }),
+    setSelection: (selection) => {
+      const prev = get().selection;
+      if (prev === selection) return;
+      if (
+        prev &&
+        selection &&
+        prev.path === selection.path &&
+        prev.text === selection.text &&
+        prev.fromLine === selection.fromLine &&
+        prev.toLine === selection.toLine
+      ) {
+        return;
+      }
+      set({ selection });
+    },
 
     addMessage: (message) => {
       set({ messages: [...get().messages, message] });

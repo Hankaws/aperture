@@ -3,6 +3,7 @@ import { applySearchReplace } from "./apply-edit";
 import { safeRelPath } from "@/lib/security/redact";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
+import type { AgentPhase } from "./phase";
 
 export const AGENT_TOOLS = [
   {
@@ -10,7 +11,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "set_plan",
       description:
-        "Post or update the visible todo list. Composer and ACP sessions must call this before propose_edit. Update statuses as you complete steps.",
+        "Post or update the visible todo list. In Plan mode, call this then stop — the user clicks Build it. In Build mode, update statuses as you complete steps.",
       parameters: {
         type: "object",
         properties: {
@@ -94,7 +95,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "propose_edit",
       description:
-        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Do not apply edits yourself — the user will accept them in the UI. Locked until set_plan has run in Composer.",
+        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
       parameters: {
         type: "object",
         properties: {
@@ -111,9 +112,14 @@ export const AGENT_TOOLS = [
 
 export type AgentToolDef = (typeof AGENT_TOOLS)[number];
 
-export function toolsForStep(allowEdit: boolean): AgentToolDef[] {
-  if (allowEdit) return AGENT_TOOLS;
-  return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit");
+export function toolsForStep(kind: "read" | "plan" | "edit"): AgentToolDef[] {
+  if (kind === "read") {
+    return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "set_plan");
+  }
+  if (kind === "plan") {
+    return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit");
+  }
+  return AGENT_TOOLS;
 }
 
 export type ToolContext = {
@@ -122,6 +128,8 @@ export type ToolContext = {
   edits: ProposedEdit[];
   plan: PlanEntry[];
   requirePlan: boolean;
+  phase: AgentPhase;
+  mode: "chat" | "composer" | "inline";
 };
 
 function clip(text: string, max = 8000): string {
@@ -135,8 +143,12 @@ export function executeTool(
   ctx: ToolContext,
 ): string {
   if (name === "set_plan") {
+    if (ctx.mode === "chat") return "Ask mode does not plan. Switch to Agent.";
     ctx.plan = normalizePlan(args.entries ?? args);
     if (ctx.plan.length === 0) return "Plan was empty. Pass entries: [{ content, status }].";
+    if (ctx.phase === "plan") {
+      return `Plan set (${ctx.plan.length} steps). Stop. The user will click Build it.`;
+    }
     return `Plan set (${ctx.plan.length} steps). Update statuses as you go, then edit.`;
   }
 
@@ -188,6 +200,12 @@ export function executeTool(
   }
 
   if (name === "propose_edit") {
+    if (ctx.mode === "chat") {
+      return "Ask mode does not edit. The user can switch to Agent.";
+    }
+    if (ctx.phase === "plan") {
+      return "Edits are locked until the user clicks Build it.";
+    }
     if (ctx.requirePlan && ctx.plan.length === 0) {
       return "Edits are locked until you call set_plan with 3–7 steps.";
     }

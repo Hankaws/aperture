@@ -1,0 +1,21 @@
+/** Cursor-like syntax colors — more hue than chrome, still cool/neutral. */
+export const SYNTAX = {
+  bg: "#0c0c0e",
+  fg: "#e8e9ed",
+  caret: "#f4f4f5",
+  gutter: "#0c0c0e",
+  gutterFg: "#5c5f69",
+  activeLine: "#16161b",
+  selection: "#2a3a4e",
+  match: "#3d4f66",
+  keyword: "#8bb4e3",
+  string: "#8fd4b2",
+  fn: "#dcc191",
+  type: "#9ec0c8",
+  comment: "#6d7080",
+  number: "#c9b8a0",
+  property: "#c5c9d1",
+  operator: "#8e929c",
+  tag: "#8bb4e3",
+  invalid: "#f87171",
+} as const;

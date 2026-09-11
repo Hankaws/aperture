@@ -19,6 +19,7 @@ import { useAccount, modelCaption } from "@/lib/billing/use-account";
 import { useIdeUi } from "@/lib/ui-store";
 import { cn, isModEvent } from "@/lib/utils";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
+import { useWorkspace } from "@/lib/workspace/store";
 
 function useIsDesktop() {
   return useSyncExternalStore(
@@ -46,6 +47,8 @@ export function IdeShell() {
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const desktop = useIsDesktop();
   const { user, account } = useAccount();
+  const projectName = useWorkspace((s) => s.name);
+  const activePath = useWorkspace((s) => s.activePath);
 
   useEffect(() => {
     void getAiStatus()
@@ -114,15 +117,27 @@ export function IdeShell() {
           <ApertureMark className="size-5" />
           <span className="text-sm font-medium tracking-tight">Aperture</span>
         </Link>
-        <span className="hidden text-[12px] text-subtle sm:inline">AI editor</span>
+        <span className="hidden max-w-40 truncate text-xs text-subtle sm:inline">{projectName}</span>
+        {activePath && (
+          <span className="hidden min-w-0 truncate font-mono text-xs text-muted lg:inline">{activePath}</span>
+        )}
         <div className="ml-auto flex min-w-0 items-center gap-1">
           {desktop && (
             <>
               <Button variant="ghost" size="icon-sm" aria-label="Toggle file tree" onClick={toggleSidebar}>
                 <PanelLeft className="size-4" />
               </Button>
-              <Button variant="ghost" size="icon-sm" aria-label="Toggle composer" onClick={toggleChat}>
-                <Sparkles className="size-4" />
+              <Button
+                variant={chatOpen ? "subtle" : "ghost"}
+                size="sm"
+                aria-label="Toggle agent"
+                onClick={() => {
+                  toggleChat();
+                  requestAnimationFrame(() => composerRef.current?.focus());
+                }}
+              >
+                <Sparkles className="size-3.5" />
+                Agent
               </Button>
             </>
           )}

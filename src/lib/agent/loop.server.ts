@@ -9,6 +9,7 @@ import { expandMentions, parseMentions } from "@/lib/workspace/mentions";
 import { sanitizeFileMap } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 
 const MAX_STEPS = 8;
 const MAX_FILES = 120;
@@ -20,10 +21,21 @@ function flavorOf(input: AgentInput) {
   return builtinById(id);
 }
 
-function systemPrompt(mode: AgentInput["mode"], rules: string | null, flavorName: string | null): string {
+function systemPrompt(
+  mode: AgentInput["mode"],
+  rules: string | null,
+  flavorName: string | null,
+  phase: ReturnType<typeof resolveAgentPhase>,
+): string {
   const preamble = flavorName
     ? acpSystemPreamble(flavorName as "claude-code" | "codex" | "opencode")
     : "You are Aperture, an AI coding agent inside a web IDE.";
+  const composerLine =
+    phase === "plan"
+      ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
+      : phase === "build"
+        ? "Build mode: the user approved the plan. Execute it. Update set_plan statuses as you complete steps. Call propose_edit for each change. Do not expand scope. Do not restart the plan."
+        : "Composer mode: call set_plan with 3–7 short steps before any propose_edit. Keep the plan visible. Update statuses as you complete steps, then edit.";
   const base = [
     preamble,
     "You operate on a virtual workspace snapshot. Tools see the live snapshot, including staged edits.",
@@ -36,8 +48,8 @@ function systemPrompt(mode: AgentInput["mode"], rules: string | null, flavorName
     mode === "inline"
       ? "Inline mode: return one focused replacement for the selection."
       : mode === "composer"
-        ? "Composer mode: call set_plan with 3–7 short steps before any propose_edit. Keep the plan visible. Update statuses as you complete steps, then edit."
-        : "Chat mode: answer first; only edit when the user asks for a change.",
+        ? composerLine
+        : "Ask mode: answer questions. You may search and read. Do not call set_plan or propose_edit. Nothing is written.",
   ].join(" ");
   if (!rules) return base;
   return `${base}\n\nProject rules (follow these):\n${rules.slice(0, 6000)}`;
@@ -140,8 +152,18 @@ export async function runAgentLoopStreaming(
     mentioned,
   );
   const chunks = indexFiles(files);
+  const phase = resolveAgentPhase(input.mode, input.phase);
   const requirePlan = input.mode === "composer" || Boolean(flavor);
-  const ctx: ToolContext = { files, chunks, edits: [], plan: [], requirePlan };
+  const approved = input.approvedPlan?.length ? input.approvedPlan : [];
+  const ctx: ToolContext = {
+    files,
+    chunks,
+    edits: [],
+    plan: approved,
+    requirePlan,
+    phase,
+    mode: input.mode,
+  };
   const traces: ToolTrace[] = [];
   const rules = findRules(fileMap)?.text ?? null;
 
@@ -154,7 +176,7 @@ export async function runAgentLoopStreaming(
   }
 
   const messages: ChatMessage[] = [
-    { role: "system", content: systemPrompt(input.mode, rules, flavor?.kind ?? null) },
+    { role: "system", content: systemPrompt(input.mode, rules, flavor?.kind ?? null, phase) },
     { role: "user", content: buildContextMessage(input, files) },
   ];
 
@@ -169,10 +191,17 @@ export async function runAgentLoopStreaming(
     for (let step = 0; step < MAX_STEPS; step++) {
       if (signal?.aborted) return { ok: false, error: "Stopped." };
       const hasPlan = ctx.plan.length > 0;
-      const allowEdit = !requirePlan || hasPlan;
+      const kind = toolKindFor(input.mode, phase);
       emit({
         type: "status",
-        text: step === 0 ? (requirePlan && !hasPlan ? "Writing a plan…" : "Reading the index…") : "Continuing…",
+        text:
+          step === 0
+            ? phase === "plan" && input.mode === "composer"
+              ? "Planning…"
+              : phase === "build"
+                ? "Building…"
+                : "Reading the index…"
+            : "Continuing…",
       });
       const completion = await completeStreaming(
         cfg,
@@ -180,24 +209,30 @@ export async function runAgentLoopStreaming(
         true,
         (delta) => emit({ type: "text", delta }),
         signal,
-        toolsForStep(allowEdit),
+        toolsForStep(kind),
       );
       const calls = completion.tool_calls ?? [];
+      const callNames = calls.map((c) => c.function.name);
+
       if (calls.length === 0) {
-        if (requirePlan && !hasPlan && !planNudged) {
+        if (phase === "plan" && requirePlan && !hasPlan && !planNudged) {
           planNudged = true;
           messages.push({ role: "assistant", content: completion.content ?? "" });
           messages.push({
             role: "user",
-            content: "Before you finish, call set_plan with the steps you will take. Then continue.",
+            content: "Before you finish, call set_plan with the steps you will take. Then stop and wait for Build it.",
           });
           continue;
         }
+        if (shouldAwaitBuild(phase, hasPlan, [])) {
+          const text = planReadyText(completion.content);
+          emit({ type: "done", text, traces, edits: [], plan: ctx.plan, awaitingBuild: true });
+          return { ok: true, text, traces, edits: [], plan: ctx.plan, awaitingBuild: true };
+        }
         const text = completion.content.trim() || "Done.";
         const edits = mergeEdits(ctx.edits);
-        const plan: PlanEntry[] = ctx.plan;
-        emit({ type: "done", text, traces, edits, plan });
-        return { ok: true, text, traces, edits, plan };
+        emit({ type: "done", text, traces, edits, plan: ctx.plan });
+        return { ok: true, text, traces, edits, plan: ctx.plan };
       }
 
       messages.push({
@@ -239,12 +274,35 @@ export async function runAgentLoopStreaming(
           content: result,
         });
       }
+
+      if (shouldAwaitBuild(phase, ctx.plan.length > 0, callNames)) {
+        const text = planReadyText(completion.content);
+        emit({ type: "done", text, traces, edits: [], plan: ctx.plan, awaitingBuild: true });
+        return { ok: true, text, traces, edits: [], plan: ctx.plan, awaitingBuild: true };
+      }
     }
 
-    const text = "Stopped after the tool-call limit. Review the staged edits.";
-    const edits = mergeEdits(ctx.edits);
-    emit({ type: "done", text, traces, edits, plan: ctx.plan });
-    return { ok: true, text, traces, edits, plan: ctx.plan };
+    const text =
+      phase === "plan" && ctx.plan.length > 0
+        ? planReadyText(undefined)
+        : "Stopped after the tool-call limit. Review the staged edits.";
+    const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
+    emit({
+      type: "done",
+      text,
+      traces,
+      edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
+      plan: ctx.plan,
+      awaitingBuild,
+    });
+    return {
+      ok: true,
+      text,
+      traces,
+      edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
+      plan: ctx.plan,
+      awaitingBuild,
+    };
   } catch (error) {
     if (signal?.aborted) return { ok: false, error: "Stopped." };
     const message = error instanceof Error ? error.message : "Agent failed";

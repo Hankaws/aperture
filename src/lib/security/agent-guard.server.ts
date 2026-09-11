@@ -1,7 +1,9 @@
 import type { AgentInput } from "@/lib/agent/types";
+import { parseAgentPhase } from "@/lib/agent/phase";
 import { isAgentRef } from "@/lib/acp/kinds";
 import { isModelSource } from "@/lib/billing/plans";
 import { redactSecrets, safeRelPath, isSecretPath } from "./redact";
+import { normalizePlan } from "@/lib/workspace/plan";
 
 export const MAX_AGENT_BODY = 2_800_000;
 export const MAX_INSTRUCTION = 8_000;
@@ -94,6 +96,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     return { error: "Unknown agent" };
   }
 
+  const phase = parseAgentPhase(input.phase);
+  const approvedPlan = normalizePlan(input.approvedPlan);
+
   return {
     mode,
     instruction: redactSecrets(instruction),
@@ -103,5 +108,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     selection,
     source,
     agentId,
+    phase,
+    approvedPlan: approvedPlan.length > 0 ? approvedPlan : undefined,
   };
 }

@@ -192,10 +192,8 @@ export function FileTree() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-10 items-center justify-between gap-1 px-2">
-        <div className="min-w-0 px-1">
-          <p className="truncate text-[11px] font-medium tracking-[0.14em] text-subtle uppercase">{name}</p>
-        </div>
+      <div className="flex h-10 items-center justify-between gap-1 border-b border-border px-2">
+        <p className="min-w-0 truncate px-1 text-sm font-medium tracking-tight">{name}</p>
         <div className="flex items-center">
           <OpenMenu />
           <Button variant="ghost" size="icon-sm" aria-label="New file" onClick={() => setNewFileOpen(true)}>

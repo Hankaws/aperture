@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, Clock, FolderOpen, ScrollText, Square, Trash2, Undo2 } from "lucide-react";
+import { ArrowUp, Clock, FileDiff, FileSearch, FolderOpen, ListTodo, MessageSquare, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DiffCard } from "./diff-card";
 import { PlanCard } from "./plan-card";
@@ -29,6 +29,7 @@ import { DEFAULT_RULES, findRules } from "@/lib/workspace/rules";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
 import type { AgentMode, ChatMessage, ToolTrace } from "@/lib/workspace/types";
+import type { AgentPhase } from "@/lib/agent/phase";
 
 const DEMO_SUGGESTIONS = [
   "Fix the off-by-one in listTasks",
@@ -139,6 +140,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       mode === "inline" ? "composer" : mode,
       source,
       target.kind === "acp" ? target.id : null,
+      { phase: "skip" },
     );
     try {
       const job = await startJob({
@@ -152,7 +154,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     }
   }
 
-  async function send(text: string, background = false) {
+  async function send(text: string, background = false, phase?: AgentPhase) {
     const trimmed = text.trim();
     if (!trimmed || agentRunning) return;
     if (!user) return;
@@ -167,9 +169,24 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       await queueBackground(trimmed);
       return;
     }
+    const resolvedPhase: AgentPhase | undefined =
+      mode === "composer" ? (phase ?? "plan") : undefined;
     await submitAgent(trimmed, mode === "inline" ? "composer" : mode, source, {
       agentId: target.kind === "acp" ? target.id : null,
       agentLabel: target.kind === "acp" ? target.name : "Aperture",
+      phase: resolvedPhase,
+    });
+    void refresh();
+  }
+
+  async function buildPlan(message: ChatMessage) {
+    if (agentRunning || !user || !message.plan?.length) return;
+    useWorkspace.getState().patchMessage(message.id, { awaitingBuild: false });
+    await submitAgent("Build it.", "composer", source, {
+      agentId: target.kind === "acp" ? target.id : null,
+      agentLabel: message.agentLabel || (target.kind === "acp" ? target.name : "Aperture"),
+      phase: "build",
+      approvedPlan: message.plan,
     });
     void refresh();
   }
@@ -220,22 +237,30 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex h-10 items-center gap-1 border-b border-border px-2">
-        <p className="px-1 text-[11px] font-medium tracking-[0.14em] text-subtle uppercase">Composer</p>
-        <div className="ml-1 flex rounded-md border border-border p-0.5">
-          {(["composer", "chat"] as const).map((id) => (
+        <div className="flex rounded-md border border-border p-0.5">
+          {(
+            [
+              ["composer", "Agent", Sparkles],
+              ["chat", "Ask", MessageSquare],
+            ] as const
+          ).map(([id, label, Icon]) => (
             <button
               key={id}
               type="button"
               onClick={() => setMode(id)}
               className={cn(
-                "rounded px-2 py-0.5 text-[11px] capitalize",
+                "inline-flex h-7 items-center gap-1 rounded px-2 text-xs",
                 mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
               )}
             >
-              {id}
+              <Icon className="size-3.5" />
+              {label}
             </button>
           ))}
         </div>
+        <p className="hidden px-2 text-xs text-subtle sm:inline">
+          {mode === "composer" ? "Plans, then waits" : "Answers only"}
+        </p>
         <div className="ml-auto flex items-center gap-0.5">
           <Button
             variant="ghost"
@@ -265,7 +290,13 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         ) : (
           <div className="space-y-4">
             {messages.map((message) => (
-              <MessageBlock key={message.id} message={message} running={agentRunning} />
+              <MessageBlock
+                key={message.id}
+                message={message}
+                running={agentRunning}
+                quoteLabel={quote.label}
+                onBuild={() => void buildPlan(message)}
+              />
             ))}
           </div>
         )}
@@ -312,7 +343,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         {signedOut ? (
           <div>
             <p className="text-sm text-muted">
-              Sign in to run Composer. Opening a folder or zip does not need an account.
+              Sign in to run Agent. Opening a folder or zip does not need an account.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "sm" }))}>
@@ -343,9 +374,13 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
               onKeyUp={(e) => syncCaret(e.currentTarget)}
               onClick={(e) => syncCaret(e.currentTarget)}
               onKeyDown={onKeyDown}
-              placeholder="Ask a change. Use @ to attach files."
+              placeholder={
+                mode === "chat"
+                  ? "Ask about the repo. Nothing is written."
+                  : "Describe the change. Agent plans first — you click Build it. @ attaches a file."
+              }
               rows={3}
-              className="min-h-16 w-full resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+              className="min-h-20 w-full resize-none rounded-xl border border-border bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             />
             <div className="mt-2 space-y-2">
               <CostMeter
@@ -364,6 +399,17 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   />
                 )}
                 <div className="ml-auto flex items-center gap-1">
+                  {mode === "composer" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={sendBlocked}
+                      onClick={() => void send(draft, false, "skip")}
+                    >
+                      Build now
+                    </Button>
+                  )}
                   {account && account.backgroundJobs > 0 && (
                     <Button
                       type="button"
@@ -381,7 +427,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                       <Square className="size-3.5 fill-current" />
                     </Button>
                   ) : (
-                    <Button type="submit" size="icon-sm" disabled={sendBlocked} aria-label="Send">
+                    <Button type="submit" size="icon-sm" disabled={sendBlocked} aria-label="Plan">
                       <ArrowUp className="size-4" />
                     </Button>
                   )}
@@ -407,14 +453,32 @@ function EmptyState({
   onSuggest: (text: string) => void;
 }) {
   return (
-    <div>
-      <p className="text-sm text-muted">
-        Composer posts a plan before the first diff. Claude Code, Codex, and OpenCode stream into the same cards.
+    <div className="px-1">
+      <p className="text-base font-medium tracking-tight">What should Agent do?</p>
+      <p className="mt-1 text-sm leading-relaxed text-pretty text-muted">
+        Agent writes a plan and waits. You click Build it. Ask only answers — it never edits.
       </p>
+      <ol className="mt-5 space-y-3">
+        {[
+          { n: "1", title: "Open a project", body: "Folder, zip, or GitHub from the file tree." },
+          { n: "2", title: "Ask in English", body: "Agent researches and posts a plan. You decide whether to build." },
+          { n: "3", title: "Build it, then apply", body: "Agent stages diffs. Apply per file, or undo the run." },
+        ].map((step) => (
+          <li key={step.n} className="flex gap-3">
+            <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border font-mono text-xs text-subtle">
+              {step.n}
+            </span>
+            <div>
+              <p className="text-sm font-medium">{step.title}</p>
+              <p className="text-xs leading-relaxed text-muted">{step.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
       {rulesPath ? (
-        <p className="mt-1 text-[12px] text-subtle">Rules: {rulesPath}</p>
+        <p className="mt-4 text-xs text-subtle">Rules: {rulesPath}</p>
       ) : (
-        <p className="mt-1 text-[12px] text-subtle">No rules file yet — create .aperture.md from the header.</p>
+        <p className="mt-4 text-xs text-subtle">No rules yet — the scroll icon creates .aperture.md.</p>
       )}
       <ul className="mt-4 space-y-2">
         {suggestions.map((s) => (
@@ -422,26 +486,34 @@ function EmptyState({
             <button
               type="button"
               onClick={() => onSuggest(s)}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-left text-[13px] text-muted hover:border-accent/40 hover:text-fg"
+              className="w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-left text-sm text-muted transition-colors hover:border-accent/40 hover:text-fg"
             >
               {s}
             </button>
           </li>
         ))}
       </ul>
-      {signedOut && (
-        <p className="mt-4 text-[12px] text-subtle">Suggestions run after you sign in.</p>
-      )}
+      {signedOut && <p className="mt-4 text-xs text-subtle">Suggestions run after you sign in.</p>}
     </div>
   );
 }
 
-function MessageBlock({ message, running }: { message: ChatMessage; running: boolean }) {
+function MessageBlock({
+  message,
+  running,
+  quoteLabel,
+  onBuild,
+}: {
+  message: ChatMessage;
+  running: boolean;
+  quoteLabel: string;
+  onBuild: () => void;
+}) {
   if (message.role === "user") {
     return (
-      <div>
-        <p className="text-[11px] font-medium tracking-wide text-subtle uppercase">You</p>
-        <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-fg">{message.content}</p>
+      <div className="rounded-xl border border-border bg-bg px-3 py-2">
+        <p className="text-xs font-medium text-subtle">You</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{message.content}</p>
       </div>
     );
   }
@@ -451,15 +523,14 @@ function MessageBlock({ message, running }: { message: ChatMessage; running: boo
   const plan = message.plan ?? [];
   const empty = !message.content.trim();
   const live = running && empty && plan.length === 0;
+  const waiting = Boolean(message.awaitingBuild && plan.length > 0);
 
   return (
     <div>
-      <p className="text-[11px] font-medium tracking-wide text-subtle uppercase">
-        {message.agentLabel || "Aperture"}
-      </p>
-      {plan.length > 0 && <PlanCard entries={plan} />}
+      <p className="text-xs font-medium text-subtle">{message.agentLabel || "Agent"}</p>
+      {plan.length > 0 && <PlanCard entries={plan} awaitingBuild={waiting} />}
       {traces.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 font-mono text-[11px] text-subtle">
+        <ul className="mt-2 space-y-1">
           {traces.map((trace) => (
             <TraceLine key={trace.id} trace={trace} />
           ))}
@@ -467,7 +538,7 @@ function MessageBlock({ message, running }: { message: ChatMessage; running: boo
       )}
       {live && (
         <p className="shimmer-text mt-2 text-[13px] text-muted">
-          {message.status || traces[traces.length - 1]?.name || "Writing a plan…"}
+          {message.status || traces[traces.length - 1]?.name || "Planning…"}
         </p>
       )}
       {running && empty && plan.length > 0 && message.status && (
@@ -475,6 +546,15 @@ function MessageBlock({ message, running }: { message: ChatMessage; running: boo
       )}
       {!empty && (
         <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-fg">{message.content}</p>
+      )}
+      {waiting && (
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
+          <p className="min-w-0 text-xs text-muted">Nothing is written until you build. {quoteLabel}.</p>
+          <Button size="sm" disabled={running} onClick={onBuild}>
+            <Play className="size-3.5" />
+            Build it
+          </Button>
+        </div>
       )}
       {edits.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -508,11 +588,23 @@ function TraceLine({ trace }: { trace: ToolTrace }) {
       : typeof trace.args.query === "string"
         ? trace.args.query
         : "";
+  const name = trace.name;
+  const Icon =
+    name.includes("plan") ? ListTodo
+    : name.includes("edit") || name.includes("write") || name.includes("patch") ? FileDiff
+    : name.includes("grep") || name.includes("search") ? Search
+    : name.includes("read") || name.includes("file") ? FileSearch
+    : Wrench;
+  const label = name.replace(/_/g, " ");
+
   return (
-    <li className="truncate">
-      {trace.name}
-      {detail ? ` · ${detail}` : ""}
-      <span className="text-subtle"> · {trace.ms}ms</span>
+    <li className="flex items-center gap-2 rounded-md border border-border/80 bg-bg px-2 py-1 text-xs text-muted">
+      <Icon className="size-3.5 shrink-0 text-subtle" strokeWidth={1.7} />
+      <span className="truncate">
+        <span className="text-fg">{label}</span>
+        {detail ? <span className="text-subtle"> · {detail}</span> : null}
+      </span>
+      <span className="ml-auto shrink-0 tabular-nums text-subtle">{trace.ms}ms</span>
     </li>
   );
 }

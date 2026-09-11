@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorState, Compartment, Annotation } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, indentOnInput, defaultHighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
@@ -16,52 +16,86 @@ import { languageFromPath } from "@/lib/parser/language";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
+import { SYNTAX } from "@/lib/editor/theme";
 import { FileCode } from "lucide-react";
 
 const theme = EditorView.theme(
   {
     "&": {
-      backgroundColor: "#09090b",
-      color: "#f4f4f5",
+      backgroundColor: SYNTAX.bg,
+      color: SYNTAX.fg,
       height: "100%",
-      fontSize: "13px",
+      fontSize: "13.5px",
     },
-    ".cm-scroller": { overflow: "auto", fontFamily: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace' },
-    ".cm-content": { caretColor: "#f4f4f5", padding: "12px 0" },
+    ".cm-scroller": {
+      overflow: "auto",
+      fontFamily: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
+      lineHeight: "1.7",
+    },
+    ".cm-content": { caretColor: SYNTAX.caret, padding: "12px 0" },
     ".cm-gutters": {
-      backgroundColor: "#09090b",
-      color: "#52525b",
+      backgroundColor: SYNTAX.gutter,
+      color: SYNTAX.gutterFg,
       border: "none",
+      borderRight: "1px solid #18181b",
     },
-    ".cm-activeLine": { backgroundColor: "#18181b" },
-    ".cm-activeLineGutter": { backgroundColor: "#18181b", color: "#a1a1aa" },
-    ".cm-cursor": { borderLeftColor: "#f4f4f5" },
+    ".cm-lineNumbers .cm-gutterElement": {
+      minWidth: "2.6rem",
+      padding: "0 10px 0 8px",
+    },
+    ".cm-activeLine": { backgroundColor: SYNTAX.activeLine },
+    ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: "#a1a1aa" },
+    ".cm-cursor": { borderLeftColor: SYNTAX.caret, borderLeftWidth: "2px" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-      backgroundColor: "#27272a",
+      backgroundColor: SYNTAX.selection,
+    },
+    ".cm-selectionMatch": { backgroundColor: SYNTAX.match },
+    "&.cm-focused .cm-matchingBracket": {
+      backgroundColor: SYNTAX.match,
+      outline: "1px solid #8bb4e3",
     },
     ".cm-foldPlaceholder": {
       background: "#18181b",
       border: "none",
       color: "#a1a1aa",
     },
+    ".cm-tooltip": {
+      backgroundColor: "#18181b",
+      border: "1px solid #27272a",
+      color: SYNTAX.fg,
+    },
   },
   { dark: true },
 );
 
 const highlight = HighlightStyle.define([
-  { tag: t.keyword, color: "#93c5fd" },
-  { tag: t.comment, color: "#71717a", fontStyle: "italic" },
-  { tag: t.string, color: "#6ee7b7" },
-  { tag: t.number, color: "#e4e4e7" },
-  { tag: t.bool, color: "#e4e4e7" },
-  { tag: t.function(t.variableName), color: "#f4f4f5" },
-  { tag: t.definition(t.variableName), color: "#f4f4f5" },
-  { tag: t.typeName, color: "#a1a1aa" },
-  { tag: t.propertyName, color: "#d4d4d8" },
-  { tag: t.operator, color: "#a1a1aa" },
-  { tag: t.heading, color: "#f4f4f5", fontWeight: "500" },
-  { tag: t.link, color: "#93c5fd" },
-  { tag: t.processingInstruction, color: "#71717a" },
+  { tag: t.keyword, color: SYNTAX.keyword },
+  { tag: t.controlKeyword, color: SYNTAX.keyword },
+  { tag: t.moduleKeyword, color: SYNTAX.keyword },
+  { tag: t.comment, color: SYNTAX.comment, fontStyle: "italic" },
+  { tag: t.lineComment, color: SYNTAX.comment, fontStyle: "italic" },
+  { tag: t.string, color: SYNTAX.string },
+  { tag: t.number, color: SYNTAX.number },
+  { tag: t.bool, color: SYNTAX.number },
+  { tag: t.null, color: SYNTAX.number },
+  { tag: t.function(t.variableName), color: SYNTAX.fn },
+  { tag: t.function(t.propertyName), color: SYNTAX.fn },
+  { tag: t.definition(t.variableName), color: SYNTAX.fn },
+  { tag: t.definition(t.function(t.variableName)), color: SYNTAX.fn },
+  { tag: t.typeName, color: SYNTAX.type },
+  { tag: t.className, color: SYNTAX.type },
+  { tag: t.propertyName, color: SYNTAX.property },
+  { tag: t.operator, color: SYNTAX.operator },
+  { tag: t.punctuation, color: SYNTAX.operator },
+  { tag: t.tagName, color: SYNTAX.tag },
+  { tag: t.angleBracket, color: SYNTAX.operator },
+  { tag: t.attributeName, color: SYNTAX.fn },
+  { tag: t.heading, color: SYNTAX.fg, fontWeight: "500" },
+  { tag: t.link, color: SYNTAX.keyword },
+  { tag: t.url, color: SYNTAX.keyword },
+  { tag: t.processingInstruction, color: SYNTAX.comment },
+  { tag: t.meta, color: SYNTAX.comment },
+  { tag: t.invalid, color: SYNTAX.invalid },
 ]);
 
 function languageExtension(path: string) {
@@ -76,11 +110,15 @@ function languageExtension(path: string) {
   return [];
 }
 
+const syncAnn = Annotation.define<boolean>();
+
 export function CodePane() {
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lastValue = useRef("");
   const pathRef = useRef<string | null>(null);
+  const writeFileRef = useRef(useWorkspace.getState().writeFile);
+  const setSelectionRef = useRef(useWorkspace.getState().setSelection);
   const langConf = useRef(new Compartment()).current;
   const listenerConf = useRef(new Compartment()).current;
   const ghostConf = useRef(new Compartment()).current;
@@ -91,6 +129,8 @@ export function CodePane() {
   const setSelection = useWorkspace((s) => s.setSelection);
   const { account } = useAccount();
   const tabOn = Boolean(account?.tab);
+  writeFileRef.current = writeFile;
+  setSelectionRef.current = setSelection;
 
   useEffect(() => {
     if (!parentRef.current || viewRef.current) return;
@@ -123,7 +163,37 @@ export function CodePane() {
           syntaxHighlighting(highlight),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           langConf.of(languageExtension(activePath ?? "")),
-          listenerConf.of([]),
+          listenerConf.of(
+            EditorView.updateListener.of((update) => {
+              if (update.transactions.some((tr) => tr.annotation(syncAnn))) {
+                if (update.docChanged) lastValue.current = update.state.doc.toString();
+                return;
+              }
+              if (update.docChanged) {
+                const next = update.state.doc.toString();
+                lastValue.current = next;
+                const path = pathRef.current;
+                if (path) writeFileRef.current(path, next);
+              }
+              if (update.selectionSet) {
+                const sel = update.state.selection.main;
+                const fromLine = update.state.doc.lineAt(sel.from);
+                const toLine = update.state.doc.lineAt(sel.to);
+                const text = sel.empty
+                  ? fromLine.text
+                  : update.state.doc.sliceString(sel.from, sel.to);
+                const path = pathRef.current;
+                if (path) {
+                  setSelectionRef.current({
+                    path,
+                    text,
+                    fromLine: fromLine.number,
+                    toLine: toLine.number,
+                  });
+                }
+              }
+            }),
+          ),
           ghostConf.of([]),
           EditorView.lineWrapping,
         ],
@@ -142,67 +212,46 @@ export function CodePane() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-
-    view.dispatch({
-      effects: listenerConf.reconfigure(
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            const next = update.state.doc.toString();
-            lastValue.current = next;
-            const path = pathRef.current;
-            if (path) writeFile(path, next);
-          }
-          if (update.selectionSet) {
-            const sel = update.state.selection.main;
-            const fromLine = update.state.doc.lineAt(sel.from);
-            const toLine = update.state.doc.lineAt(sel.to);
-            const text = sel.empty
-              ? fromLine.text
-              : update.state.doc.sliceString(sel.from, sel.to);
-            const path = pathRef.current;
-            if (path) {
-              setSelection({
-                path,
-                text,
-                fromLine: fromLine.number,
-                toLine: toLine.number,
-              });
-            }
-          }
-        }),
-      ),
-    });
-  }, [setSelection, writeFile]);
-
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
     view.dispatch({
       effects: ghostConf.reconfigure(tabOn ? ghostText(() => pathRef.current) : []),
+      annotations: syncAnn.of(true),
     });
-  }, [ghostConf, tabOn]);
+  }, [tabOn]);
 
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !activePath) return;
     pathRef.current = activePath;
-    view.dispatch({ effects: langConf.reconfigure(languageExtension(activePath)) });
+    const effects = [langConf.reconfigure(languageExtension(activePath))];
     if (value !== lastValue.current) {
       lastValue.current = value;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
+        effects,
+        annotations: syncAnn.of(true),
       });
+      return;
     }
+    view.dispatch({
+      effects,
+      annotations: syncAnn.of(true),
+    });
   }, [activePath, value]);
 
-  if (!activePath) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-bg text-muted">
-        <FileCode className="size-8 text-subtle" strokeWidth={1.4} />
-        <p className="text-sm">Open a file from the sidebar</p>
-      </div>
-    );
-  }
-
-  return <div ref={parentRef} className="h-full min-h-0 bg-bg" />;
+  return (
+    <div className="relative h-full min-h-0 bg-bg">
+      {!activePath && (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-muted">
+          <FileCode className="size-8 text-subtle" strokeWidth={1.4} />
+          <div>
+            <p className="text-sm font-medium text-fg">Open a file to start</p>
+            <p className="mt-1 max-w-xs text-sm text-pretty text-muted">
+              Pick one from the left, or ask Agent on the right to change the project.
+            </p>
+          </div>
+        </div>
+      )}
+      <div ref={parentRef} className={activePath ? "h-full min-h-0" : "hidden"} />
+    </div>
+  );
 }

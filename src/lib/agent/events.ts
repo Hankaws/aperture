@@ -6,5 +6,5 @@ export type AgentStreamEvent =
   | { type: "text"; delta: string }
   | { type: "plan"; entries: PlanEntry[] }
   | { type: "edits"; edits: ProposedEdit[] }
-  | { type: "done"; text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[] }
+  | { type: "done"; text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean }
   | { type: "error"; error: string };

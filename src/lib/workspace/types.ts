@@ -67,6 +67,8 @@ export type ChatMessage = {
   createdAt: number;
   checkpointId?: string;
   agentLabel?: string;
+  /** True when Composer posted a plan and is waiting for Build it. */
+  awaitingBuild?: boolean;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

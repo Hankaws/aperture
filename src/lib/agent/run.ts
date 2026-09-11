@@ -5,6 +5,7 @@ import type { ModelSource } from "@/lib/billing/plans";
 import type { AgentMode, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import type { AgentResult } from "./types";
 import type { AgentStreamEvent } from "./events";
+import type { AgentPhase } from "./phase";
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -56,6 +57,7 @@ export function agentPayload(
   mode: AgentMode,
   source?: ModelSource | null,
   agentId?: string | null,
+  extra?: { phase?: AgentPhase; approvedPlan?: PlanEntry[] },
 ) {
   const state = useWorkspace.getState();
   const history = state.messages
@@ -71,6 +73,8 @@ export function agentPayload(
     selection: state.selection,
     source: source ?? undefined,
     agentId: agentId ?? null,
+    phase: extra?.phase,
+    approvedPlan: extra?.approvedPlan,
   };
 }
 
@@ -78,7 +82,12 @@ export async function submitAgent(
   instruction: string,
   mode: AgentMode,
   source?: ModelSource | null,
-  opts?: { agentId?: string | null; agentLabel?: string | null },
+  opts?: {
+    agentId?: string | null;
+    agentLabel?: string | null;
+    phase?: AgentPhase;
+    approvedPlan?: PlanEntry[];
+  },
 ) {
   const trimmed = instruction.trim();
   if (!trimmed) return;
@@ -90,6 +99,8 @@ export async function submitAgent(
   const userId = `u_${stamp}`;
   const asstId = `a_${stamp}`;
   const agentLabel = opts?.agentLabel?.trim() || "Aperture";
+  const phase = opts?.phase;
+  const planning = mode === "composer" && phase !== "skip" && phase !== "build";
 
   state.addMessage({
     id: userId,
@@ -101,13 +112,27 @@ export async function submitAgent(
     id: asstId,
     role: "assistant",
     content: "",
-    status: opts?.agentId ? `ACP session/new · ${agentLabel}` : "Writing a plan…",
+    status: opts?.agentId
+      ? `ACP session/new · ${agentLabel}`
+      : phase === "build"
+        ? "Building…"
+        : planning
+          ? "Planning…"
+          : "Writing a plan…",
     agentLabel,
     createdAt: stamp + 1,
   });
   state.setAgentRunning(true);
 
-  const input = agentPayload(trimmed, mode, source, opts?.agentId);
+  const apiInstruction =
+    phase === "build" && opts?.approvedPlan?.length
+      ? `${trimmed}\n\nApproved plan:\n${opts.approvedPlan.map((e, i) => `${i + 1}. ${e.content}`).join("\n")}`
+      : trimmed;
+
+  const input = agentPayload(apiInstruction, mode, source, opts?.agentId, {
+    phase,
+    approvedPlan: opts?.approvedPlan,
+  });
 
   if (mode === "inline") {
     try {
@@ -207,7 +232,14 @@ export async function submitAgent(
           traces = event.traces;
           edits = event.edits;
           plan = event.plan ?? plan;
-          ws.patchMessage(asstId, { content: text, traces, edits, plan, status: undefined });
+          ws.patchMessage(asstId, {
+            content: text,
+            traces,
+            edits,
+            plan,
+            status: undefined,
+            awaitingBuild: Boolean(event.awaitingBuild),
+          });
           return;
         }
         if (event.type === "error") {

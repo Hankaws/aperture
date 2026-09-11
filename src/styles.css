@@ -88,8 +88,8 @@
 
   .cm-editor {
     height: 100%;
-    font-size: 13px;
-    background: var(--color-bg);
+    font-size: 13.5px;
+    background: #0c0c0e;
   }
 
   .cm-editor .cm-scroller {
@@ -118,6 +118,76 @@
   .rise-in {
     animation: rise-in 0.55s var(--ease-smooth-out) both;
   }
+
+  .landing-spot {
+    background: radial-gradient(
+      ellipse 80% 52% at 50% -10%,
+      color-mix(in oklab, var(--color-accent) 16%, transparent),
+      transparent 68%
+    );
+  }
+
+  .hero-word {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(8px);
+    animation: landing-in 0.72s var(--ease-smooth-out) forwards;
+  }
+
+  .landing-in {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+    animation: landing-in 0.7s var(--ease-smooth-out) forwards;
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(6px);
+  }
+
+  .reveal.is-in {
+    animation: landing-in 0.7s var(--ease-smooth-out) forwards;
+  }
+
+  .caret-blink {
+    display: inline-block;
+    width: 7px;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: -2px;
+    background: var(--color-accent);
+    animation: caret-blink 1s step-end infinite;
+  }
+
+  .how-rail {
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+
+  .reveal.is-in .how-rail {
+    animation: grow-x 0.9s var(--ease-smooth-out) 0.2s forwards;
+  }
+
+  .plan-tick {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+
+  .plan-tick.is-on {
+    animation: pop-in 0.35s var(--ease-smooth-out) forwards;
+  }
+
+  .demo-line {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  .demo-line.is-on {
+    animation: landing-in 0.35s var(--ease-smooth-out) forwards;
+  }
 }
 
 @keyframes shimmer {
@@ -142,11 +212,63 @@
   }
 }
 
+@keyframes landing-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shimmer-text {
     animation: none;
     color: var(--color-muted);
     background: none;
+  }
+
+  .hero-word,
+  .landing-in,
+  .reveal,
+  .reveal.is-in,
+  .how-rail,
+  .plan-tick,
+  .demo-line {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
   }
 
   * {

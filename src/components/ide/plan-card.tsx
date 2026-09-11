@@ -2,7 +2,7 @@ import { Check, Circle, CircleDot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlanEntry } from "@/lib/workspace/types";
 
-export function PlanCard({ entries }: { entries: PlanEntry[] }) {
+export function PlanCard({ entries, awaitingBuild = false }: { entries: PlanEntry[]; awaitingBuild?: boolean }) {
   if (entries.length === 0) return null;
   const done = entries.filter((e) => e.status === "completed").length;
   const live = entries.some((e) => e.status === "in_progress");
@@ -10,10 +10,10 @@ export function PlanCard({ entries }: { entries: PlanEntry[] }) {
   return (
     <div className="mt-2 overflow-hidden rounded-lg border border-border bg-bg">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-        <p className="text-[11px] font-medium tracking-[0.14em] text-subtle uppercase">Plan</p>
+        <p className="text-xs font-medium text-subtle">Plan</p>
         <p className="text-[11px] text-subtle">
           {done}/{entries.length}
-          {live ? " · running" : done === entries.length ? " · done" : ""}
+          {awaitingBuild ? " · waiting" : live ? " · running" : done === entries.length ? " · done" : ""}
         </p>
       </div>
       <ol className="py-1">

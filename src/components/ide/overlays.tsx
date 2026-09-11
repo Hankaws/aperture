@@ -60,6 +60,7 @@ export function HelpDialog() {
     [`${mod}S`, "Download project zip"],
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}I`, "Focus Agent"],
+    [`${mod}Enter`, "Apply staged diff in the editor"],
     ["Tab", "Accept ghost-text (Pro)"],
     [`${mod}B`, "Toggle file tree"],
     [`${mod}L`, "Toggle agent panel"],
@@ -69,7 +70,8 @@ export function HelpDialog() {
   const notes = [
     "Drop a folder, files, or .zip onto the editor to replace the workspace.",
     "Download a zip from Open, the command palette, or ⌘S / Ctrl+S. .env never goes in.",
-    "Apply is not final — Undo this run restores the files from before that Composer send.",
+    "Staged diffs draw in the open file. Apply there (Ctrl+Enter) or in chat. Undo this run restores the files from before that send.",
+    "Highlight code, then Explain this or Fix this. Same chips sit above Composer.",
     "Open GitHub from the file tree — public repos, signed in.",
     "Type @ in Composer to attach a file or folder.",
     "Agent plans first, then waits. Click Build it to allow edits. Build now (next to send) skips the gate for a one-file fix. Ask never writes.",

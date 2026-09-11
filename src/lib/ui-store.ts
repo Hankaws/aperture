@@ -13,6 +13,7 @@ type IdeUiState = {
   mobilePane: MobilePane;
   toggleSidebar: () => void;
   toggleChat: () => void;
+  setChatOpen: (open: boolean) => void;
   setCommandOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setNewFileOpen: (open: boolean) => void;
@@ -32,6 +33,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   mobilePane: "editor",
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
+  setChatOpen: (open) => set({ chatOpen: open }),
   setCommandOpen: (open) => set({ commandOpen: open }),
   setHelpOpen: (open) => set({ helpOpen: open }),
   setNewFileOpen: (open) => set({ newFileOpen: open }),

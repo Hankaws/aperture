@@ -3,6 +3,7 @@ import { ChevronRight, Download, FileArchive, FileCode, FileJson, FileText, Fold
 import { toast } from "sonner";
 import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
+import { pendingPathKey } from "@/lib/workspace/edits";
 import { useIdeUi } from "@/lib/ui-store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
@@ -61,7 +62,7 @@ function buildTree(paths: string[]): TreeNode[] {
   return toArr(root);
 }
 
-function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
+function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pending: Set<string> }) {
   const activePath = useWorkspace((s) => s.activePath);
   const openFile = useWorkspace((s) => s.openFile);
   const deleteFile = useWorkspace((s) => s.deleteFile);
@@ -96,6 +97,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
           )}
           <Icon className="size-3.5 shrink-0" strokeWidth={1.6} />
           <span className="truncate">{node.name}</span>
+          {pending.has(node.path) && (
+            <span className="size-1.5 shrink-0 rounded-full bg-ok" aria-label="Staged diff" />
+          )}
         </button>
         {!isFolder && (
           <button
@@ -108,7 +112,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
           </button>
         )}
       </div>
-      {isFolder && open && node.children?.map((child) => <TreeItem key={child.path} node={child} depth={depth + 1} />)}
+      {isFolder && open && node.children?.map((child) => (
+        <TreeItem key={child.path} node={child} depth={depth + 1} pending={pending} />
+      ))}
     </div>
   );
 }
@@ -187,6 +193,8 @@ export function FileTree() {
   const files = useWorkspace((s) => s.files);
   const name = useWorkspace((s) => s.name);
   const chunks = useWorkspace((s) => s.chunks);
+  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
+  const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
   const tree = useMemo(() => buildTree(Object.keys(files)), [files]);
 
@@ -203,7 +211,7 @@ export function FileTree() {
       </div>
       <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {tree.map((node) => (
-          <TreeItem key={node.path} node={node} depth={0} />
+          <TreeItem key={node.path} node={node} depth={0} pending={pending} />
         ))}
       </div>
       <div className="border-t border-border px-3 py-2 text-[11px] text-subtle">

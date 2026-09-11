@@ -114,15 +114,19 @@ export async function submitAgent(
     content: "",
     status: opts?.agentId
       ? `ACP session/new · ${agentLabel}`
-      : phase === "build"
-        ? "Building…"
-        : planning
-          ? "Planning…"
-          : "Writing a plan…",
+      : mode === "chat"
+        ? "Analyzing your code…"
+        : phase === "build"
+          ? "Building…"
+          : phase === "skip"
+            ? "Writing…"
+            : planning
+              ? "Planning…"
+              : "Working…",
     agentLabel,
     createdAt: stamp + 1,
   });
-  state.setAgentRunning(true);
+  state.setAgentRunning(true, mode);
 
   const apiInstruction =
     phase === "build" && opts?.approvedPlan?.length
@@ -225,6 +229,8 @@ export async function submitAgent(
         if (event.type === "edits") {
           edits = event.edits;
           ws.patchMessage(asstId, { content: text, traces, edits, plan });
+          const last = edits[edits.length - 1];
+          if (last?.path) ws.openFile(last.path);
           return;
         }
         if (event.type === "done") {
@@ -240,6 +246,8 @@ export async function submitAgent(
             status: undefined,
             awaitingBuild: Boolean(event.awaitingBuild),
           });
+          const firstPending = edits.find((e) => e.status === "pending");
+          if (firstPending?.path) ws.openFile(firstPending.path);
           return;
         }
         if (event.type === "error") {

@@ -3,8 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUp, Clock, FileDiff, FileSearch, FolderOpen, ListTodo, MessageSquare, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ApertureMark } from "./logo";
 import { DiffCard } from "./diff-card";
 import { PlanCard } from "./plan-card";
+import { AssistChips } from "./selection-actions";
 import { MentionPopover } from "./mention-popover";
 import { CostMeter } from "./cost-meter";
 import { JobsTray } from "./jobs-tray";
@@ -329,6 +331,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         </div>
       )}
 
+      <div className="border-t border-border px-3 pt-2 pb-1">
+        <p className="mb-1.5 text-xs text-subtle">I can explain, fix, or scan the open file.</p>
+        <AssistChips />
+      </div>
+
       {account && jobsOn && (
         <JobsTray
           jobs={jobs}
@@ -363,25 +370,27 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             }}
           >
             <MentionPopover items={mentionHits} active={mentionHi} onPick={insertMention} />
-            <textarea
-              ref={composerRef}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setDismissMention(false);
-                syncCaret(e.target);
-              }}
-              onKeyUp={(e) => syncCaret(e.currentTarget)}
-              onClick={(e) => syncCaret(e.currentTarget)}
-              onKeyDown={onKeyDown}
-              placeholder={
-                mode === "chat"
-                  ? "Ask about the repo. Nothing is written."
-                  : "Describe the change. Agent plans first — you click Build it. @ attaches a file."
-              }
-              rows={3}
-              className="min-h-20 w-full resize-none rounded-xl border border-border bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            />
+            <div className={cn("composer-rim rounded-xl p-px", agentRunning && "is-live")}>
+              <textarea
+                ref={composerRef}
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setDismissMention(false);
+                  syncCaret(e.target);
+                }}
+                onKeyUp={(e) => syncCaret(e.currentTarget)}
+                onClick={(e) => syncCaret(e.currentTarget)}
+                onKeyDown={onKeyDown}
+                placeholder={
+                  mode === "chat"
+                    ? "Ask about the repo. Nothing is written."
+                    : "Describe the change. Agent plans first — you click Build it. @ attaches a file."
+                }
+                rows={3}
+                className="min-h-20 w-full resize-none rounded-[11px] border-0 bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none"
+              />
+            </div>
             <div className="mt-2 space-y-2">
               <CostMeter
                 quote={quote}
@@ -498,6 +507,16 @@ function EmptyState({
   );
 }
 
+function AnalyzingCard({ status }: { status?: string }) {
+  return (
+    <div className="analyze-card mt-3 rounded-xl border border-border px-4 py-7 text-center">
+      <ApertureMark className="generate-spin mx-auto size-8 text-accent" />
+      <p className="mt-3 text-sm font-medium text-fg">{status || "Analyzing your code…"}</p>
+      <p className="mt-1 text-xs text-subtle">Scanning the selection.</p>
+    </div>
+  );
+}
+
 function MessageBlock({
   message,
   running,
@@ -509,6 +528,7 @@ function MessageBlock({
   quoteLabel: string;
   onBuild: () => void;
 }) {
+  const runningMode = useWorkspace((s) => s.runningMode);
   if (message.role === "user") {
     return (
       <div className="rounded-xl border border-border bg-bg px-3 py-2">
@@ -524,6 +544,7 @@ function MessageBlock({
   const empty = !message.content.trim();
   const live = running && empty && plan.length === 0;
   const waiting = Boolean(message.awaitingBuild && plan.length > 0);
+  const analyzing = live && runningMode === "chat";
 
   return (
     <div>
@@ -536,16 +557,17 @@ function MessageBlock({
           ))}
         </ul>
       )}
-      {live && (
-        <p className="shimmer-text mt-2 text-[13px] text-muted">
+      {analyzing && <AnalyzingCard status={message.status} />}
+      {live && !analyzing && (
+        <p className="shimmer-text mt-2 text-sm text-muted">
           {message.status || traces[traces.length - 1]?.name || "Planning…"}
         </p>
       )}
       {running && empty && plan.length > 0 && message.status && (
-        <p className="shimmer-text mt-2 text-[13px] text-muted">{message.status}</p>
+        <p className="shimmer-text mt-2 text-sm text-muted">{message.status}</p>
       )}
       {!empty && (
-        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-fg">{message.content}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg">{message.content}</p>
       )}
       {waiting && (
         <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">

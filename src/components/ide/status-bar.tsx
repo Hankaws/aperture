@@ -1,4 +1,5 @@
 import { useWorkspace } from "@/lib/workspace/store";
+import { listPendingEdits } from "@/lib/workspace/edits";
 import { languageFromPath } from "@/lib/parser/language";
 import { modSymbol } from "@/lib/utils";
 import type { AccountSnapshot } from "@/lib/billing/api";
@@ -17,6 +18,7 @@ export function StatusBar({ aiLabel, account }: { aiLabel: string; account?: Acc
   const agentRunning = useWorkspace((s) => s.agentRunning);
   const files = useWorkspace((s) => s.files);
   const selection = useWorkspace((s) => s.selection);
+  const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
   const lang = activePath ? languageFromPath(activePath) : "";
   const mod = modSymbol();
   const line = selection && selection.path === activePath ? selection.fromLine : null;
@@ -30,6 +32,11 @@ export function StatusBar({ aiLabel, account }: { aiLabel: string; account?: Acc
         <span className="tabular-nums">
           {Object.keys(files).length} files · {chunks.length} chunks
         </span>
+        {staged > 0 && (
+          <span className="text-ok">
+            {staged} staged {staged === 1 ? "diff" : "diffs"}
+          </span>
+        )}
         {activePath && <span className="hidden truncate sm:inline">{activePath}</span>}
       </div>
       <div className="hidden items-center gap-3 sm:flex">

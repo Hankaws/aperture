@@ -3,7 +3,7 @@ import { indexFiles } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
-import type { ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
+import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
 
 const STORAGE_KEY = "aperture-workspace-v1";
 
@@ -12,6 +12,7 @@ type Selection = {
   text: string;
   fromLine: number;
   toLine: number;
+  empty: boolean;
 } | null;
 
 type WorkspaceState = {
@@ -25,6 +26,7 @@ type WorkspaceState = {
   messages: ChatMessage[];
   checkpoints: Checkpoint[];
   agentRunning: boolean;
+  runningMode: AgentMode | null;
   selection: Selection;
   hydrate: () => void;
   loadDemo: () => void;
@@ -39,7 +41,7 @@ type WorkspaceState = {
   setSelection: (selection: Selection) => void;
   addMessage: (message: ChatMessage) => void;
   patchMessage: (id: string, patch: Partial<ChatMessage>) => void;
-  setAgentRunning: (running: boolean) => void;
+  setAgentRunning: (running: boolean, mode?: AgentMode | null) => void;
   applyEdit: (edit: ProposedEdit) => void;
   rejectEdit: (editId: string) => void;
   applyAllPending: () => void;
@@ -185,6 +187,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     messages: [],
     checkpoints: [],
     agentRunning: false,
+    runningMode: null,
     selection: null,
 
     hydrate: () => {
@@ -213,6 +216,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
               chunks: buildIndex(nextFiles),
               indexing: false,
               agentRunning: false,
+              runningMode: null,
             });
             return;
           }
@@ -235,6 +239,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         checkpoints: [],
         selection: null,
         agentRunning: false,
+        runningMode: null,
       });
       schedulePersist();
     },
@@ -256,6 +261,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         checkpoints: [],
         selection: null,
         agentRunning: false,
+        runningMode: null,
       });
       set({
         chunks: buildIndex(nextFiles),
@@ -272,8 +278,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     openFile: (path) => {
-      const { files, openTabs } = get();
+      const { files, openTabs, activePath } = get();
       if (files[path] === undefined) return;
+      if (activePath === path && openTabs.includes(path)) return;
       const tabs = openTabs.includes(path) ? openTabs : [...openTabs, path];
       set({ openTabs: tabs, activePath: path });
       schedulePersist();
@@ -327,7 +334,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         prev.path === selection.path &&
         prev.text === selection.text &&
         prev.fromLine === selection.fromLine &&
-        prev.toLine === selection.toLine
+        prev.toLine === selection.toLine &&
+        prev.empty === selection.empty
       ) {
         return;
       }
@@ -346,7 +354,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
-    setAgentRunning: (running) => set({ agentRunning: running }),
+    setAgentRunning: (running, mode) =>
+      set({ agentRunning: running, runningMode: running ? (mode ?? get().runningMode) : null }),
 
     applyEdit: (edit) => {
       const message = get().messages.find((m) => m.edits?.some((e) => e.id === edit.id));

@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { FileCode, FileJson, FileText, X } from "lucide-react";
 import { basename, cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
+import { pendingPathKey } from "@/lib/workspace/edits";
 
 function tabIcon(path: string) {
   const ext = extOf(path);
@@ -14,6 +16,8 @@ export function TabBar() {
   const activePath = useWorkspace((s) => s.activePath);
   const setActive = useWorkspace((s) => s.setActive);
   const closeTab = useWorkspace((s) => s.closeTab);
+  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
+  const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 
   if (openTabs.length === 0) {
     return <div className="h-10 border-b border-border bg-surface" />;
@@ -24,6 +28,7 @@ export function TabBar() {
       {openTabs.map((path) => {
         const active = path === activePath;
         const Icon = tabIcon(path);
+        const staged = pending.has(path);
         return (
           <div
             key={path}
@@ -40,6 +45,9 @@ export function TabBar() {
             >
               <Icon className="size-3.5 shrink-0 text-subtle" strokeWidth={1.6} />
               <span className="truncate">{basename(path)}</span>
+              {staged && (
+                <span className="size-1.5 shrink-0 rounded-full bg-ok" aria-label="Staged diff" />
+              )}
             </button>
             <button
               type="button"

@@ -57,3 +57,50 @@ export function lineDiff(oldText: string, newText: string): DiffLine[] {
   }
   return out;
 }
+
+export type DiffHunk = {
+  /** 1-based old-file lines painted as deletions. */
+  deleted: number[];
+  /** Widget sits after this 1-based old line. 0 = before the first line. */
+  insertAfter: number;
+  added: string[];
+};
+
+export function hunksFromDiff(oldText: string, newText: string): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  let oldLine = 1;
+  let cur: DiffHunk | null = null;
+
+  const flush = () => {
+    if (cur) hunks.push(cur);
+    cur = null;
+  };
+
+  for (const row of lineDiff(oldText, newText)) {
+    if (row.type === "eq") {
+      flush();
+      oldLine += 1;
+      continue;
+    }
+    if (!cur) cur = { deleted: [], added: [], insertAfter: oldLine - 1 };
+    if (row.type === "del") {
+      cur.deleted.push(oldLine);
+      cur.insertAfter = oldLine;
+      oldLine += 1;
+    } else {
+      cur.added.push(row.text);
+    }
+  }
+  flush();
+  return hunks;
+}
+
+export function diffStats(oldText: string, newText: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const row of lineDiff(oldText, newText)) {
+    if (row.type === "add") added += 1;
+    else if (row.type === "del") removed += 1;
+  }
+  return { added, removed };
+}

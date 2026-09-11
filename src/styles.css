@@ -101,6 +101,152 @@
     outline: none;
   }
 
+  .cm-aperture-del {
+    background: color-mix(in oklab, var(--color-danger) 16%, transparent);
+  }
+
+  .cm-aperture-diffGutter {
+    width: 12px;
+  }
+
+  .cm-aperture-diff-sign {
+    display: block;
+    font-size: 10px;
+    line-height: 1.7;
+    text-align: center;
+  }
+
+  .cm-aperture-diff-sign-del {
+    color: var(--color-danger);
+  }
+
+  .cm-aperture-add-block {
+    background: color-mix(in oklab, var(--color-ok) 12%, transparent);
+    border-left: 2px solid var(--color-ok);
+    font-family: var(--font-mono);
+    line-height: 1.7;
+  }
+
+  .cm-aperture-add-line {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    white-space: pre-wrap;
+    color: color-mix(in oklab, var(--color-ok) 70%, var(--color-fg));
+    padding-right: 12px;
+  }
+
+  .cm-aperture-add-sign {
+    display: inline-block;
+    width: 1.4rem;
+    flex-shrink: 0;
+    color: var(--color-ok);
+    text-align: center;
+  }
+
+  .cm-aperture-add-more {
+    padding: 2px 12px 2px 1.4rem;
+    color: var(--color-ok);
+    font-size: 11px;
+  }
+
+  .composer-rim {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-accent),
+      var(--color-ok),
+      var(--color-accent)
+    );
+    background-size: 220% 100%;
+    animation: rim-shift 3.4s linear infinite;
+  }
+
+  .composer-rim.is-live {
+    animation-duration: 1.4s;
+  }
+
+  .generate-overlay {
+    background:
+      radial-gradient(
+        ellipse 72% 58% at 50% 42%,
+        transparent 8%,
+        color-mix(in oklab, var(--color-bg) 72%, transparent) 100%
+      ),
+      color-mix(in oklab, var(--color-bg) 55%, transparent);
+  }
+
+  .generate-spin {
+    transform-origin: center;
+    animation: generate-spin 2.8s linear infinite;
+  }
+
+  .generate-stream {
+    margin-top: 1.25rem;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--color-muted);
+    mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+  }
+
+  .generate-stream-line {
+    display: flex;
+    gap: 0.85rem;
+    white-space: pre-wrap;
+    opacity: 0.45;
+  }
+
+  .generate-stream-line:nth-last-child(-n + 6) {
+    opacity: 0.75;
+  }
+
+  .generate-stream-line:nth-last-child(-n + 2) {
+    opacity: 1;
+    color: var(--color-fg);
+  }
+
+  .generate-gutter {
+    display: inline-block;
+    width: 2rem;
+    flex-shrink: 0;
+    color: var(--color-subtle);
+    text-align: right;
+    user-select: none;
+  }
+
+  .assist-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 1.75rem;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    line-height: 1;
+    transition:
+      border-color 150ms var(--ease-out),
+      color 150ms var(--ease-out),
+      background-color 150ms var(--ease-out);
+  }
+
+  .assist-chip:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--color-accent) 45%, var(--color-border));
+    color: var(--color-fg);
+  }
+
+  .assist-chip:disabled {
+    opacity: 0.45;
+  }
+
+  .analyze-card {
+    background: var(--color-bg);
+  }
+
   .shimmer-text {
     background: linear-gradient(
       90deg,
@@ -251,11 +397,32 @@
   }
 }
 
+@keyframes generate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rim-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shimmer-text {
     animation: none;
     color: var(--color-muted);
     background: none;
+  }
+
+  .composer-rim,
+  .composer-rim.is-live,
+  .generate-spin {
+    animation: none;
   }
 
   .hero-word,

@@ -2,6 +2,7 @@ import { Check, FileDiff, X } from "lucide-react";
 import { lineDiff } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { ProposedEdit } from "@/lib/workspace/types";
 
@@ -23,7 +24,10 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
         <button
           type="button"
           className="flex min-w-0 items-center gap-2 text-left"
-          onClick={() => openFile(edit.path)}
+          onClick={() => {
+            openFile(edit.path);
+            useIdeUi.getState().setMobilePane("editor");
+          }}
         >
           <FileDiff className="size-3.5 shrink-0 text-accent" />
           <span className="truncate font-mono text-[12px] text-fg">{edit.path}</span>

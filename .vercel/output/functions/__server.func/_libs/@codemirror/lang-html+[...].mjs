@@ -1,4 +1,4 @@
-import { B as tags, F as sublanguageProp, H as IterMode, K as NodeWeakMap, L as syntaxTree, Q as EditorView, S as flatIndent, T as foldNodeProp, Y as parseMixed, _ as bracketMatchingHandle, _t as EditorSelection, a as completeFromList, b as defineLanguageFacet, c as snippetCompletion, d as LRLanguage, k as indentNodeProp, m as LanguageSupport, s as ifNotIn, v as continuedIndent, w as foldInside, x as delimitedIndent, z as styleTags } from "./autocomplete+[...].mjs";
+import { B as tags, F as sublanguageProp, H as IterMode, K as NodeWeakMap, L as syntaxTree, Q as EditorView, S as flatIndent, T as foldNodeProp, Y as parseMixed, _ as bracketMatchingHandle, a as completeFromList, b as defineLanguageFacet, c as snippetCompletion, d as LRLanguage, k as indentNodeProp, m as LanguageSupport, s as ifNotIn, v as continuedIndent, w as foldInside, x as delimitedIndent, yt as EditorSelection, z as styleTags } from "./autocomplete+[...].mjs";
 import { a as LRParser, i as ExternalTokenizer, n as cssLanguage, o as LocalTokenGroup, r as ContextTracker, t as css } from "./lang-css+[...].mjs";
 //#region node_modules/@lezer/javascript/dist/index.js
 var noSemi = 316;

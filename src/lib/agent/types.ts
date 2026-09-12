@@ -1,5 +1,5 @@
 import type { ModelSource } from "@/lib/billing/plans";
-import type { AgentMode, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentMode, AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 
 export type AgentFile = {
@@ -26,6 +26,8 @@ export type AgentInput = {
   agentId?: string | null;
   phase?: AgentPhase;
   approvedPlan?: PlanEntry[];
+  /** When true, the done event includes the redacted prompt + response. */
+  debug?: boolean;
 };
 
 export type AgentResult =
@@ -36,6 +38,7 @@ export type AgentResult =
       edits: ProposedEdit[];
       plan?: PlanEntry[];
       awaitingBuild?: boolean;
+      debug?: AgentDebug;
     }
   | {
       ok: false;

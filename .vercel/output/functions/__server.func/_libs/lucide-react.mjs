@@ -484,6 +484,26 @@ var Github = createLucideIcon("github", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var History = createLucideIcon("history", [
+	["path", {
+		d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+		key: "1357e3"
+	}],
+	["path", {
+		d: "M3 3v5h5",
+		key: "1xhq8a"
+	}],
+	["path", {
+		d: "M12 7v5l4 2",
+		key: "1fdv2h"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var KeyRound = createLucideIcon("key-round", [["path", {
 	d: "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z",
 	key: "1s6t7t"
@@ -907,4 +927,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { FileDiff as A, Bug as B, Github as C, FileText as D, FolderOpen as E, Clock as F, ArrowRight as H, Circle as I, CircleDot as L, FileArchive as M, Download as N, FileSearch as O, CodeXml as P, ChevronRight as R, KeyRound as S, FolderTree as T, ArrowUp as V, MessageSquare as _, TriangleAlert as a, Layers as b, Sparkles as c, Search as d, ScrollText as f, PanelLeft as g, Play as h, Undo2 as i, FileCode as j, FileJson as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, WandSparkles as r, Square as s, X as t, Settings as u, LoaderCircle as v, Folder as w, Keyboard as x, ListTodo as y, Check as z };
+export { FileJson as A, Check as B, History as C, FolderOpen as D, FolderTree as E, CodeXml as F, ArrowUp as H, Clock as I, Circle as L, FileCode as M, FileArchive as N, FileText as O, Download as P, CircleDot as R, KeyRound as S, Folder as T, ArrowRight as U, Bug as V, MessageSquare as _, TriangleAlert as a, Layers as b, Sparkles as c, Search as d, ScrollText as f, PanelLeft as g, Play as h, Undo2 as i, FileDiff as j, FileSearch as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, WandSparkles as r, Square as s, X as t, Settings as u, LoaderCircle as v, Github as w, Keyboard as x, ListTodo as y, ChevronRight as z };

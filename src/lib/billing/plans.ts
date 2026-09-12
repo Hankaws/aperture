@@ -1,5 +1,5 @@
 export type PlanId = "hobby" | "pro" | "team";
-export type ProviderId = "grok" | "openai" | "anthropic";
+export type ProviderId = "grok" | "openai" | "anthropic" | "gemini" | "deepseek";
 export type ModelSource = "hosted" | ProviderId;
 
 export type Plan = {
@@ -50,7 +50,7 @@ export const PLANS: Plan[] = [
     monthly: 20,
     yearlyMonthly: 16,
     hostedTurns: 500,
-    byokSlots: 3,
+    byokSlots: 5,
     tab: true,
     tabDaily: 250,
     backgroundJobs: 1,
@@ -59,7 +59,7 @@ export const PLANS: Plan[] = [
     cta: "Activate Pro",
     features: [
       "500 hosted Grok turns / month",
-      "Unlimited Composer on your Grok, GPT, Claude keys",
+      "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
       "Tab ghost-text — fast model, 250 hosted / day",
       "One background job",
@@ -73,7 +73,7 @@ export const PLANS: Plan[] = [
     monthly: 40,
     yearlyMonthly: 32,
     hostedTurns: 2000,
-    byokSlots: 3,
+    byokSlots: 5,
     tab: true,
     tabDaily: 600,
     backgroundJobs: 3,
@@ -99,6 +99,8 @@ export const PROVIDERS: Array<{
   { id: "grok", label: "xAI Grok", short: "Grok", hint: "api.x.ai", placeholder: "xai-…" },
   { id: "openai", label: "OpenAI GPT", short: "GPT", hint: "api.openai.com", placeholder: "sk-…" },
   { id: "anthropic", label: "Anthropic Claude", short: "Claude", hint: "api.anthropic.com", placeholder: "sk-ant-…" },
+  { id: "gemini", label: "Google Gemini", short: "Gemini", hint: "aistudio.google.com", placeholder: "AIza…" },
+  { id: "deepseek", label: "DeepSeek", short: "DeepSeek", hint: "api.deepseek.com", placeholder: "sk-…" },
 ];
 
 export function planById(id: string): Plan {
@@ -106,7 +108,7 @@ export function planById(id: string): Plan {
 }
 
 export function isProvider(value: string): value is ProviderId {
-  return value === "grok" || value === "openai" || value === "anthropic";
+  return PROVIDERS.some((p) => p.id === value);
 }
 
 export function isModelSource(value: string): value is ModelSource {

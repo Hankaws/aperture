@@ -75,11 +75,14 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
     <div>
       <div
         className={cn(
-          "group flex h-8 items-center gap-1 rounded-md pr-1 text-[13px]",
+          "group relative flex h-9 items-center gap-1 rounded-md pr-1 text-sm",
           active ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/70 hover:text-fg",
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
       >
+        {active && !isFolder && (
+          <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" />
+        )}
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
@@ -160,12 +163,14 @@ function OpenMenu() {
     <div ref={rootRef} className="relative">
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="sm"
+        className="h-8 px-2"
         aria-label="Open project"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <FolderOpen className="size-4" />
+        <FolderOpen className="size-3.5" />
+        Open
       </Button>
       {open && (
         <div className="absolute right-0 top-9 z-20 w-48 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
@@ -192,7 +197,6 @@ function OpenMenu() {
 export function FileTree() {
   const files = useWorkspace((s) => s.files);
   const name = useWorkspace((s) => s.name);
-  const chunks = useWorkspace((s) => s.chunks);
   const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
@@ -200,22 +204,23 @@ export function FileTree() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-10 items-center justify-between gap-1 border-b border-border px-2">
+      <div className="flex h-11 items-center justify-between gap-1 border-b border-border px-2">
         <p className="min-w-0 truncate px-1 text-sm font-medium tracking-tight">{name}</p>
-        <div className="flex items-center">
+        <div className="flex shrink-0 items-center">
           <OpenMenu />
-          <Button variant="ghost" size="icon-sm" aria-label="New file" onClick={() => setNewFileOpen(true)}>
-            <Plus className="size-4" />
+          <Button variant="ghost" size="sm" className="h-8 px-2" aria-label="New file" onClick={() => setNewFileOpen(true)}>
+            <Plus className="size-3.5" />
+            New
           </Button>
         </div>
       </div>
-      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {tree.map((node) => (
           <TreeItem key={node.path} node={node} depth={0} pending={pending} />
         ))}
       </div>
-      <div className="border-t border-border px-3 py-2 text-[11px] text-subtle">
-        {Object.keys(files).length} files · {chunks.length} chunks
+      <div className="border-t border-border px-3 py-2 text-xs text-subtle">
+        {Object.keys(files).length} {Object.keys(files).length === 1 ? "file" : "files"}
       </div>
     </div>
   );

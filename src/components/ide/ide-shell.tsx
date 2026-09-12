@@ -11,6 +11,7 @@ import { AgentPanel } from "./agent-panel";
 import { CommandPalette } from "./command-palette";
 import { InlineEdit } from "./inline-edit";
 import { HelpDialog, NewFileDialog } from "./overlays";
+import { HistoryDialog } from "./history-dialog";
 import { OpenProjectHost } from "./open-project";
 import { AuthSlot } from "@/components/site/auth-slot";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,6 @@ export function IdeShell() {
   const desktop = useIsDesktop();
   const { user, account } = useAccount();
   const projectName = useWorkspace((s) => s.name);
-  const activePath = useWorkspace((s) => s.activePath);
 
   useEffect(() => {
     void getAiStatus()
@@ -57,11 +57,25 @@ export function IdeShell() {
   }, []);
 
   useEffect(() => {
+    try {
+      if (window.localStorage.getItem("aperture-debug") === "1") {
+        useIdeUi.setState({ debug: true });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         const ui = useIdeUi.getState();
         if (ui.githubOpen) {
           ui.setGithubOpen(false);
+          return;
+        }
+        if (ui.historyOpen) {
+          ui.setHistoryOpen(false);
           return;
         }
         ui.setCommandOpen(false);
@@ -118,29 +132,30 @@ export function IdeShell() {
           <span className="text-sm font-medium tracking-tight">Aperture</span>
         </Link>
         <span className="hidden max-w-40 truncate text-xs text-subtle sm:inline">{projectName}</span>
-        {activePath && (
-          <span className="hidden min-w-0 truncate font-mono text-xs text-muted lg:inline">{activePath}</span>
-        )}
         <div className="ml-auto flex min-w-0 items-center gap-1">
-          {desktop && (
-            <>
-              <Button variant="ghost" size="icon-sm" aria-label="Toggle file tree" onClick={toggleSidebar}>
-                <PanelLeft className="size-4" />
-              </Button>
-              <Button
-                variant={chatOpen ? "subtle" : "ghost"}
-                size="sm"
-                aria-label="Toggle agent"
-                onClick={() => {
-                  toggleChat();
-                  requestAnimationFrame(() => composerRef.current?.focus());
-                }}
-              >
-                <Sparkles className="size-3.5" />
-                Agent
-              </Button>
-            </>
-          )}
+          <Button
+            variant={sidebarOpen ? "subtle" : "ghost"}
+            size="sm"
+            className="hidden md:inline-flex"
+            aria-label="Toggle file tree"
+            onClick={toggleSidebar}
+          >
+            <PanelLeft className="size-3.5" />
+            Files
+          </Button>
+          <Button
+            variant={chatOpen ? "subtle" : "ghost"}
+            size="sm"
+            className="hidden md:inline-flex"
+            aria-label="Toggle agent"
+            onClick={() => {
+              toggleChat();
+              requestAnimationFrame(() => composerRef.current?.focus());
+            }}
+          >
+            <Sparkles className="size-3.5" />
+            Agent
+          </Button>
           <Link
             to="/settings"
             search={{ tab: "models" }}
@@ -149,8 +164,9 @@ export function IdeShell() {
           >
             <Settings className="size-4" />
           </Link>
-          <Button variant="ghost" size="icon-sm" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>
-            <Keyboard className="size-4" />
+          <Button variant="ghost" size="sm" aria-label="How this editor works" onClick={() => setHelpOpen(true)}>
+            <Keyboard className="size-3.5" />
+            <span className="hidden sm:inline">Help</span>
           </Button>
           <AuthSlot compact />
         </div>
@@ -214,12 +230,13 @@ export function IdeShell() {
         </div>
       )}
 
-      <StatusBar aiLabel={aiLabel} account={account} />
+      <StatusBar aiLabel={aiLabel} />
       <OpenProjectHost />
       <CommandPalette />
       <InlineEdit />
       <NewFileDialog />
       <HelpDialog />
+      <HistoryDialog />
     </div>
   );
 }

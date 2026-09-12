@@ -13,6 +13,14 @@ export function languageFromPath(path: string): LanguageId {
   return "text";
 }
 
-export function isCodeLanguage(lang: LanguageId) {
-  return lang === "typescript" || lang === "javascript" || lang === "python";
+export function languageLabel(path: string): string {
+  const lang = languageFromPath(path);
+  if (lang === "typescript") return "TypeScript";
+  if (lang === "javascript") return "JavaScript";
+  if (lang === "markdown") return "Markdown";
+  if (lang === "python") return "Python";
+  if (lang === "html") return "HTML";
+  if (lang === "css") return "CSS";
+  if (lang === "json") return "JSON";
+  return "";
 }

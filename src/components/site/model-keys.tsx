@@ -60,18 +60,18 @@ export function ModelKeys({
         </div>
       </div>
 
-      <div className="flex rounded-lg border border-border p-1">
+      <div className="flex flex-wrap rounded-lg border border-border p-1">
         {PROVIDERS.map((provider) => (
           <button
             key={provider.id}
             type="button"
             onClick={() => setTab(provider.id)}
             className={cn(
-              "h-11 flex-1 rounded-md text-sm",
+              "h-11 min-w-[5.5rem] flex-1 rounded-md px-2 text-sm",
               tab === provider.id ? "bg-elevated text-fg" : "text-muted hover:text-fg",
             )}
           >
-            {provider.label.replace(/^(xAI |OpenAI |Anthropic )/, "")}
+            {provider.short}
           </button>
         ))}
       </div>
@@ -93,7 +93,7 @@ export function ModelKeys({
 
       {account.plan === "hobby" && (
         <p className="text-sm text-muted">
-          Need GPT and Claude at the same time?{" "}
+          Need GPT, Claude, Gemini, and DeepSeek together?{" "}
           <Link to="/pricing" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-auto px-1")}>
             Upgrade to Pro
           </Link>

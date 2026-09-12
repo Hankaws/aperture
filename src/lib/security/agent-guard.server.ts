@@ -110,5 +110,6 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     agentId,
     phase,
     approvedPlan: approvedPlan.length > 0 ? approvedPlan : undefined,
+    debug: input.debug === true,
   };
 }

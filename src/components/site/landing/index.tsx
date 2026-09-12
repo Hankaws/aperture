@@ -49,7 +49,7 @@ const PILLARS = [
   {
     id: "model",
     title: "You pick the model. No Auto.",
-    body: "Hosted Grok, or your Grok, GPT, or Claude. If a key is missing we say so. We never silently switch pools.",
+    body: "Hosted Grok, or your Grok, GPT, Claude, Gemini, or DeepSeek. If a key is missing we say so. We never silently switch pools.",
     visual: "model",
   },
   {
@@ -67,7 +67,7 @@ const FAQ = [
   },
   {
     q: "Do I have to use your model?",
-    a: "No. You pick Hosted Grok, your Grok, your GPT, or your Claude. There is no Auto and no silent fallback. Hobby allows one key; Pro and Team allow all three. Your own API usage is billed by that provider, not by us.",
+    a: "No. You pick Hosted Grok, your Grok, your GPT, Claude, Gemini, or DeepSeek. There is no Auto and no silent fallback. Hobby allows one key; Pro and Team allow all five. Your own API usage is billed by that provider, not by us.",
   },
   {
     q: "What does a hosted turn cost?",
@@ -177,7 +177,7 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
       <div className="rounded-2xl border border-border bg-surface p-5">
         <p className="text-xs tracking-[0.14em] text-subtle uppercase">Composer menu</p>
         <div className="mt-4 space-y-2">
-          {["Hosted Grok", "Your GPT", "Your Claude"].map((label, i) => (
+          {["Hosted Grok", "Your GPT", "Your Claude", "Your Gemini", "Your DeepSeek"].map((label, i) => (
             <div
               key={label}
               className={cn(
@@ -408,7 +408,7 @@ export function Landing() {
                 </div>
               </div>
             </Reveal>
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {PROVIDERS.map((provider, i) => (
                 <Reveal key={provider.id} delay={i * 80}>
                   <article className="rounded-2xl border border-border bg-surface p-5">

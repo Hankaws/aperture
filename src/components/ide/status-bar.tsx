@@ -1,52 +1,51 @@
 import { useWorkspace } from "@/lib/workspace/store";
 import { listPendingEdits } from "@/lib/workspace/edits";
-import { languageFromPath } from "@/lib/parser/language";
-import { modSymbol } from "@/lib/utils";
-import type { AccountSnapshot } from "@/lib/billing/api";
+import { languageLabel } from "@/lib/parser/language";
+import { useIdeUi } from "@/lib/ui-store";
 
-function tabLabel(account: AccountSnapshot | null | undefined) {
-  if (!account?.tab) return "Tab · Pro";
-  const keyed = account.modelSource !== "hosted" && account.keys[account.modelSource]?.set;
-  if (keyed) return "Tab · your key";
-  return `Tab ${account.tabRemaining}/${account.tabCap}`;
-}
-
-export function StatusBar({ aiLabel, account }: { aiLabel: string; account?: AccountSnapshot | null }) {
+export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const activePath = useWorkspace((s) => s.activePath);
-  const chunks = useWorkspace((s) => s.chunks);
   const indexing = useWorkspace((s) => s.indexing);
   const agentRunning = useWorkspace((s) => s.agentRunning);
   const files = useWorkspace((s) => s.files);
   const selection = useWorkspace((s) => s.selection);
   const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
-  const lang = activePath ? languageFromPath(activePath) : "";
-  const mod = modSymbol();
+  const snapshots = useWorkspace((s) => s.checkpoints.length);
+  const debug = useIdeUi((s) => s.debug);
+  const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
+  const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
+  const lang = activePath ? languageLabel(activePath) : "";
   const line = selection && selection.path === activePath ? selection.fromLine : null;
+  const fileCount = Object.keys(files).length;
 
   return (
     <div className="flex h-8 items-center justify-between gap-3 border-t border-border bg-surface px-3 text-xs text-subtle">
       <div className="flex min-w-0 items-center gap-3">
-        <span className={indexing || agentRunning ? "shimmer-text" : ""}>
-          {agentRunning ? "Agent running" : indexing ? "Indexing…" : "Ready"}
+        <span className={indexing || agentRunning ? "shimmer-text" : "text-fg"}>
+          {agentRunning ? "Agent is working…" : indexing ? "Indexing…" : "Ready"}
         </span>
         <span className="tabular-nums">
-          {Object.keys(files).length} files · {chunks.length} chunks
+          {fileCount} {fileCount === 1 ? "file" : "files"}
         </span>
         {staged > 0 && (
           <span className="text-ok">
-            {staged} staged {staged === 1 ? "diff" : "diffs"}
+            {staged} {staged === 1 ? "change to apply" : "changes to apply"}
           </span>
         )}
-        {activePath && <span className="hidden truncate sm:inline">{activePath}</span>}
+        {snapshots > 0 && (
+          <button type="button" className="hover:text-fg" onClick={() => setHistoryOpen(true)}>
+            History
+          </button>
+        )}
+        {debug && <span className="text-warn">Debug</span>}
       </div>
       <div className="hidden items-center gap-3 sm:flex">
-        {line != null && <span className="tabular-nums">Ln {line}</span>}
-        {lang && <span className="uppercase">{lang}</span>}
+        {line != null && <span className="tabular-nums">Line {line}</span>}
+        {lang && <span>{lang}</span>}
         <span>{aiLabel}</span>
-        <span>{tabLabel(account)}</span>
-        <span>
-          {mod}I agent · {mod}K edit · {mod}P files
-        </span>
+        <button type="button" className="hover:text-fg" onClick={() => setHelpOpen(true)}>
+          How this works
+        </button>
       </div>
     </div>
   );

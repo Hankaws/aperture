@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Clock, Download, FileArchive, FileCode, FolderOpen, Github, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { Bug, Clock, Download, FileArchive, FileCode, FolderOpen, Github, History, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -15,6 +15,9 @@ export function CommandPalette() {
   const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
   const setMobilePane = useIdeUi((s) => s.setMobilePane);
   const setGithubOpen = useIdeUi((s) => s.setGithubOpen);
+  const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
+  const debug = useIdeUi((s) => s.debug);
+  const setDebug = useIdeUi((s) => s.setDebug);
   const files = useWorkspace((s) => s.files);
   const openFile = useWorkspace((s) => s.openFile);
   const loadDemo = useWorkspace((s) => s.loadDemo);
@@ -125,6 +128,16 @@ export function CommandPalette() {
             <Command.Item
               onSelect={() => {
                 close();
+                setHistoryOpen(true);
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+            >
+              <History className="size-3.5 text-subtle" />
+              File history
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
                 const ck = useWorkspace.getState().undoLast();
                 if (ck) toast.success(`Undid “${ck.label}”`);
                 else toast.error("Nothing to undo");
@@ -153,6 +166,22 @@ export function CommandPalette() {
             >
               <Sparkles className="size-3.5 text-subtle" />
               Rebuild index
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                const next = !useIdeUi.getState().debug;
+                setDebug(next);
+                toast.message(next ? "Debug is on" : "Debug is off", {
+                  description: next
+                    ? "The next Agent turn stores the redacted prompt and response on that message."
+                    : "Later turns will not attach a debug block.",
+                });
+                close();
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+            >
+              <Bug className="size-3.5 text-subtle" />
+              {debug ? "Turn debug off" : "Turn debug on"}
             </Command.Item>
             <Command.Item
               onSelect={() => {

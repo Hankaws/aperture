@@ -10,7 +10,7 @@ import {
   estimateCents,
   type SessionSnapshot,
 } from "./cost";
-import { isModelSource, isProvider, planById, type ModelSource, type PlanId, type ProviderId } from "./plans";
+import { isModelSource, isProvider, planById, providerShort, type ModelSource, type PlanId, type ProviderId } from "./plans";
 
 export type KeyStatus = { set: boolean; last4: string | null };
 
@@ -33,11 +33,25 @@ export type AccountSnapshot = {
   session: SessionSnapshot;
 };
 
-const PROVIDER_COLS: Record<ProviderId, "grok_key" | "openai_key" | "anthropic_key"> = {
+const PROVIDER_COLS: Record<ProviderId, "grok_key" | "openai_key" | "anthropic_key" | "gemini_key" | "deepseek_key"> = {
   grok: "grok_key",
   openai: "openai_key",
   anthropic: "anthropic_key",
+  gemini: "gemini_key",
+  deepseek: "deepseek_key",
 };
+
+const KEY_COLS = ["grok_key", "openai_key", "anthropic_key", "gemini_key", "deepseek_key"] as const;
+type KeyCol = (typeof KEY_COLS)[number];
+
+async function writeKeyColumn(
+  sql: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+  userId: string,
+  col: KeyCol,
+  value: string | null,
+) {
+  await sql.query(`update user_settings set ${col} = $1, updated_at = now() where user_id = $2`, [value, userId]);
+}
 
 function monthStamp() {
   const d = new Date();
@@ -67,6 +81,8 @@ type SettingsRow = {
   grok_key: string | null;
   openai_key: string | null;
   anthropic_key: string | null;
+  gemini_key: string | null;
+  deepseek_key: string | null;
   hosted_used: number;
   usage_month: string;
   session_cap_on: unknown;
@@ -89,7 +105,7 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
   const month = monthStamp();
   const day = dayStamp();
   const existing = await sql<SettingsRow>`
-    select plan, preferred_provider, model_source, grok_key, openai_key, anthropic_key,
+    select plan, preferred_provider, model_source, grok_key, openai_key, anthropic_key, gemini_key, deepseek_key,
            hosted_used, usage_month, session_cap_on, session_cap_turns, session_cap_cents,
            session_id, session_turns, session_cents, tab_used, tab_day
     from user_settings where user_id = ${userId}
@@ -106,6 +122,8 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
       grok_key: null,
       openai_key: null,
       anthropic_key: null,
+      gemini_key: null,
+      deepseek_key: null,
       hosted_used: 0,
       usage_month: month,
       session_cap_on: true,
@@ -138,14 +156,13 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
     row.tab_day = day;
   }
   if (!row.model_source) {
+    const preferred = row.preferred_provider;
     const inferred: ModelSource =
-      row.preferred_provider === "openai" && row.openai_key
-        ? "openai"
-        : row.preferred_provider === "anthropic" && row.anthropic_key
-          ? "anthropic"
-          : row.grok_key
-            ? "grok"
-            : "hosted";
+      isProvider(preferred) && row[PROVIDER_COLS[preferred]]
+        ? preferred
+        : row.grok_key
+          ? "grok"
+          : "hosted";
     row.model_source = inferred;
     await sql`update user_settings set model_source = ${inferred}, updated_at = now() where user_id = ${userId}`;
   }
@@ -157,18 +174,12 @@ async function migratePlaintextKeys(userId: string, row: SettingsRow) {
   const { encryptSecret, isEncryptedSecret } = await peek();
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
-  for (const col of ["grok_key", "openai_key", "anthropic_key"] as const) {
+  for (const col of KEY_COLS) {
     const value = row[col];
     if (!value || isEncryptedSecret(value)) continue;
     const wrapped = encryptSecret(value);
     row[col] = wrapped;
-    if (col === "grok_key") {
-      await sql`update user_settings set grok_key = ${wrapped}, updated_at = now() where user_id = ${userId}`;
-    } else if (col === "openai_key") {
-      await sql`update user_settings set openai_key = ${wrapped}, updated_at = now() where user_id = ${userId}`;
-    } else {
-      await sql`update user_settings set anthropic_key = ${wrapped}, updated_at = now() where user_id = ${userId}`;
-    }
+    await writeKeyColumn(sql, userId, col, wrapped);
   }
 }
 
@@ -178,6 +189,8 @@ function snapshot(row: SettingsRow, peekLast4: (stored: string | null) => string
     grok: { set: Boolean(row.grok_key), last4: peekLast4(row.grok_key) },
     openai: { set: Boolean(row.openai_key), last4: peekLast4(row.openai_key) },
     anthropic: { set: Boolean(row.anthropic_key), last4: peekLast4(row.anthropic_key) },
+    gemini: { set: Boolean(row.gemini_key), last4: peekLast4(row.gemini_key) },
+    deepseek: { set: Boolean(row.deepseek_key), last4: peekLast4(row.deepseek_key) },
   };
   const keyCount = Object.values(keys).filter((k) => k.set).length;
   const modelSource: ModelSource = isModelSource(row.model_source ?? "") ? (row.model_source as ModelSource) : "hosted";
@@ -271,20 +284,14 @@ export const saveProviderKey = createServerFn({ method: "POST" })
     const col = PROVIDER_COLS[data.provider];
     const trimmed = data.key.trim();
     const currentlySet = Boolean(row[col]);
-    const keyCount = [row.grok_key, row.openai_key, row.anthropic_key].filter(Boolean).length;
+    const keyCount = KEY_COLS.filter((c) => row[c]).length;
     if (trimmed && !currentlySet && keyCount >= plan.byokSlots) {
       throw new Error(`Your ${plan.name} plan allows ${plan.byokSlots} key${plan.byokSlots === 1 ? "" : "s"}. Upgrade to add more.`);
     }
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const value = trimmed.length === 0 ? null : encryptSecret(validateProviderKey(data.provider, trimmed));
-    if (col === "grok_key") {
-      await sql`update user_settings set grok_key = ${value}, updated_at = now() where user_id = ${context.userId}`;
-    } else if (col === "openai_key") {
-      await sql`update user_settings set openai_key = ${value}, updated_at = now() where user_id = ${context.userId}`;
-    } else {
-      await sql`update user_settings set anthropic_key = ${value}, updated_at = now() where user_id = ${context.userId}`;
-    }
+    await writeKeyColumn(sql, context.userId, col, value);
     return snapshotOf(await loadSettings(context.userId));
   });
 
@@ -366,7 +373,7 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
   if (!own) {
     return {
       ok: false,
-      error: `No ${source === "openai" ? "GPT" : source === "anthropic" ? "Claude" : "Grok"} key on this account. Add one in Settings — we never silently switch models.`,
+      error: `No ${providerShort(source)} key on this account. Add one in Settings — we never silently switch models.`,
     };
   }
   const cents = estimateCents(source);

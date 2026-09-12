@@ -28,7 +28,7 @@ const theme = EditorView.theme(
       backgroundColor: SYNTAX.bg,
       color: SYNTAX.fg,
       height: "100%",
-      fontSize: "13.5px",
+      fontSize: "14px",
     },
     ".cm-scroller": {
       overflow: "auto",
@@ -47,7 +47,7 @@ const theme = EditorView.theme(
       padding: "0 10px 0 8px",
     },
     ".cm-activeLine": { backgroundColor: SYNTAX.activeLine },
-    ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: "#a1a1aa" },
+    ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: "#c4c4cc" },
     ".cm-cursor": { borderLeftColor: SYNTAX.caret, borderLeftWidth: "2px" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
       backgroundColor: "color-mix(in oklab, var(--color-ok) 34%, transparent)",
@@ -310,7 +310,7 @@ export function CodePane() {
           <div>
             <p className="text-sm font-medium text-fg">Open a file to start</p>
             <p className="mt-1 max-w-xs text-sm text-pretty text-muted">
-              Pick one from the left, or ask Agent on the right to change the project.
+              Click a file on the left. Or ask Agent on the right — it plans first, then waits.
             </p>
           </div>
         </div>

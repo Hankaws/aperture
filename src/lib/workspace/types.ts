@@ -56,6 +56,14 @@ export type PlanEntry = {
 
 export type ChatRole = "user" | "assistant";
 
+export type AgentDebug = {
+  model: string;
+  steps: number;
+  system: string;
+  user: string;
+  response: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -69,6 +77,7 @@ export type ChatMessage = {
   agentLabel?: string;
   /** True when Composer posted a plan and is waiting for Build it. */
   awaitingBuild?: boolean;
+  debug?: AgentDebug;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

@@ -7,8 +7,8 @@
       "status": 200,
       "title": "Aperture",
       "hasCanvas": false,
-      "bodyTextLen": 4959,
-      "bodyTextHash": "3920ae45f693f3a4b9d3fc280d24bf96c2051bbb32e092685a4b662391204175",
+      "bodyTextLen": 5167,
+      "bodyTextHash": "a19bfaefc22715eef6e99b4b47564c2b68bd6f6653793cf906afe83eb4cd5746",
       "bodyTextPrefix": "Aperture How Code Why Pricing Editor Sign in Start free THE AI C",
       "horizontalOverflow": false,
       "consoleErrors": [],
@@ -21,8 +21,8 @@
       "status": 200,
       "title": "Aperture",
       "hasCanvas": false,
-      "bodyTextLen": 4842,
-      "bodyTextHash": "5809b3a13613826d623dc059acb2f5c3ef61d30bd106c09feeed8aef9a14fd4d",
+      "bodyTextLen": 5050,
+      "bodyTextHash": "e73ac9f4c1efc0fc56b519544ed3684afb8fa96516b16df58c7ea9b95891274d",
       "bodyTextPrefix": "Aperture Pricing Sign in Start free THE AI CODE EDITOR See the w",
       "horizontalOverflow": true,
       "consoleErrors": [],
@@ -35,7 +35,6 @@
   "verdictFile": "/workspace/screenshots/app-builder-built.json",
   "divergesFromBaseline": true,
   "baselineReasons": [
-    "desktop: body text replaced (similar length, page start changed)",
-    "mobile: body text replaced (similar length, page start changed)"
+    "desktop: body text replaced (similar length, page start changed)"
   ]
 }

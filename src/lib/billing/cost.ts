@@ -5,6 +5,8 @@ export const TURN_COST_CENTS: Record<ProviderId, number> = {
   grok: 8,
   openai: 12,
   anthropic: 15,
+  gemini: 6,
+  deepseek: 4,
 };
 
 export const DEFAULT_SESSION_TURNS = 8;

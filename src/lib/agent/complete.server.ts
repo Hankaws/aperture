@@ -1,4 +1,5 @@
 import { AGENT_TOOLS, type AgentToolDef } from "./tools";
+import type { ProviderId } from "@/lib/billing/plans";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -16,16 +17,21 @@ export type Completion = {
   tool_calls?: ChatMessage["tool_calls"];
 };
 
-type Cfg = { provider: "grok" | "openai" | "anthropic"; apiKey: string };
+export type CompletionCfg = { provider: ProviderId; apiKey: string };
 
-function modelOf(provider: Cfg["provider"]) {
+function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o";
   if (provider === "anthropic") return "claude-sonnet-4-5";
+  if (provider === "gemini") return "gemini-2.5-flash";
+  if (provider === "deepseek") return "deepseek-chat";
   return "grok-4.5";
 }
 
-function baseOf(provider: Cfg["provider"]) {
-  return provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
+export function openaiCompatBase(provider: ProviderId) {
+  if (provider === "openai") return "https://api.openai.com/v1";
+  if (provider === "gemini") return "https://generativelanguage.googleapis.com/v1beta/openai";
+  if (provider === "deepseek") return "https://api.deepseek.com/v1";
+  return "https://api.x.ai/v1";
 }
 
 function asAnthropicTools(tools: AgentToolDef[]) {
@@ -37,7 +43,7 @@ function asAnthropicTools(tools: AgentToolDef[]) {
 }
 
 export async function complete(
-  cfg: Cfg,
+  cfg: CompletionCfg,
   messages: ChatMessage[],
   useTools: boolean,
   signal?: AbortSignal,
@@ -56,7 +62,7 @@ export async function complete(
     body.tools = tools;
     body.tool_choice = "auto";
   }
-  const res = await fetch(`${baseOf(cfg.provider)}/chat/completions`, {
+  const res = await fetch(`${openaiCompatBase(cfg.provider)}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -76,7 +82,7 @@ export async function complete(
 }
 
 export async function completeStreaming(
-  cfg: Cfg,
+  cfg: CompletionCfg,
   messages: ChatMessage[],
   useTools: boolean,
   onText: (delta: string) => void,
@@ -97,7 +103,7 @@ export async function completeStreaming(
     body.tools = tools;
     body.tool_choice = "auto";
   }
-  const res = await fetch(`${baseOf(cfg.provider)}/chat/completions`, {
+  const res = await fetch(`${openaiCompatBase(cfg.provider)}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

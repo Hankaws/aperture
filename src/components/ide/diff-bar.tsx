@@ -19,7 +19,7 @@ export function DiffBar({ edit }: { edit: ProposedEdit }) {
         {live ? (
           <>
             <span className="text-fg">{edit.description || "Staged edit"}</span>
-            <span className="text-subtle"> · in the file</span>
+            <span className="text-subtle"> · review the green and red, then Apply</span>
           </>
         ) : (
           <span>File changed since this was staged. Apply overwrites it.</span>

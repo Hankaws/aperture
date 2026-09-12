@@ -1,5 +1,6 @@
 import { runAgent } from "./api";
 import { getBearerToken } from "@/lib/auth/client";
+import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { ModelSource } from "@/lib/billing/plans";
 import type { AgentMode, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
@@ -75,6 +76,7 @@ export function agentPayload(
     agentId: agentId ?? null,
     phase: extra?.phase,
     approvedPlan: extra?.approvedPlan,
+    debug: useIdeUi.getState().debug,
   };
 }
 
@@ -151,6 +153,7 @@ export async function submitAgent(
         edits: result.edits,
         plan: result.plan,
         status: undefined,
+        debug: result.debug,
       });
     } catch (error) {
       useWorkspace.getState().patchMessage(asstId, { content: describeError(error), status: undefined });
@@ -245,6 +248,7 @@ export async function submitAgent(
             plan,
             status: undefined,
             awaitingBuild: Boolean(event.awaitingBuild),
+            debug: event.debug,
           });
           const firstPending = edits.find((e) => e.status === "pending");
           if (firstPending?.path) ws.openFile(firstPending.path);

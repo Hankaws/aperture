@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import type { ProviderId } from "@/lib/billing/plans";
 
 /**
  * AES-256-GCM envelope for BYOK strings at rest.
@@ -56,7 +57,7 @@ export function decryptSecret(stored: string | null): string | null {
   }
 }
 
-export function validateProviderKey(provider: "grok" | "openai" | "anthropic", key: string): string {
+export function validateProviderKey(provider: ProviderId, key: string): string {
   const next = key.trim();
   if (next.length < 16 || next.length > 256) {
     throw new Error("That does not look like an API key.");
@@ -75,6 +76,12 @@ export function validateProviderKey(provider: "grok" | "openai" | "anthropic", k
   }
   if (provider === "grok" && !(next.startsWith("xai-") || next.startsWith("sk-"))) {
     throw new Error("xAI keys start with xai-");
+  }
+  if (provider === "gemini" && !next.startsWith("AIza")) {
+    throw new Error("Gemini keys start with AIza");
+  }
+  if (provider === "deepseek" && !next.startsWith("sk-")) {
+    throw new Error("DeepSeek keys start with sk-");
   }
   return next;
 }

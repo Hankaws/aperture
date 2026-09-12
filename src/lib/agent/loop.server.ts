@@ -6,9 +6,10 @@ import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { expandMentions, parseMentions } from "@/lib/workspace/mentions";
-import { sanitizeFileMap } from "@/lib/security/redact";
+import type { ProviderId } from "@/lib/billing/plans";
+import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
-import type { PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 
 const MAX_STEPS = 8;
@@ -80,6 +81,24 @@ function fileTree(files: Record<string, string>): string {
     .join("\n");
 }
 
+function packDebug(
+  input: AgentInput,
+  provider: string,
+  system: string,
+  user: string,
+  response: string,
+  steps: number,
+): AgentDebug | undefined {
+  if (!input.debug) return undefined;
+  return {
+    model: provider,
+    steps,
+    system: redactSecrets(system).slice(0, 6000),
+    user: redactSecrets(user).slice(0, 6000),
+    response: redactSecrets(response).slice(0, 6000),
+  };
+}
+
 function toPlainArgs(args: Record<string, unknown>): Record<string, string | number | boolean | null> {
   const out: Record<string, string | number | boolean | null> = {};
   for (const [key, value] of Object.entries(args)) {
@@ -133,14 +152,14 @@ function buildContextMessage(input: AgentInput, files: Record<string, string>): 
 
 export async function runAgentLoop(
   input: AgentInput,
-  cfg: { provider: "grok" | "openai" | "anthropic"; apiKey: string },
+  cfg: { provider: ProviderId; apiKey: string },
 ): Promise<AgentResult> {
   return runAgentLoopStreaming(input, cfg, () => undefined);
 }
 
 export async function runAgentLoopStreaming(
   input: AgentInput,
-  cfg: { provider: "grok" | "openai" | "anthropic"; apiKey: string },
+  cfg: { provider: ProviderId; apiKey: string },
   emit: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
@@ -175,9 +194,11 @@ export async function runAgentLoopStreaming(
     emit({ type: "status", text: `ACP session/new · ${flavor.name}` });
   }
 
+  const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase);
+  const userCtx = buildContextMessage(input, files);
   const messages: ChatMessage[] = [
-    { role: "system", content: systemPrompt(input.mode, rules, flavor?.kind ?? null, phase) },
-    { role: "user", content: buildContextMessage(input, files) },
+    { role: "system", content: sys },
+    { role: "user", content: userCtx },
   ];
 
   for (const turn of input.history.slice(-8)) {
@@ -186,6 +207,16 @@ export async function runAgentLoopStreaming(
   messages.push({ role: "user", content: input.instruction });
 
   let planNudged = false;
+  const userBlob = `${userCtx}\n\n${input.instruction}`;
+
+  const succeed = (
+    body: { text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean },
+    steps: number,
+  ): AgentResult => {
+    const debug = packDebug(input, cfg.provider, sys, userBlob, body.text, steps);
+    emit({ type: "done", ...body, ...(debug ? { debug } : {}) });
+    return { ok: true, ...body, ...(debug ? { debug } : {}) };
+  };
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -225,14 +256,10 @@ export async function runAgentLoopStreaming(
           continue;
         }
         if (shouldAwaitBuild(phase, hasPlan, [])) {
-          const text = planReadyText(completion.content);
-          emit({ type: "done", text, traces, edits: [], plan: ctx.plan, awaitingBuild: true });
-          return { ok: true, text, traces, edits: [], plan: ctx.plan, awaitingBuild: true };
+          return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
         }
         const text = completion.content.trim() || "Done.";
-        const edits = mergeEdits(ctx.edits);
-        emit({ type: "done", text, traces, edits, plan: ctx.plan });
-        return { ok: true, text, traces, edits, plan: ctx.plan };
+        return succeed({ text, traces, edits: mergeEdits(ctx.edits), plan: ctx.plan }, step + 1);
       }
 
       messages.push({
@@ -276,9 +303,7 @@ export async function runAgentLoopStreaming(
       }
 
       if (shouldAwaitBuild(phase, ctx.plan.length > 0, callNames)) {
-        const text = planReadyText(completion.content);
-        emit({ type: "done", text, traces, edits: [], plan: ctx.plan, awaitingBuild: true });
-        return { ok: true, text, traces, edits: [], plan: ctx.plan, awaitingBuild: true };
+        return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
       }
     }
 
@@ -287,22 +312,16 @@ export async function runAgentLoopStreaming(
         ? planReadyText(undefined)
         : "Stopped after the tool-call limit. Review the staged edits.";
     const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
-    emit({
-      type: "done",
-      text,
-      traces,
-      edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
-      plan: ctx.plan,
-      awaitingBuild,
-    });
-    return {
-      ok: true,
-      text,
-      traces,
-      edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
-      plan: ctx.plan,
-      awaitingBuild,
-    };
+    return succeed(
+      {
+        text,
+        traces,
+        edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
+        plan: ctx.plan,
+        awaitingBuild,
+      },
+      MAX_STEPS,
+    );
   } catch (error) {
     if (signal?.aborted) return { ok: false, error: "Stopped." };
     const message = error instanceof Error ? error.message : "Agent failed";
@@ -312,7 +331,7 @@ export async function runAgentLoopStreaming(
 }
 
 async function runInline(
-  cfg: { provider: "grok" | "openai" | "anthropic"; apiKey: string },
+  cfg: { provider: ProviderId; apiKey: string },
   input: AgentInput,
   files: Record<string, string>,
   signal?: AbortSignal,
@@ -358,7 +377,15 @@ async function runInline(
       description: input.instruction,
       status: "pending",
     };
-    return { ok: true, text: "Inline replacement ready.", traces: [], edits: [edit] };
+    const debug = packDebug(
+      input,
+      cfg.provider,
+      "You rewrite a selected span of code. Return ONLY the replacement code. No markdown fences, no commentary.",
+      `File: ${sel.path} L${sel.fromLine}-L${sel.toLine}\nInstruction: ${input.instruction}\n\n${sel.text}`,
+      text,
+      1,
+    );
+    return { ok: true, text: "Inline replacement ready.", traces: [], edits: [edit], ...(debug ? { debug } : {}) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Inline edit failed" };
   }

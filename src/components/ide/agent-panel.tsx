@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, Clock, FileDiff, FileSearch, FolderOpen, ListTodo, MessageSquare, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench } from "lucide-react";
+import { ArrowUp, Clock, FileDiff, FileSearch, FolderOpen, History, ListTodo, MessageSquare, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApertureMark } from "./logo";
 import { DiffCard } from "./diff-card";
@@ -20,6 +20,7 @@ import { startJob } from "@/lib/jobs/api";
 import { useJobs } from "@/lib/jobs/use-jobs";
 import { cn } from "@/lib/utils";
 import { DEMO_WORKSPACE_NAME } from "@/lib/workspace/demo-repo";
+import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { pickFolder } from "@/lib/workspace/import-bridge";
 import {
   activeMention,
@@ -30,7 +31,7 @@ import {
 import { DEFAULT_RULES, findRules } from "@/lib/workspace/rules";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
-import type { AgentMode, ChatMessage, ToolTrace } from "@/lib/workspace/types";
+import type { AgentMode, AgentDebug, ChatMessage, ToolTrace } from "@/lib/workspace/types";
 import type { AgentPhase } from "@/lib/agent/phase";
 
 const DEMO_SUGGESTIONS = [
@@ -267,12 +268,29 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           <Button
             variant="ghost"
             size="icon-sm"
+            title={rules ? `Open ${rules.path}` : "Create project rules"}
             aria-label={rules ? `Open ${rules.path}` : "Create project rules"}
             onClick={openRules}
           >
             <ScrollText className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Clear chat" onClick={clearChat} disabled={messages.length === 0}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="File history"
+            aria-label="File history"
+            onClick={() => useIdeUi.getState().setHistoryOpen(true)}
+          >
+            <History className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Clear chat"
+            aria-label="Clear chat"
+            onClick={clearChat}
+            disabled={messages.length === 0}
+          >
             <Trash2 className="size-4" />
           </Button>
         </div>
@@ -306,28 +324,50 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
       {pending.length > 0 && (
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-          <p className="text-[12px] text-muted">
+          <p className="text-xs text-muted">
             {pending.length} staged {pending.length === 1 ? "diff" : "diffs"}
           </p>
-          <Button size="sm" onClick={() => applyAllPending()}>
-            Apply all
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                downloadDiffReport({
+                  title: pending[0]?.description || "Staged diffs",
+                  workspace: name,
+                  files: filesFromEdits(pending),
+                })
+              }
+            >
+              <FileDiff className="size-3.5" />
+              Report
+            </Button>
+            <Button size="sm" onClick={() => applyAllPending()}>
+              Apply all
+            </Button>
+          </div>
         </div>
       )}
       {pending.length === 0 && checkpoints.length > 0 && (
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-          <p className="min-w-0 truncate text-[12px] text-muted">Last run: {checkpoints[checkpoints.length - 1]!.label}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              const ck = undoLast();
-              if (ck) toast.success(`Undid “${ck.label}”`);
-            }}
-          >
-            <Undo2 className="size-3.5" />
-            Undo last
-          </Button>
+          <p className="min-w-0 truncate text-xs text-muted">Last run: {checkpoints[checkpoints.length - 1]!.label}</p>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={() => useIdeUi.getState().setHistoryOpen(true)}>
+              <History className="size-3.5" />
+              History
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const ck = undoLast();
+                if (ck) toast.success(`Undid “${ck.label}”`);
+              }}
+            >
+              <Undo2 className="size-3.5" />
+              Undo last
+            </Button>
+          </div>
         </div>
       )}
 
@@ -432,12 +472,14 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                     </Button>
                   )}
                   {agentRunning ? (
-                    <Button type="button" size="icon-sm" aria-label="Stop" onClick={() => abortAgent()}>
+                    <Button type="button" size="sm" aria-label="Stop" onClick={() => abortAgent()}>
                       <Square className="size-3.5 fill-current" />
+                      Stop
                     </Button>
                   ) : (
-                    <Button type="submit" size="icon-sm" disabled={sendBlocked} aria-label="Plan">
-                      <ArrowUp className="size-4" />
+                    <Button type="submit" size="sm" disabled={sendBlocked} aria-label={mode === "chat" ? "Ask" : "Plan"}>
+                      <ArrowUp className="size-3.5" />
+                      {mode === "chat" ? "Ask" : "Plan"}
                     </Button>
                   )}
                 </div>
@@ -485,9 +527,9 @@ function EmptyState({
         ))}
       </ol>
       {rulesPath ? (
-        <p className="mt-4 text-xs text-subtle">Rules: {rulesPath}</p>
+        <p className="mt-4 text-xs text-subtle">Project rules: {rulesPath}</p>
       ) : (
-        <p className="mt-4 text-xs text-subtle">No rules yet — the scroll icon creates .aperture.md.</p>
+        <p className="mt-4 text-xs text-subtle">No project rules yet. The document icon in this header creates them.</p>
       )}
       <ul className="mt-4 space-y-2">
         {suggestions.map((s) => (
@@ -599,7 +641,21 @@ function MessageBlock({
           )}
         </div>
       )}
+      {message.debug && <DebugBlock debug={message.debug} />}
     </div>
+  );
+}
+
+function DebugBlock({ debug }: { debug: AgentDebug }) {
+  return (
+    <details className="mt-3 rounded-xl border border-border bg-bg px-3 py-2">
+      <summary className="cursor-pointer text-xs text-subtle">
+        Debug · {debug.model} · {debug.steps} {debug.steps === 1 ? "step" : "steps"}
+      </summary>
+      <pre className="aperture-scroll mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted">
+        {`# system\n${debug.system}\n\n# user\n${debug.user}\n\n# response\n${debug.response}`}
+      </pre>
+    </details>
   );
 }
 

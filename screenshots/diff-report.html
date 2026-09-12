@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fix the off-by-one in listTasks · harbor-api</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #09090b; color: #f4f4f5; font: 14px/1.5 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+    header.top { padding: 28px 32px 12px; border-bottom: 1px solid #27272a; }
+    header.top p { margin: 6px 0 0; color: #a1a1aa; }
+    h1 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+    .file { margin: 24px 32px 40px; border: 1px solid #27272a; border-radius: 14px; overflow: hidden; background: #111113; }
+    .file header { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #27272a; }
+    .file h2 { margin: 0; font: 500 13px/1.4 "IBM Plex Mono", ui-monospace, monospace; }
+    .file header p { margin: 0; color: #6ee7b7; font-variant-numeric: tabular-nums; }
+    pre { margin: 0; padding: 8px 0 12px; font: 12.5px/1.7 "IBM Plex Mono", ui-monospace, monospace; overflow: auto; }
+    .ln { padding: 0 16px; white-space: pre-wrap; }
+    .add { background: rgba(110, 231, 183, 0.12); color: #b7f5d8; }
+    .del { background: rgba(248, 113, 113, 0.12); color: #fecaca; }
+    .eq { color: #71717a; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>Fix the off-by-one in listTasks</h1>
+    <p>harbor-api · 1 file · Aperture</p>
+  </header>
+  <section class="file">
+  <header>
+    <h2>src/store.ts</h2>
+    <p>+0 −0</p>
+  </header>
+  <pre><div class="ln eq">  import type { Task, TaskStatus } from "./types.ts";</div><div class="ln eq">  </div><div class="ln eq">  const tasks: Task[] = [</div><div class="ln eq">    {</div><div class="ln eq">      id: "tsk_100",</div><div class="ln eq">      title: "Index the workspace",</div><div class="ln eq">      status: "done",</div><div class="ln eq">      createdAt: 1_714_000_000_000,</div><div class="ln eq">      updatedAt: 1_714_000_100_000,</div><div class="ln eq">    },</div><div class="ln eq">    {</div><div class="ln eq">      id: "tsk_101",</div><div class="ln eq">      title: "Fix pagination",</div><div class="ln eq">      status: "open",</div><div class="ln eq">      createdAt: 1_714_000_200_000,</div><div class="ln eq">      updatedAt: 1_714_000_200_000,</div><div class="ln eq">    },</div><div class="ln eq">    {</div><div class="ln eq">      id: "tsk_102",</div><div class="ln eq">      title: "Validate createTask input",</div><div class="ln eq">      status: "open",</div><div class="ln eq">      createdAt: 1_714_000_300_000,</div><div class="ln eq">      updatedAt: 1_714_000_300_000,</div><div class="ln eq">    },</div><div class="ln eq">  ];</div><div class="ln eq">  </div><div class="ln eq">  let seq = 103;</div><div class="ln eq">  </div><div class="ln eq">  export function listTasks(page: number, pageSize: number): Task[] {</div><div class="ln eq">    const start = Math.max(0, page) * pageSize;</div><div class="ln eq">    // Off-by-one: skips the first item on every page.</div><div class="ln eq">    return tasks.slice(start + 1, start + pageSize + 1);</div><div class="ln eq">  }</div><div class="ln eq">  </div><div class="ln eq">  export function countTasks(): number {</div><div class="ln eq">    return tasks.length;</div><div class="ln eq">  }</div><div class="ln eq">  </div><div class="ln eq">  export function getTask(id: string): Task | null {</div><div class="ln eq">    return tasks.find((task) =&gt; task.id === id) ?? null;</div><div class="ln eq">  }</div><div class="ln eq">  </div><div class="ln eq">  export function createTask(title: string): Task {</div><div class="ln eq">    const now = Date.now();</div><div class="ln eq">    const task: Task = {</div><div class="ln eq">      id: `tsk_${seq++}`,</div><div class="ln eq">      title,</div><div class="ln eq">      status: "open",</div><div class="ln eq">      createdAt: now,</div><div class="ln eq">      updatedAt: now,</div><div class="ln eq">    };</div><div class="ln eq">    tasks.push(task);</div><div class="ln eq">    return task;</div><div class="ln eq">  }</div><div class="ln eq">  </div><div class="ln eq">  export function patchTask(</div><div class="ln eq">    id: string,</div><div class="ln eq">    patch: { title?: string; status?: TaskStatus },</div><div class="ln eq">  ): Task | null {</div><div class="ln eq">    const task = getTask(id);</div><div class="ln eq">    if (!task) return null;</div><div class="ln eq">    if (typeof patch.title === "string") task.title = patch.title;</div><div class="ln eq">    if (patch.status) task.status = patch.status;</div><div class="ln eq">    task.updatedAt = Date.now();</div><div class="ln eq">    return task;</div><div class="ln eq">  }</div><div class="ln eq">  </div></pre>
+</section>
+</body>
+</html>

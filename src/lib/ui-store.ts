@@ -10,6 +10,8 @@ type IdeUiState = {
   newFileOpen: boolean;
   githubOpen: boolean;
   inlineOpen: boolean;
+  historyOpen: boolean;
+  debug: boolean;
   mobilePane: MobilePane;
   toggleSidebar: () => void;
   toggleChat: () => void;
@@ -19,6 +21,8 @@ type IdeUiState = {
   setNewFileOpen: (open: boolean) => void;
   setGithubOpen: (open: boolean) => void;
   setInlineOpen: (open: boolean) => void;
+  setHistoryOpen: (open: boolean) => void;
+  setDebug: (on: boolean) => void;
   setMobilePane: (pane: MobilePane) => void;
 };
 
@@ -30,6 +34,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   newFileOpen: false,
   githubOpen: false,
   inlineOpen: false,
+  historyOpen: false,
+  debug: false,
   mobilePane: "editor",
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
@@ -39,5 +45,16 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setNewFileOpen: (open) => set({ newFileOpen: open }),
   setGithubOpen: (open) => set({ githubOpen: open }),
   setInlineOpen: (open) => set({ inlineOpen: open }),
+  setHistoryOpen: (open) => set({ historyOpen: open }),
+  setDebug: (on) => {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("aperture-debug", on ? "1" : "0");
+      } catch {
+        // quota
+      }
+    }
+    set({ debug: on });
+  },
   setMobilePane: (pane) => set({ mobilePane: pane }),
 }));

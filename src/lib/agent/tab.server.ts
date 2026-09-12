@@ -1,10 +1,22 @@
-type Cfg = { provider: "grok" | "openai" | "anthropic"; apiKey: string };
+import type { ProviderId } from "@/lib/billing/plans";
+import { openaiCompatBase } from "./complete.server";
+
+type Cfg = { provider: ProviderId; apiKey: string };
 
 /** Cheap, low-latency models only. Never grok-4.5 / grok-4.6 / sonnet / gpt-4o. */
-function modelOf(provider: Cfg["provider"]) {
+function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o-mini";
   if (provider === "anthropic") return "claude-haiku-4-5";
+  if (provider === "gemini") return "gemini-2.5-flash";
+  if (provider === "deepseek") return "deepseek-chat";
   return "grok-4-1-fast-non-reasoning";
+}
+
+function tabModels(provider: ProviderId): string[] {
+  if (provider === "openai") return ["gpt-4o-mini"];
+  if (provider === "gemini") return ["gemini-2.5-flash"];
+  if (provider === "deepseek") return ["deepseek-chat"];
+  return ["grok-4-1-fast-non-reasoning", "grok-4.1-fast-non-reasoning"];
 }
 
 type CacheEntry = { text: string; at: number };
@@ -97,11 +109,8 @@ export async function completeTab(
     return cleanCompletion(data.content?.map((b) => b.text ?? "").join("") ?? "", prefix, suffix);
   }
 
-  const base = cfg.provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
-  const models =
-    cfg.provider === "openai"
-      ? ["gpt-4o-mini"]
-      : ["grok-4-1-fast-non-reasoning", "grok-4.1-fast-non-reasoning"];
+  const base = openaiCompatBase(cfg.provider);
+  const models = tabModels(cfg.provider);
   let lastError: Error | null = null;
   for (const model of models) {
     const res = await fetch(`${base}/chat/completions`, {

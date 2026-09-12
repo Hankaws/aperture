@@ -7,9 +7,9 @@
       "status": 200,
       "title": "Aperture",
       "hasCanvas": false,
-      "bodyTextLen": 994,
-      "bodyTextHash": "bb5307e6c135d08e4ee6db2e4d6c20e3cf6a0b079f6a9312824a8ce3a02c5321",
-      "bodyTextPrefix": "Aperture harbor-api README.md Agent harbor-api src lib routes in",
+      "bodyTextLen": 998,
+      "bodyTextHash": "4ee00df7baba8539a07362c0658e489ce7b093ec5dd85c84054f9c3fcfe43f1d",
+      "bodyTextPrefix": "Aperture harbor-api Files Agent Help harbor-api Open New src lib",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
@@ -21,9 +21,9 @@
       "status": 200,
       "title": "Aperture",
       "hasCanvas": false,
-      "bodyTextLen": 879,
-      "bodyTextHash": "417e2d14f55f06672cd8580134886e2c714d32eeb9f6e12f9f7789b8cb51ffcb",
-      "bodyTextPrefix": "Aperture Agent harbor-api src lib routes index.ts router.ts stor",
+      "bodyTextLen": 893,
+      "bodyTextHash": "aa9313ab1c4d48e96d70db780813bfe12123e2b467df1dd6b58a6a676d332761",
+      "bodyTextPrefix": "Aperture Files Agent harbor-api Open New src lib routes index.ts",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
@@ -32,5 +32,9 @@
   },
   "brandWarnings": [],
   "authWarnings": [],
-  "verdictFile": "/workspace/screenshots/editor-built.json"
+  "verdictFile": "/workspace/screenshots/editor-built.json",
+  "divergesFromBaseline": true,
+  "baselineReasons": [
+    "mobile: body text replaced (similar length, page start changed)"
+  ]
 }

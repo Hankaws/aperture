@@ -8,6 +8,7 @@ import {
   MIN_SESSION_CENTS,
   MIN_SESSION_TURNS,
   estimateCents,
+  quoteRuns,
   type SessionSnapshot,
 } from "./cost";
 import { isModelSource, isProvider, planById, providerShort, type ModelSource, type PlanId, type ProviderId } from "./plans";
@@ -450,6 +451,15 @@ export async function recordTabUse(userId: string, hosted: boolean) {
     set tab_used = tab_used + 1, updated_at = now()
     where user_id = ${userId} and tab_used < ${plan.tabDaily}
   `;
+}
+
+export async function canAffordRuns(
+  userId: string,
+  source: ModelSource | null | undefined,
+  n: number,
+): Promise<boolean> {
+  const account = await snapshotOf(await loadSettings(userId));
+  return !quoteRuns(account, source ?? account.modelSource, n).blocked;
 }
 
 export async function recordAgentRun(userId: string, hosted: boolean, cents: number) {

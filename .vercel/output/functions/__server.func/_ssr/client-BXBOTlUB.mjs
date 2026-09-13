@@ -1,18 +1,11 @@
-import { o as __toESM, r as __exportAll } from "../_runtime.mjs";
-import { t as __exportAll$1 } from "./rolldown-runtime-D7D4PA-g.mjs";
+import { o as __toESM } from "../_runtime.mjs";
+import { t as __exportAll } from "./rolldown-runtime-D7D4PA-g.mjs";
 import { r as require_react } from "../_libs/@radix-ui/react-compose-refs+[...].mjs";
 import { an as isSafeUrlScheme, in as createFetch, nn as toKebabCase, tn as capitalizeFirstLetter } from "../_libs/@better-auth/core+[...].mjs";
 import { n as PACKAGE_VERSION, r as getBaseURL, t as GENERIC_OAUTH_ERROR_CODES } from "./url-DwGxbmbA.mjs";
 import { a as atom, i as onSet, n as STORE_UNMOUNT_DELAY, r as onMount, t as listenKeys } from "../_libs/nanostores.mjs";
 import { n as defu } from "../_libs/defu.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/client-BXBOTlUB.js
-var client_BXBOTlUB_exports = /* @__PURE__ */ __exportAll({
-	a: () => signOut,
-	i: () => signIn,
-	n: () => client_exports,
-	r: () => getBearerToken,
-	t: () => authClient
-});
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var genericOAuthClient = () => {
 	return {
@@ -870,7 +863,7 @@ async function runPreSignInSignOut({ livePreview, hasBearer, requestSignOut, cle
 	if (hasBearer || !livePreview) await settleWithin(requestSignOut, timeoutMs ?? signOutTimeoutMs(livePreview));
 	clearToken();
 }
-var client_exports = /* @__PURE__ */ __exportAll$1({
+var client_exports = /* @__PURE__ */ __exportAll({
 	authClient: () => authClient,
 	authEnabled: () => true,
 	getBearerToken: () => getBearerToken,
@@ -1046,4 +1039,4 @@ async function signOut(redirectTo = "/") {
 	});
 }
 //#endregion
-export { signOut as a, signIn as i, client_BXBOTlUB_exports as n, getBearerToken as r, authClient as t };
+export { signOut as a, signIn as i, client_exports as n, getBearerToken as r, authClient as t };

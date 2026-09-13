@@ -25,6 +25,13 @@ export type IndexedChunk = SyntaxChunk & {
   tokens: string[];
 };
 
+export type DiffNote = {
+  id: string;
+  excerpt: string;
+  type: "eq" | "add" | "del";
+  text: string;
+};
+
 export type ProposedEdit = {
   id: string;
   path: string;
@@ -32,6 +39,7 @@ export type ProposedEdit = {
   newText: string;
   description: string;
   status: "pending" | "applied" | "rejected";
+  notes?: DiffNote[];
 };
 
 export type JsonScalar = string | number | boolean | null;

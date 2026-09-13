@@ -1,12 +1,38 @@
-import { fuzzyMatch } from "@/lib/utils";
+function fuzzyMatch(query: string, text: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const t = text.toLowerCase();
+  if (t.includes(q)) return true;
+  let i = 0;
+  for (const ch of t) {
+    if (ch === q[i]) i += 1;
+    if (i === q.length) return true;
+  }
+  return false;
+}
 
-export type MentionItem = { path: string; kind: "file" | "folder" };
+export type MentionKind = "file" | "folder" | "source";
+
+export type MentionItem = {
+  path: string;
+  kind: MentionKind;
+  description?: string;
+};
+
+export const CONTEXT_SOURCES: MentionItem[] = [
+  { path: "codebase", kind: "source", description: "Search the indexed repo" },
+  { path: "repo-map", kind: "source", description: "Workspace file tree" },
+];
+
+export function isContextSource(path: string): boolean {
+  return CONTEXT_SOURCES.some((item) => item.path === path);
+}
 
 export function mentionItems(files: Record<string, string>): MentionItem[] {
   const folders = new Set<string>();
-  const items: MentionItem[] = [];
+  const items: MentionItem[] = [...CONTEXT_SOURCES];
   for (const path of Object.keys(files)) {
-    items.push({ path, kind: "file" });
+    items.push({ path, kind: "file", description: "File" });
     const parts = path.split("/");
     let acc = "";
     for (let i = 0; i < parts.length - 1; i++) {
@@ -14,8 +40,10 @@ export function mentionItems(files: Record<string, string>): MentionItem[] {
       folders.add(acc);
     }
   }
-  for (const path of folders) items.push({ path, kind: "folder" });
+  for (const path of folders) items.push({ path, kind: "folder", description: "Folder" });
   items.sort((a, b) => {
+    if (a.kind === "source" && b.kind !== "source") return -1;
+    if (a.kind !== "source" && b.kind === "source") return 1;
     if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
     return a.path.localeCompare(b.path);
   });
@@ -44,6 +72,7 @@ export function expandMentions(
   const out: Array<{ path: string; content: string }> = [];
   const seen = new Set<string>();
   for (const path of paths) {
+    if (isContextSource(path)) continue;
     if (files[path] !== undefined) {
       if (seen.has(path)) continue;
       seen.add(path);
@@ -73,14 +102,21 @@ export function activeMention(text: string, caret: number): { start: number; que
   return { start: at, query: between };
 }
 
-export function filterMentions(items: MentionItem[], query: string, limit = 8): MentionItem[] {
+export function filterMentions(items: MentionItem[], query: string, limit = 10): MentionItem[] {
   const q = query.trim().toLowerCase();
-  const ranked = items.filter((item) => fuzzyMatch(q, item.path));
-  ranked.sort((a, b) => {
+  const match = (item: MentionItem) =>
+    !q || fuzzyMatch(q, item.path) || Boolean(item.description && fuzzyMatch(q, item.description));
+  const sources = items.filter((item) => item.kind === "source" && match(item));
+  const rest = items.filter((item) => item.kind !== "source" && match(item));
+  rest.sort((a, b) => {
     const as = a.path.toLowerCase().startsWith(q) ? 0 : 1;
     const bs = b.path.toLowerCase().startsWith(q) ? 0 : 1;
     if (as !== bs) return as - bs;
     return a.path.length - b.path.length;
   });
-  return ranked.slice(0, limit);
+  return [...sources, ...rest].slice(0, limit);
+}
+
+export function mentionQuery(instruction: string): string {
+  return instruction.replace(/@[A-Za-z0-9_./-]+/g, " ").replace(/\s+/g, " ").trim();
 }

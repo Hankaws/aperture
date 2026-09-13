@@ -7,6 +7,7 @@ import type { AgentMode, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/worksp
 import type { AgentResult } from "./types";
 import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
+import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -65,9 +66,10 @@ export function agentPayload(
     .filter((m) => m.content.trim().length > 0)
     .slice(-8)
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  const captures = formatDesignCaptures(useIdeUi.getState().captures);
   return {
     mode,
-    instruction,
+    instruction: captures ? `${captures}\n\n${instruction}` : instruction,
     history,
     files: Object.entries(state.files).map(([path, content]) => ({ path, content })),
     activePath: state.activePath,

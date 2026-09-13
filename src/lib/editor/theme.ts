@@ -22,7 +22,7 @@ export const EDITOR = {
   selectionInactive: "#16332c",
   wordRead: "#243830",
   wordWrite: "#2d5c4c",
-  matchBorder: "#8bb4e3",
+  matchBorder: "#6cb2ff",
   tabHover: "#1a1a20",
   tabModified: "#c4c4cc",
   ghost: "#52525b",
@@ -60,7 +60,7 @@ export const EDITOR = {
   },
 } as const;
 
-/** Cursor-like syntax colors — more hue than chrome, still cool/neutral. */
+/** Cool chrome, more hue in tokens so keywords/strings/comments scan apart. */
 export const SYNTAX = {
   bg: EDITOR.bg,
   fg: EDITOR.fg,
@@ -70,14 +70,14 @@ export const SYNTAX = {
   activeLine: EDITOR.activeLine,
   selection: EDITOR.selection,
   match: EDITOR.wordWrite,
-  keyword: "#8bb4e3",
-  string: "#8fd4b2",
-  fn: "#dcc191",
-  type: "#9ec0c8",
-  comment: "#6d7080",
-  number: "#c9b8a0",
-  property: "#c5c9d1",
-  operator: "#8e929c",
-  tag: "#8bb4e3",
+  keyword: "#6cb2ff",
+  string: "#5ee0a8",
+  fn: "#e8c27a",
+  type: "#6ed4e0",
+  comment: "#545761",
+  number: "#d7bc96",
+  property: "#d2d6de",
+  operator: "#8b909c",
+  tag: "#6cb2ff",
   invalid: EDITOR.danger,
 } as const;

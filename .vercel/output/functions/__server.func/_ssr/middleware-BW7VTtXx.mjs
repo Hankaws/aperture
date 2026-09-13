@@ -26,7 +26,7 @@ import { n as createMiddleware } from "./ssr.mjs";
 * per-user data and scope every query by `context.userId`.
 */
 var authMiddleware = createMiddleware({ type: "function" }).client(async ({ next }) => {
-	const { getBearerToken } = await import("./client-BXBOTlUB.mjs").then((n) => n.n).then((n) => n.n);
+	const { getBearerToken } = await import("./client-BXBOTlUB.mjs").then((n) => n.n);
 	return next({ sendContext: { bearerToken: getBearerToken() ?? void 0 } });
 }).server(async ({ next, context }) => {
 	const { assertSameSiteRequest } = await import("./isolation.server-CGNg1r0B.mjs");

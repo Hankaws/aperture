@@ -57,13 +57,13 @@ export function HelpDialog() {
 
   const steps = [
     { n: "1", title: "Open a file", body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open." },
-    { n: "2", title: "Ask Agent", body: "Describe the change. Agent posts a plan and waits — you click Build it." },
+    { n: "2", title: "Ask Composer", body: "Describe the change. Composer posts a plan and waits — you click Build it. Preview shows markdown, or an HTML page you can click to capture." },
     { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. Apply, reject, or undo the run." },
   ];
 
   const rows = [
     [`${mod}P`, "Go to file"],
-    [`${mod}I`, "Focus Agent"],
+    [`${mod}I`, "Focus Composer"],
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}Enter`, "Apply the change in this file"],
     ["Tab", "Accept ghost text (Pro)"],
@@ -90,7 +90,7 @@ export function HelpDialog() {
           ))}
         </ol>
         <p className="mt-4 text-sm leading-relaxed text-muted">
-          Highlight code, then Explain or Fix. Ask never writes. Agent always waits for Build it — unless you click Build now.
+          Highlight code, then Explain or Fix. Ask never writes. Composer always waits for Build it — unless you click Build now.
         </p>
         <ul className="mt-5 space-y-2 border-t border-border pt-4">
           {rows.map(([key, label]) => (

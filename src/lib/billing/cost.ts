@@ -1,4 +1,4 @@
-import { providerShort, type ModelSource, type ProviderId } from "./plans";
+import { providerShort, type ModelSource, type ProviderId } from "./plans.ts";
 
 /** Honest typical Composer-send estimates (whole tool loop, not per grep). */
 export const TURN_COST_CENTS: Record<ProviderId, number> = {
@@ -67,7 +67,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
       label: hosted ? "This run = 1 hosted turn" : `on your ${providerShort(provider)} key, ~${formatUsd(cents)}`,
       sub: "Sign in to send",
       blocked: true,
-      blockReason: "Sign in to run Composer.",
+      blockReason: null,
     };
   }
 
@@ -120,4 +120,47 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
     blocked,
     blockReason,
   };
+}
+
+export function quoteRuns(
+  account: QuoteAccount | null,
+  source: ModelSource | undefined,
+  n: number,
+): RunQuote {
+  const count = Math.max(1, Math.trunc(n) || 1);
+  const one = quoteRun(account, source);
+  if (count === 1) return one;
+
+  const cents = one.cents * count;
+  const label = one.hosted
+    ? `This build = ${count} hosted turns`
+    : `on your ${providerShort(one.provider)} key, ~${formatUsd(cents)}`;
+
+  if (!account) {
+    return { ...one, cents, label, sub: "Sign in to send", blocked: true, blockReason: null };
+  }
+
+  let blocked = one.blocked;
+  let blockReason = one.blockReason;
+  if (one.hosted) {
+    if (account.remaining < count) {
+      blocked = true;
+      blockReason = `Need ${count} hosted turns (${account.remaining} left this month).`;
+    } else if (account.session.on && account.session.turns + count > account.session.capTurns) {
+      blocked = true;
+      blockReason = `Need ${count} hosted turns; session cap is ${account.session.capTurns}.`;
+    } else if (!one.blocked) {
+      blocked = false;
+      blockReason = null;
+    }
+  } else if (
+    !one.blocked &&
+    account.session.on &&
+    account.session.cents + cents > account.session.capCents
+  ) {
+    blocked = true;
+    blockReason = `Need ~${formatUsd(cents)}; session cap is ${formatUsd(account.session.capCents)}.`;
+  }
+
+  return { ...one, cents, label, blocked, blockReason };
 }

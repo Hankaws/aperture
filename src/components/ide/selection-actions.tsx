@@ -32,7 +32,7 @@ export function useAssistActions() {
       return;
     }
     if (!user) {
-      toast.error("Sign in to run Agent.");
+      toast.error("Sign in to run Composer.");
       return;
     }
     if (quote.blocked) {

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { DesignCapture } from "@/lib/workspace/design-mode";
 
 export type MobilePane = "files" | "editor" | "agent";
 
@@ -12,6 +13,8 @@ type IdeUiState = {
   inlineOpen: boolean;
   historyOpen: boolean;
   debug: boolean;
+  designOpen: boolean;
+  captures: DesignCapture[];
   mobilePane: MobilePane;
   toggleSidebar: () => void;
   toggleChat: () => void;
@@ -23,6 +26,10 @@ type IdeUiState = {
   setInlineOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
   setDebug: (on: boolean) => void;
+  setDesignOpen: (open: boolean) => void;
+  addCapture: (capture: DesignCapture) => void;
+  removeCapture: (id: string) => void;
+  clearCaptures: () => void;
   setMobilePane: (pane: MobilePane) => void;
 };
 
@@ -36,6 +43,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   inlineOpen: false,
   historyOpen: false,
   debug: false,
+  designOpen: false,
+  captures: [],
   mobilePane: "editor",
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
@@ -56,5 +65,9 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     }
     set({ debug: on });
   },
+  setDesignOpen: (open) => set((s) => ({ designOpen: open, mobilePane: open ? "editor" : s.mobilePane })),
+  addCapture: (capture) => set((s) => ({ captures: [...s.captures, capture].slice(-6) })),
+  removeCapture: (id) => set((s) => ({ captures: s.captures.filter((c) => c.id !== id) })),
+  clearCaptures: () => set({ captures: [] }),
   setMobilePane: (pane) => set({ mobilePane: pane }),
 }));

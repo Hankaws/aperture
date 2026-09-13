@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, Circle, Clock, Ellipsis, FileDiff, FileSearch, History, ListTodo, Play, ScrollText, Search, Square, Trash2, Undo2, Wrench } from "lucide-react";
+import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApertureMark } from "./logo";
 import { DiffCard } from "./diff-card";
@@ -14,20 +14,22 @@ import { ModelPicker, type RunTarget } from "./model-picker";
 import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { quoteRun } from "@/lib/billing/cost";
+import { quoteRun, quoteRuns } from "@/lib/billing/cost";
+import { billedWorkers } from "@/lib/agent/fanout";
+import { formatDiffNotes, notesOn } from "@/lib/workspace/diff-notes";
 import { useAccount } from "@/lib/billing/use-account";
 import { startJob } from "@/lib/jobs/api";
 import { useJobs } from "@/lib/jobs/use-jobs";
 import { cn } from "@/lib/utils";
 import { DEMO_WORKSPACE_NAME } from "@/lib/workspace/demo-repo";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
-import { hasCodeRange } from "@/lib/workspace/edits";
 import {
   activeMention,
   filterMentions,
   mentionItems,
   type MentionItem,
 } from "@/lib/workspace/mentions";
+import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-local";
 import { DEFAULT_RULES, findRules } from "@/lib/workspace/rules";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
@@ -57,8 +59,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const applyAllPending = useWorkspace((s) => s.applyAllPending);
   const undoLast = useWorkspace((s) => s.undoLast);
   const checkpoints = useWorkspace((s) => s.checkpoints);
-  const activePath = useWorkspace((s) => s.activePath);
-  const selection = useWorkspace((s) => s.selection);
+  const captures = useIdeUi((s) => s.captures);
+  const removeCapture = useIdeUi((s) => s.removeCapture);
   const { user, isPending } = useCurrentUserState();
   const { account, setAccount, refresh } = useAccount();
   const [draft, setDraft] = useState("");
@@ -67,9 +69,14 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const [mentionHi, setMentionHi] = useState(0);
   const [dismissMention, setDismissMention] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [agents, setAgents] = useState<AgentConnection[]>([]);
   const [target, setTarget] = useState<RunTarget>({ kind: "model", source: "hosted" });
+  const [dropOn, setDropOn] = useState(false);
+  const attachRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listEndRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const messageCount = useRef(0);
 
   const jobsOn = Boolean(account && (account.backgroundJobs > 0 || account.acp));
   const { jobs, setJobs, refresh: refreshJobs, liveCount } = useJobs(jobsOn);
@@ -111,6 +118,17 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     setMentionHi(0);
   }, [mention?.query, mention?.start]);
 
+  const last = messages[messages.length - 1];
+  const streamKey = `${messages.length}:${last?.id ?? ""}:${last?.content.length ?? 0}:${last?.edits?.length ?? 0}:${last?.traces?.length ?? 0}:${agentRunning ? "1" : "0"}`;
+
+  useEffect(() => {
+    const grew = messages.length > messageCount.current;
+    messageCount.current = messages.length;
+    if (grew) stickToBottom.current = true;
+    if (!stickToBottom.current) return;
+    listEndRef.current?.scrollIntoView({ behavior: grew ? "smooth" : "auto", block: "end" });
+  }, [streamKey, messages.length]);
+
   function syncCaret(el: HTMLTextAreaElement) {
     setCaret(el.selectionStart ?? el.value.length);
   }
@@ -128,6 +146,74 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       el.focus();
       el.setSelectionRange(nextCaret, nextCaret);
       setCaret(nextCaret);
+    });
+  }
+
+  function insertContextPaths(paths: string[]) {
+    if (paths.length === 0) return;
+    const el = composerRef.current;
+    const pos = el?.selectionStart ?? draft.length;
+    const token = paths.map((path) => `@${path}`).join(" ");
+    const left = draft.slice(0, pos);
+    const right = draft.slice(pos);
+    const padL = left && !/\s$/.test(left) ? " " : "";
+    const insert = `${padL}${token} `;
+    const next = left + insert + right;
+    const nextCaret = left.length + insert.length;
+    setDraft(next);
+    setCaret(nextCaret);
+    requestAnimationFrame(() => {
+      const box = composerRef.current;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(nextCaret, nextCaret);
+    });
+  }
+
+  async function attachFiles(list: File[]) {
+    if (list.length === 0) return;
+    try {
+      const result = await importLocalFiles(list, "attach");
+      const paths = Object.keys(result.files);
+      if (paths.length === 0) {
+        toast.error("No text files in that drop. Images and binaries are skipped.");
+        return;
+      }
+      for (const [path, content] of Object.entries(result.files)) {
+        const current = useWorkspace.getState();
+        if (current.files[path] === undefined) current.createFile(path, content);
+        else if (current.files[path] !== content) current.writeFile(path, content);
+      }
+      insertContextPaths(paths);
+      toast.success(`Attached ${paths.length === 1 ? paths[0] : `${paths.length} files`} with @`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not attach files");
+    }
+  }
+
+  async function openContextPicker() {
+    const el = composerRef.current;
+    const pos = el?.selectionStart ?? draft.length;
+    const left = draft.slice(0, pos);
+    const at = left.lastIndexOf("@");
+    const typing = at >= 0 && !/[\s\n]/.test(left.slice(at + 1));
+    if (typing) {
+      setDismissMention(false);
+      setCaret(pos);
+      el?.focus();
+      return;
+    }
+    const insert = left.length === 0 || /\s$/.test(left) ? "@" : " @";
+    const next = left + insert + draft.slice(pos);
+    const nextCaret = left.length + insert.length;
+    setDraft(next);
+    setCaret(nextCaret);
+    setDismissMention(false);
+    requestAnimationFrame(() => {
+      const box = composerRef.current;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(nextCaret, nextCaret);
     });
   }
 
@@ -161,7 +247,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   }
 
   async function send(text: string, background = false, phase?: AgentPhase) {
-    const trimmed = text.trim();
+    const captures = useIdeUi.getState().captures;
+    const trimmed = text.trim() || (captures.length > 0 ? "Revise the captured element. Keep the rest of the page." : "");
     if (!trimmed || agentRunning) return;
     if (!user) return;
     if (target.kind === "acp" && !account?.acp) {
@@ -173,6 +260,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     setDismissMention(false);
     if (background) {
       await queueBackground(trimmed);
+      useIdeUi.getState().clearCaptures();
       return;
     }
     const resolvedPhase: AgentPhase | undefined =
@@ -182,6 +270,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       agentLabel: target.kind === "acp" ? target.name : "Aperture",
       phase: resolvedPhase,
     });
+    useIdeUi.getState().clearCaptures();
     void refresh();
   }
 
@@ -193,6 +282,18 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       agentLabel: message.agentLabel || (target.kind === "acp" ? target.name : "Aperture"),
       phase: "build",
       approvedPlan: message.plan,
+    });
+    void refresh();
+  }
+
+  async function sendNotes(edits: ChatMessage["edits"]) {
+    const body = formatDiffNotes(edits ?? []);
+    if (!body || agentRunning || !user) return;
+    if (blocked || acpBlocked) return;
+    await submitAgent(body, "composer", source, {
+      agentId: target.kind === "acp" ? target.id : null,
+      agentLabel: target.kind === "acp" ? target.name : "Aperture",
+      phase: "skip",
     });
     void refresh();
   }
@@ -238,109 +339,98 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     useIdeUi.getState().setMobilePane("editor");
   }
 
-  const sendBlocked = !draft.trim() || isPending || !user || blocked || acpBlocked;
+  const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !user || blocked || acpBlocked;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-8 items-center gap-2 px-3">
-        <p className="text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">
-          {mode === "composer" ? "Composer" : "Ask"}
-        </p>
-        <div className="ml-auto flex items-center gap-0.5">
-          <div className="mr-1 flex rounded-md p-0.5">
-            {(
-              [
-                ["composer", "Agent"],
-                ["chat", "Ask"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setMode(id)}
-                className={cn(
-                  "h-6 rounded px-1.5 text-[11px]",
-                  mode === id ? "text-fg" : "text-subtle hover:text-fg",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="size-7"
-              aria-label="Composer actions"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
+      <div className="flex h-8 items-center gap-1.5 border-b border-border px-2">
+        <div className="flex rounded-md border border-border p-px">
+          {(
+            [
+              ["composer", "Composer", Sparkles],
+              ["chat", "Ask", MessageSquare],
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setMode(id)}
+              className={cn(
+                "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px]",
+                mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
+              )}
             >
-              <Ellipsis className="size-4" />
-            </Button>
-            {menuOpen && (
-              <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
-                <button
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    openRules();
-                  }}
-                >
-                  <ScrollText className="size-3.5 text-subtle" />
-                  {rules ? "Project rules" : "Create rules"}
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    useIdeUi.getState().setHistoryOpen(true);
-                  }}
-                >
-                  <History className="size-3.5 text-subtle" />
-                  File history
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg disabled:opacity-40"
-                  disabled={messages.length === 0}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    clearChat();
-                  }}
-                >
-                  <Trash2 className="size-3.5 text-subtle" />
-                  Clear chat
-                </button>
-              </div>
-            )}
-          </div>
+              <Icon className="size-3" />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7"
+            title={rules ? `Open ${rules.path}` : "Create project rules"}
+            aria-label={rules ? `Open ${rules.path}` : "Create project rules"}
+            onClick={openRules}
+          >
+            <ScrollText className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7"
+            title="File history"
+            aria-label="File history"
+            onClick={() => useIdeUi.getState().setHistoryOpen(true)}
+          >
+            <History className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7"
+            title="Clear chat"
+            aria-label="Clear chat"
+            onClick={clearChat}
+            disabled={messages.length === 0}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
         </div>
       </div>
 
-      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div
+        ref={listRef}
+        className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2.5 py-2"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 56;
+        }}
+      >
         {messages.length === 0 ? (
-          <EmptyState
-            suggestions={suggestions}
-            path={activePath}
-            onSuggest={(s) => {
-              setDraft(s);
-              if (user && !blocked && !acpBlocked) void send(s);
-            }}
-          />
+          <p className="text-xs text-subtle">Composer plans first. You click Build it.</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {messages.map((message) => (
               <MessageBlock
                 key={message.id}
                 message={message}
                 running={agentRunning}
-                quoteLabel={quote.label}
+                quoteLabel={
+                  message.awaitingBuild
+                    ? quoteRuns(
+                        account,
+                        source,
+                        billedWorkers(message.plan, Object.keys(files), (n) => !quoteRuns(account, source, n).blocked),
+                      ).label
+                    : quote.label
+                }
                 onBuild={() => void buildPlan(message)}
+                onSendNotes={() => void sendNotes(message.edits)}
               />
             ))}
+            <div ref={listEndRef} aria-hidden className="h-px" />
           </div>
         )}
       </div>
@@ -394,11 +484,26 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         </div>
       )}
 
-      {hasCodeRange(selection) && (
-        <div className="border-t border-border px-3 pt-2 pb-1">
-          <AssistChips />
-        </div>
-      )}
+      <div className="border-t border-border px-2.5 py-1.5">
+        {messages.length === 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1">
+            {suggestions.slice(0, 3).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="assist-chip max-w-full"
+                onClick={() => {
+                  setDraft(s);
+                  if (user && !blocked && !acpBlocked) void send(s);
+                }}
+              >
+                <span className="truncate">{s}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <AssistChips />
+      </div>
 
       {account && jobsOn && (
         <JobsTray
@@ -410,7 +515,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         />
       )}
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border p-2.5">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -418,7 +523,60 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           }}
         >
           <MentionPopover items={mentionHits} active={mentionHi} onPick={insertMention} />
-          <div className={cn("composer-rim rounded-xl p-px", agentRunning && "is-live")}>
+          {captures.length > 0 && (
+            <ul className="mb-2 flex flex-wrap gap-1.5">
+              {captures.map((cap) => (
+                <li key={cap.id}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-md border border-border bg-elevated px-2 py-1 text-[11px] text-fg"
+                    onClick={() => removeCapture(cap.id)}
+                    title="Remove capture"
+                  >
+                    {cap.screenshot ? (
+                      <img src={cap.screenshot} alt="" className="size-5 rounded-sm object-cover" />
+                    ) : (
+                      <MousePointer2 className="size-3 text-accent" />
+                    )}
+                    <span className="max-w-28 truncate font-mono">{cap.selector}</span>
+                    <X className="size-3 text-subtle" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div
+            data-drop="composer"
+            className={cn("composer-rim relative rounded-xl p-px", agentRunning && "is-live", dropOn && "is-live")}
+            onDragEnter={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setDropOn(true);
+            }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setDropOn(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+              setDropOn(false);
+            }}
+            onDrop={(e) => {
+              if (!e.dataTransfer?.files.length && !e.dataTransfer?.items.length) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setDropOn(false);
+              void filesFromDataTransfer(e.dataTransfer).then((list) => attachFiles(list));
+            }}
+          >
+            {dropOn && (
+              <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[11px] bg-list-drop/80">
+                <p className="text-sm font-medium text-fg">Drop files for Composer</p>
+              </div>
+            )}
             <textarea
               ref={composerRef}
               value={draft}
@@ -432,28 +590,75 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
               onKeyDown={onKeyDown}
               placeholder={
                 mode === "chat"
-                  ? "Ask about the repo. Nothing is written."
-                  : "Fix pagination in @src/store.ts"
+                  ? "Ask about the repo. Use @ for context."
+                  : "Describe the change. Use @ for context — Composer plans first."
               }
-              rows={3}
-              className="min-h-16 w-full resize-none rounded-[11px] border-0 bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none"
+              rows={2}
+              className="min-h-14 w-full resize-none rounded-[11px] border-0 bg-bg px-2.5 py-2 text-sm leading-snug text-fg placeholder:text-subtle focus-visible:outline-none"
             />
           </div>
-          {signedOut ? (
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="min-w-0 truncate text-xs text-subtle">Sign in to run this plan</p>
-              <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "sm" }))}>
-                Sign in
-              </Link>
-            </div>
-          ) : (
-            <div className="mt-2 space-y-2">
-              <CostMeter
-                quote={quote}
-                acpLabel={target.kind === "acp" ? target.name : null}
-                acpRemote={target.kind === "acp" && target.remote}
-              />
+          <div className="mt-2 space-y-2">
+            <CostMeter
+              quote={quote}
+              acpLabel={target.kind === "acp" ? target.name : null}
+              acpRemote={target.kind === "acp" && target.remote}
+            />
+            {signedOut ? (
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Add context"
+                  title="Add context with @"
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
+                  onClick={openContextPicker}
+                >
+                  <AtSign className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Add files"
+                  title="Add files to Composer"
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
+                  onClick={() => attachRef.current?.click()}
+                >
+                  <Paperclip className="size-3.5" />
+                </button>
+                <Link
+                  to="/login"
+                  search={{ next: "/app" }}
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/login"
+                  search={{ next: "/app" }}
+                  className={cn(buttonVariants({ size: "sm" }), "ml-auto")}
+                >
+                  <ArrowUp className="size-3.5" />
+                  Plan
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Add context"
+                  title="Add context with @"
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
+                  onClick={openContextPicker}
+                >
+                  <AtSign className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Add files"
+                  title="Add files to Composer"
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
+                  onClick={() => attachRef.current?.click()}
+                >
+                  <Paperclip className="size-3.5" />
+                </button>
                 {account && (
                   <ModelPicker
                     account={account}
@@ -500,47 +705,20 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   )}
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({
-  suggestions,
-  path,
-  onSuggest,
-}: {
-  suggestions: string[];
-  path: string | null;
-  onSuggest: (text: string) => void;
-}) {
-  return (
-    <div>
-      <div className="rounded-lg border border-border bg-bg px-2.5 py-2">
-        <p className="text-[0.65rem] tracking-[0.14em] text-subtle uppercase">Plan</p>
-        <div className="mt-1.5 space-y-0.5">
-          {suggestions.slice(0, 3).map((label, i) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => onSuggest(label)}
-              className="flex w-full items-center gap-2 rounded-md px-0.5 py-1 text-left hover:bg-elevated"
-            >
-              <Circle className="size-3 shrink-0 text-subtle" strokeWidth={1.6} />
-              <span className="min-w-0 truncate text-xs text-fg">
-                <span className="mr-1.5 font-mono text-[0.7rem] text-subtle">{String(i + 1).padStart(2, "0")}</span>
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate font-mono text-xs text-subtle">Edit · {path ?? "no file"}</p>
-        <span className="rounded-md bg-elevated px-2 py-0.5 text-xs text-subtle">Review</span>
+        <input
+          ref={attachRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const list = e.target.files ? Array.from(e.target.files) : [];
+            e.target.value = "";
+            void attachFiles(list);
+          }}
+        />
       </div>
     </div>
   );
@@ -561,11 +739,13 @@ function MessageBlock({
   running,
   quoteLabel,
   onBuild,
+  onSendNotes,
 }: {
   message: ChatMessage;
   running: boolean;
   quoteLabel: string;
   onBuild: () => void;
+  onSendNotes: () => void;
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
   if (message.role === "user") {
@@ -580,6 +760,7 @@ function MessageBlock({
   const traces = message.traces ?? [];
   const edits = message.edits ?? [];
   const plan = message.plan ?? [];
+  const noteCount = notesOn(edits);
   const empty = !message.content.trim();
   const live = running && empty && plan.length === 0;
   const waiting = Boolean(message.awaitingBuild && plan.length > 0);
@@ -587,7 +768,7 @@ function MessageBlock({
 
   return (
     <div>
-      <p className="text-xs font-medium text-subtle">{message.agentLabel || "Agent"}</p>
+      <p className="text-xs font-medium text-subtle">{message.agentLabel || "Composer"}</p>
       {plan.length > 0 && <PlanCard entries={plan} awaitingBuild={waiting} />}
       {traces.length > 0 && (
         <ul className="mt-2 space-y-1">
@@ -622,6 +803,17 @@ function MessageBlock({
           {edits.map((edit) => (
             <DiffCard key={edit.id} edit={edit} />
           ))}
+          {noteCount > 0 && (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
+              <p className="min-w-0 text-xs text-muted">
+                {noteCount} {noteCount === 1 ? "note" : "notes"} for Composer. {quoteLabel}.
+              </p>
+              <Button size="sm" disabled={running} onClick={onSendNotes}>
+                <MessageSquare className="size-3.5" />
+                Send notes
+              </Button>
+            </div>
+          )}
           {edits.some((e) => e.status === "applied") && message.checkpointId && (
             <Button
               size="sm"

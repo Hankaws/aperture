@@ -33,8 +33,8 @@
   --color-scrollbar: #27272a;
   --color-scrollbar-hover: #3f3f46;
 
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -61,6 +61,11 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-synthesis: none;
+    font-optical-sizing: auto;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     background: var(--color-bg);
     color: var(--color-fg);
   }
@@ -68,8 +73,23 @@
   body {
     margin: 0;
     font-family: var(--font-sans);
+    font-kerning: normal;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background: var(--color-bg);
     color: var(--color-fg);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-family: var(--font-mono);
+    font-kerning: none;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0, "kern" 0;
+    font-synthesis: none;
+    text-rendering: optimizeSpeed;
   }
 
   button:not(:disabled),
@@ -111,15 +131,28 @@
   .cm-editor {
     position: relative;
     height: 100%;
-    font-size: 14px;
+    font-size: 13px;
     background: #0c0c0e;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeSpeed;
   }
 
   .cm-editor .cm-scroller {
     font-family: var(--font-mono);
-    line-height: 1.6;
+    font-kerning: none;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0, "kern" 0;
+    font-synthesis: none;
+    line-height: 1.5;
+    tab-size: 2;
     scrollbar-width: thin;
     scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  .cm-editor .cm-lineNumbers .cm-gutterElement {
+    font-variant-numeric: tabular-nums;
   }
 
   .cm-editor .cm-scroller::-webkit-scrollbar {
@@ -146,14 +179,14 @@
     left: 0;
     right: 0;
     z-index: 4;
-    height: 26px;
-    padding: 0 12px 0 calc(2.6rem + 12px);
+    height: 22px;
+    padding: 0 10px 0 calc(2.2rem + 8px);
     border-bottom: 1px solid var(--color-border);
     background: var(--color-sticky);
     color: var(--color-fg);
     font-family: var(--font-mono);
     font-size: 12px;
-    line-height: 26px;
+    line-height: 22px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -178,12 +211,12 @@
 
   .file-tree:focus-within .tree-row.is-active {
     background: var(--color-list-selected);
-    color: var(--color-accent);
+    color: var(--color-fg);
   }
 
   .file-tree:not(:focus-within) .tree-row.is-active {
-    background: transparent;
-    color: var(--color-accent);
+    background: var(--color-list-selected-inactive);
+    color: var(--color-fg);
   }
 
   .tree-row:hover {
@@ -213,6 +246,21 @@
     position: relative;
     overflow: hidden;
     background: var(--color-editor);
+    opacity: 0.22;
+    transition: opacity 150ms var(--ease-out);
+  }
+
+  .editor-stage:hover .aperture-minimap,
+  .aperture-minimap:hover,
+  .aperture-minimap:focus-visible {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aperture-minimap {
+      opacity: 1;
+      transition: none;
+    }
   }
 
   .aperture-minimap i {
@@ -354,14 +402,14 @@
   .assist-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    height: 1.75rem;
-    padding: 0 0.7rem;
+    gap: 0.3rem;
+    height: 1.5rem;
+    padding: 0 0.55rem;
     border-radius: 999px;
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     color: var(--color-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     line-height: 1;
     transition:
       border-color 150ms var(--ease-out),

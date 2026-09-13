@@ -220,7 +220,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     ready: true,
     name: DEMO_WORKSPACE_NAME,
     files: { ...DEMO_FILES },
-    openTabs: ["src/store.ts"],
+    openTabs: ["src/store.ts", "src/index.ts"],
     activePath: "src/store.ts",
     previewPath: null,
     pinned: [],
@@ -282,7 +282,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       set({
         name: DEMO_WORKSPACE_NAME,
         files: { ...DEMO_FILES },
-        openTabs: ["src/store.ts"],
+        openTabs: ["src/store.ts", "src/index.ts"],
         activePath: "src/store.ts",
         previewPath: null,
         pinned: [],

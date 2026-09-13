@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Bug, Clock, Download, FileArchive, FileCode, FolderOpen, Github, History, Palette, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, Palette, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -16,6 +16,8 @@ export function CommandPalette() {
   const setMobilePane = useIdeUi((s) => s.setMobilePane);
   const setGithubOpen = useIdeUi((s) => s.setGithubOpen);
   const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
+  const setDesignOpen = useIdeUi((s) => s.setDesignOpen);
+  const designOpen = useIdeUi((s) => s.designOpen);
   const debug = useIdeUi((s) => s.debug);
   const setDebug = useIdeUi((s) => s.setDebug);
   const files = useWorkspace((s) => s.files);
@@ -83,6 +85,17 @@ export function CommandPalette() {
             ))}
           </Command.Group>
           <Command.Group heading="Workspace" className="px-1 text-[11px] text-subtle">
+            <Command.Item
+              onSelect={() => {
+                setDesignOpen(!designOpen);
+                setMobilePane("editor");
+                close();
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <Eye className="size-3.5 text-subtle" />
+              {designOpen ? "Close Preview" : "Preview"}
+            </Command.Item>
             <Command.Item
               onSelect={() => {
                 close();

@@ -27,15 +27,15 @@
       --selection-inactive: #16332c;
       --word-read: #243830;
       --word-write: #2d5c4c;
-      --match-border: #8bb4e3;
-      --keyword: #8bb4e3;
-      --string: #8fd4b2;
-      --fn: #dcc191;
-      --type: #9ec0c8;
-      --comment: #6d7080;
-      --number: #c9b8a0;
-      --property: #c5c9d1;
-      --operator: #8e929c;
+      --match-border: #6cb2ff;
+      --keyword: #6cb2ff;
+      --string: #5ee0a8;
+      --fn: #e8c27a;
+      --type: #6ed4e0;
+      --comment: #545761;
+      --number: #d7bc96;
+      --property: #d2d6de;
+      --operator: #8b909c;
       --tab-hover: #1a1a20;
       --tab-modified: #c4c4cc;
       --ghost: #52525b;
@@ -79,6 +79,15 @@
       color: var(--fg);
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-synthesis: none;
+    }
+    pre, code {
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0, "calt" 0;
+      text-rendering: optimizeSpeed;
+      tab-size: 2;
     }
     .page {
       min-height: 100%;

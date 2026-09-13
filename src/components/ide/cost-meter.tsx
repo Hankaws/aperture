@@ -22,7 +22,7 @@ export function CostMeter({
 
   return (
     <div className="min-w-0">
-      <p className={cn("truncate text-[11px]", quote.blocked ? "text-warn" : "text-subtle")}>
+      <p className={cn("truncate text-[11px]", quote.blocked && quote.blockReason ? "text-warn" : "text-subtle")}>
         {quote.label}
         {acpLabel ? ` · ACP ${acpLabel}` : ""}
         <span className="text-subtle"> · {quote.sub}</span>

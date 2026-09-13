@@ -30,14 +30,18 @@ const theme = EditorView.theme(
       backgroundColor: SYNTAX.bg,
       color: SYNTAX.fg,
       height: "100%",
-      fontSize: "14px",
+      fontSize: "13px",
     },
     ".cm-scroller": {
       overflow: "auto",
-      fontFamily: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
-      lineHeight: "1.7",
+      fontFamily: "var(--font-mono)",
+      fontKerning: "none",
+      fontVariantLigatures: "none",
+      fontFeatureSettings: '"liga" 0, "calt" 0, "kern" 0',
+      lineHeight: "1.5",
+      tabSize: 2,
     },
-    ".cm-content": { caretColor: SYNTAX.caret, padding: "12px 0" },
+    ".cm-content": { caretColor: SYNTAX.caret, padding: "8px 0" },
     ".cm-gutters": {
       backgroundColor: SYNTAX.gutter,
       color: SYNTAX.gutterFg,
@@ -45,8 +49,8 @@ const theme = EditorView.theme(
       borderRight: `1px solid ${EDITOR.elevated}`,
     },
     ".cm-lineNumbers .cm-gutterElement": {
-      minWidth: "2.6rem",
-      padding: "0 10px 0 8px",
+      minWidth: "2.2rem",
+      padding: "0 8px 0 6px",
     },
     ".cm-activeLine": { backgroundColor: SYNTAX.activeLine },
     ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: EDITOR.activeLineGutter },
@@ -342,14 +346,14 @@ export function CodePane() {
   }, [pendingEdit]);
 
   return (
-    <div className="relative flex h-full min-h-0 bg-bg">
+    <div className="editor-stage relative flex h-full min-h-0 bg-bg">
       {!activePath && (
         <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted">
           <FileCode className="size-8 text-subtle" strokeWidth={1.4} />
           <div>
             <p className="text-sm font-medium text-fg">Open a file to start</p>
             <p className="mt-1 max-w-xs text-sm text-pretty text-muted">
-              Click a file on the left. Or ask Agent on the right — it plans first, then waits.
+              Click a file on the left. Or ask Composer on the right — it plans first, then waits.
             </p>
           </div>
         </div>

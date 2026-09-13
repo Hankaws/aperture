@@ -73,21 +73,24 @@ export const Route = createFileRoute("/api/agent")({
                 const { runAcpSession } = await import("@/lib/acp/session.server");
                 await runAcpSession(input, { userId, emit, signal: request.signal });
               } else {
-                const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
+                const { resolveModel, recordAgentRun, canAffordRuns } = await import("@/lib/billing/api");
                 const resolved = await resolveModel(userId, input.source);
                 if (!resolved.ok) {
                   emit({ type: "error", error: resolved.error });
                   return;
                 }
-                const { runAgentLoopStreaming } = await import("@/lib/agent/loop.server");
-                const result = await runAgentLoopStreaming(
+                const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
+                const { result, turns } = await runComposerStreaming(
                   input,
                   { provider: resolved.provider, apiKey: resolved.apiKey },
                   emit,
                   request.signal,
+                  (n) => canAffordRuns(userId, resolved.source, n),
                 );
                 if (result.ok) {
-                  await recordAgentRun(userId, resolved.hosted, resolved.cents);
+                  for (let i = 0; i < turns; i += 1) {
+                    await recordAgentRun(userId, resolved.hosted, resolved.cents);
+                  }
                 }
               }
             } catch (error) {

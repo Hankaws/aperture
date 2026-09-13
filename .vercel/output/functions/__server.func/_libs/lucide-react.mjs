@@ -108,6 +108,21 @@ var ArrowUp = createLucideIcon("arrow-up", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var AtSign = createLucideIcon("at-sign", [["circle", {
+	cx: "12",
+	cy: "12",
+	r: "4",
+	key: "4exip2"
+}], ["path", {
+	d: "M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8",
+	key: "7n84p3"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Bug = createLucideIcon("bug", [
 	["path", {
 		d: "m8 2 1.88 1.88",
@@ -588,6 +603,30 @@ var Layers = createLucideIcon("layers", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Library = createLucideIcon("library", [
+	["path", {
+		d: "m16 6 4 14",
+		key: "ji33uf"
+	}],
+	["path", {
+		d: "M12 6v14",
+		key: "1n7gus"
+	}],
+	["path", {
+		d: "M8 8v12",
+		key: "1gg7y9"
+	}],
+	["path", {
+		d: "M4 4v16",
+		key: "6qkkli"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var ListTodo = createLucideIcon("list-todo", [
 	["rect", {
 		x: "3",
@@ -620,6 +659,34 @@ var ListTodo = createLucideIcon("list-todo", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ListTree = createLucideIcon("list-tree", [
+	["path", {
+		d: "M21 12h-8",
+		key: "1bmf0i"
+	}],
+	["path", {
+		d: "M21 6H8",
+		key: "1pqkrb"
+	}],
+	["path", {
+		d: "M21 18h-8",
+		key: "1tm79t"
+	}],
+	["path", {
+		d: "M3 6v4c0 1.1.9 2 2 2h3",
+		key: "1ywdgy"
+	}],
+	["path", {
+		d: "M3 10v6c0 1.1.9 2 2 2h3",
+		key: "2wc746"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var LoaderCircle = createLucideIcon("loader-circle", [["path", {
 	d: "M21 12a9 9 0 1 1-6.219-8.56",
 	key: "13zald"
@@ -633,6 +700,16 @@ var LoaderCircle = createLucideIcon("loader-circle", [["path", {
 var MessageSquare = createLucideIcon("message-square", [["path", {
 	d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
 	key: "1lielz"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var MousePointer2 = createLucideIcon("mouse-pointer-2", [["path", {
+	d: "M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z",
+	key: "edeuup"
 }]]);
 /**
 * @license lucide-react v0.510.0 - ISC
@@ -674,6 +751,19 @@ var Palette = createLucideIcon("palette", [
 		key: "fotxhn"
 	}]
 ]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Paperclip = createLucideIcon("paperclip", [["path", {
+	d: "M13.234 20.252 21 12.3",
+	key: "1cbrk9"
+}], ["path", {
+	d: "m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486",
+	key: "1pkts6"
+}]]);
 /**
 * @license lucide-react v0.510.0 - ISC
 *
@@ -963,4 +1053,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { FileSearch as A, ChevronRight as B, KeyRound as C, FolderTree as D, Folder as E, Download as F, Bug as H, CodeXml as I, Clock as L, FileDiff as M, FileCode as N, FolderOpen as O, FileArchive as P, Circle as R, Keyboard as S, Github as T, ArrowUp as U, Check as V, ArrowRight as W, Palette as _, TriangleAlert as a, ListTodo as b, Sparkles as c, Search as d, ScrollText as f, Pin as g, Play as h, Undo2 as i, FileJson as j, FileText as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, WandSparkles as r, Square as s, X as t, Settings as u, MessageSquare as v, History as w, Layers as x, LoaderCircle as y, CircleDot as z };
+export { Folder as A, CodeXml as B, ListTodo as C, KeyRound as D, Keyboard as E, FileJson as F, Check as G, Circle as H, FileDiff as I, ArrowUp as J, Bug as K, FileCode as L, FolderOpen as M, FileText as N, History as O, FileSearch as P, FileArchive as R, ListTree as S, Layers as T, CircleDot as U, Clock as V, ChevronRight as W, ArrowRight as Y, Paperclip as _, TriangleAlert as a, MessageSquare as b, Sparkles as c, Search as d, ScrollText as f, Pin as g, Play as h, Undo2 as i, FolderTree as j, Github as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, AtSign as q, WandSparkles as r, Square as s, X as t, Settings as u, Palette as v, Library as w, LoaderCircle as x, MousePointer2 as y, Download as z };

@@ -13,6 +13,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const snapshots = useWorkspace((s) => s.checkpoints.length);
   const dirty = useWorkspace((s) => s.dirtyPaths.length);
   const debug = useIdeUi((s) => s.debug);
+  const designOpen = useIdeUi((s) => s.designOpen);
   const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const lang = activePath ? languageLabel(activePath) : "";
@@ -20,10 +21,10 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const fileCount = Object.keys(files).length;
 
   return (
-    <div className="flex h-7 items-center justify-between gap-3 border-t border-border bg-surface px-3 font-mono text-[11px] text-subtle">
+    <div className="flex h-6 items-center justify-between gap-3 border-t border-border bg-surface px-2.5 font-mono text-[11px] text-subtle">
       <div className="flex min-w-0 items-center gap-3">
         <span className={indexing || agentRunning ? "shimmer-text" : "text-fg"}>
-          {agentRunning ? "Agent is working…" : indexing ? "Indexing…" : "Ready"}
+          {agentRunning ? "Composer is working…" : indexing ? "Indexing…" : designOpen ? "Preview" : "Ready"}
         </span>
         <span className="tabular-nums">
           {fileCount} {fileCount === 1 ? "file" : "files"}

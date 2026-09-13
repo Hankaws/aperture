@@ -1,7 +1,7 @@
 import { o as isAcpKind } from "./kinds-CCf1JBpH.mjs";
 import { r as createServerFn } from "./ssr.mjs";
-import { t as authMiddleware } from "./middleware-BW7VTtXx.mjs";
 import { t as createServerRpc } from "./createServerRpc-CcvdN_gc.mjs";
+import { t as authMiddleware } from "./middleware-BW7VTtXx.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/api-COWLm3TA.js
 function asIso(value) {
 	if (value instanceof Date) return value.toISOString();
@@ -43,7 +43,7 @@ var saveAgent_createServerFn_handler = createServerRpc({
 var saveAgent = createServerFn({ method: "POST" }).validator((input) => input).middleware([authMiddleware]).handler(saveAgent_createServerFn_handler, async ({ context, data }) => {
 	const { getSql } = await import("./db-2laMynzA.mjs").then((n) => n.t).then((n) => n.t);
 	const sql = await getSql();
-	const { planById } = await import("./plans-CTIRB29R.mjs").then((n) => n.o).then((n) => n.o);
+	const { planById } = await import("./plans-CTIRB29R.mjs").then((n) => n.o);
 	if (!planById((await sql`select plan from user_settings where user_id = ${context.userId}`)[0]?.plan ?? "hobby").acp) throw new Error("External agents are on Pro. Upgrade to plug Claude Code, Codex, or OpenCode into the same diff UI.");
 	if (!isAcpKind(data.kind)) throw new Error("Unknown agent kind.");
 	const name = data.name.trim().slice(0, 80);

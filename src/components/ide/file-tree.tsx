@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Download, FileArchive, FolderOpen, Github, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pendingPathKey } from "@/lib/workspace/edits";
 import { useIdeUi } from "@/lib/ui-store";
@@ -14,6 +14,13 @@ type TreeNode = {
   path: string;
   children?: TreeNode[];
 };
+
+function fileIcon(path: string) {
+  const ext = extOf(path);
+  if (ext === "json") return FileJson;
+  if (ext === "md") return FileText;
+  return FileCode;
+}
 
 function buildTree(paths: string[]): TreeNode[] {
   type Mutable = { name: string; path: string; kids?: Map<string, Mutable> };
@@ -65,19 +72,23 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
   const isFolder = Boolean(node.children);
   const active = activePath === node.path;
   const dirty = dirtyPaths.includes(node.path);
+  const Icon = isFolder ? (open ? FolderOpen : Folder) : fileIcon(node.path);
 
   return (
     <div>
       <div
         className={cn(
-          "tree-row group relative flex h-7 items-center gap-1 rounded-sm pr-1 font-mono text-xs",
-          active ? "is-active" : "text-muted",
+          "tree-row group relative flex h-8 items-center gap-1 rounded-sm pr-1 text-[13px] md:h-7",
+          active ? "is-active text-fg" : "text-muted",
         )}
-        style={{ paddingLeft: 10 + depth * 12 }}
+        style={{ paddingLeft: 8 + depth * 10 }}
       >
+        {active && !isFolder && (
+          <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" />
+        )}
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1 text-left"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           onClick={() => {
             if (isFolder) setOpen((v) => !v);
             else openPreview(node.path);
@@ -88,11 +99,12 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
         >
           {isFolder ? (
             <ChevronRight
-              className={cn("size-3 shrink-0 text-subtle transition-transform duration-150", open && "rotate-90")}
+              className={cn("size-3.5 shrink-0 text-subtle transition-transform duration-150", open && "rotate-90")}
             />
           ) : (
-            <span className="w-3" />
+            <span className="w-3.5" />
           )}
+          <Icon className="size-3.5 shrink-0" strokeWidth={1.6} />
           <span className="truncate">{node.name}</span>
           {pending.has(node.path) && (
             <span className="size-1.5 shrink-0 rounded-full bg-ok" aria-label="Staged diff" />
@@ -105,10 +117,10 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
           <button
             type="button"
             aria-label={`Delete ${node.name}`}
-            className="flex size-6 items-center justify-center rounded-md text-subtle hover:text-danger md:opacity-0 md:group-hover:opacity-100"
+            className="flex size-7 items-center justify-center rounded-md text-subtle hover:text-danger md:opacity-0 md:group-hover:opacity-100"
             onClick={() => deleteFile(node.path)}
           >
-            <Trash2 className="size-3" />
+            <Trash2 className="size-3.5" />
           </button>
         )}
       </div>
@@ -160,13 +172,14 @@ function OpenMenu() {
     <div ref={rootRef} className="relative">
       <Button
         variant="ghost"
-        size="icon-sm"
-        className="size-7"
+        size="sm"
+        className="h-7 px-1.5"
         aria-label="Open project"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         <FolderOpen className="size-3.5" />
+        Open
       </Button>
       {open && (
         <div className="absolute right-0 top-8 z-20 w-48 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
@@ -174,7 +187,7 @@ function OpenMenu() {
             <button
               key={item.label}
               type="button"
-              className="flex h-10 w-full items-center gap-2 px-3 text-left text-[13px] text-fg hover:bg-bg"
+              className="flex h-10 w-full items-center gap-2 px-3 text-left text-sm text-fg hover:bg-bg"
               onClick={() => {
                 setOpen(false);
                 item.run();
@@ -197,6 +210,7 @@ export function FileTree() {
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
   const tree = useMemo(() => buildTree(Object.keys(files)), [files]);
   const [dropOver, setDropOver] = useState(false);
+  const count = Object.keys(files).length;
 
   return (
     <div
@@ -212,19 +226,23 @@ export function FileTree() {
       }}
       onDrop={() => setDropOver(false)}
     >
-      <div className="flex h-8 items-center justify-between gap-1 px-3">
-        <p className="text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">Workspace</p>
+      <div className="flex h-8 items-center justify-between gap-1 border-b border-border px-1.5">
+        <p className="px-1 text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">Workspace</p>
         <div className="flex shrink-0 items-center">
           <OpenMenu />
-          <Button variant="ghost" size="icon-sm" className="size-7" aria-label="New file" onClick={() => setNewFileOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-7 px-1.5" aria-label="New file" onClick={() => setNewFileOpen(true)}>
             <Plus className="size-3.5" />
+            New
           </Button>
         </div>
       </div>
-      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2 py-1">
+      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-1 py-1">
         {tree.map((node) => (
           <TreeItem key={node.path} node={node} depth={0} pending={pending} />
         ))}
+      </div>
+      <div className="border-t border-border px-2.5 py-1 font-mono text-[11px] text-subtle">
+        {count} {count === 1 ? "file" : "files"}
       </div>
     </div>
   );

@@ -68,13 +68,15 @@ export function OpenProjectHost() {
     function onDragOver(e: DragEvent) {
       if (!e.dataTransfer?.types.includes("Files")) return;
       e.preventDefault();
-      setDragging(true);
+      const overComposer = e.target instanceof Element && Boolean(e.target.closest("[data-drop='composer']"));
+      setDragging(!overComposer);
     }
     function onDragLeave(e: DragEvent) {
       if (e.relatedTarget === null) setDragging(false);
     }
     function onDrop(e: DragEvent) {
       if (!e.dataTransfer) return;
+      if (e.target instanceof Element && e.target.closest("[data-drop='composer']")) return;
       e.preventDefault();
       setDragging(false);
       void (async () => {

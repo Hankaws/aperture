@@ -1,11 +1,12 @@
-import { indexFiles } from "@/lib/indexer/search";
+import { indexFiles, semanticSearch } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
 import { complete, completeStreaming, type ChatMessage } from "./complete.server";
 import type { AgentStreamEvent } from "./events";
 import { executeTool, toolsForStep, type ToolContext } from "./tools";
+import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
-import { expandMentions, parseMentions } from "@/lib/workspace/mentions";
+import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import type { ProviderId } from "@/lib/billing/plans";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
@@ -41,10 +42,11 @@ function systemPrompt(
     preamble,
     "You operate on a virtual workspace snapshot. Tools see the live snapshot, including staged edits.",
     "Always inspect code with semantic_search, grep, or read_file before editing.",
+    "You may call several search and read tools in one step; they run in parallel.",
     "Prefer the smallest unique search/replace. Never invent files that do not exist.",
     "Cite paths as path:line when answering questions.",
     "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
-    "The user may attach files with @path. Treat those as the primary context.",
+    "The user may attach files with @path, @codebase (indexed search), or @repo-map. Treat those as the primary context.",
     "Never repeat API keys, tokens, passwords, private keys, or secret-looking strings. If one appears, write [redacted].",
     mode === "inline"
       ? "Inline mode: return one focused replacement for the selection."
@@ -131,7 +133,11 @@ function mergeEdits(edits: ProposedEdit[]): ProposedEdit[] {
   return [...byPath.values()];
 }
 
-function buildContextMessage(input: AgentInput, files: Record<string, string>): string {
+function buildContextMessage(
+  input: AgentInput,
+  files: Record<string, string>,
+  chunks: ReturnType<typeof indexFiles>,
+): string {
   const mentioned = parseMentions(input.instruction, files);
   const extra = expandMentions(mentioned, files);
   const parts = [
@@ -141,10 +147,27 @@ function buildContextMessage(input: AgentInput, files: Record<string, string>): 
       ? `Selection in ${input.selection.path} L${input.selection.fromLine}-L${input.selection.toLine}:\n${input.selection.text}`
       : "",
   ];
+  if (mentioned.includes("repo-map")) {
+    parts.push("Attached @repo-map: use the workspace file tree above as the map of this repo.");
+  }
+  if (mentioned.includes("codebase")) {
+    const query = mentionQuery(input.instruction) || input.instruction;
+    const hits = semanticSearch(chunks, query, 6);
+    parts.push(
+      hits.length === 0
+        ? "Attached @codebase: no matching chunks."
+        : "Attached @codebase:\n" +
+            hits
+              .map((h) => {
+                const c = h.chunk;
+                return `# ${c.path}  ${c.name}  L${c.startLine}-${c.endLine}\n${c.text.split("\n").slice(0, 18).join("\n")}`;
+              })
+              .join("\n\n---\n\n"),
+    );
+  }
   if (extra.length > 0) {
     parts.push(
-      "Attached with @:\n" +
-        extra.map((file) => `### ${file.path}\n${file.content}`).join("\n\n"),
+      "Attached with @:\n" + extra.map((file) => `### ${file.path}\n${file.content}`).join("\n\n"),
     );
   }
   return parts.filter(Boolean).join("\n\n");
@@ -195,7 +218,7 @@ export async function runAgentLoopStreaming(
   }
 
   const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase);
-  const userCtx = buildContextMessage(input, files);
+  const userCtx = buildContextMessage(input, files, chunks);
   const messages: ChatMessage[] = [
     { role: "system", content: sys },
     { role: "user", content: userCtx },
@@ -268,38 +291,39 @@ export async function runAgentLoopStreaming(
         tool_calls: calls,
       });
 
-      for (const call of calls) {
+      const parsed = calls.map(parseCall);
+      for (const batch of partitionCalls(parsed)) {
         if (signal?.aborted) return { ok: false, error: "Stopped." };
-        let args: Record<string, unknown> = {};
-        try {
-          args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
-        } catch {
-          args = {};
-        }
-        const display = acpTraceName(call.function.name, flavor?.kind);
-        emit({ type: "status", text: `${display}…` });
-        const started = Date.now();
-        const result = executeTool(call.function.name, args, ctx);
-        const trace: ToolTrace = {
-          id: call.id,
-          name: display,
-          args: toPlainArgs(args),
-          resultPreview: result.slice(0, 400),
-          ms: Date.now() - started,
+        const parallel = batch.length > 1 && batch.every((c) => isReadTool(c.name));
+        if (parallel) emit({ type: "status", text: `Reading ${batch.length} files…` });
+
+        const runOne = (call: (typeof parsed)[number]) => {
+          const started = Date.now();
+          const result = executeTool(call.name, call.args, ctx);
+          return { call, result, ms: Date.now() - started };
         };
-        traces.push(trace);
-        emit({ type: "trace", trace });
-        if (call.function.name === "set_plan") {
-          emit({ type: "plan", entries: ctx.plan });
+        const outcomes = parallel ? await Promise.all(batch.map(async (c) => runOne(c))) : batch.map(runOne);
+
+        for (const outcome of outcomes) {
+          const display = acpTraceName(outcome.call.name, flavor?.kind);
+          if (!parallel) emit({ type: "status", text: `${display}…` });
+          const trace: ToolTrace = {
+            id: outcome.call.id,
+            name: display,
+            args: toPlainArgs(outcome.call.args),
+            resultPreview: outcome.result.slice(0, 400),
+            ms: outcome.ms,
+          };
+          traces.push(trace);
+          emit({ type: "trace", trace });
+          if (outcome.call.name === "set_plan") emit({ type: "plan", entries: ctx.plan });
+          if (outcome.call.name === "propose_edit") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
+          messages.push({
+            role: "tool",
+            tool_call_id: outcome.call.id,
+            content: outcome.result,
+          });
         }
-        if (call.function.name === "propose_edit") {
-          emit({ type: "edits", edits: mergeEdits(ctx.edits) });
-        }
-        messages.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: result,
-        });
       }
 
       if (shouldAwaitBuild(phase, ctx.plan.length > 0, callNames)) {

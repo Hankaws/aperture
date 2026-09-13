@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 
 const FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
+const RELOAD_KEY = "aperture-chunk-reload";
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -9,21 +11,58 @@ function errorMessage(error: unknown): string {
   return FALLBACK_MESSAGE;
 }
 
+function isStaleChunk(message: string): boolean {
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(
+    message,
+  );
+}
+
+function hardReload() {
+  try {
+    sessionStorage.removeItem(RELOAD_KEY);
+  } catch {
+    // ignore
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("_r", String(Date.now()));
+  window.location.replace(url.pathname + url.search + url.hash);
+}
+
 export function AppErrorComponent({ error }: ErrorComponentProps) {
+  const message = errorMessage(error);
+  const stale = isStaleChunk(message);
+
+  useEffect(() => {
+    if (!stale || typeof window === "undefined") return;
+    try {
+      if (sessionStorage.getItem(RELOAD_KEY) === "1") return;
+      sessionStorage.setItem(RELOAD_KEY, "1");
+    } catch {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("_r", String(Date.now()));
+    window.location.replace(url.pathname + url.search + url.hash);
+  }, [stale]);
+
   return (
-    <main
-      className={
-        "flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center " +
-        "bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50"
-      }
-    >
-      <span className="text-red-500" aria-hidden="true">
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-bg px-6 text-center text-fg">
+      <span className="text-danger" aria-hidden="true">
         <TriangleAlert className="size-10" strokeWidth={2} />
       </span>
       <h1 className="text-lg font-semibold">Something went wrong</h1>
-      <p className="max-w-md text-sm break-words text-zinc-500 dark:text-zinc-400">
-        {errorMessage(error)}
+      <p className="max-w-md text-sm break-words text-muted">
+        {stale
+          ? "The editor failed to load a cached file. Reload to pick up the latest version."
+          : message}
       </p>
+      <button
+        type="button"
+        className="mt-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:opacity-90"
+        onClick={hardReload}
+      >
+        Reload
+      </button>
     </main>
   );
 }

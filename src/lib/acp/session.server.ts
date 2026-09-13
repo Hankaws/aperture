@@ -16,18 +16,21 @@ export async function runAcpSession(
   if (isBuiltinAgentId(agentId)) {
     const builtin = builtinById(agentId);
     opts.emit({ type: "status", text: `ACP session/new · ${builtin?.name ?? "agent"}` });
-    const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
+    const { resolveModel, recordAgentRun, canAffordRuns } = await import("@/lib/billing/api");
     const resolved = await resolveModel(opts.userId, input.source);
     if (!resolved.ok) return { ok: false, error: resolved.error };
-    const { runAgentLoopStreaming } = await import("@/lib/agent/loop.server");
-    const result = await runAgentLoopStreaming(
+    const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
+    const { result, turns } = await runComposerStreaming(
       input,
       { provider: resolved.provider, apiKey: resolved.apiKey },
       opts.emit,
       opts.signal,
+      (n) => canAffordRuns(opts.userId, resolved.source, n),
     );
     if (result.ok) {
-      await recordAgentRun(opts.userId, resolved.hosted, resolved.cents);
+      for (let i = 0; i < turns; i += 1) {
+        await recordAgentRun(opts.userId, resolved.hosted, resolved.cents);
+      }
     }
     return { ...result, hosted: resolved.hosted, cents: resolved.cents };
   }

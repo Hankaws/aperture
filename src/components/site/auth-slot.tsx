@@ -23,7 +23,11 @@ export function AuthSlot({ compact = false }: { compact?: boolean }) {
   }
   if (compact) {
     return (
-      <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "sm" }))}>
+      <Link
+        to="/login"
+        search={{ next: "/app" }}
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2.5 text-xs")}
+      >
         Sign in
       </Link>
     );

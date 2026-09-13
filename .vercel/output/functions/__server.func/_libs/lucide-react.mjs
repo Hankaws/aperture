@@ -640,16 +640,52 @@ var MessageSquare = createLucideIcon("message-square", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var PanelLeft = createLucideIcon("panel-left", [["rect", {
-	width: "18",
-	height: "18",
-	x: "3",
-	y: "3",
-	rx: "2",
-	key: "afitv7"
+var Palette = createLucideIcon("palette", [
+	["path", {
+		d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
+		key: "e79jfc"
+	}],
+	["circle", {
+		cx: "13.5",
+		cy: "6.5",
+		r: ".5",
+		fill: "currentColor",
+		key: "1okk4w"
+	}],
+	["circle", {
+		cx: "17.5",
+		cy: "10.5",
+		r: ".5",
+		fill: "currentColor",
+		key: "f64h9f"
+	}],
+	["circle", {
+		cx: "6.5",
+		cy: "12.5",
+		r: ".5",
+		fill: "currentColor",
+		key: "qy21gx"
+	}],
+	["circle", {
+		cx: "8.5",
+		cy: "7.5",
+		r: ".5",
+		fill: "currentColor",
+		key: "fotxhn"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Pin = createLucideIcon("pin", [["path", {
+	d: "M12 17v5",
+	key: "bb1du9"
 }], ["path", {
-	d: "M9 3v18",
-	key: "fh3hqa"
+	d: "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z",
+	key: "1nkz8b"
 }]]);
 /**
 * @license lucide-react v0.510.0 - ISC
@@ -927,4 +963,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { FileJson as A, Check as B, History as C, FolderOpen as D, FolderTree as E, CodeXml as F, ArrowUp as H, Clock as I, Circle as L, FileCode as M, FileArchive as N, FileText as O, Download as P, CircleDot as R, KeyRound as S, Folder as T, ArrowRight as U, Bug as V, MessageSquare as _, TriangleAlert as a, Layers as b, Sparkles as c, Search as d, ScrollText as f, PanelLeft as g, Play as h, Undo2 as i, FileDiff as j, FileSearch as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, WandSparkles as r, Square as s, X as t, Settings as u, LoaderCircle as v, Github as w, Keyboard as x, ListTodo as y, ChevronRight as z };
+export { FileSearch as A, ChevronRight as B, KeyRound as C, FolderTree as D, Folder as E, Download as F, Bug as H, CodeXml as I, Clock as L, FileDiff as M, FileCode as N, FolderOpen as O, FileArchive as P, Circle as R, Keyboard as S, Github as T, ArrowUp as U, Check as V, ArrowRight as W, Palette as _, TriangleAlert as a, ListTodo as b, Sparkles as c, Search as d, ScrollText as f, Pin as g, Play as h, Undo2 as i, FileJson as j, FileText as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, WandSparkles as r, Square as s, X as t, Settings as u, MessageSquare as v, History as w, Layers as x, LoaderCircle as y, CircleDot as z };

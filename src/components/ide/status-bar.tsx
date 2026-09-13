@@ -11,6 +11,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const selection = useWorkspace((s) => s.selection);
   const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
   const snapshots = useWorkspace((s) => s.checkpoints.length);
+  const dirty = useWorkspace((s) => s.dirtyPaths.length);
   const debug = useIdeUi((s) => s.debug);
   const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
@@ -19,7 +20,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const fileCount = Object.keys(files).length;
 
   return (
-    <div className="flex h-8 items-center justify-between gap-3 border-t border-border bg-surface px-3 text-xs text-subtle">
+    <div className="flex h-7 items-center justify-between gap-3 border-t border-border bg-surface px-3 font-mono text-[11px] text-subtle">
       <div className="flex min-w-0 items-center gap-3">
         <span className={indexing || agentRunning ? "shimmer-text" : "text-fg"}>
           {agentRunning ? "Agent is working…" : indexing ? "Indexing…" : "Ready"}
@@ -27,6 +28,11 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         <span className="tabular-nums">
           {fileCount} {fileCount === 1 ? "file" : "files"}
         </span>
+        {dirty > 0 && (
+          <span className="text-fg">
+            {dirty} unsaved
+          </span>
+        )}
         {staged > 0 && (
           <span className="text-ok">
             {staged} {staged === 1 ? "change to apply" : "changes to apply"}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Bug, Clock, Download, FileArchive, FileCode, FolderOpen, Github, History, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { Bug, Clock, Download, FileArchive, FileCode, FolderOpen, Github, History, Palette, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -75,7 +75,7 @@ export function CommandPalette() {
                   setMobilePane("editor");
                   close();
                 }}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+                className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
               >
                 <FileCode className="size-3.5 text-subtle" />
                 <span className="font-mono text-[13px]">{path}</span>
@@ -86,9 +86,19 @@ export function CommandPalette() {
             <Command.Item
               onSelect={() => {
                 close();
+                window.location.assign("/theme.html");
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <Palette className="size-3.5 text-subtle" />
+              Editor theme
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
                 pickFolder();
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <FolderOpen className="size-3.5 text-subtle" />
               Open folder
@@ -98,7 +108,7 @@ export function CommandPalette() {
                 close();
                 pickZip();
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <FileArchive className="size-3.5 text-subtle" />
               Open zip
@@ -108,7 +118,7 @@ export function CommandPalette() {
                 close();
                 setGithubOpen(true);
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Github className="size-3.5 text-subtle" />
               Open GitHub repo
@@ -120,7 +130,7 @@ export function CommandPalette() {
                   .then((r) => toast.success(`Downloaded ${r.name} · ${r.count} files`))
                   .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not download"));
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Download className="size-3.5 text-subtle" />
               Download zip
@@ -130,7 +140,7 @@ export function CommandPalette() {
                 close();
                 setHistoryOpen(true);
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <History className="size-3.5 text-subtle" />
               File history
@@ -142,7 +152,7 @@ export function CommandPalette() {
                 if (ck) toast.success(`Undid “${ck.label}”`);
                 else toast.error("Nothing to undo");
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Undo2 className="size-3.5 text-subtle" />
               {checkpoints.length > 0 ? `Undo last run · ${checkpoints[checkpoints.length - 1]!.label}` : "Undo last Composer run"}
@@ -152,7 +162,7 @@ export function CommandPalette() {
                 close();
                 void navigate({ to: "/settings", search: { tab: "limits" } });
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Clock className="size-3.5 text-subtle" />
               Session cap
@@ -162,7 +172,7 @@ export function CommandPalette() {
                 reindex();
                 close();
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Sparkles className="size-3.5 text-subtle" />
               Rebuild index
@@ -178,7 +188,7 @@ export function CommandPalette() {
                 });
                 close();
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Bug className="size-3.5 text-subtle" />
               {debug ? "Turn debug off" : "Turn debug on"}
@@ -189,7 +199,7 @@ export function CommandPalette() {
                 loadDemo();
                 close();
               }}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated"
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <RotateCcw className="size-3.5 text-subtle" />
               Reset harbor-api demo

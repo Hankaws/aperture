@@ -1,7 +1,7 @@
 import { o as isAcpKind } from "./kinds-CCf1JBpH.mjs";
 import { r as createServerFn } from "./ssr.mjs";
-import { t as createServerRpc } from "./createServerRpc-CcvdN_gc.mjs";
 import { t as authMiddleware } from "./middleware-BW7VTtXx.mjs";
+import { t as createServerRpc } from "./createServerRpc-CcvdN_gc.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/api-COWLm3TA.js
 function asIso(value) {
 	if (value instanceof Date) return value.toISOString();

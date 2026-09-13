@@ -1,5 +1,5 @@
-import { i as openaiCompatBase } from "./complete.server-DFKFh9h7.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/tab.server-BlzjJBUq.js
+import { i as openaiCompatBase } from "./complete.server-CD2QvcD3.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/tab.server-Dxd_kOUl.js
 /** Cheap, low-latency models only. Never grok-4.5 / grok-4.6 / sonnet / gpt-4o. */
 function modelOf(provider) {
 	if (provider === "openai") return "gpt-4o-mini";

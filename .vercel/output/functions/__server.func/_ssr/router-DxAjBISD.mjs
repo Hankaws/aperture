@@ -7,7 +7,7 @@ import { L as string, N as number, P as object, R as union, j as literal } from 
 import { n as auth } from "./server-BInRgz1J.mjs";
 import { a as TriangleAlert } from "../_libs/lucide-react.mjs";
 import { t as Toaster } from "../_libs/sonner.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-BJEff0LS.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-DxAjBISD.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
@@ -301,7 +301,7 @@ function PreviewHostBridge() {
 	}, [router]);
 	return null;
 }
-var styles_default = "/assets/styles-CIgSKar2.css";
+var styles_default = "/assets/styles-BzmJ0P7A.css";
 var APP_NAME = "Aperture";
 var Route$8 = createRootRoute({
 	head: () => ({
@@ -381,9 +381,9 @@ var Route$8 = createRootRoute({
 });
 var $$splitComponentImporter$4 = () => import("./routes-De_kYa1-.mjs");
 var Route$7 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./app-Cg9tPx1z.mjs");
+var $$splitComponentImporter$3 = () => import("./app-CRi9sNt8.mjs");
 var Route$6 = createFileRoute("/app")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./login-CiJHgwi7.mjs");
+var $$splitComponentImporter$2 = () => import("./login-Dnakhj93.mjs");
 var NEXT_ROUTES = [
 	"/app",
 	"/pricing",
@@ -398,7 +398,7 @@ var Route$5 = createFileRoute("/login")({
 });
 var $$splitComponentImporter$1 = () => import("./pricing-CD33JzCG.mjs");
 var Route$4 = createFileRoute("/pricing")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./settings-D9fCHntR.mjs");
+var $$splitComponentImporter = () => import("./settings-CejAlO06.mjs");
 var Route$3 = createFileRoute("/settings")({
 	validateSearch: (s) => ({ tab: s.tab === "models" || s.tab === "limits" || s.tab === "agents" ? s.tab : "plan" }),
 	component: lazyRouteComponent($$splitComponentImporter, "component")
@@ -445,7 +445,7 @@ var Route$2 = createFileRoute("/api/agent")({ server: { handlers: { POST: async 
 		};
 		try {
 			if (input.agentId) {
-				const { runAcpSession } = await import("./session.server-BnD_6toD.mjs");
+				const { runAcpSession } = await import("./session.server-o9JuHXuQ.mjs");
 				await runAcpSession(input, {
 					userId,
 					emit,
@@ -461,7 +461,7 @@ var Route$2 = createFileRoute("/api/agent")({ server: { handlers: { POST: async 
 					});
 					return;
 				}
-				const { runAgentLoopStreaming } = await import("./loop.server-Dkdk3YDs.mjs");
+				const { runAgentLoopStreaming } = await import("./loop.server-EhEaAxg5.mjs");
 				if ((await runAgentLoopStreaming(input, {
 					provider: resolved.provider,
 					apiKey: resolved.apiKey
@@ -515,7 +515,7 @@ var Route$1 = createFileRoute("/api/tab")({ server: { handlers: { POST: async ({
 	const prefix = typeof body.prefix === "string" ? body.prefix.slice(-2800) : "";
 	const suffix = typeof body.suffix === "string" ? body.suffix.slice(0, 400) : "";
 	if (!path || prefix.length < 8) return Response.json({ text: "" });
-	const { tabCacheGet, tabCacheKey, tabCacheSet, completeTab } = await import("./tab.server-BlzjJBUq.mjs");
+	const { tabCacheGet, tabCacheKey, tabCacheSet, completeTab } = await import("./tab.server-Dxd_kOUl.mjs");
 	const cacheKey = tabCacheKey(path, prefix, suffix);
 	const cached = tabCacheGet(cacheKey);
 	if (cached !== null) return Response.json({ text: cached });

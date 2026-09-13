@@ -6,7 +6,7 @@ import { n as require_jsx_runtime } from "../_libs/radix-ui__react-context+react
 import { s as setPlan } from "./api-BHHVIIah.mjs";
 import { n as cn } from "./utils-DTfuEt1f.mjs";
 import { a as buttonVariants, i as SignedOut, o as useCurrentUserState, r as Button, t as ApertureMark } from "./auth-slot-DAdQDs8Q.mjs";
-import { B as Check } from "../_libs/lucide-react.mjs";
+import { V as Check } from "../_libs/lucide-react.mjs";
 import { n as toast } from "../_libs/sonner.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/pricing-table-y79Y6w3F.js
 var import_react = /* @__PURE__ */ __toESM(require_react());

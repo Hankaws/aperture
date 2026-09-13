@@ -6,9 +6,9 @@ import { i as signIn, t as authClient } from "./client-BXBOTlUB.mjs";
 import { t as GROK_PROVIDERS } from "./server-BInRgz1J.mjs";
 import { o as useCurrentUserState, r as Button, t as ApertureMark } from "./auth-slot-DAdQDs8Q.mjs";
 import { t as Input } from "./input-DFmVyX9g.mjs";
-import { r as Route$5 } from "./router-BJEff0LS.mjs";
+import { r as Route$5 } from "./router-DxAjBISD.mjs";
 import { t as SiteNav } from "./site-nav-5Hx5WF8n.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/login-CiJHgwi7.js
+//#region node_modules/.nitro/vite/services/ssr/assets/login-Dnakhj93.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function Login() {

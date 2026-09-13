@@ -108,7 +108,7 @@ var HEADERS = { TSS_SHELL: "X-TSS_SHELL" };
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-DWzMYKnW.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-Dcl4xa-w.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -134,7 +134,7 @@ var manifest = {
 	},
 	"2545e838152aebcc44ecadc566d3d3c7a5086bb0080a371b67dff82079e39e6a": {
 		functionName: "listJobs_createServerFn_handler",
-		importer: () => import("./api-B2_eh5_H.mjs")
+		importer: () => import("./api-BL1f5F-a.mjs")
 	},
 	"28565cc805871003787c42c251e781dd40870f168a3cb9207da7385f4430af0f": {
 		functionName: "getAccount_createServerFn_handler",
@@ -154,11 +154,11 @@ var manifest = {
 	},
 	"45eee6b45f13cc2c0aafd492fabcb4c4120d8ed3a7b9f7df7944466fbf99c0d5": {
 		functionName: "startJob_createServerFn_handler",
-		importer: () => import("./api-B2_eh5_H.mjs")
+		importer: () => import("./api-BL1f5F-a.mjs")
 	},
 	"5a883aeda48a7c277fc8d161d1c2939700d59765653c6b0c344daba878a2fb56": {
 		functionName: "runAgent_createServerFn_handler",
-		importer: () => import("./api-BnViCrLf.mjs")
+		importer: () => import("./api-CwCb--Ej.mjs")
 	},
 	"604b993a9f98e3c4eab4064503ec36787cadf99a3564732e53d5d1089322903a": {
 		functionName: "setModelSource_createServerFn_handler",
@@ -178,7 +178,7 @@ var manifest = {
 	},
 	"e54b9f52e92fd0ce5c89cc29868ce677b67be7b8d0ad8342d78166a538cfdfe0": {
 		functionName: "cancelJob_createServerFn_handler",
-		importer: () => import("./api-B2_eh5_H.mjs")
+		importer: () => import("./api-BL1f5F-a.mjs")
 	},
 	"e6c3bf3bc595548ea8ace93cb611972e3b1a86c99ba1031fb682662ee2b6d328": {
 		functionName: "saveAgent_createServerFn_handler",
@@ -186,7 +186,7 @@ var manifest = {
 	},
 	"f06e765097cd01ae1f0ecd38bb7749a1bdb7f0e3a10daf23cb1bb01a7a37343a": {
 		functionName: "getAiStatus_createServerFn_handler",
-		importer: () => import("./api-BnViCrLf.mjs")
+		importer: () => import("./api-CwCb--Ej.mjs")
 	},
 	"f1ba1e94692ccaec60d102aa8a6c773659dd97596bc81e2ff9cd0d4419816f86": {
 		functionName: "setSessionCap_createServerFn_handler",
@@ -1460,7 +1460,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-BJEff0LS.mjs").then((n) => n.t),
+		import("./router-DxAjBISD.mjs").then((n) => n.t),
 		import("./start-5Z2QO8AU.mjs"),
 		import("./empty-plugin-adapters-D9UWiqvJ.mjs")
 	]);

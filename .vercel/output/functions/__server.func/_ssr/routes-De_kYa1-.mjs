@@ -5,7 +5,7 @@ import { _ as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as require_jsx_runtime } from "../_libs/radix-ui__react-context+react.mjs";
 import { n as cn } from "./utils-DTfuEt1f.mjs";
 import { a as buttonVariants, o as useCurrentUserState } from "./auth-slot-DAdQDs8Q.mjs";
-import { B as Check, L as Circle, S as KeyRound, U as ArrowRight, b as Layers, c as Sparkles, l as ShieldCheck } from "../_libs/lucide-react.mjs";
+import { C as KeyRound, R as Circle, V as Check, W as ArrowRight, c as Sparkles, l as ShieldCheck, x as Layers } from "../_libs/lucide-react.mjs";
 import { t as SiteNav } from "./site-nav-5Hx5WF8n.mjs";
 import { n as SiteFooter, t as PricingTable } from "./pricing-table-y79Y6w3F.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/routes-De_kYa1-.js

@@ -33,8 +33,6 @@
   "brandWarnings": [],
   "authWarnings": [],
   "verdictFile": "/workspace/screenshots/app-builder-built.json",
-  "divergesFromBaseline": true,
-  "baselineReasons": [
-    "desktop: body text replaced (similar length, page start changed)"
-  ]
+  "divergesFromBaseline": false,
+  "baselineReasons": []
 }

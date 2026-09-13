@@ -1,9 +1,9 @@
 import { a as builtinById, c as isBuiltinAgentId } from "./kinds-CCf1JBpH.mjs";
 import { a as planById } from "./plans-CTIRB29R.mjs";
 import { r as createServerFn } from "./ssr.mjs";
-import { t as createServerRpc } from "./createServerRpc-CcvdN_gc.mjs";
 import { t as authMiddleware } from "./middleware-BW7VTtXx.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/api-B2_eh5_H.js
+import { t as createServerRpc } from "./createServerRpc-CcvdN_gc.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/api-BL1f5F-a.js
 function asIso(value) {
 	if (value instanceof Date) return value.toISOString();
 	if (typeof value === "string") return value;
@@ -96,7 +96,7 @@ var startJob = createServerFn({ method: "POST" }).validator((input) => input).mi
       insert into user_jobs (id, user_id, kind, agent_id, instruction, status)
       values (${id}, ${context.userId}, ${agentId ? "acp" : "composer"}, ${agentId}, ${clean.instruction}, 'queued')
     `;
-	const { runJob } = await import("./runner.server-kdSxo5YB.mjs");
+	const { runJob } = await import("./runner.server-_o7FE68r.mjs");
 	runJob(id, context.userId, {
 		...clean,
 		agentId
@@ -121,7 +121,7 @@ var cancelJob_createServerFn_handler = createServerRpc({
 	filename: "src/lib/jobs/api.ts"
 }, (opts) => cancelJob.__executeServer(opts));
 var cancelJob = createServerFn({ method: "POST" }).validator((id) => id).middleware([authMiddleware]).handler(cancelJob_createServerFn_handler, async ({ context, data: id }) => {
-	const { abortJob } = await import("./runner.server-kdSxo5YB.mjs");
+	const { abortJob } = await import("./runner.server-_o7FE68r.mjs");
 	abortJob(id);
 	const { getSql } = await import("./db-2laMynzA.mjs").then((n) => n.t).then((n) => n.t);
 	await (await getSql())`

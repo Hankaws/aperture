@@ -9,8 +9,8 @@ export function PlanCard({ entries, awaitingBuild = false }: { entries: PlanEntr
 
   return (
     <div className="mt-2 overflow-hidden rounded-lg border border-border bg-bg">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-        <p className="text-xs font-medium text-subtle">Plan</p>
+      <div className="flex items-center justify-between gap-2 px-2.5 pt-2 pb-1">
+        <p className="text-[0.65rem] tracking-[0.14em] text-subtle uppercase">Plan</p>
         <p className="text-[11px] text-subtle">
           {done}/{entries.length}
           {awaitingBuild ? " · waiting" : live ? " · running" : done === entries.length ? " · done" : ""}

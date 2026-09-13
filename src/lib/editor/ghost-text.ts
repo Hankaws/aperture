@@ -1,6 +1,7 @@
 import { Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type ViewUpdate } from "@codemirror/view";
 import { requestTabCompletion } from "@/lib/agent/tab";
+import { EDITOR } from "@/lib/editor/theme";
 
 class GhostWidget extends WidgetType {
   constructor(readonly text: string) {
@@ -38,7 +39,7 @@ function ghostDecorations(view: EditorView, text: string | null) {
 
 const ghostTheme = EditorView.theme({
   ".cm-aperture-ghost": {
-    color: "#52525b",
+    color: EDITOR.ghost,
     fontStyle: "italic",
     pointerEvents: "none",
     opacity: "0.85",

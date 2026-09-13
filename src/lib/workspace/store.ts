@@ -5,7 +5,7 @@ import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
 import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
 
-const STORAGE_KEY = "aperture-workspace-v1";
+const STORAGE_KEY = "aperture-workspace-v2";
 
 type Selection = {
   path: string;
@@ -21,6 +21,9 @@ type WorkspaceState = {
   files: Record<string, string>;
   openTabs: string[];
   activePath: string | null;
+  previewPath: string | null;
+  pinned: string[];
+  dirtyPaths: string[];
   chunks: IndexedChunk[];
   indexing: boolean;
   messages: ChatMessage[];
@@ -33,8 +36,10 @@ type WorkspaceState = {
   loadProject: (name: string, files: Record<string, string>) => void;
   reindex: () => void;
   openFile: (path: string) => void;
+  openPreview: (path: string) => void;
   closeTab: (path: string) => void;
   setActive: (path: string) => void;
+  pinTab: (path: string) => void;
   writeFile: (path: string, content: string) => void;
   createFile: (path: string, content?: string) => void;
   deleteFile: (path: string) => void;
@@ -55,6 +60,9 @@ type PersistShape = {
   files: Record<string, string>;
   openTabs: string[];
   activePath: string | null;
+  previewPath?: string | null;
+  pinned?: string[];
+  dirtyPaths?: string[];
   messages: ChatMessage[];
   checkpoints?: Checkpoint[];
 };
@@ -66,6 +74,9 @@ function persist(state: WorkspaceState) {
     files: state.files,
     openTabs: state.openTabs,
     activePath: state.activePath,
+    previewPath: state.previewPath,
+    pinned: state.pinned,
+    dirtyPaths: state.dirtyPaths,
     messages: state.messages.slice(-40),
   };
   try {
@@ -104,6 +115,28 @@ function syncTabs(files: Record<string, string>, openTabs: string[], activePath:
   const tabs = openTabs.filter((p) => files[p] !== undefined);
   const active = activePath && files[activePath] !== undefined ? activePath : (tabs[tabs.length - 1] ?? null);
   return { openTabs: tabs, activePath: active };
+}
+
+function orderTabs(tabs: string[], pinned: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const path of pinned) {
+    if (tabs.includes(path) && !seen.has(path)) {
+      seen.add(path);
+      out.push(path);
+    }
+  }
+  for (const path of tabs) {
+    if (!seen.has(path)) {
+      seen.add(path);
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+function withPath(list: string[], path: string) {
+  return list.includes(path) ? list : [...list, path];
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => {
@@ -147,8 +180,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     }));
     set({
       files,
-      openTabs,
+      openTabs: orderTabs(openTabs, get().pinned),
       activePath: edit.path,
+      previewPath: get().previewPath === edit.path ? null : get().previewPath,
+      dirtyPaths: withPath(get().dirtyPaths, edit.path),
       chunks: buildIndex(files),
       messages,
     });
@@ -159,6 +194,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     if (!ck) return null;
     const files = restoreFiles(get().files, ck.before);
     const tabs = syncTabs(files, get().openTabs, get().activePath);
+    const pinned = get().pinned.filter((p) => files[p] !== undefined);
+    const prev = get().previewPath;
+    const previewPath = prev && files[prev] !== undefined ? prev : null;
     const messages = get().messages.map((m) => {
       if (m.id !== ck.messageId) return m;
       return {
@@ -169,6 +207,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set({
       files,
       ...tabs,
+      pinned,
+      previewPath,
       chunks: buildIndex(files),
       messages,
     });
@@ -180,8 +220,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     ready: true,
     name: DEMO_WORKSPACE_NAME,
     files: { ...DEMO_FILES },
-    openTabs: ["README.md", "src/store.ts"],
-    activePath: "README.md",
+    openTabs: ["src/store.ts"],
+    activePath: "src/store.ts",
+    previewPath: null,
+    pinned: [],
+    dirtyPaths: [],
     chunks: buildIndex(DEMO_FILES),
     indexing: false,
     messages: [],
@@ -206,11 +249,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
               parsed.activePath && nextFiles[parsed.activePath] !== undefined
                 ? parsed.activePath
                 : nextTabs[0]!;
+            const nextPreview =
+              parsed.previewPath && nextFiles[parsed.previewPath] !== undefined ? parsed.previewPath : null;
+            const nextPinned = (parsed.pinned ?? []).filter((p) => nextFiles[p] !== undefined);
+            const nextDirty = (parsed.dirtyPaths ?? []).filter((p) => nextFiles[p] !== undefined);
             set({
               name: parsed.name || DEMO_WORKSPACE_NAME,
               files: nextFiles,
               openTabs: nextTabs,
               activePath: nextActive,
+              previewPath: nextPreview,
+              pinned: nextPinned,
+              dirtyPaths: nextDirty,
               messages: parsed.messages ?? [],
               checkpoints: parsed.checkpoints ?? [],
               chunks: buildIndex(nextFiles),
@@ -232,8 +282,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       set({
         name: DEMO_WORKSPACE_NAME,
         files: { ...DEMO_FILES },
-        openTabs: ["README.md", "src/store.ts"],
-        activePath: "README.md",
+        openTabs: ["src/store.ts"],
+        activePath: "src/store.ts",
+        previewPath: null,
+        pinned: [],
+        dirtyPaths: [],
         chunks: buildIndex(DEMO_FILES),
         messages: [],
         checkpoints: [],
@@ -257,6 +310,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         files: nextFiles,
         openTabs: [preferred],
         activePath: preferred,
+        previewPath: null,
+        pinned: [],
+        dirtyPaths: [],
         messages: [],
         checkpoints: [],
         selection: null,
@@ -278,18 +334,43 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     openFile: (path) => {
-      const { files, openTabs, activePath } = get();
+      const { files, openTabs, activePath, pinned, previewPath } = get();
       if (files[path] === undefined) return;
-      if (activePath === path && openTabs.includes(path)) return;
-      const tabs = openTabs.includes(path) ? openTabs : [...openTabs, path];
-      set({ openTabs: tabs, activePath: path });
+      const nextPreview = previewPath === path ? null : previewPath;
+      const tabs = orderTabs(openTabs.includes(path) ? openTabs : [...openTabs, path], pinned);
+      if (activePath === path && openTabs.includes(path) && previewPath !== path) return;
+      set({ openTabs: tabs, activePath: path, previewPath: nextPreview });
+      schedulePersist();
+    },
+
+    openPreview: (path) => {
+      const { files, openTabs, activePath, pinned, previewPath } = get();
+      if (files[path] === undefined) return;
+      if (openTabs.includes(path) && previewPath !== path) {
+        if (activePath === path) return;
+        set({ activePath: path });
+        schedulePersist();
+        return;
+      }
+      if (previewPath === path) {
+        if (activePath !== path) {
+          set({ activePath: path });
+          schedulePersist();
+        }
+        return;
+      }
+      const withoutOld = openTabs.filter((p) => p !== previewPath);
+      const tabs = orderTabs(withoutOld.includes(path) ? withoutOld : [...withoutOld, path], pinned);
+      set({ openTabs: tabs, activePath: path, previewPath: path });
       schedulePersist();
     },
 
     closeTab: (path) => {
       const tabs = get().openTabs.filter((p) => p !== path);
       const active = get().activePath === path ? (tabs[tabs.length - 1] ?? null) : get().activePath;
-      set({ openTabs: tabs, activePath: active });
+      const pinned = get().pinned.filter((p) => p !== path);
+      const previewPath = get().previewPath === path ? null : get().previewPath;
+      set({ openTabs: tabs, activePath: active, pinned, previewPath });
       schedulePersist();
     },
 
@@ -298,11 +379,27 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
+    pinTab: (path) => {
+      const { files, openTabs, pinned, previewPath } = get();
+      if (files[path] === undefined) return;
+      const isPinned = pinned.includes(path);
+      const nextPinned = isPinned ? pinned.filter((p) => p !== path) : [...pinned, path];
+      const tabs = orderTabs(openTabs.includes(path) ? openTabs : [...openTabs, path], nextPinned);
+      set({
+        pinned: nextPinned,
+        openTabs: tabs,
+        previewPath: previewPath === path ? null : previewPath,
+        activePath: path,
+      });
+      schedulePersist();
+    },
+
     writeFile: (path, content) => {
       if (isSecretPath(path)) return;
       if (get().files[path] === content) return;
       const files = { ...get().files, [path]: content };
-      set({ files });
+      const previewPath = get().previewPath === path ? null : get().previewPath;
+      set({ files, dirtyPaths: withPath(get().dirtyPaths, path), previewPath });
       schedulePersist();
       scheduleReindex();
     },
@@ -311,8 +408,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const clean = safeRelPath(path);
       if (!clean || isSecretPath(clean)) return;
       const files = { ...get().files, [clean]: content };
-      const openTabs = get().openTabs.includes(clean) ? get().openTabs : [...get().openTabs, clean];
-      set({ files, openTabs, activePath: clean, chunks: buildIndex(files) });
+      const openTabs = orderTabs(
+        get().openTabs.includes(clean) ? get().openTabs : [...get().openTabs, clean],
+        get().pinned,
+      );
+      set({
+        files,
+        openTabs,
+        activePath: clean,
+        previewPath: get().previewPath === clean ? null : get().previewPath,
+        dirtyPaths: withPath(get().dirtyPaths, clean),
+        chunks: buildIndex(files),
+      });
       schedulePersist();
     },
 
@@ -321,7 +428,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       delete files[path];
       const openTabs = get().openTabs.filter((p) => p !== path);
       const active = get().activePath === path ? (openTabs[openTabs.length - 1] ?? null) : get().activePath;
-      set({ files, openTabs, activePath: active, chunks: buildIndex(files) });
+      const pinned = get().pinned.filter((p) => p !== path);
+      const previewPath = get().previewPath === path ? null : get().previewPath;
+      const dirtyPaths = get().dirtyPaths.filter((p) => p !== path);
+      set({ files, openTabs, activePath: active, pinned, previewPath, dirtyPaths, chunks: buildIndex(files) });
       schedulePersist();
     },
 

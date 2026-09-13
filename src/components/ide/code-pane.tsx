@@ -18,7 +18,9 @@ import { pendingEditFor } from "@/lib/workspace/edits";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
-import { SYNTAX } from "@/lib/editor/theme";
+import { EDITOR, SYNTAX } from "@/lib/editor/theme";
+import { stickyScroll } from "@/lib/editor/sticky-scroll";
+import { minimapScrollTo, paintMinimap } from "@/lib/editor/minimap";
 import { useIdeUi } from "@/lib/ui-store";
 import { FileCode } from "lucide-react";
 
@@ -40,32 +42,43 @@ const theme = EditorView.theme(
       backgroundColor: SYNTAX.gutter,
       color: SYNTAX.gutterFg,
       border: "none",
-      borderRight: "1px solid #18181b",
+      borderRight: `1px solid ${EDITOR.elevated}`,
     },
     ".cm-lineNumbers .cm-gutterElement": {
       minWidth: "2.6rem",
       padding: "0 10px 0 8px",
     },
     ".cm-activeLine": { backgroundColor: SYNTAX.activeLine },
-    ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: "#c4c4cc" },
+    ".cm-activeLineGutter": { backgroundColor: SYNTAX.activeLine, color: EDITOR.activeLineGutter },
     ".cm-cursor": { borderLeftColor: SYNTAX.caret, borderLeftWidth: "2px" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-      backgroundColor: "color-mix(in oklab, var(--color-ok) 34%, transparent)",
-    },
-    ".cm-selectionMatch": { backgroundColor: SYNTAX.match },
+    ".cm-selectionBackground": { backgroundColor: EDITOR.selectionInactive },
+    "&.cm-focused .cm-selectionBackground": { backgroundColor: EDITOR.selection },
+    ".cm-selectionMatch": { backgroundColor: EDITOR.wordRead },
+    "&.cm-focused .cm-selectionMatch": { backgroundColor: EDITOR.wordRead },
     "&.cm-focused .cm-matchingBracket": {
-      backgroundColor: SYNTAX.match,
-      outline: "1px solid #8bb4e3",
+      backgroundColor: EDITOR.wordWrite,
+      outline: `1px solid ${EDITOR.matchBorder}`,
     },
+    ".cm-nonmatchingBracket": { color: EDITOR.danger, outline: `1px solid ${EDITOR.danger}` },
     ".cm-foldPlaceholder": {
-      background: "#18181b",
+      background: EDITOR.elevated,
       border: "none",
-      color: "#a1a1aa",
+      color: EDITOR.muted,
     },
     ".cm-tooltip": {
-      backgroundColor: "#18181b",
-      border: "1px solid #27272a",
+      backgroundColor: EDITOR.elevated,
+      border: `1px solid ${EDITOR.border}`,
       color: SYNTAX.fg,
+    },
+    ".cm-tooltip-autocomplete ul li[aria-selected]": {
+      background: EDITOR.paletteFocus,
+    },
+    ".cm-inlayHint, .cm-aperture-inlay": {
+      background: EDITOR.inlayBg,
+      color: EDITOR.inlayFg,
+      fontStyle: "italic",
+      padding: "0 5px",
+      borderRadius: "4px",
     },
   },
   { dark: true },
@@ -117,6 +130,7 @@ const syncAnn = Annotation.define<boolean>();
 
 export function CodePane() {
   const parentRef = useRef<HTMLDivElement>(null);
+  const miniRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lastValue = useRef("");
   const pathRef = useRef<string | null>(null);
@@ -163,7 +177,8 @@ export function CodePane() {
           bracketMatching(),
           closeBrackets(),
           autocompletion(),
-          highlightSelectionMatches(),
+          highlightSelectionMatches({ highlightWordAroundCursor: true }),
+          stickyScroll(),
           keymap.of([
             ...closeBracketsKeymap,
             ...defaultKeymap,
@@ -268,6 +283,30 @@ export function CodePane() {
   }, [pendingEdit]);
 
   useEffect(() => {
+    const view = viewRef.current;
+    const host = miniRef.current;
+    if (!view || !host || !activePath) return;
+    const scroller = view.scrollDOM;
+    const paint = () => {
+      paintMinimap(
+        host,
+        view.state.doc.toString(),
+        scroller.scrollTop,
+        scroller.clientHeight,
+        scroller.scrollHeight,
+      );
+    };
+    paint();
+    scroller.addEventListener("scroll", paint, { passive: true });
+    const ro = new ResizeObserver(paint);
+    ro.observe(scroller);
+    return () => {
+      scroller.removeEventListener("scroll", paint);
+      ro.disconnect();
+    };
+  }, [activePath, value]);
+
+  useEffect(() => {
     if (!pendingEdit) {
       scrolledFor.current = null;
       return;
@@ -303,9 +342,9 @@ export function CodePane() {
   }, [pendingEdit]);
 
   return (
-    <div className="relative h-full min-h-0 bg-bg">
+    <div className="relative flex h-full min-h-0 bg-bg">
       {!activePath && (
-        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-muted">
+        <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted">
           <FileCode className="size-8 text-subtle" strokeWidth={1.4} />
           <div>
             <p className="text-sm font-medium text-fg">Open a file to start</p>
@@ -315,7 +354,20 @@ export function CodePane() {
           </div>
         </div>
       )}
-      <div ref={parentRef} className={activePath ? "h-full min-h-0" : "hidden"} />
+      <div ref={parentRef} className={activePath ? "h-full min-h-0 min-w-0 flex-1" : "hidden"} />
+      {activePath ? (
+        <div
+          ref={miniRef}
+          className="aperture-minimap hidden h-full w-10 shrink-0 cursor-pointer border-l border-border md:block"
+          aria-hidden="true"
+          onPointerDown={(e) => {
+            const view = viewRef.current;
+            const host = miniRef.current;
+            if (!view || !host) return;
+            view.scrollDOM.scrollTop = minimapScrollTo(host, e.clientY, view.scrollDOM.scrollHeight);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

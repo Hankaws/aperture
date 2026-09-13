@@ -14,6 +14,24 @@
   --color-danger: #f87171;
   --color-ok: #6ee7b7;
   --color-warn: #fbbf24;
+  --color-editor: #0c0c0e;
+  --color-tab-hover: #1a1a20;
+  --color-tab-modified: #c4c4cc;
+  --color-selection-inactive: #16332c;
+  --color-word-read: #243830;
+  --color-word-write: #2d5c4c;
+  --color-ghost: #52525b;
+  --color-inlay-bg: #1c1c22;
+  --color-inlay-fg: #8b8e98;
+  --color-sticky: #141418;
+  --color-list-hover: #1a1a20;
+  --color-list-selected: #1c1c22;
+  --color-list-selected-inactive: #141416;
+  --color-list-focus: #1c2430;
+  --color-list-drop: #1a2a38;
+  --color-palette-focus: #1c2430;
+  --color-scrollbar: #27272a;
+  --color-scrollbar-hover: #3f3f46;
 
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -73,7 +91,7 @@
 @layer components {
   .aperture-scroll {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-border) transparent;
+    scrollbar-color: var(--color-scrollbar) transparent;
   }
 
   .aperture-scroll::-webkit-scrollbar {
@@ -82,11 +100,16 @@
   }
 
   .aperture-scroll::-webkit-scrollbar-thumb {
-    background: var(--color-border);
+    background: var(--color-scrollbar);
     border-radius: 999px;
   }
 
+  .aperture-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--color-scrollbar-hover);
+  }
+
   .cm-editor {
+    position: relative;
     height: 100%;
     font-size: 14px;
     background: #0c0c0e;
@@ -95,10 +118,122 @@
   .cm-editor .cm-scroller {
     font-family: var(--font-mono);
     line-height: 1.6;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  .cm-editor .cm-scroller::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+    background: var(--color-scrollbar);
+    border-radius: 999px;
+  }
+
+  .cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
+    background: var(--color-scrollbar-hover);
   }
 
   .cm-editor.cm-focused {
     outline: none;
+  }
+
+  .cm-aperture-sticky {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 4;
+    height: 26px;
+    padding: 0 12px 0 calc(2.6rem + 12px);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-sticky);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 26px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .cm-aperture-inlay {
+    display: inline-block;
+    margin: 0 3px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--color-inlay-bg);
+    color: var(--color-inlay-fg);
+    font-size: 11px;
+    font-style: italic;
+    vertical-align: 1px;
+  }
+
+  .file-tree {
+    background: var(--color-surface);
+  }
+
+  .file-tree:focus-within .tree-row.is-active {
+    background: var(--color-list-selected);
+    color: var(--color-accent);
+  }
+
+  .file-tree:not(:focus-within) .tree-row.is-active {
+    background: transparent;
+    color: var(--color-accent);
+  }
+
+  .tree-row:hover {
+    background: var(--color-list-hover);
+    color: var(--color-fg);
+  }
+
+  .tree-row:focus-within:not(.is-active) {
+    background: var(--color-list-focus);
+    color: var(--color-fg);
+  }
+
+  .file-tree.is-drop {
+    box-shadow: inset 0 0 0 1px var(--color-accent);
+    background: var(--color-list-drop);
+  }
+
+  .cmdk-item[data-selected] {
+    background: var(--color-palette-focus);
+  }
+
+  .cmdk-item:hover:not([data-selected]) {
+    background: var(--color-list-hover);
+  }
+
+  .aperture-minimap {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-editor);
+  }
+
+  .aperture-minimap i {
+    position: absolute;
+    left: 4px;
+    display: block;
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .aperture-minimap-slider {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+  }
+
+  .aperture-minimap:hover .aperture-minimap-slider {
+    background: rgba(255, 255, 255, 0.18);
   }
 
   .cm-aperture-del {

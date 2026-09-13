@@ -1,5 +1,5 @@
 import { a as builtinById, c as isBuiltinAgentId } from "./kinds-CCf1JBpH.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/session.server-BnD_6toD.js
+//#region node_modules/.nitro/vite/services/ssr/assets/session.server-o9JuHXuQ.js
 async function runAcpSession(input, opts) {
 	const agentId = input.agentId ?? "";
 	if (!agentId) return {
@@ -18,7 +18,7 @@ async function runAcpSession(input, opts) {
 			ok: false,
 			error: resolved.error
 		};
-		const { runAgentLoopStreaming } = await import("./loop.server-Dkdk3YDs.mjs");
+		const { runAgentLoopStreaming } = await import("./loop.server-EhEaAxg5.mjs");
 		const result = await runAgentLoopStreaming(input, {
 			provider: resolved.provider,
 			apiKey: resolved.apiKey

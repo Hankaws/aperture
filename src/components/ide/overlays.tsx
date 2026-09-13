@@ -56,7 +56,7 @@ export function HelpDialog() {
   if (!open) return null;
 
   const steps = [
-    { n: "1", title: "Open a file", body: "Click anything in the file tree. Open a folder, zip, or GitHub from Open." },
+    { n: "1", title: "Open a file", body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open." },
     { n: "2", title: "Ask Agent", body: "Describe the change. Agent posts a plan and waits — you click Build it." },
     { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. Apply, reject, or undo the run." },
   ];

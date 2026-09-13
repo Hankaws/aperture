@@ -1,10 +1,10 @@
 import { a as builtinById, i as acpTraceName, r as acpSystemPreamble } from "./kinds-CCf1JBpH.mjs";
 import { a as sanitizeFileMap, n as redactSecrets } from "./redact-Ckw8E-v4.mjs";
 import { a as toolKindFor, i as shouldAwaitBuild, n as planReadyText, r as resolveAgentPhase } from "./phase-CqR4q0c4.mjs";
-import { a as indexFiles, t as applySearchReplace } from "./apply-edit-EH1xW8If.mjs";
+import { a as indexFiles, t as applySearchReplace } from "./apply-edit-BQE-oS-F.mjs";
 import { a as findRules, r as expandMentions, s as parseMentions } from "./mentions-9PH6SrSM.mjs";
-import { a as toolsForStep, n as completeStreaming, r as executeTool, t as complete } from "./complete.server-DFKFh9h7.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/loop.server-Dkdk3YDs.js
+import { a as toolsForStep, n as completeStreaming, r as executeTool, t as complete } from "./complete.server-CD2QvcD3.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/loop.server-EhEaAxg5.js
 var MAX_STEPS = 8;
 var MAX_FILES = 120;
 var MAX_CHARS = 22e4;

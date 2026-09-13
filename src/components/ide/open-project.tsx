@@ -125,7 +125,7 @@ export function OpenProjectHost() {
       />
       {githubOpen && <GithubDialog onClose={() => setGithubOpen(false)} busy={busy} setBusy={setBusy} />}
       {(dragging || busy) && (
-        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-bg/70">
+        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-list-drop/80">
           <div className="rounded-2xl border border-border bg-surface px-6 py-5 text-center shadow-[var(--shadow-float)]">
             {busy ? (
               <LoaderCircle className="mx-auto size-5 animate-spin text-muted" />

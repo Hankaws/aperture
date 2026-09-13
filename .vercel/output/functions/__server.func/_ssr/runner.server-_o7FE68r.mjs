@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/runner.server-kdSxo5YB.js
+//#region node_modules/.nitro/vite/services/ssr/assets/runner.server-_o7FE68r.js
 function controllers() {
 	const g = globalThis;
 	g.__apertureJobs ??= /* @__PURE__ */ new Map();
@@ -22,7 +22,7 @@ async function runJob(id, userId, raw, agentId) {
   `;
 	try {
 		if (agentId) {
-			const { runAcpSession } = await import("./session.server-BnD_6toD.mjs");
+			const { runAcpSession } = await import("./session.server-o9JuHXuQ.mjs");
 			const result = await runAcpSession({
 				...input,
 				agentId
@@ -58,7 +58,7 @@ async function runJob(id, userId, raw, agentId) {
       `;
 			return;
 		}
-		const { runAgentLoop } = await import("./loop.server-Dkdk3YDs.mjs");
+		const { runAgentLoop } = await import("./loop.server-EhEaAxg5.mjs");
 		const result = await runAgentLoop(input, {
 			provider: resolved.provider,
 			apiKey: resolved.apiKey

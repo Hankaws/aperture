@@ -12,14 +12,14 @@ import { n as createSsrRpc, o as setModelSource } from "./api-BHHVIIah.mjs";
 import { a as isModEvent, i as fuzzyMatch, n as cn, o as modSymbol, r as extOf, t as basename } from "./utils-DTfuEt1f.mjs";
 import { n as assembleImport, r as filesFromZipBuffer } from "./project-files-B6R06HJh.mjs";
 import { t as parseUnifiedDiff } from "./patch-BCE3WVGP.mjs";
-import { a as indexFiles, i as hunksFromDiff, n as diffStats, o as languageFromPath, s as lineDiff } from "./apply-edit-EH1xW8If.mjs";
+import { a as indexFiles, c as lineDiff, i as hunksFromDiff, n as diffStats, o as languageFromPath, s as languageLabel } from "./apply-edit-BQE-oS-F.mjs";
 import { a as findRules, i as filterMentions, n as activeMention, o as mentionItems, t as DEFAULT_RULES } from "./mentions-9PH6SrSM.mjs";
 import { r as getBearerToken } from "./client-BXBOTlUB.mjs";
 import { a as buttonVariants, n as AuthSlot, o as useCurrentUserState, r as Button, t as ApertureMark } from "./auth-slot-DAdQDs8Q.mjs";
 import { n as useAccount, t as modelCaption } from "./use-account-BeKoB5uo.mjs";
 import { n as listAgents } from "./api-BNmGtrJa.mjs";
 import { t as Input } from "./input-DFmVyX9g.mjs";
-import { A as FileJson, B as Check, C as History, D as FolderOpen, E as FolderTree, F as CodeXml, H as ArrowUp, I as Clock, L as Circle, M as FileCode, N as FileArchive, O as FileText, P as Download, R as CircleDot, T as Folder, V as Bug, _ as MessageSquare, c as Sparkles, d as Search, f as ScrollText, g as PanelLeft, h as Play, i as Undo2, j as FileDiff, k as FileSearch, m as Plus, n as Wrench, o as Trash2, p as RotateCcw, r as WandSparkles, s as Square, t as X, u as Settings, v as LoaderCircle, w as Github, x as Keyboard, y as ListTodo, z as ChevronRight } from "../_libs/lucide-react.mjs";
+import { A as FileSearch, B as ChevronRight, D as FolderTree, E as Folder, F as Download, H as Bug, I as CodeXml, L as Clock, M as FileDiff, N as FileCode, O as FolderOpen, P as FileArchive, R as Circle, S as Keyboard, T as Github, U as ArrowUp, V as Check, _ as Palette, b as ListTodo, c as Sparkles, d as Search, f as ScrollText, g as Pin, h as Play, i as Undo2, j as FileJson, k as FileText, m as Plus, n as Wrench, o as Trash2, p as RotateCcw, r as WandSparkles, s as Square, t as X, u as Settings, v as MessageSquare, w as History, y as LoaderCircle, z as CircleDot } from "../_libs/lucide-react.mjs";
 import { n as toast } from "../_libs/sonner.mjs";
 import { n as nn, r as qt, t as Qt } from "../_libs/react-resizable-panels.mjs";
 import { t as create } from "../_libs/zustand.mjs";
@@ -33,7 +33,7 @@ import { t as json } from "../_libs/@codemirror/lang-json+[...].mjs";
 import { t as markdown } from "../_libs/@codemirror/lang-markdown+[...].mjs";
 import { t as python } from "../_libs/@codemirror/lang-python+[...].mjs";
 import { t as _e } from "../_libs/cmdk.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/app-Cg9tPx1z.js
+//#region node_modules/.nitro/vite/services/ssr/assets/app-CRi9sNt8.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var import_lib = /* @__PURE__ */ __toESM(require_lib());
@@ -371,6 +371,9 @@ function persist(state) {
 		files: state.files,
 		openTabs: state.openTabs,
 		activePath: state.activePath,
+		previewPath: state.previewPath,
+		pinned: state.pinned,
+		dirtyPaths: state.dirtyPaths,
 		messages: state.messages.slice(-40)
 	};
 	try {
@@ -405,6 +408,22 @@ function syncTabs(files, openTabs, activePath) {
 		openTabs: tabs,
 		activePath: activePath && files[activePath] !== void 0 ? activePath : tabs[tabs.length - 1] ?? null
 	};
+}
+function orderTabs(tabs, pinned) {
+	const seen = /* @__PURE__ */ new Set();
+	const out = [];
+	for (const path of pinned) if (tabs.includes(path) && !seen.has(path)) {
+		seen.add(path);
+		out.push(path);
+	}
+	for (const path of tabs) if (!seen.has(path)) {
+		seen.add(path);
+		out.push(path);
+	}
+	return out;
+}
+function withPath(list, path) {
+	return list.includes(path) ? list : [...list, path];
 }
 var useWorkspace = create((set, get) => {
 	function ensureCheckpointForMessage(messageId) {
@@ -453,8 +472,10 @@ var useWorkspace = create((set, get) => {
 		}));
 		set({
 			files,
-			openTabs,
+			openTabs: orderTabs(openTabs, get().pinned),
 			activePath: edit.path,
+			previewPath: get().previewPath === edit.path ? null : get().previewPath,
+			dirtyPaths: withPath(get().dirtyPaths, edit.path),
 			chunks: buildIndex(files),
 			messages
 		});
@@ -464,6 +485,9 @@ var useWorkspace = create((set, get) => {
 		if (!ck) return null;
 		const files = restoreFiles(get().files, ck.before);
 		const tabs = syncTabs(files, get().openTabs, get().activePath);
+		const pinned = get().pinned.filter((p) => files[p] !== void 0);
+		const prev = get().previewPath;
+		const previewPath = prev && files[prev] !== void 0 ? prev : null;
 		const messages = get().messages.map((m) => {
 			if (m.id !== ck.messageId) return m;
 			return {
@@ -477,6 +501,8 @@ var useWorkspace = create((set, get) => {
 		set({
 			files,
 			...tabs,
+			pinned,
+			previewPath,
 			chunks: buildIndex(files),
 			messages
 		});
@@ -487,8 +513,15 @@ var useWorkspace = create((set, get) => {
 		ready: true,
 		name: DEMO_WORKSPACE_NAME,
 		files: { ...DEMO_FILES },
-		openTabs: ["README.md", "src/store.ts"],
-		activePath: "README.md",
+		openTabs: [
+			"src/store.ts",
+			"src/index.ts",
+			"README.md"
+		],
+		activePath: "src/store.ts",
+		previewPath: "README.md",
+		pinned: ["src/store.ts"],
+		dirtyPaths: [],
 		chunks: buildIndex(DEMO_FILES),
 		indexing: false,
 		messages: [],
@@ -506,11 +539,17 @@ var useWorkspace = create((set, get) => {
 					if (nextFiles && Object.keys(nextFiles).length > 0) {
 						const nextTabs = parsed.openTabs?.length ? parsed.openTabs.filter((p) => nextFiles[p] !== void 0) : [Object.keys(nextFiles)[0]];
 						const nextActive = parsed.activePath && nextFiles[parsed.activePath] !== void 0 ? parsed.activePath : nextTabs[0];
+						const nextPreview = parsed.previewPath && nextFiles[parsed.previewPath] !== void 0 ? parsed.previewPath : null;
+						const nextPinned = (parsed.pinned ?? []).filter((p) => nextFiles[p] !== void 0);
+						const nextDirty = (parsed.dirtyPaths ?? []).filter((p) => nextFiles[p] !== void 0);
 						set({
 							name: parsed.name || "harbor-api",
 							files: nextFiles,
 							openTabs: nextTabs,
 							activePath: nextActive,
+							previewPath: nextPreview,
+							pinned: nextPinned,
+							dirtyPaths: nextDirty,
 							messages: parsed.messages ?? [],
 							checkpoints: parsed.checkpoints ?? [],
 							chunks: buildIndex(nextFiles),
@@ -532,8 +571,15 @@ var useWorkspace = create((set, get) => {
 			set({
 				name: DEMO_WORKSPACE_NAME,
 				files: { ...DEMO_FILES },
-				openTabs: ["README.md", "src/store.ts"],
-				activePath: "README.md",
+				openTabs: [
+					"src/store.ts",
+					"src/index.ts",
+					"README.md"
+				],
+				activePath: "src/store.ts",
+				previewPath: "README.md",
+				pinned: ["src/store.ts"],
+				dirtyPaths: [],
 				chunks: buildIndex(DEMO_FILES),
 				messages: [],
 				checkpoints: [],
@@ -553,6 +599,9 @@ var useWorkspace = create((set, get) => {
 				files: nextFiles,
 				openTabs: [preferred],
 				activePath: preferred,
+				previewPath: null,
+				pinned: [],
+				dirtyPaths: [],
 				messages: [],
 				checkpoints: [],
 				selection: null,
@@ -574,12 +623,39 @@ var useWorkspace = create((set, get) => {
 			});
 		},
 		openFile: (path) => {
-			const { files, openTabs, activePath } = get();
+			const { files, openTabs, activePath, pinned, previewPath } = get();
 			if (files[path] === void 0) return;
-			if (activePath === path && openTabs.includes(path)) return;
+			const nextPreview = previewPath === path ? null : previewPath;
+			const tabs = orderTabs(openTabs.includes(path) ? openTabs : [...openTabs, path], pinned);
+			if (activePath === path && openTabs.includes(path) && previewPath !== path) return;
 			set({
-				openTabs: openTabs.includes(path) ? openTabs : [...openTabs, path],
-				activePath: path
+				openTabs: tabs,
+				activePath: path,
+				previewPath: nextPreview
+			});
+			schedulePersist();
+		},
+		openPreview: (path) => {
+			const { files, openTabs, activePath, pinned, previewPath } = get();
+			if (files[path] === void 0) return;
+			if (openTabs.includes(path) && previewPath !== path) {
+				if (activePath === path) return;
+				set({ activePath: path });
+				schedulePersist();
+				return;
+			}
+			if (previewPath === path) {
+				if (activePath !== path) {
+					set({ activePath: path });
+					schedulePersist();
+				}
+				return;
+			}
+			const withoutOld = openTabs.filter((p) => p !== previewPath);
+			set({
+				openTabs: orderTabs(withoutOld.includes(path) ? withoutOld : [...withoutOld, path], pinned),
+				activePath: path,
+				previewPath: path
 			});
 			schedulePersist();
 		},
@@ -587,7 +663,9 @@ var useWorkspace = create((set, get) => {
 			const tabs = get().openTabs.filter((p) => p !== path);
 			set({
 				openTabs: tabs,
-				activePath: get().activePath === path ? tabs[tabs.length - 1] ?? null : get().activePath
+				activePath: get().activePath === path ? tabs[tabs.length - 1] ?? null : get().activePath,
+				pinned: get().pinned.filter((p) => p !== path),
+				previewPath: get().previewPath === path ? null : get().previewPath
 			});
 			schedulePersist();
 		},
@@ -595,13 +673,31 @@ var useWorkspace = create((set, get) => {
 			set({ activePath: path });
 			schedulePersist();
 		},
+		pinTab: (path) => {
+			const { files, openTabs, pinned, previewPath } = get();
+			if (files[path] === void 0) return;
+			const nextPinned = pinned.includes(path) ? pinned.filter((p) => p !== path) : [...pinned, path];
+			set({
+				pinned: nextPinned,
+				openTabs: orderTabs(openTabs.includes(path) ? openTabs : [...openTabs, path], nextPinned),
+				previewPath: previewPath === path ? null : previewPath,
+				activePath: path
+			});
+			schedulePersist();
+		},
 		writeFile: (path, content) => {
 			if (isSecretPath(path)) return;
 			if (get().files[path] === content) return;
-			set({ files: {
+			const files = {
 				...get().files,
 				[path]: content
-			} });
+			};
+			const previewPath = get().previewPath === path ? null : get().previewPath;
+			set({
+				files,
+				dirtyPaths: withPath(get().dirtyPaths, path),
+				previewPath
+			});
 			schedulePersist();
 			scheduleReindex();
 		},
@@ -614,8 +710,10 @@ var useWorkspace = create((set, get) => {
 			};
 			set({
 				files,
-				openTabs: get().openTabs.includes(clean) ? get().openTabs : [...get().openTabs, clean],
+				openTabs: orderTabs(get().openTabs.includes(clean) ? get().openTabs : [...get().openTabs, clean], get().pinned),
 				activePath: clean,
+				previewPath: get().previewPath === clean ? null : get().previewPath,
+				dirtyPaths: withPath(get().dirtyPaths, clean),
 				chunks: buildIndex(files)
 			});
 			schedulePersist();
@@ -628,6 +726,9 @@ var useWorkspace = create((set, get) => {
 				files,
 				openTabs,
 				activePath: get().activePath === path ? openTabs[openTabs.length - 1] ?? null : get().activePath,
+				pinned: get().pinned.filter((p) => p !== path),
+				previewPath: get().previewPath === path ? null : get().previewPath,
+				dirtyPaths: get().dirtyPaths.filter((p) => p !== path),
 				chunks: buildIndex(files)
 			});
 			schedulePersist();
@@ -835,14 +936,17 @@ function buildTree(paths) {
 }
 function TreeItem({ node, depth, pending }) {
 	const activePath = useWorkspace((s) => s.activePath);
+	const dirtyPaths = useWorkspace((s) => s.dirtyPaths);
+	const openPreview = useWorkspace((s) => s.openPreview);
 	const openFile = useWorkspace((s) => s.openFile);
 	const deleteFile = useWorkspace((s) => s.deleteFile);
 	const [open, setOpen] = (0, import_react.useState)(depth < 1);
 	const isFolder = Boolean(node.children);
 	const active = activePath === node.path;
+	const dirty = dirtyPaths.includes(node.path);
 	const Icon = isFolder ? open ? FolderOpen : Folder : fileIcon(node.path);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: cn("group relative flex h-9 items-center gap-1 rounded-md pr-1 text-sm", active ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/70 hover:text-fg"),
+		className: cn("tree-row group relative flex h-9 items-center gap-1 rounded-md pr-1 text-sm", active ? "is-active text-fg" : "text-muted"),
 		style: { paddingLeft: 8 + depth * 12 },
 		children: [
 			active && !isFolder && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" }),
@@ -851,7 +955,10 @@ function TreeItem({ node, depth, pending }) {
 				className: "flex min-w-0 flex-1 items-center gap-1.5 text-left",
 				onClick: () => {
 					if (isFolder) setOpen((v) => !v);
-					else openFile(node.path);
+					else openPreview(node.path);
+				},
+				onDoubleClick: () => {
+					if (!isFolder) openFile(node.path);
 				},
 				children: [
 					isFolder ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronRight, { className: cn("size-3.5 shrink-0 text-subtle transition-transform duration-150", open && "rotate-90") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-3.5" }),
@@ -866,6 +973,10 @@ function TreeItem({ node, depth, pending }) {
 					pending.has(node.path) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 						className: "size-1.5 shrink-0 rounded-full bg-ok",
 						"aria-label": "Staged diff"
+					}),
+					dirty && !pending.has(node.path) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "size-1.5 shrink-0 rounded-full bg-tab-modified",
+						"aria-label": "Unsaved"
 					})
 				]
 			}),
@@ -913,14 +1024,14 @@ function OpenMenu() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		ref: rootRef,
 		className: "relative",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 			variant: "ghost",
-			size: "sm",
-			className: "h-8 px-2",
+			size: "icon-sm",
+			className: "size-7",
 			"aria-label": "Open project",
 			"aria-expanded": open,
 			onClick: () => setOpen((v) => !v),
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderOpen, { className: "size-3.5" }), "Open"]
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderOpen, { className: "size-3.5" })
 		}), open && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 			className: "absolute right-0 top-9 z-20 w-48 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]",
 			children: [
@@ -958,28 +1069,38 @@ function OpenMenu() {
 }
 function FileTree() {
 	const files = useWorkspace((s) => s.files);
-	const name = useWorkspace((s) => s.name);
 	const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
 	const pending = (0, import_react.useMemo)(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 	const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
 	const tree = (0, import_react.useMemo)(() => buildTree(Object.keys(files)), [files]);
+	const [dropOver, setDropOver] = (0, import_react.useState)(false);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-full min-h-0 flex-col bg-surface",
+		className: cn("file-tree flex h-full min-h-0 flex-col", dropOver && "is-drop"),
+		onDragOver: (e) => {
+			if (!e.dataTransfer?.types.includes("Files")) return;
+			e.preventDefault();
+			setDropOver(true);
+		},
+		onDragLeave: (e) => {
+			if (e.currentTarget.contains(e.relatedTarget)) return;
+			setDropOver(false);
+		},
+		onDrop: () => setDropOver(false),
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex h-11 items-center justify-between gap-1 border-b border-border px-2",
+				className: "flex h-9 items-center justify-between gap-1 px-3",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "min-w-0 truncate px-1 text-sm font-medium tracking-tight",
-					children: name
+					className: "text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase",
+					children: "Workspace"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex shrink-0 items-center",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(OpenMenu, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(OpenMenu, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 						variant: "ghost",
-						size: "sm",
-						className: "h-8 px-2",
+						size: "icon-sm",
+						className: "size-7",
 						"aria-label": "New file",
 						onClick: () => setNewFileOpen(true),
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "size-3.5" }), "New"]
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "size-3.5" })
 					})]
 				})]
 			}),
@@ -1011,35 +1132,55 @@ function tabIcon(path) {
 function TabBar() {
 	const openTabs = useWorkspace((s) => s.openTabs);
 	const activePath = useWorkspace((s) => s.activePath);
+	const previewPath = useWorkspace((s) => s.previewPath);
+	const pinned = useWorkspace((s) => s.pinned);
+	const dirtyPaths = useWorkspace((s) => s.dirtyPaths);
 	const setActive = useWorkspace((s) => s.setActive);
 	const closeTab = useWorkspace((s) => s.closeTab);
+	const pinTab = useWorkspace((s) => s.pinTab);
+	const openFile = useWorkspace((s) => s.openFile);
 	const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
 	const pending = (0, import_react.useMemo)(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 	if (openTabs.length === 0) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "flex h-10 items-center border-b border-border bg-surface px-3 text-sm text-subtle",
+		className: "flex h-10 items-center bg-bg px-3 text-sm text-subtle",
 		children: "Open a file from the left to start editing"
 	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "flex h-10 items-stretch overflow-x-auto border-b border-border bg-surface",
+		className: "flex h-9 items-stretch overflow-x-auto border-b border-border bg-bg",
 		children: openTabs.map((path) => {
 			const active = path === activePath;
+			const preview = path === previewPath;
+			const isPinned = pinned.includes(path);
+			const dirty = dirtyPaths.includes(path);
 			const Icon = tabIcon(path);
 			const staged = pending.has(path);
 			return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: cn("group relative flex min-w-0 shrink-0 items-center gap-1 border-r border-border px-2", active ? "bg-bg text-fg" : "text-muted hover:bg-elevated/50 hover:text-fg"),
+				className: cn("group relative flex min-w-0 shrink-0 items-center gap-1 border-r border-border px-2", active ? "bg-bg text-fg" : "text-muted hover:bg-tab-hover hover:text-fg"),
+				onDoubleClick: () => openFile(path),
+				onAuxClick: (e) => {
+					if (e.button === 1) {
+						e.preventDefault();
+						closeTab(path);
+					}
+				},
 				children: [
-					active && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute inset-x-0 bottom-0 h-0.5 bg-accent" }),
+					active && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute inset-x-0 top-0 h-0.5 bg-accent" }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						type: "button",
 						className: "flex max-w-48 items-center gap-1.5 truncate px-1 py-2 text-sm",
+						title: preview ? "Preview — double-click to keep" : isPinned ? "Pinned" : basename(path),
 						onClick: () => setActive(path),
 						children: [
+							isPinned && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pin, {
+								className: "size-3 shrink-0 text-subtle",
+								strokeWidth: 1.8
+							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, {
 								className: "size-3.5 shrink-0 text-subtle",
 								strokeWidth: 1.6
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: cn("truncate", active && "font-medium"),
+								className: cn("truncate", active && "font-medium", preview && "italic text-muted"),
 								children: basename(path)
 							}),
 							staged && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
@@ -1050,10 +1191,23 @@ function TabBar() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						"aria-label": `Close ${basename(path)}`,
-						className: cn("flex size-7 items-center justify-center rounded-md hover:bg-elevated", active ? "opacity-100" : "opacity-0 group-hover:opacity-100"),
+						"aria-label": isPinned ? `Unpin ${basename(path)}` : `Pin ${basename(path)}`,
+						className: "hidden size-7 items-center justify-center rounded-md text-subtle hover:bg-elevated hover:text-fg group-hover:flex",
+						onClick: (e) => {
+							e.stopPropagation();
+							pinTab(path);
+						},
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pin, {
+							className: cn("size-3", isPinned && "text-fg"),
+							strokeWidth: 1.8
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						"aria-label": dirty ? `Unsaved · Close ${basename(path)}` : `Close ${basename(path)}`,
+						className: cn("relative flex size-7 items-center justify-center rounded-md hover:bg-elevated", active || dirty ? "opacity-100" : "opacity-0 group-hover:opacity-100"),
 						onClick: () => closeTab(path),
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "size-3.5" })
+						children: [dirty && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "size-1.5 rounded-full bg-tab-modified group-hover:opacity-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: cn("size-3.5", dirty && "absolute opacity-0 group-hover:opacity-100") })]
 					})
 				]
 			}, path);
@@ -1077,6 +1231,87 @@ async function requestTabCompletion(input, signal) {
 	const text = ((await res.json()).text ?? "").trim();
 	return text.length > 0 ? text : null;
 }
+/** Editor chrome + syntax. Hex matches public/theme.html exactly. */
+var EDITOR = {
+	page: "#09090b",
+	bg: "#0c0c0e",
+	surface: "#111113",
+	elevated: "#18181b",
+	fg: "#e8e9ed",
+	fgBright: "#f4f4f5",
+	muted: "#a1a1aa",
+	subtle: "#71717a",
+	gutterFg: "#8b8e98",
+	border: "#27272a",
+	accent: "#93c5fd",
+	ok: "#6ee7b7",
+	danger: "#f87171",
+	warn: "#fbbf24",
+	caret: "#f4f4f5",
+	activeLine: "#1a1a20",
+	activeLineGutter: "#c4c4cc",
+	selection: "#1f4a3c",
+	selectionInactive: "#16332c",
+	wordRead: "#243830",
+	wordWrite: "#2d5c4c",
+	matchBorder: "#8bb4e3",
+	tabHover: "#1a1a20",
+	tabModified: "#c4c4cc",
+	ghost: "#52525b",
+	inlayBg: "#1c1c22",
+	inlayFg: "#8b8e98",
+	stickyBg: "#141418",
+	stickyHover: "#1a1a20",
+	listHover: "#1a1a20",
+	listSelected: "#1c1c22",
+	listSelectedInactive: "#141416",
+	listFocus: "#1c2430",
+	listDrop: "#1a2a38",
+	paletteFocus: "#1c2430",
+	minimapSlider: "rgba(255, 255, 255, 0.10)",
+	minimapSliderHover: "rgba(255, 255, 255, 0.18)",
+	scrollbar: "#27272a",
+	scrollbarHover: "#3f3f46",
+	ansi: {
+		black: "#18181b",
+		red: "#f87171",
+		green: "#6ee7b7",
+		yellow: "#fbbf24",
+		blue: "#93c5fd",
+		magenta: "#e8b4c4",
+		cyan: "#9ec0c8",
+		white: "#e8e9ed",
+		brightBlack: "#71717a",
+		brightRed: "#fca5a5",
+		brightGreen: "#a7f3d0",
+		brightYellow: "#fde68a",
+		brightBlue: "#bfdbfe",
+		brightMagenta: "#f5d0dc",
+		brightCyan: "#c2e7ee",
+		brightWhite: "#fafafa"
+	}
+};
+/** Cursor-like syntax colors — more hue than chrome, still cool/neutral. */
+var SYNTAX = {
+	bg: EDITOR.bg,
+	fg: EDITOR.fg,
+	caret: EDITOR.caret,
+	gutter: EDITOR.bg,
+	gutterFg: EDITOR.gutterFg,
+	activeLine: EDITOR.activeLine,
+	selection: EDITOR.selection,
+	match: EDITOR.wordWrite,
+	keyword: "#8bb4e3",
+	string: "#8fd4b2",
+	fn: "#dcc191",
+	type: "#9ec0c8",
+	comment: "#6d7080",
+	number: "#c9b8a0",
+	property: "#c5c9d1",
+	operator: "#8e929c",
+	tag: "#8bb4e3",
+	invalid: EDITOR.danger
+};
 var GhostWidget = class extends WidgetType {
 	text;
 	constructor(text) {
@@ -1111,7 +1346,7 @@ function ghostDecorations(view, text) {
 	}).range(pos)]);
 }
 var ghostTheme = EditorView.theme({ ".cm-aperture-ghost": {
-	color: "#52525b",
+	color: EDITOR.ghost,
 	fontStyle: "italic",
 	pointerEvents: "none",
 	opacity: "0.85"
@@ -1352,27 +1587,86 @@ function pendingDiff(edit, handlers) {
 		}]))
 	];
 }
-/** Cursor-like syntax colors — more hue than chrome, still cool/neutral. */
-var SYNTAX = {
-	bg: "#0c0c0e",
-	fg: "#e8e9ed",
-	caret: "#f4f4f5",
-	gutter: "#0c0c0e",
-	gutterFg: "#8b8e98",
-	activeLine: "#1a1a20",
-	selection: "#1f4a3c",
-	match: "#2d5c4c",
-	keyword: "#8bb4e3",
-	string: "#8fd4b2",
-	fn: "#dcc191",
-	type: "#9ec0c8",
-	comment: "#6d7080",
-	number: "#c9b8a0",
-	property: "#c5c9d1",
-	operator: "#8e929c",
-	tag: "#8bb4e3",
-	invalid: "#f87171"
-};
+var DECL = /^\s*(export\s+)?(default\s+)?(async\s+)?(function\*?|class|const|let|var|type|interface|enum|def|async def)\b/;
+function stickyLine(doc, fromLine) {
+	const floor = Math.max(1, fromLine - 80);
+	for (let n = fromLine; n >= floor; n -= 1) {
+		const line = doc.line(n);
+		if (DECL.test(line.text)) return {
+			number: line.number,
+			text: line.text.trimEnd()
+		};
+	}
+	return null;
+}
+function stickyScroll() {
+	return ViewPlugin.fromClass(class {
+		view;
+		dom;
+		onScroll;
+		raf = 0;
+		constructor(view) {
+			this.view = view;
+			this.dom = document.createElement("div");
+			this.dom.className = "cm-aperture-sticky";
+			this.dom.hidden = true;
+			this.dom.setAttribute("aria-hidden", "true");
+			view.dom.appendChild(this.dom);
+			this.onScroll = () => this.schedule(view);
+			view.scrollDOM.addEventListener("scroll", this.onScroll, { passive: true });
+			this.schedule(view);
+		}
+		update(update) {
+			if (update.viewportChanged || update.docChanged || update.geometryChanged) this.schedule(update.view);
+		}
+		schedule(view) {
+			if (this.raf) cancelAnimationFrame(this.raf);
+			this.raf = requestAnimationFrame(() => this.sync(view));
+		}
+		sync(view) {
+			const height = view.scrollDOM.scrollTop + 4;
+			const block = view.lineBlockAtHeight(height);
+			const vis = view.state.doc.lineAt(block.from);
+			const found = stickyLine(view.state.doc, vis.number);
+			if (!found || found.number >= vis.number) {
+				this.dom.hidden = true;
+				this.dom.textContent = "";
+				return;
+			}
+			this.dom.hidden = false;
+			this.dom.textContent = found.text;
+		}
+		destroy() {
+			if (this.raf) cancelAnimationFrame(this.raf);
+			this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
+			this.dom.remove();
+		}
+	});
+}
+function paintMinimap(host, text, scrollTop, clientHeight, scrollHeight) {
+	const h = host.clientHeight || 200;
+	const w = host.clientWidth || 52;
+	const lines = text.split("\n");
+	const max = Math.min(lines.length, 900);
+	const lineH = h / Math.max(max, 1);
+	const bars = [];
+	for (let i = 0; i < max; i += 1) {
+		const t = (lines[i] ?? "").trim();
+		if (!t) continue;
+		const comment = t.startsWith("//") || t.startsWith("#") || t.startsWith("*");
+		const width = Math.min(w - 8, Math.max(6, t.length * 1.15));
+		bars.push(`<i style="top:${(i * lineH).toFixed(2)}px;width:${width.toFixed(1)}px;height:${Math.max(1, lineH - .4).toFixed(2)}px;opacity:${comment ? .4 : .28};background:${comment ? "#6d7080" : EDITOR.fg}"></i>`);
+	}
+	const ratio = scrollHeight > 0 ? clientHeight / scrollHeight : 1;
+	const top = scrollHeight > 0 ? scrollTop / scrollHeight * h : 0;
+	const sliderH = Math.max(12, h * ratio);
+	host.innerHTML = `<span class="aperture-minimap-slider" style="top:${top.toFixed(1)}px;height:${sliderH.toFixed(1)}px"></span>${bars.join("")}`;
+}
+function minimapScrollTo(host, clientY, scrollHeight) {
+	const rect = host.getBoundingClientRect();
+	const y = Math.min(Math.max(clientY - rect.top, 0), rect.height);
+	return (rect.height > 0 ? y / rect.height : 0) * scrollHeight;
+}
 var theme = EditorView.theme({
 	"&": {
 		backgroundColor: SYNTAX.bg,
@@ -1393,7 +1687,7 @@ var theme = EditorView.theme({
 		backgroundColor: SYNTAX.gutter,
 		color: SYNTAX.gutterFg,
 		border: "none",
-		borderRight: "1px solid #18181b"
+		borderRight: `1px solid ${EDITOR.elevated}`
 	},
 	".cm-lineNumbers .cm-gutterElement": {
 		minWidth: "2.6rem",
@@ -1402,27 +1696,41 @@ var theme = EditorView.theme({
 	".cm-activeLine": { backgroundColor: SYNTAX.activeLine },
 	".cm-activeLineGutter": {
 		backgroundColor: SYNTAX.activeLine,
-		color: "#c4c4cc"
+		color: EDITOR.activeLineGutter
 	},
 	".cm-cursor": {
 		borderLeftColor: SYNTAX.caret,
 		borderLeftWidth: "2px"
 	},
-	"&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "color-mix(in oklab, var(--color-ok) 34%, transparent)" },
-	".cm-selectionMatch": { backgroundColor: SYNTAX.match },
+	".cm-selectionBackground": { backgroundColor: EDITOR.selectionInactive },
+	"&.cm-focused .cm-selectionBackground": { backgroundColor: EDITOR.selection },
+	".cm-selectionMatch": { backgroundColor: EDITOR.wordRead },
+	"&.cm-focused .cm-selectionMatch": { backgroundColor: EDITOR.wordRead },
 	"&.cm-focused .cm-matchingBracket": {
-		backgroundColor: SYNTAX.match,
-		outline: "1px solid #8bb4e3"
+		backgroundColor: EDITOR.wordWrite,
+		outline: `1px solid ${EDITOR.matchBorder}`
+	},
+	".cm-nonmatchingBracket": {
+		color: EDITOR.danger,
+		outline: `1px solid ${EDITOR.danger}`
 	},
 	".cm-foldPlaceholder": {
-		background: "#18181b",
+		background: EDITOR.elevated,
 		border: "none",
-		color: "#a1a1aa"
+		color: EDITOR.muted
 	},
 	".cm-tooltip": {
-		backgroundColor: "#18181b",
-		border: "1px solid #27272a",
+		backgroundColor: EDITOR.elevated,
+		border: `1px solid ${EDITOR.border}`,
 		color: SYNTAX.fg
+	},
+	".cm-tooltip-autocomplete ul li[aria-selected]": { background: EDITOR.paletteFocus },
+	".cm-inlayHint, .cm-aperture-inlay": {
+		background: EDITOR.inlayBg,
+		color: EDITOR.inlayFg,
+		fontStyle: "italic",
+		padding: "0 5px",
+		borderRadius: "4px"
 	}
 }, { dark: true });
 var highlight = HighlightStyle.define([
@@ -1555,6 +1863,7 @@ function languageExtension(path) {
 var syncAnn = Annotation.define();
 function CodePane() {
 	const parentRef = (0, import_react.useRef)(null);
+	const miniRef = (0, import_react.useRef)(null);
 	const viewRef = (0, import_react.useRef)(null);
 	const lastValue = (0, import_react.useRef)("");
 	const pathRef = (0, import_react.useRef)(null);
@@ -1598,7 +1907,8 @@ function CodePane() {
 					bracketMatching(),
 					closeBrackets(),
 					autocompletion(),
-					highlightSelectionMatches(),
+					highlightSelectionMatches({ highlightWordAroundCursor: true }),
+					stickyScroll(),
 					keymap.of([
 						...closeBracketsKeymap,
 						...defaultKeymap,
@@ -1694,6 +2004,23 @@ function CodePane() {
 		});
 	}, [pendingEdit]);
 	(0, import_react.useEffect)(() => {
+		const view = viewRef.current;
+		const host = miniRef.current;
+		if (!view || !host || !activePath) return;
+		const scroller = view.scrollDOM;
+		const paint = () => {
+			paintMinimap(host, view.state.doc.toString(), scroller.scrollTop, scroller.clientHeight, scroller.scrollHeight);
+		};
+		paint();
+		scroller.addEventListener("scroll", paint, { passive: true });
+		const ro = new ResizeObserver(paint);
+		ro.observe(scroller);
+		return () => {
+			scroller.removeEventListener("scroll", paint);
+			ro.disconnect();
+		};
+	}, [activePath, value]);
+	(0, import_react.useEffect)(() => {
 		if (!pendingEdit) {
 			scrolledFor.current = null;
 			return;
@@ -1730,23 +2057,37 @@ function CodePane() {
 		useIdeUi.getState().setMobilePane("editor");
 	}, [pendingEdit]);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "relative h-full min-h-0 bg-bg",
-		children: [!activePath && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-muted",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileCode, {
-				className: "size-8 text-subtle",
-				strokeWidth: 1.4
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "text-sm font-medium text-fg",
-				children: "Open a file to start"
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "mt-1 max-w-xs text-sm text-pretty text-muted",
-				children: "Click a file on the left. Or ask Agent on the right — it plans first, then waits."
-			})] })]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-			ref: parentRef,
-			className: activePath ? "h-full min-h-0" : "hidden"
-		})]
+		className: "relative flex h-full min-h-0 bg-bg",
+		children: [
+			!activePath && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex h-full flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileCode, {
+					className: "size-8 text-subtle",
+					strokeWidth: 1.4
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-sm font-medium text-fg",
+					children: "Open a file to start"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "mt-1 max-w-xs text-sm text-pretty text-muted",
+					children: "Click a file on the left. Or ask Agent on the right — it plans first, then waits."
+				})] })]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				ref: parentRef,
+				className: activePath ? "h-full min-h-0 min-w-0 flex-1" : "hidden"
+			}),
+			activePath ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				ref: miniRef,
+				className: "aperture-minimap hidden h-full w-14 shrink-0 cursor-pointer border-l border-border md:block",
+				"aria-hidden": "true",
+				onPointerDown: (e) => {
+					const view = viewRef.current;
+					const host = miniRef.current;
+					if (!view || !host) return;
+					view.scrollDOM.scrollTop = minimapScrollTo(host, e.clientY, view.scrollDOM.scrollHeight);
+				}
+			}) : null
+		]
 	});
 }
 function DiffBar({ edit }) {
@@ -2247,11 +2588,10 @@ function EditorColumn() {
 	const pending = useWorkspace((s) => pendingEditFor(s.messages, s.activePath));
 	const running = useWorkspace((s) => s.agentRunning);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-full min-h-0 flex-col",
+		className: "flex h-full min-h-0 flex-col bg-bg",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TabBar, {}),
 			pending && !running && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DiffBar, { edit: pending }),
-			!pending && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EditorHint, {}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "relative min-h-0 flex-1",
 				children: [
@@ -2266,37 +2606,6 @@ function EditorColumn() {
 		]
 	});
 }
-function EditorHint() {
-	const activePath = useWorkspace((s) => s.activePath);
-	const selection = useWorkspace((s) => s.selection);
-	if (!activePath) return null;
-	const lang = languageFromPath(activePath);
-	const selected = hasCodeRange(selection) && selection?.path === activePath;
-	const parts = activePath.split("/").filter(Boolean);
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-9 shrink-0 items-center gap-3 border-b border-border bg-bg px-3",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "min-w-0 flex-1 truncate font-mono text-xs",
-				children: parts.map((part, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [i > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-subtle",
-					children: " / "
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: i === parts.length - 1 ? "text-fg" : "text-muted",
-					children: part
-				})] }, `${i}-${part}`))
-			}),
-			lang !== "text" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-				className: "hidden shrink-0 text-xs capitalize text-subtle sm:inline",
-				children: lang
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "hidden shrink-0 text-xs text-subtle md:inline",
-				children: selected ? "Explain or Fix this selection" : "Select code to Explain or Fix"
-			})
-		]
-	});
-}
 function StatusBar({ aiLabel }) {
 	const activePath = useWorkspace((s) => s.activePath);
 	const indexing = useWorkspace((s) => s.indexing);
@@ -2305,14 +2614,15 @@ function StatusBar({ aiLabel }) {
 	const selection = useWorkspace((s) => s.selection);
 	const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
 	const snapshots = useWorkspace((s) => s.checkpoints.length);
+	const dirty = useWorkspace((s) => s.dirtyPaths.length);
 	const debug = useIdeUi((s) => s.debug);
 	const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
 	const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
-	const lang = activePath ? languageFromPath(activePath) : "";
+	const lang = activePath ? languageLabel(activePath) : "";
 	const line = selection && selection.path === activePath ? selection.fromLine : null;
 	const fileCount = Object.keys(files).length;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-8 items-center justify-between gap-3 border-t border-border bg-surface px-3 text-xs text-subtle",
+		className: "flex h-7 items-center justify-between gap-3 border-t border-border bg-surface px-3 font-mono text-[11px] text-subtle",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "flex min-w-0 items-center gap-3",
 			children: [
@@ -2327,6 +2637,10 @@ function StatusBar({ aiLabel }) {
 						" ",
 						fileCount === 1 ? "file" : "files"
 					]
+				}),
+				dirty > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+					className: "text-fg",
+					children: [dirty, " unsaved"]
 				}),
 				staged > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 					className: "text-ok",
@@ -2354,10 +2668,7 @@ function StatusBar({ aiLabel }) {
 					className: "tabular-nums",
 					children: ["Line ", line]
 				}),
-				lang && lang !== "text" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "capitalize",
-					children: lang
-				}),
+				lang && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: lang }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: aiLabel }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
@@ -3062,60 +3373,57 @@ function AgentPanel({ composerRef }) {
 		className: "flex h-full min-h-0 flex-col bg-surface",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex h-10 items-center gap-1 border-b border-border px-2",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "flex rounded-md border border-border p-0.5",
-						children: [[
-							"composer",
-							"Agent",
-							Sparkles
-						], [
-							"chat",
-							"Ask",
-							MessageSquare
-						]].map(([id, label, Icon]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							type: "button",
-							onClick: () => setMode(id),
-							className: cn("inline-flex h-7 items-center gap-1 rounded px-2 text-xs", mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg"),
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-3.5" }), label]
-						}, id))
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "hidden px-2 text-xs text-subtle sm:inline",
-						children: mode === "composer" ? "Plans, then waits" : "Answers only"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "ml-auto flex items-center gap-0.5",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-								variant: "ghost",
-								size: "icon-sm",
-								title: rules ? `Open ${rules.path}` : "Create project rules",
-								"aria-label": rules ? `Open ${rules.path}` : "Create project rules",
-								onClick: openRules,
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ScrollText, { className: "size-4" })
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-								variant: "ghost",
-								size: "icon-sm",
-								title: "File history",
-								"aria-label": "File history",
-								onClick: () => useIdeUi.getState().setHistoryOpen(true),
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(History, { className: "size-4" })
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-								variant: "ghost",
-								size: "icon-sm",
-								title: "Clear chat",
-								"aria-label": "Clear chat",
-								onClick: clearChat,
-								disabled: messages.length === 0,
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "size-4" })
-							})
-						]
-					})
-				]
+				className: "flex h-9 items-center gap-2 px-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase",
+					children: mode === "composer" ? "Composer" : "Ask"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "ml-auto flex items-center gap-0.5",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mr-1 flex rounded-md border border-border p-0.5",
+							children: [[
+								"composer",
+								"Agent",
+								Sparkles
+							], [
+								"chat",
+								"Ask",
+								MessageSquare
+							]].map(([id, label, Icon]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => setMode(id),
+								className: cn("inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px]", mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg"),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-3" }), label]
+							}, id))
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "ghost",
+							size: "icon-sm",
+							title: rules ? `Open ${rules.path}` : "Create project rules",
+							"aria-label": rules ? `Open ${rules.path}` : "Create project rules",
+							onClick: openRules,
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ScrollText, { className: "size-4" })
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "ghost",
+							size: "icon-sm",
+							title: "File history",
+							"aria-label": "File history",
+							onClick: () => useIdeUi.getState().setHistoryOpen(true),
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(History, { className: "size-4" })
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "ghost",
+							size: "icon-sm",
+							title: "Clear chat",
+							"aria-label": "Clear chat",
+							onClick: clearChat,
+							disabled: messages.length === 0,
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "size-4" })
+						})
+					]
+				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "aperture-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3",
@@ -3572,7 +3880,7 @@ function CommandPalette() {
 								setMobilePane("editor");
 								close();
 							},
-							className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+							className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileCode, { className: "size-3.5 text-subtle" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "font-mono text-[13px]",
 								children: path
@@ -3586,9 +3894,17 @@ function CommandPalette() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
 								onSelect: () => {
 									close();
+									window.location.assign("/theme.html");
+								},
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Palette, { className: "size-3.5 text-subtle" }), "Editor theme"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
+								onSelect: () => {
+									close();
 									pickFolder();
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FolderOpen, { className: "size-3.5 text-subtle" }), "Open folder"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3596,7 +3912,7 @@ function CommandPalette() {
 									close();
 									pickZip();
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileArchive, { className: "size-3.5 text-subtle" }), "Open zip"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3604,7 +3920,7 @@ function CommandPalette() {
 									close();
 									setGithubOpen(true);
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Github, { className: "size-3.5 text-subtle" }), "Open GitHub repo"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3612,7 +3928,7 @@ function CommandPalette() {
 									close();
 									downloadCurrentWorkspace().then((r) => toast.success(`Downloaded ${r.name} · ${r.count} files`)).catch((error) => toast.error(error instanceof Error ? error.message : "Could not download"));
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "size-3.5 text-subtle" }), "Download zip"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3620,7 +3936,7 @@ function CommandPalette() {
 									close();
 									setHistoryOpen(true);
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(History, { className: "size-3.5 text-subtle" }), "File history"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3630,7 +3946,7 @@ function CommandPalette() {
 									if (ck) toast.success(`Undid “${ck.label}”`);
 									else toast.error("Nothing to undo");
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Undo2, { className: "size-3.5 text-subtle" }), checkpoints.length > 0 ? `Undo last run · ${checkpoints[checkpoints.length - 1].label}` : "Undo last Composer run"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3641,7 +3957,7 @@ function CommandPalette() {
 										search: { tab: "limits" }
 									});
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "size-3.5 text-subtle" }), "Session cap"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3649,7 +3965,7 @@ function CommandPalette() {
 									reindex();
 									close();
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, { className: "size-3.5 text-subtle" }), "Rebuild index"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3659,7 +3975,7 @@ function CommandPalette() {
 									toast.message(next ? "Debug is on" : "Debug is off", { description: next ? "The next Agent turn stores the redacted prompt and response on that message." : "Later turns will not attach a debug block." });
 									close();
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bug, { className: "size-3.5 text-subtle" }), debug ? "Turn debug off" : "Turn debug on"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(_e.Item, {
@@ -3668,7 +3984,7 @@ function CommandPalette() {
 									loadDemo();
 									close();
 								},
-								className: "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg data-[selected=true]:bg-elevated",
+								className: "cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RotateCcw, { className: "size-3.5 text-subtle" }), "Reset harbor-api demo"]
 							})
 						]
@@ -3831,7 +4147,7 @@ function HelpDialog() {
 		{
 			n: "1",
 			title: "Open a file",
-			body: "Click anything in the file tree. Open a folder, zip, or GitHub from Open."
+			body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open."
 		},
 		{
 			n: "2",
@@ -4168,7 +4484,7 @@ function OpenProjectHost() {
 			setBusy
 		}),
 		(dragging || busy) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-			className: "pointer-events-none fixed inset-0 z-40 grid place-items-center bg-bg/70",
+			className: "pointer-events-none fixed inset-0 z-40 grid place-items-center bg-list-drop/80",
 			children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "rounded-2xl border border-border bg-surface px-6 py-5 text-center shadow-[var(--shadow-float)]",
 				children: [
@@ -4290,6 +4606,55 @@ function useIsDesktop() {
 		return () => mq.removeEventListener("change", onChange);
 	}, () => window.matchMedia("(min-width: 768px)").matches, () => true);
 }
+function TitleBar() {
+	const name = useWorkspace((s) => s.name);
+	const path = useWorkspace((s) => s.activePath);
+	const chunks = useWorkspace((s) => s.chunks.length);
+	const indexing = useWorkspace((s) => s.indexing);
+	const running = useWorkspace((s) => s.agentRunning);
+	const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
+	const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
+	const title = path ? `${name} / ${path}` : name;
+	const status = running ? "Composer running" : staged > 0 ? `staged · ${staged} ${staged === 1 ? "file" : "files"}` : indexing ? "Indexing…" : `indexed · ${chunks} chunks`;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex h-10 shrink-0 items-center gap-2 border-b border-border bg-surface px-3",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "hidden size-2 rounded-full bg-border md:block" }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "hidden size-2 rounded-full bg-border md:block" }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "hidden size-2 rounded-full bg-border md:block" }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+				to: "/",
+				className: "text-fg md:hidden",
+				"aria-label": "Aperture home",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ApertureMark, { className: "size-4" })
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: "min-w-0 flex-1 truncate font-mono text-xs text-subtle",
+				children: title
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: cn("hidden shrink-0 font-mono text-xs sm:inline", staged > 0 ? "text-ok" : "text-subtle"),
+				children: status
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+				to: "/settings",
+				search: { tab: "models" },
+				"aria-label": "Model settings",
+				className: "grid size-7 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Settings, { className: "size-3.5" })
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+				variant: "ghost",
+				size: "icon-sm",
+				"aria-label": "How this editor works",
+				className: "size-7",
+				onClick: () => setHelpOpen(true),
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Keyboard, { className: "size-3.5" })
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(AuthSlot, { compact: true })
+		]
+	});
+}
 function IdeShell() {
 	const sidebarOpen = useIdeUi((s) => s.sidebarOpen);
 	const chatOpen = useIdeUi((s) => s.chatOpen);
@@ -4304,7 +4669,6 @@ function IdeShell() {
 	const [aiAvailable, setAiAvailable] = (0, import_react.useState)(null);
 	const desktop = useIsDesktop();
 	const { user, account } = useAccount();
-	const projectName = useWorkspace((s) => s.name);
 	(0, import_react.useEffect)(() => {
 		getAiStatus().then((s) => setAiAvailable(s.available)).catch(() => setAiAvailable(false));
 	}, []);
@@ -4371,133 +4735,83 @@ function IdeShell() {
 	]);
 	const aiLabel = !user ? "Sign in" : account ? modelCaption(account) : aiAvailable === false ? "AI offline" : "grok-4.5";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-dvh min-h-0 flex-col bg-bg text-fg",
+		className: "flex h-dvh min-h-0 flex-col bg-bg p-0 text-fg md:p-3",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
-				className: "flex h-11 items-center gap-2 border-b border-border px-2 sm:px-3",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex min-h-0 flex-1 flex-col overflow-hidden border-border bg-surface md:rounded-2xl md:border md:shadow-[var(--shadow-float)]",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Link, {
-						to: "/",
-						className: "flex items-center gap-2 text-fg",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ApertureMark, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "text-sm font-medium tracking-tight",
-							children: "Aperture"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TitleBar, {}),
+					desktop ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "flex min-h-0 flex-1",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(qt, {
+							orientation: "horizontal",
+							className: "h-full w-full",
+							children: [
+								sidebarOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
+									id: "files",
+									defaultSize: "18%",
+									minSize: "14%",
+									maxSize: "30%",
+									className: "min-h-0",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileTree, {})
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(nn, { className: "w-px bg-border hover:bg-accent/40" })] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
+									id: "editor",
+									minSize: "32%",
+									className: "min-h-0",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EditorColumn, {})
+								}),
+								chatOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(nn, { className: "w-px bg-border hover:bg-accent/40" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
+									id: "agent",
+									defaultSize: "28%",
+									minSize: "22%",
+									maxSize: "42%",
+									className: "min-h-0",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AgentPanel, { composerRef })
+								})] })
+							]
+						})
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex min-h-0 flex-1 flex-col",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "relative min-h-0 flex-1",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "absolute inset-0 overflow-hidden",
+								children: [
+									mobilePane === "files" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileTree, {}),
+									mobilePane === "editor" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EditorColumn, {}),
+									mobilePane === "agent" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AgentPanel, { composerRef })
+								]
+							})
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
+							className: "grid grid-cols-3 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]",
+							children: [
+								[
+									"files",
+									FolderTree,
+									"Files"
+								],
+								[
+									"editor",
+									CodeXml,
+									"Code"
+								],
+								[
+									"agent",
+									Sparkles,
+									"Agent"
+								]
+							].map(([id, Icon, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								type: "button",
+								onClick: () => setMobilePane(id),
+								className: cn("flex h-12 flex-col items-center justify-center gap-0.5 text-[11px]", mobilePane === id ? "text-fg" : "text-subtle"),
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
+							}, id))
 						})]
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "hidden max-w-40 truncate text-xs text-subtle sm:inline",
-						children: projectName
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "ml-auto flex min-w-0 items-center gap-1",
-						children: [
-							desktop && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
-								variant: sidebarOpen ? "subtle" : "ghost",
-								size: "sm",
-								"aria-label": "Toggle file tree",
-								onClick: toggleSidebar,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PanelLeft, { className: "size-3.5" }), "Files"]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
-								variant: chatOpen ? "subtle" : "ghost",
-								size: "sm",
-								"aria-label": "Toggle agent",
-								onClick: () => {
-									toggleChat();
-									requestAnimationFrame(() => composerRef.current?.focus());
-								},
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, { className: "size-3.5" }), "Agent"]
-							})] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
-								to: "/settings",
-								search: { tab: "models" },
-								"aria-label": "Model settings",
-								className: "grid size-8 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Settings, { className: "size-4" })
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
-								variant: "ghost",
-								size: "sm",
-								"aria-label": "How this editor works",
-								onClick: () => setHelpOpen(true),
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Keyboard, { className: "size-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "hidden sm:inline",
-									children: "Help"
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(AuthSlot, { compact: true })
-						]
-					})
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatusBar, { aiLabel })
 				]
 			}),
-			desktop ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "flex min-h-0 flex-1",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(qt, {
-					orientation: "horizontal",
-					className: "h-full w-full",
-					children: [
-						sidebarOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
-							id: "files",
-							defaultSize: "18%",
-							minSize: "14%",
-							maxSize: "30%",
-							className: "min-h-0",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileTree, {})
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(nn, { className: "w-px bg-border hover:bg-accent/40" })] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
-							id: "editor",
-							minSize: "32%",
-							className: "min-h-0",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EditorColumn, {})
-						}),
-						chatOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(nn, { className: "w-px bg-border hover:bg-accent/40" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Qt, {
-							id: "agent",
-							defaultSize: "30%",
-							minSize: "24%",
-							maxSize: "46%",
-							className: "min-h-0",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AgentPanel, { composerRef })
-						})] })
-					]
-				})
-			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex min-h-0 flex-1 flex-col",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "relative min-h-0 flex-1",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "absolute inset-0 overflow-hidden",
-						children: [
-							mobilePane === "files" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileTree, {}),
-							mobilePane === "editor" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EditorColumn, {}),
-							mobilePane === "agent" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AgentPanel, { composerRef })
-						]
-					})
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
-					className: "grid grid-cols-3 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]",
-					children: [
-						[
-							"files",
-							FolderTree,
-							"Files"
-						],
-						[
-							"editor",
-							CodeXml,
-							"Code"
-						],
-						[
-							"agent",
-							Sparkles,
-							"Agent"
-						]
-					].map(([id, Icon, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						type: "button",
-						onClick: () => setMobilePane(id),
-						className: cn("flex h-12 flex-col items-center justify-center gap-0.5 text-[11px]", mobilePane === id ? "text-fg" : "text-subtle"),
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
-					}, id))
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatusBar, { aiLabel }),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(OpenProjectHost, {}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CommandPalette, {}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(InlineEdit, {}),

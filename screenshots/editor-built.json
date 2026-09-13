@@ -1,40 +1,5 @@
 {
+  "ok": false,
   "url": "http://127.0.0.1:8081/app",
-  "viewports": {
-    "desktop": {
-      "width": 1280,
-      "height": 800,
-      "status": 200,
-      "title": "Aperture",
-      "hasCanvas": false,
-      "bodyTextLen": 998,
-      "bodyTextHash": "4ee00df7baba8539a07362c0658e489ce7b093ec5dd85c84054f9c3fcfe43f1d",
-      "bodyTextPrefix": "Aperture harbor-api Files Agent Help harbor-api Open New src lib",
-      "horizontalOverflow": false,
-      "consoleErrors": [],
-      "pageErrors": [],
-      "screenshot": "/workspace/screenshots/editor-built.png"
-    },
-    "mobile": {
-      "width": 390,
-      "height": 844,
-      "status": 200,
-      "title": "Aperture",
-      "hasCanvas": false,
-      "bodyTextLen": 893,
-      "bodyTextHash": "aa9313ab1c4d48e96d70db780813bfe12123e2b467df1dd6b58a6a676d332761",
-      "bodyTextPrefix": "Aperture Files Agent harbor-api Open New src lib routes index.ts",
-      "horizontalOverflow": false,
-      "consoleErrors": [],
-      "pageErrors": [],
-      "screenshot": "/workspace/screenshots/editor-built-mobile.png"
-    }
-  },
-  "brandWarnings": [],
-  "authWarnings": [],
-  "verdictFile": "/workspace/screenshots/editor-built.json",
-  "divergesFromBaseline": true,
-  "baselineReasons": [
-    "mobile: body text replaced (similar length, page start changed)"
-  ]
+  "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8081/app\nCall log:\n  - navigating to \"http://127.0.0.1:8081/app\", waiting until \"domcontentloaded\"\n"
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, Clock, FileDiff, FileSearch, FolderOpen, History, ListTodo, MessageSquare, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench } from "lucide-react";
+import { ArrowUp, Circle, Clock, Ellipsis, FileDiff, FileSearch, History, ListTodo, Play, ScrollText, Search, Square, Trash2, Undo2, Wrench } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApertureMark } from "./logo";
 import { DiffCard } from "./diff-card";
@@ -21,7 +21,7 @@ import { useJobs } from "@/lib/jobs/use-jobs";
 import { cn } from "@/lib/utils";
 import { DEMO_WORKSPACE_NAME } from "@/lib/workspace/demo-repo";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
-import { pickFolder } from "@/lib/workspace/import-bridge";
+import { hasCodeRange } from "@/lib/workspace/edits";
 import {
   activeMention,
   filterMentions,
@@ -57,6 +57,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const applyAllPending = useWorkspace((s) => s.applyAllPending);
   const undoLast = useWorkspace((s) => s.undoLast);
   const checkpoints = useWorkspace((s) => s.checkpoints);
+  const activePath = useWorkspace((s) => s.activePath);
+  const selection = useWorkspace((s) => s.selection);
   const { user, isPending } = useCurrentUserState();
   const { account, setAccount, refresh } = useAccount();
   const [draft, setDraft] = useState("");
@@ -65,6 +67,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const [mentionHi, setMentionHi] = useState(0);
   const [dismissMention, setDismissMention] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [agents, setAgents] = useState<AgentConnection[]>([]);
   const [target, setTarget] = useState<RunTarget>({ kind: "model", source: "hosted" });
 
@@ -239,60 +242,81 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-10 items-center gap-1 border-b border-border px-2">
-        <div className="flex rounded-md border border-border p-0.5">
-          {(
-            [
-              ["composer", "Agent", Sparkles],
-              ["chat", "Ask", MessageSquare],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setMode(id)}
-              className={cn(
-                "inline-flex h-7 items-center gap-1 rounded px-2 text-xs",
-                mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
-              )}
-            >
-              <Icon className="size-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="hidden px-2 text-xs text-subtle sm:inline">
-          {mode === "composer" ? "Plans, then waits" : "Answers only"}
+      <div className="flex h-8 items-center gap-2 px-3">
+        <p className="text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">
+          {mode === "composer" ? "Composer" : "Ask"}
         </p>
         <div className="ml-auto flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title={rules ? `Open ${rules.path}` : "Create project rules"}
-            aria-label={rules ? `Open ${rules.path}` : "Create project rules"}
-            onClick={openRules}
-          >
-            <ScrollText className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="File history"
-            aria-label="File history"
-            onClick={() => useIdeUi.getState().setHistoryOpen(true)}
-          >
-            <History className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Clear chat"
-            aria-label="Clear chat"
-            onClick={clearChat}
-            disabled={messages.length === 0}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <div className="mr-1 flex rounded-md p-0.5">
+            {(
+              [
+                ["composer", "Agent"],
+                ["chat", "Ask"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMode(id)}
+                className={cn(
+                  "h-6 rounded px-1.5 text-[11px]",
+                  mode === id ? "text-fg" : "text-subtle hover:text-fg",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-7"
+              aria-label="Composer actions"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <Ellipsis className="size-4" />
+            </Button>
+            {menuOpen && (
+              <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
+                <button
+                  type="button"
+                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    openRules();
+                  }}
+                >
+                  <ScrollText className="size-3.5 text-subtle" />
+                  {rules ? "Project rules" : "Create rules"}
+                </button>
+                <button
+                  type="button"
+                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    useIdeUi.getState().setHistoryOpen(true);
+                  }}
+                >
+                  <History className="size-3.5 text-subtle" />
+                  File history
+                </button>
+                <button
+                  type="button"
+                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-fg hover:bg-bg disabled:opacity-40"
+                  disabled={messages.length === 0}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    clearChat();
+                  }}
+                >
+                  <Trash2 className="size-3.5 text-subtle" />
+                  Clear chat
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -300,8 +324,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         {messages.length === 0 ? (
           <EmptyState
             suggestions={suggestions}
-            signedOut={signedOut}
-            rulesPath={rules?.path ?? null}
+            path={activePath}
             onSuggest={(s) => {
               setDraft(s);
               if (user && !blocked && !acpBlocked) void send(s);
@@ -371,10 +394,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         </div>
       )}
 
-      <div className="border-t border-border px-3 pt-2 pb-1">
-        <p className="mb-1.5 text-xs text-subtle">I can explain, fix, or scan the open file.</p>
-        <AssistChips />
-      </div>
+      {hasCodeRange(selection) && (
+        <div className="border-t border-border px-3 pt-2 pb-1">
+          <AssistChips />
+        </div>
+      )}
 
       {account && jobsOn && (
         <JobsTray
@@ -387,50 +411,42 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       )}
 
       <div className="border-t border-border p-3">
-        {signedOut ? (
-          <div>
-            <p className="text-sm text-muted">
-              Sign in to run Agent. Opening a folder or zip does not need an account.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(draft);
+          }}
+        >
+          <MentionPopover items={mentionHits} active={mentionHi} onPick={insertMention} />
+          <div className={cn("composer-rim rounded-xl p-px", agentRunning && "is-live")}>
+            <textarea
+              ref={composerRef}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setDismissMention(false);
+                syncCaret(e.target);
+              }}
+              onKeyUp={(e) => syncCaret(e.currentTarget)}
+              onClick={(e) => syncCaret(e.currentTarget)}
+              onKeyDown={onKeyDown}
+              placeholder={
+                mode === "chat"
+                  ? "Ask about the repo. Nothing is written."
+                  : "Fix pagination in @src/store.ts"
+              }
+              rows={3}
+              className="min-h-16 w-full resize-none rounded-[11px] border-0 bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none"
+            />
+          </div>
+          {signedOut ? (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-xs text-subtle">Sign in to run this plan</p>
               <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "sm" }))}>
                 Sign in
               </Link>
-              <Button variant="outline" size="sm" onClick={() => pickFolder()}>
-                <FolderOpen className="size-3.5" />
-                Open folder
-              </Button>
             </div>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void send(draft);
-            }}
-          >
-            <MentionPopover items={mentionHits} active={mentionHi} onPick={insertMention} />
-            <div className={cn("composer-rim rounded-xl p-px", agentRunning && "is-live")}>
-              <textarea
-                ref={composerRef}
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  setDismissMention(false);
-                  syncCaret(e.target);
-                }}
-                onKeyUp={(e) => syncCaret(e.currentTarget)}
-                onClick={(e) => syncCaret(e.currentTarget)}
-                onKeyDown={onKeyDown}
-                placeholder={
-                  mode === "chat"
-                    ? "Ask about the repo. Nothing is written."
-                    : "Describe the change. Agent plans first — you click Build it. @ attaches a file."
-                }
-                rows={3}
-                className="min-h-20 w-full resize-none rounded-[11px] border-0 bg-bg px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none"
-              />
-            </div>
+          ) : (
             <div className="mt-2 space-y-2">
               <CostMeter
                 quote={quote}
@@ -485,8 +501,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                 </div>
               </div>
             </div>
-          </form>
-        )}
+          )}
+        </form>
       </div>
     </div>
   );
@@ -494,57 +510,38 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
 function EmptyState({
   suggestions,
-  signedOut,
-  rulesPath,
+  path,
   onSuggest,
 }: {
   suggestions: string[];
-  signedOut: boolean;
-  rulesPath: string | null;
+  path: string | null;
   onSuggest: (text: string) => void;
 }) {
   return (
-    <div className="px-1">
-      <p className="text-base font-medium tracking-tight">What should Agent do?</p>
-      <p className="mt-1 text-sm leading-relaxed text-pretty text-muted">
-        Agent writes a plan and waits. You click Build it. Ask only answers — it never edits.
-      </p>
-      <ol className="mt-5 space-y-3">
-        {[
-          { n: "1", title: "Open a project", body: "Folder, zip, or GitHub from the file tree." },
-          { n: "2", title: "Ask in English", body: "Agent researches and posts a plan. You decide whether to build." },
-          { n: "3", title: "Build it, then apply", body: "Agent stages diffs. Apply per file, or undo the run." },
-        ].map((step) => (
-          <li key={step.n} className="flex gap-3">
-            <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border font-mono text-xs text-subtle">
-              {step.n}
-            </span>
-            <div>
-              <p className="text-sm font-medium">{step.title}</p>
-              <p className="text-xs leading-relaxed text-muted">{step.body}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      {rulesPath ? (
-        <p className="mt-4 text-xs text-subtle">Project rules: {rulesPath}</p>
-      ) : (
-        <p className="mt-4 text-xs text-subtle">No project rules yet. The document icon in this header creates them.</p>
-      )}
-      <ul className="mt-4 space-y-2">
-        {suggestions.map((s) => (
-          <li key={s}>
+    <div>
+      <div className="rounded-lg border border-border bg-bg px-2.5 py-2">
+        <p className="text-[0.65rem] tracking-[0.14em] text-subtle uppercase">Plan</p>
+        <div className="mt-1.5 space-y-0.5">
+          {suggestions.slice(0, 3).map((label, i) => (
             <button
+              key={label}
               type="button"
-              onClick={() => onSuggest(s)}
-              className="w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-left text-sm text-muted transition-colors hover:border-accent/40 hover:text-fg"
+              onClick={() => onSuggest(label)}
+              className="flex w-full items-center gap-2 rounded-md px-0.5 py-1 text-left hover:bg-elevated"
             >
-              {s}
+              <Circle className="size-3 shrink-0 text-subtle" strokeWidth={1.6} />
+              <span className="min-w-0 truncate text-xs text-fg">
+                <span className="mr-1.5 font-mono text-[0.7rem] text-subtle">{String(i + 1).padStart(2, "0")}</span>
+                {label}
+              </span>
             </button>
-          </li>
-        ))}
-      </ul>
-      {signedOut && <p className="mt-4 text-xs text-subtle">Suggestions run after you sign in.</p>}
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate font-mono text-xs text-subtle">Edit · {path ?? "no file"}</p>
+        <span className="rounded-md bg-elevated px-2 py-0.5 text-xs text-subtle">Review</span>
+      </div>
     </div>
   );
 }

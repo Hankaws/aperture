@@ -1,5 +1,5 @@
 import { r as extOf } from "./utils-DTfuEt1f.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/apply-edit-EH1xW8If.js
+//#region node_modules/.nitro/vite/services/ssr/assets/apply-edit-BQE-oS-F.js
 function languageFromPath(path) {
 	const ext = extOf(path);
 	if (ext === "ts" || ext === "tsx" || ext === "mts" || ext === "cts") return "typescript";
@@ -10,6 +10,17 @@ function languageFromPath(path) {
 	if (ext === "html" || ext === "htm") return "html";
 	if (ext === "css") return "css";
 	return "text";
+}
+function languageLabel(path) {
+	const lang = languageFromPath(path);
+	if (lang === "typescript") return "TypeScript";
+	if (lang === "javascript") return "JavaScript";
+	if (lang === "markdown") return "Markdown";
+	if (lang === "python") return "Python";
+	if (lang === "html") return "HTML";
+	if (lang === "css") return "CSS";
+	if (lang === "json") return "JSON";
+	return "";
 }
 var WINDOW = 80;
 function lineAt(source, index) {
@@ -446,4 +457,4 @@ function diffStats(oldText, newText) {
 	};
 }
 //#endregion
-export { indexFiles as a, semanticSearch as c, hunksFromDiff as i, diffStats as n, languageFromPath as o, grepFiles as r, lineDiff as s, applySearchReplace as t };
+export { indexFiles as a, lineDiff as c, hunksFromDiff as i, semanticSearch as l, diffStats as n, languageFromPath as o, grepFiles as r, languageLabel as s, applySearchReplace as t };

@@ -128,6 +128,108 @@
     background: var(--color-scrollbar-hover);
   }
 
+  /* CSS Grid recipes: definite tracks beat nested flex-1 for pane height. */
+  .ide-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .ide-workspace {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .ide-mobile {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .ide-stack {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .ide-editor {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .ide-preview-split {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .ide-preview-split > .ide-code {
+    display: none;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 768px) {
+    .ide-preview-split {
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 1.05fr);
+    }
+
+    .ide-preview-split > .ide-code {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr);
+    }
+  }
+
+  .ide-title {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.5rem;
+    height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  @media (min-width: 768px) {
+    .ide-title {
+      height: 2rem;
+      padding-inline: 0.625rem;
+    }
+  }
+
+  .ide-status {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.75rem;
+    height: 1.75rem;
+    padding-inline: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-subtle);
+  }
+
+  @media (min-width: 768px) {
+    .ide-status {
+      height: 1.5rem;
+      padding-inline: 0.625rem;
+    }
+  }
+
   .cm-editor {
     position: relative;
     height: 100%;
@@ -232,6 +334,10 @@
   .file-tree.is-drop {
     box-shadow: inset 0 0 0 1px var(--color-accent);
     background: var(--color-list-drop);
+  }
+
+  .cmdk-item {
+    min-height: 2.75rem;
   }
 
   .cmdk-item[data-selected] {

@@ -9,6 +9,7 @@ import { pendingEditFor } from "@/lib/workspace/edits";
 import { languageFromPath } from "@/lib/parser/language";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
+import { cn } from "@/lib/utils";
 
 export function EditorColumn() {
   const pending = useWorkspace((s) => pendingEditFor(s.messages, s.activePath));
@@ -19,23 +20,30 @@ export function EditorColumn() {
   const markdown = Boolean(activePath && languageFromPath(activePath) === "markdown");
   const showMarkdown = previewOpen && markdown;
   const showDesign = previewOpen && !markdown;
+  const split = showMarkdown || showDesign;
   const body = activePath ? files[activePath] ?? "" : "";
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-bg">
+    <div className="ide-editor bg-bg">
       <TabBar />
-      {pending && !running && !previewOpen && <DiffBar edit={pending} />}
-      <div className="relative min-h-0 flex-1">
-        {showDesign ? (
-          <DesignPane />
-        ) : (
-          <>
-            <div className="absolute inset-0">
-              {showMarkdown ? <MarkdownPreview text={body} /> : <CodePane />}
-            </div>
-            {!showMarkdown && <GenerateOverlay />}
-            {!showMarkdown && <SelectionActions />}
-          </>
+      <div className={cn("min-h-0 min-w-0", split ? "ide-preview-split" : "flex min-h-0 flex-col")}>
+        {pending && !running && !split && <DiffBar edit={pending} />}
+        <div className={cn("relative min-h-0 min-w-0", split && "ide-code")}>
+          <div className="absolute inset-0">
+            <CodePane />
+          </div>
+          {!split && <GenerateOverlay />}
+          {!split && <SelectionActions />}
+        </div>
+        {showDesign && (
+          <div className="min-h-0 min-w-0 border-t border-border md:border-t-0 md:border-l">
+            <DesignPane />
+          </div>
+        )}
+        {showMarkdown && (
+          <div className="min-h-0 min-w-0 overflow-auto border-t border-border md:border-t-0 md:border-l">
+            <MarkdownPreview text={body} />
+          </div>
         )}
       </div>
     </div>

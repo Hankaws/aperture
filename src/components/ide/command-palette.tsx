@@ -44,7 +44,7 @@ export function CommandPalette() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh] max-md:items-stretch max-md:px-0 max-md:pt-0">
       <button
         type="button"
         aria-label="Close command palette"
@@ -52,7 +52,7 @@ export function CommandPalette() {
         onClick={close}
       />
       <Command
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-float)]"
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-float)] max-md:max-w-none max-md:rounded-none max-md:border-0"
         shouldFilter={false}
         loop
       >
@@ -62,10 +62,10 @@ export function CommandPalette() {
             value={query}
             onValueChange={setQuery}
             placeholder="Go to file or run a command"
-            className="h-12 w-full bg-transparent text-sm text-fg outline-none placeholder:text-subtle"
+            className="h-12 w-full bg-transparent text-sm text-fg outline-none placeholder:text-subtle md:h-12"
           />
         </div>
-        <Command.List className="aperture-scroll max-h-80 overflow-y-auto p-2">
+        <Command.List className="aperture-scroll max-h-80 overflow-y-auto p-2 max-md:max-h-[min(70dvh,28rem)]">
           <Command.Empty className="px-3 py-6 text-center text-sm text-muted">No matches</Command.Empty>
           <Command.Group heading="Files" className="px-1 pb-2 text-[11px] text-subtle">
             {paths.slice(0, 12).map((path) => (
@@ -77,7 +77,7 @@ export function CommandPalette() {
                   setMobilePane("editor");
                   close();
                 }}
-                className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+                className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg max-md:min-h-11"
               >
                 <FileCode className="size-3.5 text-subtle" />
                 <span className="font-mono text-[13px]">{path}</span>

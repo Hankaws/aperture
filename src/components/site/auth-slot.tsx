@@ -17,7 +17,7 @@ export function AuthSlot({ compact = false }: { compact?: boolean }) {
             Open editor
           </Link>
         )}
-        <UserButton />
+        <UserButton compact={compact} />
       </div>
     );
   }

@@ -33,6 +33,7 @@ import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-lo
 import { DEFAULT_RULES, findRules } from "@/lib/workspace/rules";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
+import { resolveAgentTask } from "@/lib/workspace/agent-task";
 import type { AgentMode, AgentDebug, ChatMessage, ToolTrace } from "@/lib/workspace/types";
 import type { AgentPhase } from "@/lib/agent/phase";
 
@@ -342,7 +343,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !user || blocked || acpBlocked;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface">
+    <div className="ide-stack bg-surface">
       <div className="flex h-8 items-center gap-1.5 border-b border-border px-2">
         <div className="flex rounded-md border border-border p-px">
           {(
@@ -400,16 +401,24 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         </div>
       </div>
 
+      <TaskStrip />
+
       <div
         ref={listRef}
-        className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-2.5 py-2"
+        className="aperture-scroll min-h-0 overflow-y-auto px-2.5 py-2"
         onScroll={(e) => {
           const el = e.currentTarget;
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 56;
         }}
       >
         {messages.length === 0 ? (
-          <p className="text-xs text-subtle">Composer plans first. You click Build it.</p>
+          <EmptyComposer
+            suggestions={suggestions}
+            onPick={(s) => {
+              setDraft(s);
+              if (user && !blocked && !acpBlocked) void send(s);
+            }}
+          />
         ) : (
           <div className="space-y-3">
             {messages.map((message) => (
@@ -435,6 +444,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         )}
       </div>
 
+      <div>
       {pending.length > 0 && (
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
           <p className="text-xs text-muted">
@@ -485,23 +495,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       )}
 
       <div className="border-t border-border px-2.5 py-1.5">
-        {messages.length === 0 && (
-          <div className="mb-1.5 flex flex-wrap gap-1">
-            {suggestions.slice(0, 3).map((s) => (
-              <button
-                key={s}
-                type="button"
-                className="assist-chip max-w-full"
-                onClick={() => {
-                  setDraft(s);
-                  if (user && !blocked && !acpBlocked) void send(s);
-                }}
-              >
-                <span className="truncate">{s}</span>
-              </button>
-            ))}
-          </div>
-        )}
         <AssistChips />
       </div>
 
@@ -538,7 +531,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                     ) : (
                       <MousePointer2 className="size-3 text-accent" />
                     )}
-                    <span className="max-w-28 truncate font-mono">{cap.selector}</span>
+                    <span className="max-w-28 truncate font-mono">{cap.note || cap.selector}</span>
                     <X className="size-3 text-subtle" />
                   </button>
                 </li>
@@ -720,6 +713,65 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           }}
         />
       </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyComposer({ suggestions, onPick }: { suggestions: string[]; onPick: (s: string) => void }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col justify-end gap-3 py-2">
+      <div>
+        <p className="text-sm font-medium text-fg">Composer plans first. You click Build it.</p>
+        <p className="mt-1 text-xs leading-relaxed text-subtle">
+          @ a file for context, or open Preview, click a UI element, and send the notes here.
+        </p>
+      </div>
+      <ul className="space-y-1">
+        {suggestions.slice(0, 3).map((s) => (
+          <li key={s}>
+            <button
+              type="button"
+              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-left text-[13px] text-fg hover:bg-elevated"
+              onClick={() => onPick(s)}
+            >
+              {s}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function TaskStrip() {
+  const agentRunning = useWorkspace((s) => s.agentRunning);
+  const indexing = useWorkspace((s) => s.indexing);
+  const messages = useWorkspace((s) => s.messages);
+  const designOpen = useIdeUi((s) => s.designOpen);
+  const task = resolveAgentTask({ running: agentRunning, indexing, preview: designOpen, messages });
+  if (task.kind === "ready" && task.total === 0) return null;
+  const pct = task.total > 0 ? Math.round((task.done / task.total) * 100) : task.kind === "running" ? 40 : 0;
+
+  return (
+    <div className="flex h-7 shrink-0 items-center gap-2 border-b border-border px-2.5">
+      <span
+        className={cn(
+          "shrink-0 text-[10px] font-medium tracking-wide uppercase",
+          task.kind === "awaiting" ? "text-ok" : task.kind === "running" ? "text-accent" : "text-subtle",
+        )}
+      >
+        {task.label}
+      </span>
+      {task.total > 0 && (
+        <span className="relative h-1 min-w-16 flex-1 overflow-hidden rounded-full bg-elevated">
+          <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        </span>
+      )}
+      <span className="min-w-0 truncate text-[11px] text-muted">
+        {task.total > 0 ? `${task.done}/${task.total}` : ""}
+        {task.detail ? ` · ${task.detail}` : ""}
+      </span>
     </div>
   );
 }

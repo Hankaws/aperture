@@ -57,7 +57,7 @@ export function HelpDialog() {
 
   const steps = [
     { n: "1", title: "Open a file", body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open." },
-    { n: "2", title: "Ask Composer", body: "Describe the change. Composer posts a plan and waits — you click Build it. Preview shows markdown, or an HTML page you can click to capture." },
+    { n: "2", title: "Ask Composer", body: "Describe the change. Composer posts a plan and waits — you click Build it. Design Mode: click a page element, add a note, then Send to Composer." },
     { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. Apply, reject, or undo the run." },
   ];
 

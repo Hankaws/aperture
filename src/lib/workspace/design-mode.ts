@@ -5,9 +5,12 @@ export type DesignCapture = {
   tag: string;
   text: string;
   html: string;
+  neighborhood: string;
   css: string;
   bounds: { x: number; y: number; w: number; h: number };
   screenshot: string | null;
+  source: string | null;
+  note: string;
 };
 
 export const PREVIEW_HTML_PATH = "preview.html";
@@ -100,6 +103,21 @@ export function pickHtmlEntry(files: Record<string, string>, activePath: string 
   return index ?? list[0]!;
 }
 
+export function guessSource(files: Record<string, string>, selector: string): string | null {
+  const id = /#([A-Za-z0-9_-]+)/.exec(selector)?.[1];
+  const cls = /\.([A-Za-z0-9_-]+)/.exec(selector)?.[1];
+  const needles = [id ? `#${id}` : "", cls ? `.${cls}` : "", cls ?? ""].filter(Boolean);
+  if (needles.length === 0) return null;
+  for (const [path, body] of Object.entries(files)) {
+    if (!/\.(html?|css|tsx?|jsx?)$/i.test(path)) continue;
+    const lines = body.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (needles.some((n) => lines[i]!.includes(n))) return `${path}:${i + 1}`;
+    }
+  }
+  return null;
+}
+
 function resolveRel(from: string, href: string): string | null {
   const clean = href.split("?")[0]!.split("#")[0]!.trim();
   if (!clean || clean.startsWith("data:") || /^[a-z]+:/i.test(clean)) return null;
@@ -134,6 +152,32 @@ export function assembleHtmlPreview(files: Record<string, string>, entry: string
   return `${html}${script}`;
 }
 
+export function previewMarkupKey(html: string): string {
+  return html.replace(/<style data-from="[^"]*">[\s\S]*?<\/style>/gi, "<style/>");
+}
+
+export function cssFromPreview(html: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const re = /<style data-from="([^"]+)">([\s\S]*?)<\/style>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html))) out[match[1]!] = match[2]!.trim();
+  return out;
+}
+
+export function hotReloadStyles(doc: { querySelectorAll: (sel: string) => Iterable<{ getAttribute: (n: string) => string | null; textContent: string | null }> }, html: string): boolean {
+  const next = cssFromPreview(html);
+  let changed = false;
+  for (const el of doc.querySelectorAll("style[data-from]")) {
+    const path = el.getAttribute("data-from");
+    if (!path || next[path] === undefined) continue;
+    if ((el.textContent ?? "").trim() !== next[path]) {
+      el.textContent = next[path]!;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function formatDesignCaptures(captures: DesignCapture[]): string {
   if (captures.length === 0) return "";
   return captures
@@ -146,17 +190,23 @@ export function formatDesignCaptures(captures: DesignCapture[]): string {
         `Design Mode capture from ${c.path}`,
         `selector: ${c.selector}`,
         `tag: ${c.tag}`,
+        c.source ? `source: ${c.source}` : null,
         `text: ${c.text}`,
+        c.note ? `intent: ${c.note}` : null,
         `bounds: ${c.bounds.w}×${c.bounds.h} at (${c.bounds.x}, ${c.bounds.y})`,
         `html:\n${c.html}`,
+        c.neighborhood ? `neighborhood:\n${c.neighborhood}` : null,
         `css:\n${c.css}`,
         shot,
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
     })
     .join("\n\n---\n\n");
 }
 
 export const PICKER_SCRIPT = `(() => {
+  document.documentElement.style.cursor = "crosshair";
   const box = document.createElement("div");
   box.setAttribute("data-aperture-picker", "1");
   box.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #3b9eff;background:rgba(59,158,255,.14);display:none;";
@@ -221,11 +271,13 @@ export const PICKER_SCRIPT = `(() => {
     const el = hit(e);
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const wrap = el.parentElement && el.parentElement !== document.body ? el.parentElement : null;
     const payload = {
       selector: selector(el),
       tag: el.tagName.toLowerCase(),
       text: (el.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 160),
       html: (el.outerHTML || "").slice(0, 4000),
+      neighborhood: wrap ? (wrap.outerHTML || "").slice(0, 4000) : "",
       css: css(el),
       bounds: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
       screenshot: null

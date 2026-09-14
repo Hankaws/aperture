@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -78,7 +78,7 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
     <div>
       <div
         className={cn(
-          "tree-row group relative flex h-8 items-center gap-1 rounded-sm pr-1 text-[13px] md:h-7",
+          "tree-row group relative flex h-11 items-center gap-1 rounded-sm pr-1 text-[15px] md:h-7 md:text-[13px]",
           active ? "is-active text-fg" : "text-muted",
         )}
         style={{ paddingLeft: 8 + depth * 10 }}
@@ -90,8 +90,17 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
           type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           onClick={() => {
-            if (isFolder) setOpen((v) => !v);
-            else openPreview(node.path);
+            if (isFolder) {
+              setOpen((v) => !v);
+              return;
+            }
+            const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+            if (mobile) {
+              openFile(node.path);
+              useIdeUi.getState().setMobilePane("editor");
+            } else {
+              openPreview(node.path);
+            }
           }}
           onDoubleClick={() => {
             if (!isFolder) openFile(node.path);
@@ -117,7 +126,10 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
           <button
             type="button"
             aria-label={`Delete ${node.name}`}
-            className="flex size-7 items-center justify-center rounded-md text-subtle hover:text-danger md:opacity-0 md:group-hover:opacity-100"
+            className={cn(
+              "flex size-9 items-center justify-center rounded-md text-subtle hover:text-danger md:size-7 md:opacity-0 md:group-hover:opacity-100",
+              active ? "max-md:flex" : "max-md:hidden",
+            )}
             onClick={() => deleteFile(node.path)}
           >
             <Trash2 className="size-3.5" />
@@ -208,13 +220,14 @@ export function FileTree() {
   const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
+  const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
   const tree = useMemo(() => buildTree(Object.keys(files)), [files]);
   const [dropOver, setDropOver] = useState(false);
   const count = Object.keys(files).length;
 
   return (
     <div
-      className={cn("file-tree flex h-full min-h-0 flex-col", dropOver && "is-drop")}
+      className={cn("file-tree ide-stack", dropOver && "is-drop")}
       onDragOver={(e) => {
         if (!e.dataTransfer?.types.includes("Files")) return;
         e.preventDefault();
@@ -226,17 +239,21 @@ export function FileTree() {
       }}
       onDrop={() => setDropOver(false)}
     >
-      <div className="flex h-8 items-center justify-between gap-1 border-b border-border px-1.5">
+      <div className="flex h-11 items-center justify-between gap-1 border-b border-border px-1.5 md:h-8">
         <p className="px-1 text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">Workspace</p>
         <div className="flex shrink-0 items-center">
+          <Button variant="ghost" size="sm" className="h-9 px-1.5 md:h-7" aria-label="Search files" onClick={() => setCommandOpen(true)}>
+            <Search className="size-3.5" />
+            <span className="md:hidden">Search</span>
+          </Button>
           <OpenMenu />
-          <Button variant="ghost" size="sm" className="h-7 px-1.5" aria-label="New file" onClick={() => setNewFileOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-9 px-1.5 md:h-7" aria-label="New file" onClick={() => setNewFileOpen(true)}>
             <Plus className="size-3.5" />
             New
           </Button>
         </div>
       </div>
-      <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto px-1 py-1">
+      <div className="aperture-scroll min-h-0 overflow-y-auto px-1 py-1">
         {tree.map((node) => (
           <TreeItem key={node.path} node={node} depth={0} pending={pending} />
         ))}

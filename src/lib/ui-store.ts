@@ -28,6 +28,7 @@ type IdeUiState = {
   setDebug: (on: boolean) => void;
   setDesignOpen: (open: boolean) => void;
   addCapture: (capture: DesignCapture) => void;
+  updateCapture: (id: string, patch: Partial<DesignCapture>) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
   setMobilePane: (pane: MobilePane) => void;
@@ -66,7 +67,14 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     set({ debug: on });
   },
   setDesignOpen: (open) => set((s) => ({ designOpen: open, mobilePane: open ? "editor" : s.mobilePane })),
-  addCapture: (capture) => set((s) => ({ captures: [...s.captures, capture].slice(-6) })),
+  addCapture: (capture) =>
+    set((s) => ({
+      captures: [...s.captures, capture].slice(-8),
+    })),
+  updateCapture: (id, patch) =>
+    set((s) => ({
+      captures: s.captures.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    })),
   removeCapture: (id) => set((s) => ({ captures: s.captures.filter((c) => c.id !== id) })),
   clearCaptures: () => set({ captures: [] }),
   setMobilePane: (pane) => set({ mobilePane: pane }),

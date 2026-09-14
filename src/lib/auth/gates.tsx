@@ -87,11 +87,10 @@ export function SignInButtons() {
  * gate-materialized — behind the gate the next request signs the viewer
  * straight back in, so a sign-out control there is a broken loop.
  */
-export function UserButton() {
+export function UserButton({ compact = false }: { compact?: boolean }) {
   const user = useCurrentUser();
-  // Sign-out can take a moment (and can fail when deployed), so the control
-  // shows it is working and cannot be fired twice.
   const [signingOut, setSigningOut] = useState(false);
+  const [open, setOpen] = useState(false);
   const gateSession = useSyncExternalStore(
     subscribeToNothing,
     hasGateSessionMarker,
@@ -99,30 +98,61 @@ export function UserButton() {
   );
   if (!user) return null;
   const label = user.displayName ?? user.primaryEmail ?? "Account";
+  const avatar = user.profileImageUrl ? (
+    <img src={user.profileImageUrl} alt="" className="size-7 rounded-full object-cover" />
+  ) : (
+    <span className="grid size-7 place-items-center rounded-full bg-elevated text-xs font-medium text-fg">
+      {label.charAt(0).toUpperCase()}
+    </span>
+  );
+
+  if (compact) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          aria-label={label}
+          aria-expanded={open}
+          className="rounded-full"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {avatar}
+        </button>
+        {open && (
+          <div className="absolute right-0 top-9 z-40 w-52 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
+            <p className="truncate px-3 py-2 text-sm text-fg">{label}</p>
+            {authEnabled && !gateSession && (
+              <button
+                type="button"
+                disabled={signingOut}
+                className="flex h-11 w-full items-center px-3 text-left text-sm text-fg hover:bg-bg disabled:opacity-50"
+                onClick={() => {
+                  setSigningOut(true);
+                  void signOut().catch(() => setSigningOut(false));
+                }}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
-      {user.profileImageUrl ? (
-        <img
-          src={user.profileImageUrl}
-          alt=""
-          className="h-8 w-8 rounded-full object-cover"
-        />
-      ) : (
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-black/10 text-sm font-medium dark:bg-white/20">
-          {label.charAt(0).toUpperCase()}
-        </span>
-      )}
-      <span className="text-sm font-medium">{label}</span>
+      {avatar}
+      <span className="hidden max-w-28 truncate text-sm font-medium lg:inline">{label}</span>
       {authEnabled && !gateSession && (
         <button
           type="button"
           disabled={signingOut}
           onClick={() => {
             setSigningOut(true);
-            // Success navigates away; on failure re-enable so it can be retried.
             void signOut().catch(() => setSigningOut(false));
           }}
-          className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
+          className="hidden cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline md:inline"
         >
           {signingOut ? "Signing out…" : "Sign out"}
         </button>

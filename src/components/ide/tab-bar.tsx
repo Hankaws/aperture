@@ -23,7 +23,7 @@ export function PreviewToggle({ className }: { className?: string }) {
       aria-pressed={open}
       aria-label={open ? "Close preview" : "Open preview"}
       className={cn(
-        "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium",
+        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium md:h-7 md:px-2.5 md:text-[12px]",
         open ? "bg-accent text-bg" : "border border-border bg-elevated text-fg hover:bg-list-hover",
         className,
       )}
@@ -48,7 +48,7 @@ export function TabBar() {
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 
   return (
-    <div className="flex h-8 items-stretch border-b border-border bg-surface">
+    <div className="flex h-10 items-stretch border-b border-border bg-surface md:h-8">
       <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
         {openTabs.length === 0 ? (
           <span className="flex items-center px-3 text-xs text-subtle">Open a file from Workspace to start</span>

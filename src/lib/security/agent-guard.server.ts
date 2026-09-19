@@ -1,4 +1,6 @@
 import type { AgentInput } from "@/lib/agent/types";
+import type { WorkerSpec } from "@/lib/agent/crew";
+import { parseWorkerRole } from "@/lib/agent/crew";
 import { parseAgentPhase } from "@/lib/agent/phase";
 import { isAgentRef } from "@/lib/acp/kinds";
 import { isModelSource } from "@/lib/billing/plans";
@@ -98,6 +100,69 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
 
   const phase = parseAgentPhase(input.phase);
   const approvedPlan = normalizePlan(input.approvedPlan);
+  const known = new Set(files.map((f) => f.path));
+  const workers: WorkerSpec[] = [];
+  if (Array.isArray(input.workers)) {
+    for (const row of input.workers.slice(0, 3)) {
+      if (!row || typeof row !== "object") continue;
+      const rec = row as Record<string, unknown>;
+      const paths = Array.isArray(rec.files)
+        ? rec.files
+            .filter((p): p is string => typeof p === "string")
+            .map((p) => safeRelPath(p))
+            .filter((p): p is string => typeof p === "string" && known.has(p))
+            .slice(0, 12)
+        : [];
+      if (paths.length === 0) continue;
+      const wsource =
+        typeof rec.source === "string" && isModelSource(rec.source) ? rec.source : undefined;
+      const label = typeof rec.label === "string" ? rec.label.slice(0, 80) : paths[0]!;
+      workers.push({
+        files: paths,
+        steps: normalizePlan(rec.steps),
+        source: wsource,
+        label,
+        agentId: null,
+        role: parseWorkerRole(rec.role),
+      });
+    }
+  }
+
+  const pendingEdits: AgentInput["pendingEdits"] = [];
+  if (Array.isArray(input.pendingEdits)) {
+    for (const row of input.pendingEdits.slice(0, 8)) {
+      if (!row || typeof row !== "object") continue;
+      const rec = row as Record<string, unknown>;
+      const path = typeof rec.path === "string" ? safeRelPath(rec.path) : null;
+      if (!path || !known.has(path)) continue;
+      if (typeof rec.oldText !== "string" || typeof rec.newText !== "string") continue;
+      pendingEdits.push({
+        id: typeof rec.id === "string" ? rec.id.slice(0, 80) : `pending_${pendingEdits.length}_${path}`,
+        path,
+        oldText: rec.oldText.slice(0, 20_000),
+        newText: rec.newText.slice(0, 20_000),
+        description: typeof rec.description === "string" ? rec.description.slice(0, 200) : path,
+        status: "pending",
+        notes: Array.isArray(rec.notes)
+          ? rec.notes.slice(0, 12).flatMap((note) => {
+              if (!note || typeof note !== "object") return [];
+              const n = note as Record<string, unknown>;
+              if (typeof n.text !== "string") return [];
+              return [
+                {
+                  id: typeof n.id === "string" ? n.id.slice(0, 80) : `n_${path}`,
+                  excerpt: typeof n.excerpt === "string" ? n.excerpt.slice(0, 80) : "",
+                  type: n.type === "del" ? "del" : n.type === "eq" ? "eq" : "add",
+                  text: n.text.slice(0, 400),
+                },
+              ];
+            })
+          : undefined,
+      });
+    }
+  }
+
+  const keepWorkers = workers.length >= 2 || workers.some((w) => w.role === "review");
 
   return {
     mode,
@@ -110,6 +175,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     agentId,
     phase,
     approvedPlan: approvedPlan.length > 0 ? approvedPlan : undefined,
+    workers: keepWorkers ? workers : undefined,
+    role: parseWorkerRole(input.role) === "review" ? "review" : undefined,
+    pendingEdits: pendingEdits.length ? pendingEdits : undefined,
     debug: input.debug === true,
   };
 }

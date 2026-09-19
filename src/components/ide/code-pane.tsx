@@ -4,7 +4,7 @@ import { EditorState, Compartment, Annotation } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, indentOnInput, defaultHighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
 import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
@@ -17,8 +17,11 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { pendingEditFor } from "@/lib/workspace/edits";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
+import { workspaceComplete } from "@/lib/editor/workspace-complete";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
+import { jumpReview } from "@/lib/editor/review-jump";
 import { EDITOR, SYNTAX } from "@/lib/editor/theme";
+import { clampSession, loadSession, saveSession } from "@/lib/editor/session";
 import { stickyScroll } from "@/lib/editor/sticky-scroll";
 import { minimapScrollTo, paintMinimap } from "@/lib/editor/minimap";
 import { useIdeUi } from "@/lib/ui-store";
@@ -84,6 +87,29 @@ const theme = EditorView.theme(
       padding: "0 5px",
       borderRadius: "4px",
     },
+    ".cm-searchMatch": { backgroundColor: EDITOR.wordRead },
+    ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: EDITOR.wordWrite },
+    ".cm-panels": {
+      backgroundColor: EDITOR.peekBg,
+      borderTop: `1px solid ${EDITOR.peekBorder}`,
+      color: EDITOR.fg,
+    },
+    ".cm-lintRange-error": { textDecoration: `underline wavy ${EDITOR.squiggleError}` },
+    ".cm-lintRange-warning": { textDecoration: `underline wavy ${EDITOR.squiggleWarn}` },
+    ".cm-textfield": {
+      background: EDITOR.bg,
+      border: `1px solid ${EDITOR.border}`,
+      color: EDITOR.fg,
+      borderRadius: "6px",
+      padding: "2px 8px",
+    },
+    ".cm-button": {
+      background: EDITOR.elevated,
+      border: `1px solid ${EDITOR.border}`,
+      color: EDITOR.fg,
+      borderRadius: "6px",
+    },
+    ".cm-panel.cm-search label": { fontSize: "11px", color: EDITOR.muted },
   },
   { dark: true },
 );
@@ -138,6 +164,7 @@ export function CodePane() {
   const viewRef = useRef<EditorView | null>(null);
   const lastValue = useRef("");
   const pathRef = useRef<string | null>(null);
+  const chunksRef = useRef(useWorkspace.getState().chunks);
   const writeFileRef = useRef(useWorkspace.getState().writeFile);
   const setSelectionRef = useRef(useWorkspace.getState().setSelection);
   const applyRef = useRef(useWorkspace.getState().applyEdit);
@@ -146,10 +173,12 @@ export function CodePane() {
   const listenerConf = useRef(new Compartment()).current;
   const ghostConf = useRef(new Compartment()).current;
   const diffConf = useRef(new Compartment()).current;
+  const wrapConf = useRef(new Compartment()).current;
   const scrolledFor = useRef<string | null>(null);
   const jumpedFor = useRef<string | null>(null);
 
   const activePath = useWorkspace((s) => s.activePath);
+  const chunks = useWorkspace((s) => s.chunks);
   const value = useWorkspace((s) => (s.activePath ? (s.files[s.activePath] ?? "") : ""));
   const pendingEdit = useWorkspace((s) => pendingEditFor(s.messages, s.activePath));
   const writeFile = useWorkspace((s) => s.writeFile);
@@ -157,7 +186,11 @@ export function CodePane() {
   const applyEdit = useWorkspace((s) => s.applyEdit);
   const rejectEdit = useWorkspace((s) => s.rejectEdit);
   const { account } = useAccount();
+  const reveal = useIdeUi((s) => s.reveal);
+  const findTick = useIdeUi((s) => s.findTick);
   const tabOn = Boolean(account?.tab) && !pendingEdit;
+  pathRef.current = activePath;
+  chunksRef.current = chunks;
   writeFileRef.current = writeFile;
   setSelectionRef.current = setSelection;
   applyRef.current = applyEdit;
@@ -180,7 +213,8 @@ export function CodePane() {
           indentOnInput(),
           bracketMatching(),
           closeBrackets(),
-          autocompletion(),
+          autocompletion({ activateOnTyping: true }),
+          workspaceComplete(() => chunksRef.current, () => pathRef.current),
           highlightSelectionMatches({ highlightWordAroundCursor: true }),
           stickyScroll(),
           keymap.of([
@@ -229,7 +263,7 @@ export function CodePane() {
           ),
           ghostConf.of([]),
           diffConf.of([]),
-          EditorView.lineWrapping,
+          wrapConf.of(languageFromPath(activePath ?? "") === "markdown" ? EditorView.lineWrapping : []),
         ],
       }),
     });
@@ -255,15 +289,38 @@ export function CodePane() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !activePath) return;
+    const prev = pathRef.current;
+    const pathChanged = Boolean(prev && prev !== activePath);
+    if (pathChanged && prev) {
+      const sel = view.state.selection.main;
+      saveSession(prev, { anchor: sel.anchor, head: sel.head, scrollTop: view.scrollDOM.scrollTop });
+    }
     pathRef.current = activePath;
-    const effects = [langConf.reconfigure(languageExtension(activePath))];
+    const wrap = languageFromPath(activePath) === "markdown" ? EditorView.lineWrapping : [];
+    const effects = [langConf.reconfigure(languageExtension(activePath)), wrapConf.reconfigure(wrap)];
     if (value !== lastValue.current) {
       lastValue.current = value;
+      const current = view.state.selection.main;
+      const saved = pathChanged ? loadSession(activePath) : undefined;
+      const sel = clampSession(
+        saved ?? {
+          anchor: pathChanged ? 0 : current.anchor,
+          head: pathChanged ? 0 : current.head,
+          scrollTop: pathChanged ? 0 : view.scrollDOM.scrollTop,
+        },
+        value.length,
+      );
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
+        selection: { anchor: sel.anchor, head: sel.head },
         effects,
         annotations: syncAnn.of(true),
       });
+      if (saved) {
+        requestAnimationFrame(() => {
+          if (viewRef.current === view) view.scrollDOM.scrollTop = sel.scrollTop;
+        });
+      }
       return;
     }
     view.dispatch({
@@ -280,6 +337,12 @@ export function CodePane() {
         pendingDiff(pendingEdit, {
           apply: (edit) => applyRef.current(edit),
           reject: (id) => rejectRef.current(id),
+          keep: () => jumpReview(1),
+          drop: (line) => {
+            if (!pendingEdit) return;
+            useWorkspace.getState().dropHunkAt(pendingEdit.id, line);
+            jumpReview(1);
+          },
         }),
       ),
       annotations: syncAnn.of(true),
@@ -344,6 +407,25 @@ export function CodePane() {
     jumpedFor.current = pendingEdit.id;
     useIdeUi.getState().setMobilePane("editor");
   }, [pendingEdit]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !reveal || reveal.path !== activePath) return;
+    const line = Math.min(Math.max(1, reveal.line), view.state.doc.lines);
+    const pos = view.state.doc.line(line).from;
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos, { y: "center" }),
+      annotations: syncAnn.of(true),
+    });
+    useIdeUi.getState().setReveal(null);
+  }, [reveal, activePath]);
+
+  useEffect(() => {
+    if (!findTick) return;
+    const view = viewRef.current;
+    if (view) openSearchPanel(view);
+  }, [findTick]);
 
   return (
     <div className="editor-stage relative flex h-full min-h-0 bg-bg">

@@ -20,16 +20,16 @@ export async function runAcpSession(
     const resolved = await resolveModel(opts.userId, input.source);
     if (!resolved.ok) return { ok: false, error: resolved.error };
     const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
-    const { result, turns } = await runComposerStreaming(
+    const { result, bills } = await runComposerStreaming(
       input,
-      { provider: resolved.provider, apiKey: resolved.apiKey },
+      { provider: resolved.provider, apiKey: resolved.apiKey, hosted: resolved.hosted, cents: resolved.cents },
       opts.emit,
       opts.signal,
       (n) => canAffordRuns(opts.userId, resolved.source, n),
     );
     if (result.ok) {
-      for (let i = 0; i < turns; i += 1) {
-        await recordAgentRun(opts.userId, resolved.hosted, resolved.cents);
+      for (const bill of bills) {
+        await recordAgentRun(opts.userId, bill.hosted, bill.cents);
       }
     }
     return { ...result, hosted: resolved.hosted, cents: resolved.cents };

@@ -7,13 +7,16 @@ import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
+import { autoContextPaths, formatAutoContext } from "./auto-context";
 import type { ProviderId } from "@/lib/billing/plans";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
+import { appendVerify } from "./verify";
 
-const MAX_STEPS = 8;
+const MAX_PLAN_STEPS = 8;
+const MAX_BUILD_STEPS = 12;
 const MAX_FILES = 120;
 const MAX_CHARS = 220_000;
 
@@ -28,16 +31,19 @@ function systemPrompt(
   rules: string | null,
   flavorName: string | null,
   phase: ReturnType<typeof resolveAgentPhase>,
+  role?: AgentInput["role"],
 ): string {
   const preamble = flavorName
     ? acpSystemPreamble(flavorName as "claude-code" | "codex" | "opencode")
     : "You are Aperture, an AI coding agent inside a web IDE.";
   const composerLine =
-    phase === "plan"
-      ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
-      : phase === "build"
-        ? "Build mode: the user approved the plan. Execute it. Update set_plan statuses as you complete steps. Call propose_edit for each change. Do not expand scope. Do not restart the plan."
-        : "Composer mode: call set_plan with 3–7 short steps before any propose_edit. Keep the plan visible. Update statuses as you complete steps, then edit.";
+    role === "review"
+      ? "Review mode: inspect staged diffs. Call note_diff for each real issue. Do not call propose_edit. Do not rewrite files."
+      : phase === "plan"
+        ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
+        : phase === "build"
+          ? "Build mode: the user approved the plan. Execute it. Update set_plan statuses as you complete steps. Call propose_edit for each change. Do not expand scope. Do not restart the plan."
+          : "Composer mode: call set_plan with 3–7 short steps before any propose_edit. Keep the plan visible. Update statuses as you complete steps, then edit.";
   const base = [
     preamble,
     "You operate on a virtual workspace snapshot. Tools see the live snapshot, including staged edits.",
@@ -45,7 +51,9 @@ function systemPrompt(
     "You may call several search and read tools in one step; they run in parallel.",
     "Prefer the smallest unique search/replace. Never invent files that do not exist.",
     "Cite paths as path:line when answering questions.",
-    "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
+    role === "review"
+      ? "When you find an issue, call note_diff. Do not dump entire files into chat unless asked."
+      : "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
     "The user may attach files with @path, @codebase (indexed search), or @repo-map. Treat those as the primary context.",
     "Never repeat API keys, tokens, passwords, private keys, or secret-looking strings. If one appears, write [redacted].",
     mode === "inline"
@@ -140,6 +148,15 @@ function buildContextMessage(
 ): string {
   const mentioned = parseMentions(input.instruction, files);
   const extra = expandMentions(mentioned, files);
+  const auto = (input.focusPaths?.length
+    ? input.focusPaths
+    : autoContextPaths({
+        activePath: input.activePath ?? null,
+        openTabs: input.openTabs ?? [],
+        recentPaths: input.recentPaths ?? [],
+        mentioned,
+      })
+  ).filter((path) => files[path] !== undefined && !mentioned.includes(path));
   const parts = [
     `Workspace files:\n${fileTree(files)}`,
     input.activePath ? `Active file: ${input.activePath}` : "",
@@ -170,6 +187,8 @@ function buildContextMessage(
       "Attached with @:\n" + extra.map((file) => `### ${file.path}\n${file.content}`).join("\n\n"),
     );
   }
+  const autoBlock = formatAutoContext(auto, files);
+  if (autoBlock) parts.push(autoBlock);
   return parts.filter(Boolean).join("\n\n");
 }
 
@@ -189,22 +208,31 @@ export async function runAgentLoopStreaming(
   const flavor = flavorOf(input);
   const fileMap = sanitizeFileMap(Object.fromEntries(input.files.map((f) => [f.path, f.content])));
   const mentioned = parseMentions(input.instruction, fileMap);
+  const auto = input.focusPaths?.length
+    ? input.focusPaths
+    : autoContextPaths({
+        activePath: input.activePath ?? null,
+        openTabs: input.openTabs ?? [],
+        recentPaths: input.recentPaths ?? [],
+        mentioned,
+      });
   const files = capFiles(
     Object.entries(fileMap).map(([path, content]) => ({ path, content })),
-    mentioned,
+    [...mentioned, ...auto],
   );
   const chunks = indexFiles(files);
   const phase = resolveAgentPhase(input.mode, input.phase);
-  const requirePlan = input.mode === "composer" || Boolean(flavor);
+  const requirePlan = (input.mode === "composer" || Boolean(flavor)) && phase !== "skip";
   const approved = input.approvedPlan?.length ? input.approvedPlan : [];
   const ctx: ToolContext = {
     files,
     chunks,
-    edits: [],
+    edits: (input.pendingEdits ?? []).map((edit) => ({ ...edit, notes: [...(edit.notes ?? [])] })),
     plan: approved,
     requirePlan,
     phase,
     mode: input.mode,
+    role: input.role,
   };
   const traces: ToolTrace[] = [];
   const rules = findRules(fileMap)?.text ?? null;
@@ -217,7 +245,7 @@ export async function runAgentLoopStreaming(
     emit({ type: "status", text: `ACP session/new · ${flavor.name}` });
   }
 
-  const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase);
+  const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
   const userCtx = buildContextMessage(input, files, chunks);
   const messages: ChatMessage[] = [
     { role: "system", content: sys },
@@ -230,22 +258,29 @@ export async function runAgentLoopStreaming(
   messages.push({ role: "user", content: input.instruction });
 
   let planNudged = false;
+  const maxSteps = phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
   const succeed = (
     body: { text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean },
     steps: number,
   ): AgentResult => {
-    const debug = packDebug(input, cfg.provider, sys, userBlob, body.text, steps);
-    emit({ type: "done", ...body, ...(debug ? { debug } : {}) });
-    return { ok: true, ...body, ...(debug ? { debug } : {}) };
+    const edits = body.edits;
+    const text =
+      body.awaitingBuild || phase === "plan"
+        ? body.text
+        : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan);
+    if (text !== body.text) emit({ type: "status", text: "Verifying…" });
+    const debug = packDebug(input, cfg.provider, sys, userBlob, text, steps);
+    emit({ type: "done", ...body, text, ...(debug ? { debug } : {}) });
+    return { ok: true, ...body, text, ...(debug ? { debug } : {}) };
   };
 
   try {
-    for (let step = 0; step < MAX_STEPS; step++) {
+    for (let step = 0; step < maxSteps; step++) {
       if (signal?.aborted) return { ok: false, error: "Stopped." };
       const hasPlan = ctx.plan.length > 0;
-      const kind = toolKindFor(input.mode, phase);
+      const kind = input.role === "review" ? "review" : toolKindFor(input.mode, phase);
       emit({
         type: "status",
         text:
@@ -317,7 +352,7 @@ export async function runAgentLoopStreaming(
           traces.push(trace);
           emit({ type: "trace", trace });
           if (outcome.call.name === "set_plan") emit({ type: "plan", entries: ctx.plan });
-          if (outcome.call.name === "propose_edit") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
+          if (outcome.call.name === "propose_edit" || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
           messages.push({
             role: "tool",
             tool_call_id: outcome.call.id,
@@ -344,7 +379,7 @@ export async function runAgentLoopStreaming(
         plan: ctx.plan,
         awaitingBuild,
       },
-      MAX_STEPS,
+      maxSteps,
     );
   } catch (error) {
     if (signal?.aborted) return { ok: false, error: "Stopped." };

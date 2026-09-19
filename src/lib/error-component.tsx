@@ -6,9 +6,17 @@ const FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page."
 const RELOAD_KEY = "aperture-chunk-reload";
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
-  return FALLBACK_MESSAGE;
+  const raw =
+    error instanceof Error && error.message
+      ? error.message
+      : typeof error === "string" && error
+        ? error
+        : FALLBACK_MESSAGE;
+  const minified = /Minified React error #(\d+)/i.exec(raw);
+  if (minified?.[1] === "185") {
+    return "The editor hit an update loop and stopped. Reload to continue.";
+  }
+  return raw;
 }
 
 function isStaleChunk(message: string): boolean {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { diffStats, hunksFromDiff } from "./apply-edit.ts";
+import { diffStats, dropHunk, hunksFromDiff } from "./apply-edit.ts";
 
 test("replace in the middle is one hunk", () => {
   const hunks = hunksFromDiff("a\nb\nc", "a\nX\nc");
@@ -37,6 +37,12 @@ test("separated changes are two hunks", () => {
   assert.equal(hunks.length, 2);
   assert.deepEqual(hunks[0]?.added, ["B"]);
   assert.deepEqual(hunks[1]?.added, ["D"]);
+});
+
+test("dropHunk keeps the other change", () => {
+  assert.equal(dropHunk("a\nb\nc\nd", "a\nB\nc\nD", 0), "a\nb\nc\nD");
+  assert.equal(dropHunk("a\nb\nc\nd", "a\nB\nc\nD", 1), "a\nB\nc\nd");
+  assert.equal(dropHunk("a\nb\nc", "a\nc", 0), "a\nb\nc");
 });
 
 test("diffStats counts add and del", () => {

@@ -99,7 +99,12 @@ export function firstHunkPos(edit: ProposedEdit, lineCount: number, lineFrom: (n
 
 export function pendingDiff(
   edit: ProposedEdit | null,
-  handlers: { apply: (edit: ProposedEdit) => void; reject: (id: string) => void },
+  handlers: {
+    apply: (edit: ProposedEdit) => void;
+    reject: (id: string) => void;
+    keep: () => void;
+    drop: (line: number) => void;
+  },
 ): Extension {
   if (!edit) return [];
 
@@ -134,8 +139,32 @@ export function pendingDiff(
   const keys = Prec.high(
     keymap.of([
       {
+        key: "Enter",
+        run: () => {
+          handlers.keep();
+          return true;
+        },
+      },
+      {
+        key: "Backspace",
+        run: (view) => {
+          const line = view.state.doc.lineAt(view.state.selection.main.head).number;
+          handlers.drop(line);
+          return true;
+        },
+      },
+      {
+        key: "Delete",
+        run: (view) => {
+          const line = view.state.doc.lineAt(view.state.selection.main.head).number;
+          handlers.drop(line);
+          return true;
+        },
+      },
+      {
         key: "Mod-Enter",
         run: () => {
+          if (edit.notes?.length) return false;
           handlers.apply(edit);
           return true;
         },

@@ -8,6 +8,10 @@ import type { AgentResult } from "./types";
 import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
 import { formatDesignCaptures } from "@/lib/workspace/design-mode";
+import { parseMentions } from "@/lib/workspace/mentions";
+import { attachNotesToPending, listPendingEdits } from "@/lib/workspace/edits";
+import { autoContextPaths } from "./auto-context";
+import type { WorkerRole, WorkerSpec } from "./crew";
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -59,7 +63,7 @@ export function agentPayload(
   mode: AgentMode,
   source?: ModelSource | null,
   agentId?: string | null,
-  extra?: { phase?: AgentPhase; approvedPlan?: PlanEntry[] },
+  extra?: { phase?: AgentPhase; approvedPlan?: PlanEntry[]; workers?: WorkerSpec[]; role?: WorkerRole; pendingEdits?: ProposedEdit[] },
 ) {
   const state = useWorkspace.getState();
   const history = state.messages
@@ -67,6 +71,14 @@ export function agentPayload(
     .slice(-8)
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
   const captures = formatDesignCaptures(useIdeUi.getState().captures);
+  const mentioned = parseMentions(instruction, state.files);
+  const focusPaths = autoContextPaths({
+    activePath: state.activePath,
+    openTabs: state.openTabs,
+    recentPaths: state.recentPaths,
+    mentioned,
+    extra: listPendingEdits(state.messages).map((e) => e.path),
+  });
   return {
     mode,
     instruction: captures ? `${captures}\n\n${instruction}` : instruction,
@@ -74,10 +86,16 @@ export function agentPayload(
     files: Object.entries(state.files).map(([path, content]) => ({ path, content })),
     activePath: state.activePath,
     selection: state.selection,
+    openTabs: state.openTabs,
+    recentPaths: state.recentPaths,
+    focusPaths,
     source: source ?? undefined,
     agentId: agentId ?? null,
     phase: extra?.phase,
     approvedPlan: extra?.approvedPlan,
+    workers: extra?.workers,
+    role: extra?.role,
+    pendingEdits: extra?.pendingEdits ?? listPendingEdits(state.messages),
     debug: useIdeUi.getState().debug,
   };
 }
@@ -91,6 +109,10 @@ export async function submitAgent(
     agentLabel?: string | null;
     phase?: AgentPhase;
     approvedPlan?: PlanEntry[];
+    apiInstruction?: string;
+    workers?: WorkerSpec[];
+    role?: WorkerRole;
+    pendingEdits?: ProposedEdit[];
   },
 ) {
   const trimmed = instruction.trim();
@@ -133,13 +155,17 @@ export async function submitAgent(
   state.setAgentRunning(true, mode);
 
   const apiInstruction =
-    phase === "build" && opts?.approvedPlan?.length
+    opts?.apiInstruction ??
+    (phase === "build" && opts?.approvedPlan?.length
       ? `${trimmed}\n\nApproved plan:\n${opts.approvedPlan.map((e, i) => `${i + 1}. ${e.content}`).join("\n")}`
-      : trimmed;
+      : trimmed);
 
   const input = agentPayload(apiInstruction, mode, source, opts?.agentId, {
     phase,
     approvedPlan: opts?.approvedPlan,
+    workers: opts?.workers,
+    role: opts?.role,
+    pendingEdits: opts?.pendingEdits,
   });
 
   if (mode === "inline") {
@@ -243,6 +269,13 @@ export async function submitAgent(
           traces = event.traces;
           edits = event.edits;
           plan = event.plan ?? plan;
+          const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
+          if (reviewOnly && edits.length) {
+            for (const patch of attachNotesToPending(ws.messages, edits)) {
+              ws.patchMessage(patch.id, { edits: patch.edits });
+            }
+            edits = [];
+          }
           ws.patchMessage(asstId, {
             content: text,
             traces,

@@ -75,6 +75,7 @@ export function grepFiles(
   files: Record<string, string>,
   pattern: string,
   maxHits = 40,
+  pathPrefix?: string,
 ): Array<{ path: string; line: number; text: string }> {
   const hits: Array<{ path: string; line: number; text: string }> = [];
   let regex: RegExp | null = null;
@@ -87,7 +88,11 @@ export function grepFiles(
       regex = null;
     }
   }
+  const prefix = pathPrefix?.trim() ?? "";
   for (const [path, content] of Object.entries(files)) {
+    if (prefix && path !== prefix && !path.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`) && !path.endsWith(`/${prefix}`)) {
+      continue;
+    }
     const lines = content.split("\n");
     lines.forEach((text, i) => {
       if (hits.length >= maxHits) return;

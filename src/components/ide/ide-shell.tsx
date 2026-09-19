@@ -21,7 +21,8 @@ import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useAccount, modelCaption } from "@/lib/billing/use-account";
 import { listPendingEdits } from "@/lib/workspace/edits";
-import { useIdeUi } from "@/lib/ui-store";
+import { jumpReview } from "@/lib/editor/review-jump";
+import { useIdeUi, hydrateAppearance } from "@/lib/ui-store";
 import { cn, isModEvent, modSymbol } from "@/lib/utils";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -223,12 +224,25 @@ export function IdeShell() {
   const { user, account } = useAccount();
   const desktop = layoutReady && desktopMq;
   const captureCount = useIdeUi((s) => s.captures.length);
+  const composerUnread = useIdeUi((s) => s.composerUnread);
   const agentRunning = useWorkspace((s) => s.agentRunning);
-  const composerAlert = useWorkspace((s) => s.messages.some((m) => m.awaitingBuild)) || captureCount > 0 || agentRunning;
+  const composerAlert =
+    useWorkspace((s) => s.messages.some((m) => m.awaitingBuild)) || captureCount > 0 || agentRunning || composerUnread;
+  const runningRef = useRef(false);
 
   useLayoutEffect(() => {
     setLayoutReady(true);
+    hydrateAppearance();
   }, []);
+
+  useEffect(() => {
+    const was = runningRef.current;
+    runningRef.current = agentRunning;
+    if (was && !agentRunning) {
+      const ui = useIdeUi.getState();
+      if (ui.mobilePane !== "agent" || !ui.chatOpen) ui.setComposerUnread(true);
+    }
+  }, [agentRunning]);
 
   useEffect(() => {
     void getAiStatus()
@@ -266,6 +280,13 @@ export function IdeShell() {
         ui.setInlineOpen(false);
         ui.setHelpOpen(false);
         ui.setNewFileOpen(false);
+        return;
+      }
+      if (e.key === "F8") {
+        const open = useIdeUi.getState();
+        if (open.commandOpen || open.helpOpen || open.githubOpen || open.historyOpen) return;
+        e.preventDefault();
+        jumpReview(e.shiftKey ? -1 : 1, e.altKey);
         return;
       }
       if (!isModEvent(e)) return;

@@ -25,6 +25,40 @@ export function pendingPathKey(messages: ChatMessage[]): string {
   return [...paths].sort().join("|");
 }
 
+export function pendingByPath(messages: ChatMessage[]): ProposedEdit[] {
+  const map = new Map<string, ProposedEdit>();
+  for (const edit of listPendingEdits(messages)) map.set(edit.path, edit);
+  return [...map.values()];
+}
+
+export function attachNotesToPending(
+  messages: ChatMessage[],
+  incoming: ProposedEdit[],
+): Array<{ id: string; edits: ProposedEdit[] }> {
+  const byMessage = new Map<string, ProposedEdit[]>();
+  for (const message of messages) {
+    if (message.edits?.length) {
+      byMessage.set(
+        message.id,
+        message.edits.map((e) => ({ ...e, notes: [...(e.notes ?? [])] })),
+      );
+    }
+  }
+  const touched = new Set<string>();
+  for (const inc of incoming) {
+    if (!inc.notes?.length) continue;
+    for (const [id, edits] of byMessage) {
+      const idx = edits.findIndex((e) => e.path === inc.path && e.status === "pending");
+      if (idx < 0) continue;
+      const current = edits[idx]!;
+      edits[idx] = { ...current, notes: [...(current.notes ?? []), ...inc.notes] };
+      touched.add(id);
+      break;
+    }
+  }
+  return [...touched].map((id) => ({ id, edits: byMessage.get(id)! }));
+}
+
 export function hasCodeRange(
   selection: { empty?: boolean; text: string } | null | undefined,
 ): boolean {

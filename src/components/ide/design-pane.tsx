@@ -10,6 +10,7 @@ import {
   guessSource,
   hotReloadStyles,
   htmlFiles,
+  isDesignPayload,
   pickHtmlEntry,
   PREVIEW_CSS_PATH,
   PREVIEW_HTML_PATH,
@@ -81,7 +82,7 @@ export function DesignPane() {
     function onMsg(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as { type?: string; payload?: Omit<DesignCapture, "id" | "path" | "source" | "note"> };
-      if (data?.type !== "aperture-design-pick" || !data.payload || !entry) return;
+      if (data?.type !== "aperture-design-pick" || !isDesignPayload(data.payload) || !entry) return;
       const id = `d_${Date.now()}`;
       addCapture({
         ...data.payload,
@@ -162,6 +163,7 @@ export function DesignPane() {
           ref={frameRef}
           title="Design Mode"
           sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
           className="absolute inset-0 h-full w-full border-0 bg-white"
         />
         {captures.map((cap, i) => (

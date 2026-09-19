@@ -20,11 +20,15 @@ test("theme preview hardcodes the installed hex", () => {
     EDITOR.stickyBg,
     EDITOR.listDrop,
     EDITOR.paletteFocus,
+    EDITOR.diffAddBg,
+    EDITOR.peekBg,
     EDITOR.ansi.magenta,
     EDITOR.ansi.brightCyan,
     SYNTAX.keyword,
     SYNTAX.string,
     SYNTAX.fn,
+    SYNTAX.type,
+    SYNTAX.comment,
   ];
   for (const value of hex) {
     assert.ok(html.includes(value), `theme.html missing ${value}`);

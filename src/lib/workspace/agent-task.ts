@@ -41,9 +41,18 @@ export function resolveAgentTask(input: {
   const total = plan.length;
 
   if (input.running) {
+    const last = [...input.messages].reverse().find((m) => m.role === "assistant");
+    const status = last?.status ?? "";
+    const label = /Build/i.test(status)
+      ? "Building"
+      : /Writ|Iterat|Verif/i.test(status)
+        ? "Iterating"
+        : /Analyz|Ask/i.test(status)
+          ? "Asking"
+          : "Planning";
     return {
       kind: "running",
-      label: "Working",
+      label,
       detail: current?.content || tool || "Composer",
       done,
       total,

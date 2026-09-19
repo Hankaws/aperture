@@ -57,7 +57,7 @@ export function HelpDialog() {
 
   const steps = [
     { n: "1", title: "Open a file", body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open." },
-    { n: "2", title: "Ask Composer", body: "Describe the change. Composer posts a plan and waits — you click Build it. Design Mode: click a page element, add a note, then Send to Composer." },
+    { n: "2", title: "Ask Composer", body: "Manual mode: Composer plans and waits — you click Build it, then Apply. Toggle Crew so Claude and GPT can split a confirmed build. Design Mode strips page scripts; click an element, add a note, send it here." },
     { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. Apply, reject, or undo the run." },
   ];
 
@@ -66,7 +66,12 @@ export function HelpDialog() {
     [`${mod}I`, "Focus Composer"],
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}Enter`, "Apply the change in this file"],
+    ["F8", "Next review hunk · Shift previous · Alt next file"],
+    ["Enter / Backspace", "Keep this hunk · drop this hunk"],
+    ["/review /fix /explain", "Slash commands in Composer"],
     ["Tab", "Accept ghost text (Pro)"],
+    [`${mod}→`, "Accept the next ghost word"],
+    [`${mod}Space`, "Workspace symbols"],
     [`${mod}S`, "Download a zip"],
     [`${mod}/`, "This guide"],
   ];

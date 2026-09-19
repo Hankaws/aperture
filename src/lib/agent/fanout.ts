@@ -1,4 +1,5 @@
 import type { PlanEntry, ProposedEdit, ToolTrace } from "../workspace/types.ts";
+import type { WorkerRole, WorkerSpec } from "./crew.ts";
 
 export const MAX_FANOUT = 3;
 
@@ -107,6 +108,21 @@ export function scopedBuildInput<T extends { instruction?: string; phase?: strin
     approvedPlan: worker.steps,
     instruction: `Build it.\n\nYou own only these files: ${owned}. Do not propose_edit any other path. Read other files if you need context.\n\nYour steps:\n${steps}`,
   };
+}
+
+export function scopedWorkerInput<
+  T extends { instruction?: string; phase?: string; approvedPlan?: PlanEntry[]; role?: WorkerRole },
+>(base: T, worker: WorkerSpec): T {
+  if ((worker.role ?? "build") === "review") {
+    return {
+      ...base,
+      phase: "skip",
+      role: "review",
+      approvedPlan: undefined,
+      instruction: `Review the staged diffs. Call note_diff for each real issue (bug, regression, missing edge). Do not propose_edit. Do not rewrite files.\nFiles: ${worker.files.join(", ")}`,
+    };
+  }
+  return scopedBuildInput(base, worker);
 }
 
 export function mergeFanoutResults(

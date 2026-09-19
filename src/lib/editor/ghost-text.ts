@@ -2,7 +2,7 @@ import { Prec, StateEffect, StateField, type Extension } from "@codemirror/state
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type ViewUpdate } from "@codemirror/view";
 import { requestTabCompletion } from "@/lib/agent/tab";
 import { EDITOR } from "@/lib/editor/theme";
-
+import { takeGhostWord } from "./ghost-word";
 class GhostWidget extends WidgetType {
   constructor(readonly text: string) {
     super();
@@ -13,7 +13,7 @@ class GhostWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-aperture-ghost";
-    span.textContent = this.text;
+    span.textContent = this.text.split("\n").slice(0, 8).join("\n");
     return span;
   }
 }
@@ -43,6 +43,9 @@ const ghostTheme = EditorView.theme({
     fontStyle: "italic",
     pointerEvents: "none",
     opacity: "0.85",
+    whiteSpace: "pre",
+    display: "inline-block",
+    verticalAlign: "text-top",
   },
 });
 
@@ -83,7 +86,7 @@ export function ghostText(path: () => string | null): Extension[] {
         inflight?.abort();
         timer = setTimeout(() => {
           void this.request();
-        }, 380);
+        }, 280);
       }
       async request() {
         const filePath = path();
@@ -91,9 +94,7 @@ export function ghostText(path: () => string | null): Extension[] {
         const state = this.view.state;
         const pos = state.selection.main.head;
         if (!state.selection.main.empty) return;
-        const line = state.doc.lineAt(pos);
-        if (pos - line.from < 6) return;
-        if (line.text.trim().length < 4) return;
+        if (state.doc.length < 12 || pos < 2) return;
         const prefix = state.doc.sliceString(Math.max(0, pos - 2400), pos);
         const suffix = state.doc.sliceString(pos, Math.min(state.doc.length, pos + 280));
         const key = `${filePath}:${prefix.slice(-100)}:${suffix.slice(0, 24)}`;
@@ -141,6 +142,23 @@ export function ghostText(path: () => string | null): Extension[] {
           changes: { from: pos, insert: ghost },
           selection: { anchor: pos + ghost.length },
           effects: setGhost.of(null),
+        });
+        return true;
+      },
+    },
+    {
+      key: "Ctrl-ArrowRight",
+      mac: "Cmd-ArrowRight",
+      run: (view) => {
+        const ghost = view.state.field(ghostField);
+        if (!ghost) return false;
+        const { take, rest } = takeGhostWord(ghost);
+        if (!take) return false;
+        const pos = view.state.selection.main.head;
+        view.dispatch({
+          changes: { from: pos, insert: take },
+          selection: { anchor: pos + take.length },
+          effects: setGhost.of(rest.length ? rest : null),
         });
         return true;
       },

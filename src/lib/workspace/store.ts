@@ -3,6 +3,8 @@ import { indexFiles } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
+import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
+import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
 
 const STORAGE_KEY = "aperture-workspace-v2";
@@ -20,6 +22,7 @@ type WorkspaceState = {
   name: string;
   files: Record<string, string>;
   openTabs: string[];
+  recentPaths: string[];
   activePath: string | null;
   previewPath: string | null;
   pinned: string[];
@@ -50,6 +53,9 @@ type WorkspaceState = {
   applyEdit: (edit: ProposedEdit) => void;
   rejectEdit: (editId: string) => void;
   applyAllPending: () => void;
+  rejectAllPending: () => void;
+  dropHunkAt: (editId: string, line: number) => void;
+  clearPendingNotes: (editId?: string) => void;
   undoCheckpoint: (id: string) => Checkpoint | null;
   undoLast: () => Checkpoint | null;
   clearChat: () => void;
@@ -59,6 +65,7 @@ type PersistShape = {
   name: string;
   files: Record<string, string>;
   openTabs: string[];
+  recentPaths?: string[];
   activePath: string | null;
   previewPath?: string | null;
   pinned?: string[];
@@ -73,6 +80,7 @@ function persist(state: WorkspaceState) {
     name: state.name,
     files: state.files,
     openTabs: state.openTabs,
+    recentPaths: state.recentPaths,
     activePath: state.activePath,
     previewPath: state.previewPath,
     pinned: state.pinned,
@@ -133,6 +141,10 @@ function orderTabs(tabs: string[], pinned: string[]) {
     }
   }
   return out;
+}
+
+function remember(recent: string[], path: string): string[] {
+  return [path, ...recent.filter((p) => p !== path)].slice(0, 8);
 }
 
 function withPath(list: string[], path: string) {
@@ -221,6 +233,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     name: DEMO_WORKSPACE_NAME,
     files: { ...DEMO_FILES },
     openTabs: ["src/store.ts", "src/index.ts"],
+    recentPaths: ["src/store.ts", "src/index.ts"],
     activePath: "src/store.ts",
     previewPath: null,
     pinned: [],
@@ -253,10 +266,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
               parsed.previewPath && nextFiles[parsed.previewPath] !== undefined ? parsed.previewPath : null;
             const nextPinned = (parsed.pinned ?? []).filter((p) => nextFiles[p] !== undefined);
             const nextDirty = (parsed.dirtyPaths ?? []).filter((p) => nextFiles[p] !== undefined);
+            const nextRecent = (parsed.recentPaths ?? nextTabs).filter((p) => nextFiles[p] !== undefined);
             set({
               name: parsed.name || DEMO_WORKSPACE_NAME,
               files: nextFiles,
               openTabs: nextTabs,
+              recentPaths: nextRecent.length ? nextRecent : nextTabs,
               activePath: nextActive,
               previewPath: nextPreview,
               pinned: nextPinned,
@@ -283,6 +298,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         name: DEMO_WORKSPACE_NAME,
         files: { ...DEMO_FILES },
         openTabs: ["src/store.ts", "src/index.ts"],
+        recentPaths: ["src/store.ts", "src/index.ts"],
         activePath: "src/store.ts",
         previewPath: null,
         pinned: [],
@@ -309,6 +325,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         name,
         files: nextFiles,
         openTabs: [preferred],
+        recentPaths: [preferred],
         activePath: preferred,
         previewPath: null,
         pinned: [],
@@ -334,34 +351,42 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     openFile: (path) => {
-      const { files, openTabs, activePath, pinned, previewPath } = get();
+      const { files, openTabs, activePath, pinned, previewPath, recentPaths } = get();
       if (files[path] === undefined) return;
       const nextPreview = previewPath === path ? null : previewPath;
       const tabs = orderTabs(openTabs.includes(path) ? openTabs : [...openTabs, path], pinned);
-      if (activePath === path && openTabs.includes(path) && previewPath !== path) return;
-      set({ openTabs: tabs, activePath: path, previewPath: nextPreview });
+      const recent = remember(recentPaths, path);
+      if (activePath === path && openTabs.includes(path) && previewPath !== path) {
+        set({ recentPaths: recent });
+        schedulePersist();
+        return;
+      }
+      set({ openTabs: tabs, activePath: path, previewPath: nextPreview, recentPaths: recent });
       schedulePersist();
     },
 
     openPreview: (path) => {
-      const { files, openTabs, activePath, pinned, previewPath } = get();
+      const { files, openTabs, activePath, pinned, previewPath, recentPaths } = get();
       if (files[path] === undefined) return;
+      const recent = remember(recentPaths, path);
       if (openTabs.includes(path) && previewPath !== path) {
-        if (activePath === path) return;
-        set({ activePath: path });
+        if (activePath === path) {
+          set({ recentPaths: recent });
+          schedulePersist();
+          return;
+        }
+        set({ activePath: path, recentPaths: recent });
         schedulePersist();
         return;
       }
       if (previewPath === path) {
-        if (activePath !== path) {
-          set({ activePath: path });
-          schedulePersist();
-        }
+        set({ activePath: path, recentPaths: recent });
+        schedulePersist();
         return;
       }
       const withoutOld = openTabs.filter((p) => p !== previewPath);
       const tabs = orderTabs(withoutOld.includes(path) ? withoutOld : [...withoutOld, path], pinned);
-      set({ openTabs: tabs, activePath: path, previewPath: path });
+      set({ openTabs: tabs, activePath: path, previewPath: path, recentPaths: recent });
       schedulePersist();
     },
 
@@ -375,7 +400,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     setActive: (path) => {
-      set({ activePath: path });
+      set({ activePath: path, recentPaths: remember(get().recentPaths, path) });
       schedulePersist();
     },
 
@@ -468,6 +493,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       set({ agentRunning: running, runningMode: running ? (mode ?? get().runningMode) : null }),
 
     applyEdit: (edit) => {
+      if (edit.notes?.length) return;
       const message = get().messages.find((m) => m.edits?.some((e) => e.id === edit.id));
       if (message) ensureCheckpointForMessage(message.id);
       applyOne(edit);
@@ -485,12 +511,65 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     applyAllPending: () => {
-      const pendingByMessage = get().messages.filter((m) => m.edits?.some((e) => e.status === "pending"));
-      for (const message of pendingByMessage) ensureCheckpointForMessage(message.id);
       const pending = get()
         .messages.flatMap((m) => m.edits ?? [])
         .filter((e) => e.status === "pending");
+      if (pending.some((e) => (e.notes?.length ?? 0) > 0)) return;
+      const pendingByMessage = get().messages.filter((m) => m.edits?.some((e) => e.status === "pending"));
+      for (const message of pendingByMessage) ensureCheckpointForMessage(message.id);
       for (const edit of pending) applyOne(edit);
+      schedulePersist();
+    },
+
+    rejectAllPending: () => {
+      set({
+        messages: get().messages.map((m) => ({
+          ...m,
+          edits: m.edits?.map((e) => (e.status === "pending" ? { ...e, status: "rejected" as const } : e)),
+        })),
+      });
+      schedulePersist();
+    },
+
+    dropHunkAt: (editId, line) => {
+      const edit = get()
+        .messages.flatMap((m) => m.edits ?? [])
+        .find((e) => e.id === editId && e.status === "pending");
+      if (!edit) return;
+      const anchors = hunkAnchorLines(edit);
+      const index = hunkIndexAt(anchors, line);
+      const hunks = hunksFromDiff(edit.oldText, edit.newText);
+      const hunk = hunks[index];
+      if (!hunk) return;
+      if (hunks.length <= 1) {
+        get().rejectEdit(editId);
+        return;
+      }
+      const nextText = dropHunk(edit.oldText, edit.newText, index);
+      if (nextText === edit.oldText) {
+        get().rejectEdit(editId);
+        return;
+      }
+      const dropped = new Set(hunkLines(edit.oldText, hunk).map((text) => text.slice(0, 80)));
+      const notes = (edit.notes ?? []).filter((note) => !dropped.has(note.excerpt));
+      set({
+        messages: get().messages.map((m) => ({
+          ...m,
+          edits: m.edits?.map((e) => (e.id === editId ? { ...e, newText: nextText, notes } : e)),
+        })),
+      });
+      schedulePersist();
+    },
+
+    clearPendingNotes: (editId) => {
+      set({
+        messages: get().messages.map((m) => ({
+          ...m,
+          edits: m.edits?.map((e) =>
+            e.status === "pending" && (!editId || e.id === editId) ? { ...e, notes: [] } : e,
+          ),
+        })),
+      });
       schedulePersist();
     },
 

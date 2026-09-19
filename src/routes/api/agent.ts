@@ -80,16 +80,26 @@ export const Route = createFileRoute("/api/agent")({
                   return;
                 }
                 const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
-                const { result, turns } = await runComposerStreaming(
+                const { result, bills } = await runComposerStreaming(
                   input,
-                  { provider: resolved.provider, apiKey: resolved.apiKey },
+                  { provider: resolved.provider, apiKey: resolved.apiKey, hosted: resolved.hosted, cents: resolved.cents },
                   emit,
                   request.signal,
                   (n) => canAffordRuns(userId, resolved.source, n),
+                  async (source) => {
+                    const extra = await resolveModel(userId, source ?? resolved.source);
+                    if (!extra.ok) throw new Error(extra.error);
+                    return {
+                      provider: extra.provider,
+                      apiKey: extra.apiKey,
+                      hosted: extra.hosted,
+                      cents: extra.cents,
+                    };
+                  },
                 );
                 if (result.ok) {
-                  for (let i = 0; i < turns; i += 1) {
-                    await recordAgentRun(userId, resolved.hosted, resolved.cents);
+                  for (const bill of bills) {
+                    await recordAgentRun(userId, bill.hosted, bill.cents);
                   }
                 }
               }

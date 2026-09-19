@@ -42,5 +42,16 @@ test("resolveAgentTask shows the live step while running", () => {
     messages: [planMsg({ traces: [{ id: "t", name: "grep", args: {}, resultPreview: "", ms: 4 }] })],
   });
   assert.equal(task.kind, "running");
+  assert.equal(task.label, "Planning");
   assert.match(task.detail, /Fix off-by-one/);
+});
+
+test("resolveAgentTask labels Building from live status", () => {
+  const task = resolveAgentTask({
+    running: true,
+    indexing: false,
+    preview: false,
+    messages: [planMsg({ status: "Building…", awaitingBuild: false })],
+  });
+  assert.equal(task.label, "Building");
 });

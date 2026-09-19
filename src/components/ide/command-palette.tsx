@@ -8,6 +8,7 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { abortAgent } from "@/lib/agent/run";
+import { parseGoto, resolveGotoPath } from "@/lib/editor/goto";
 import { fuzzyMatch } from "@/lib/utils";
 
 export function CommandPalette() {
@@ -18,10 +19,13 @@ export function CommandPalette() {
   const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
   const setDesignOpen = useIdeUi((s) => s.setDesignOpen);
   const designOpen = useIdeUi((s) => s.designOpen);
+  const theme = useIdeUi((s) => s.theme);
+  const density = useIdeUi((s) => s.density);
   const debug = useIdeUi((s) => s.debug);
   const setDebug = useIdeUi((s) => s.setDebug);
   const files = useWorkspace((s) => s.files);
   const openFile = useWorkspace((s) => s.openFile);
+  const activePath = useWorkspace((s) => s.activePath);
   const loadDemo = useWorkspace((s) => s.loadDemo);
   const reindex = useWorkspace((s) => s.reindex);
   const checkpoints = useWorkspace((s) => s.checkpoints);
@@ -36,6 +40,9 @@ export function CommandPalette() {
     () => Object.keys(files).filter((p) => fuzzyMatch(query, p)),
     [files, query],
   );
+  const fileList = useMemo(() => Object.keys(files), [files]);
+  const goto = parseGoto(query);
+  const gotoPath = goto ? resolveGotoPath(fileList, goto.path, activePath) : null;
 
   if (!open) return null;
 
@@ -67,6 +74,25 @@ export function CommandPalette() {
         </div>
         <Command.List className="aperture-scroll max-h-80 overflow-y-auto p-2 max-md:max-h-[min(70dvh,28rem)]">
           <Command.Empty className="px-3 py-6 text-center text-sm text-muted">No matches</Command.Empty>
+          {goto && gotoPath && (
+            <Command.Group heading="Go to" className="px-1 pb-2 text-[11px] text-subtle">
+              <Command.Item
+                value={`goto:${gotoPath}:${goto.line}`}
+                onSelect={() => {
+                  openFile(gotoPath);
+                  useIdeUi.getState().setReveal({ path: gotoPath, line: goto.line });
+                  setMobilePane("editor");
+                  close();
+                }}
+                className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg max-md:min-h-11"
+              >
+                <Search className="size-3.5 text-subtle" />
+                <span>
+                  {gotoPath}:{goto.line}
+                </span>
+              </Command.Item>
+            </Command.Group>
+          )}
           <Command.Group heading="Files" className="px-1 pb-2 text-[11px] text-subtle">
             {paths.slice(0, 12).map((path) => (
               <Command.Item
@@ -87,6 +113,17 @@ export function CommandPalette() {
           <Command.Group heading="Workspace" className="px-1 text-[11px] text-subtle">
             <Command.Item
               onSelect={() => {
+                useIdeUi.getState().requestFind();
+                setMobilePane("editor");
+                close();
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <Search className="size-3.5 text-subtle" />
+              Find in file
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
                 setDesignOpen(!designOpen);
                 setMobilePane("editor");
                 close();
@@ -98,13 +135,23 @@ export function CommandPalette() {
             </Command.Item>
             <Command.Item
               onSelect={() => {
+                useIdeUi.getState().setTheme(theme === "claude" ? "cursor" : "claude");
                 close();
-                window.location.assign("/theme.html");
               }}
-              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+              className="cmdk-item flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Palette className="size-3.5 text-subtle" />
-              Editor theme
+              {theme === "claude" ? "Theme: Cursor" : "Theme: Claude"}
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                useIdeUi.getState().setDensity(density === "compact" ? "comfortable" : "compact");
+                close();
+              }}
+              className="cmdk-item flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <Palette className="size-3.5 text-subtle" />
+              Density: {density === "compact" ? "Comfortable" : "Compact"}
             </Command.Item>
             <Command.Item
               onSelect={() => {

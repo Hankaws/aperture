@@ -64,7 +64,11 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         </span>
         {dirty > 0 && <span className="hidden shrink-0 text-fg sm:inline">{dirty} unsaved</span>}
         {staged > 0 && (
-          <button type="button" className="shrink-0 text-ok hover:text-fg" onClick={openComposer}>
+          <button
+            type="button"
+            className="shrink-0 text-ok hover:text-fg"
+            onClick={() => useIdeUi.setState({ chatOpen: true, mobilePane: "editor" })}
+          >
             {staged} {staged === 1 ? "diff" : "diffs"}
           </button>
         )}
@@ -87,6 +91,9 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
       <div className="flex items-center gap-3">
         {line != null && <span className="hidden tabular-nums md:inline">Line {line}</span>}
         {lang && <span className="hidden md:inline">{lang}</span>}
+        <span className="hidden shrink-0 text-subtle md:inline" title="Agents wait for Build it and Apply. Nothing runs unattended.">
+          Manual
+        </span>
         <Link
           to={aiLabel === "Sign in" ? "/login" : "/settings"}
           search={aiLabel === "Sign in" ? { next: "/app" } : { tab: "models" }}

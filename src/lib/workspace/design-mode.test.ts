@@ -7,8 +7,10 @@ import {
   guessSource,
   hotReloadStyles,
   htmlFiles,
+  isDesignPayload,
   pickHtmlEntry,
   previewMarkupKey,
+  sanitizePreviewHtml,
   type DesignCapture,
 } from "./design-mode.ts";
 
@@ -32,6 +34,43 @@ test("assembleHtmlPreview inlines css and injects picker", () => {
   assert.match(html, /\.cta \{ color: red; \}/);
   assert.match(html, /aperture-design-pick/);
   assert.doesNotMatch(html, /<link rel="stylesheet" href="preview.css">/);
+});
+
+test("sanitizePreviewHtml strips scripts and handlers", () => {
+  const dirty = `<p onclick="steal()">x</p><script>alert(1)</script><a href="javascript:alert(2)">y</a>`;
+  const clean = sanitizePreviewHtml(dirty);
+  assert.doesNotMatch(clean, /<script/i);
+  assert.doesNotMatch(clean, /onclick/i);
+  assert.doesNotMatch(clean, /javascript:/i);
+  assert.match(clean, /<p>x<\/p>/);
+});
+
+test("assembleHtmlPreview does not keep page scripts", () => {
+  const html = assembleHtmlPreview(
+    { "evil.html": `<body><button>Go</button><script>parent.postMessage({type:'aperture-design-pick'},'*')</script></body>` },
+    "evil.html",
+  );
+  assert.equal((html.match(/<script/gi) ?? []).length, 1);
+  assert.match(html, /aperture-design-pick/);
+  assert.doesNotMatch(html, /parent\.postMessage\(\{type:'aperture-design-pick'\}/);
+});
+
+test("isDesignPayload rejects junk", () => {
+  assert.equal(isDesignPayload(null), false);
+  assert.equal(isDesignPayload({ selector: "a" }), false);
+  assert.equal(
+    isDesignPayload({
+      selector: "button.cta",
+      tag: "button",
+      text: "Go",
+      html: "<button>",
+      neighborhood: "",
+      css: "color: red",
+      bounds: { x: 0, y: 0, w: 8, h: 8 },
+      screenshot: null,
+    }),
+    true,
+  );
 });
 
 test("guessSource finds class in css", () => {

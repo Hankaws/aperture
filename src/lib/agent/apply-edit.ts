@@ -95,6 +95,34 @@ export function hunksFromDiff(oldText: string, newText: string): DiffHunk[] {
   return hunks;
 }
 
+function applyHunk(lines: string[], hunk: DiffHunk): string[] {
+  const next = [...lines];
+  if (hunk.deleted.length) {
+    const start = hunk.deleted[0]! - 1;
+    next.splice(start, hunk.deleted.length, ...hunk.added);
+  } else {
+    next.splice(hunk.insertAfter, 0, ...hunk.added);
+  }
+  return next;
+}
+
+export function hunkLines(oldText: string, hunk: DiffHunk): string[] {
+  const old = oldText.split("\n");
+  return [...hunk.deleted.map((n) => old[n - 1] ?? ""), ...hunk.added];
+}
+
+/** Rebuild newText without hunk `index`. Empty string means the edit is fully reverted. */
+export function dropHunk(oldText: string, newText: string, index: number): string {
+  const hunks = hunksFromDiff(oldText, newText);
+  if (index < 0 || index >= hunks.length) return newText;
+  let lines = oldText.split("\n");
+  for (let i = hunks.length - 1; i >= 0; i -= 1) {
+    if (i === index) continue;
+    lines = applyHunk(lines, hunks[i]!);
+  }
+  return lines.join("\n");
+}
+
 export function diffStats(oldText: string, newText: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;

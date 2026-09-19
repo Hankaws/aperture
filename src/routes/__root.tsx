@@ -47,6 +47,12 @@ export const Route = createRootRoute({
     <html lang="en" className="antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("aperture-theme");if(t)document.documentElement.setAttribute("data-theme",t);var d=localStorage.getItem("aperture-density");if(d)document.documentElement.setAttribute("data-density",d);}catch(e){}',
+          }}
+        />
       </head>
       <body className="bg-bg text-fg">
         <PreviewHostBridge />

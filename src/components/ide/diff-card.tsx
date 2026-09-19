@@ -71,7 +71,13 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
             <Button variant="ghost" size="icon-sm" aria-label="Reject edit" onClick={() => rejectEdit(edit.id)}>
               <X className="size-3.5" />
             </Button>
-            <Button size="sm" className="h-7 px-2.5" onClick={() => applyEdit(edit)}>
+            <Button
+              size="sm"
+              className="h-7 px-2.5"
+              disabled={notes.length > 0}
+              title={notes.length > 0 ? "Send or dismiss notes first" : undefined}
+              onClick={() => applyEdit(edit)}
+            >
               <Check className="size-3.5" />
               Apply
             </Button>

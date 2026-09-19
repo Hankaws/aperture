@@ -134,8 +134,46 @@ function resolveRel(from: string, href: string): string | null {
   return out.join("/");
 }
 
+export function sanitizePreviewHtml(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<script\b[^>]*\/?>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<(object|embed|applet|form)\b[\s\S]*?<\/\1>/gi, "")
+    .replace(/<base\b[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*http-equiv\s*=\s*['"]?refresh[^>]*>/gi, "");
+}
+
+export function isDesignPayload(value: unknown): value is Omit<DesignCapture, "id" | "path" | "source" | "note"> {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  const bounds = o.bounds as Record<string, unknown> | undefined;
+  return (
+    typeof o.selector === "string" &&
+    o.selector.length <= 240 &&
+    typeof o.tag === "string" &&
+    o.tag.length <= 40 &&
+    typeof o.text === "string" &&
+    o.text.length <= 240 &&
+    typeof o.html === "string" &&
+    o.html.length <= 8000 &&
+    typeof o.neighborhood === "string" &&
+    o.neighborhood.length <= 8000 &&
+    typeof o.css === "string" &&
+    o.css.length <= 4000 &&
+    Boolean(bounds) &&
+    typeof bounds!.x === "number" &&
+    typeof bounds!.y === "number" &&
+    typeof bounds!.w === "number" &&
+    typeof bounds!.h === "number" &&
+    (o.screenshot === null || typeof o.screenshot === "string")
+  );
+}
+
 export function assembleHtmlPreview(files: Record<string, string>, entry: string): string {
-  let html = files[entry] ?? "";
+  let html = sanitizePreviewHtml(files[entry] ?? "");
   if (!html.trim()) html = STARTER_PREVIEW_HTML;
   html = html.replace(/<link\b[^>]*>/gi, (tag) => {
     const href = /href\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];

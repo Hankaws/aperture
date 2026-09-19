@@ -14,23 +14,42 @@ function tabIcon(path: string) {
 
 export function PreviewToggle({ className }: { className?: string }) {
   const open = useIdeUi((s) => s.designOpen);
+  const codePeek = useIdeUi((s) => s.codePeek);
   const setOpen = useIdeUi((s) => s.setDesignOpen);
+  const setCodePeek = useIdeUi((s) => s.setCodePeek);
 
   return (
-    <button
-      type="button"
-      onClick={() => setOpen(!open)}
-      aria-pressed={open}
-      aria-label={open ? "Close preview" : "Open preview"}
-      className={cn(
-        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium md:h-7 md:px-2.5 md:text-[12px]",
-        open ? "bg-accent text-bg" : "border border-border bg-elevated text-fg hover:bg-list-hover",
-        className,
+    <div className="flex items-center gap-1">
+      {open && (
+        <button
+          type="button"
+          onClick={() => setCodePeek(!codePeek)}
+          aria-pressed={codePeek}
+          aria-label={codePeek ? "Hide code" : "Show code beside preview"}
+          className={cn(
+            "hidden h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium md:inline-flex",
+            codePeek ? "bg-elevated text-fg" : "text-muted hover:bg-list-hover hover:text-fg",
+          )}
+        >
+          <FileCode className="size-3.5" strokeWidth={2} />
+          Code
+        </button>
       )}
-    >
-      <Eye className="size-3.5" strokeWidth={2} />
-      Preview
-    </button>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-pressed={open}
+        aria-label={open ? "Close preview" : "Open preview"}
+        className={cn(
+          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium md:h-7 md:px-2.5 md:text-[12px]",
+          open ? "bg-accent text-bg" : "border border-border bg-elevated text-fg hover:bg-list-hover",
+          className,
+        )}
+      >
+        <Eye className="size-3.5" strokeWidth={2} />
+        Preview
+      </button>
+    </div>
   );
 }
 
@@ -84,7 +103,7 @@ export function TabBar() {
                 >
                   {isPinned && <Pin className="size-3 shrink-0 text-subtle" strokeWidth={1.8} />}
                   <Icon className="size-3 shrink-0 text-subtle" strokeWidth={1.6} />
-                  <span className={cn("truncate", active && "font-medium", preview && "italic text-muted")}>
+                  <span className={cn("truncate", active && "font-medium", preview && "tab-preview")}>
                     {basename(path)}
                   </span>
                   {staged && <span className="size-1.5 shrink-0 rounded-full bg-ok" aria-label="Staged change" />}

@@ -1,6 +1,6 @@
 import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
-import { previewNotesForEdit } from "@/lib/workspace/preview-check";
+import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { safeRelPath } from "@/lib/security/redact";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
@@ -282,7 +282,10 @@ export function executeTool(
     if (notes.length) edit.notes = notes;
     ctx.edits.push(edit);
     if (notes.length) {
-      return `Edit staged for ${path}, but preview check failed: ${notes.map((n) => n.text.replace("Preview check: ", "")).join("; ")}. Fix before the user can Apply.`;
+      // Notes arrive label-prefixed ("Syntax check: …") for the diff card; the
+      // agent already knows which file it edited, so report just the problem.
+      const problems = notes.map((n) => n.text.replace(/^[^:]+ check: /, "")).join("; ");
+      return `Edit staged for ${path}, but ${checkLabel(path).toLowerCase()} failed: ${problems}. Fix before the user can Apply.`;
     }
     return `Edit staged for ${path}. The user must accept it in the UI.`;
   }

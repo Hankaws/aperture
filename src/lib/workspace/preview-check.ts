@@ -1,4 +1,5 @@
 import type { DiffNote, ProposedEdit } from "./types";
+import { isJsonPath, isScriptPath, jsonIssues, scriptIssues } from "./syntax-check.ts";
 
 const VOID = new Set([
   "area",
@@ -19,6 +20,24 @@ const VOID = new Set([
 
 export function isPreviewPath(path: string): boolean {
   return /\.(html?|css)$/i.test(path);
+}
+
+/**
+ * Every path a staged edit can be checked against.
+ *
+ * Wider than `isPreviewPath`, which stays narrow because it decides where a
+ * *runtime* error from the preview iframe belongs — those come from the
+ * rendered document, not from a module the preview never loaded.
+ */
+export function isCheckablePath(path: string): boolean {
+  return isPreviewPath(path) || isScriptPath(path) || isJsonPath(path);
+}
+
+/** What to call the check in a note, so a parse error does not read as markup. */
+export function checkLabel(path: string): string {
+  if (isPreviewPath(path)) return "Preview check";
+  if (isJsonPath(path)) return "JSON check";
+  return "Syntax check";
 }
 
 export function htmlIssues(html: string): string[] {
@@ -70,6 +89,8 @@ export function cssIssues(css: string): string[] {
 export function issuesForText(path: string, text: string): string[] {
   if (/\.html?$/i.test(path)) return htmlIssues(text);
   if (/\.css$/i.test(path)) return cssIssues(text);
+  if (isJsonPath(path)) return jsonIssues(text);
+  if (isScriptPath(path)) return scriptIssues(path, text);
   return [];
 }
 
@@ -86,13 +107,14 @@ export function previewIssues(
 ): Array<{ path: string; issues: string[] }> {
   const snapshot = mergeEdits(files, edits);
   const out: Array<{ path: string; issues: string[] }> = [];
-  const paths = new Set(edits.filter((e) => isPreviewPath(e.path)).map((e) => e.path));
+  const paths = new Set(edits.filter((e) => isCheckablePath(e.path)).map((e) => e.path));
   for (const path of paths) {
     const issues = issuesForText(path, snapshot[path] ?? "");
     if (issues.length) out.push({ path, issues });
   }
-  if (liveErrors.length && paths.size) {
-    const htmlPath = [...paths].find((p) => /\.html?$/i.test(p)) ?? [...paths][0]!;
+  const previewPaths = [...paths].filter(isPreviewPath);
+  if (liveErrors.length && previewPaths.length) {
+    const htmlPath = previewPaths.find((p) => /\.html?$/i.test(p)) ?? previewPaths[0]!;
     const row = out.find((r) => r.path === htmlPath);
     const extra = liveErrors.slice(0, 4);
     if (row) row.issues.push(...extra);
@@ -102,11 +124,12 @@ export function previewIssues(
 }
 
 export function notesFromPreviewIssues(path: string, issues: string[]): DiffNote[] {
+  const label = checkLabel(path);
   return issues.slice(0, 4).map((text, i) => ({
     id: `preview_${i}_${path}`,
     excerpt: "",
     type: "eq" as const,
-    text: `Preview check: ${text}`,
+    text: `${label}: ${text}`,
   }));
 }
 
@@ -115,7 +138,7 @@ export function previewNotesForEdit(
   files: Record<string, string>,
   liveErrors: string[] = [],
 ): DiffNote[] {
-  if (!isPreviewPath(edit.path)) return [];
+  if (!isCheckablePath(edit.path)) return [];
   const rows = previewIssues(files, [edit], liveErrors);
   const hit = rows.find((r) => r.path === edit.path) ?? rows[0];
   if (!hit) return [];

@@ -1,5 +1,6 @@
 import type { DiffNote, ProposedEdit } from "./types";
 import { isJsonPath, isScriptPath, jsonIssues, scriptIssues } from "./syntax-check.ts";
+import { importIssues } from "./module-graph.ts";
 
 const VOID = new Set([
   "area",
@@ -110,6 +111,9 @@ export function previewIssues(
   const paths = new Set(edits.filter((e) => isCheckablePath(e.path)).map((e) => e.path));
   for (const path of paths) {
     const issues = issuesForText(path, snapshot[path] ?? "");
+    // Only worth resolving imports once the file itself parses: a broken parse
+    // yields a partial import list, and reporting both at once buries the cause.
+    if (issues.length === 0 && isScriptPath(path)) issues.push(...importIssues(path, snapshot));
     if (issues.length) out.push({ path, issues });
   }
   const previewPaths = [...paths].filter(isPreviewPath);

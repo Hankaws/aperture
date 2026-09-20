@@ -120,3 +120,89 @@ test("formatDesignCaptures includes intent and neighborhood", () => {
   assert.match(text, /neighborhood:/);
   assert.match(text, /<button class="cta">Go<\/button>/);
 });
+
+test("scripts are stripped by default, exactly as before", () => {
+  const files = {
+    "index.html": '<html><body><h1>hi</h1><script src="./app.js"></script></body></html>',
+    "app.js": "console.log('ran');",
+  };
+  const out = assembleHtmlPreview(files, "index.html");
+  assert.doesNotMatch(out, /console\.log\('ran'\)/);
+  assert.doesNotMatch(out, /app\.js/);
+});
+
+test("with scripts on, a workspace script is inlined", () => {
+  const files = {
+    "index.html": '<html><body><script src="./app.js"></script></body></html>',
+    "app.js": "window.ran = true;",
+  };
+  const out = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.match(out, /window\.ran = true;/);
+  assert.match(out, /data-from="app\.js"/);
+  // The src is consumed by the inline body, not left to fetch.
+  assert.doesNotMatch(out, /src="\.\/app\.js"/);
+});
+
+test("with scripts on, an inline script survives", () => {
+  const files = { "index.html": "<html><body><script>window.x = 1;</script></body></html>" };
+  const out = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.match(out, /window\.x = 1;/);
+});
+
+test("a remote script is dropped even with scripts on", () => {
+  const files = {
+    "index.html": '<html><body><script src="https://cdn.example.com/x.js"></script></body></html>',
+  };
+  const out = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.doesNotMatch(out, /cdn\.example\.com/);
+});
+
+test("a module with relative imports is not inlined", () => {
+  // Inlined, its `./util.js` would resolve against about:srcdoc and fail —
+  // a module-resolution error that says nothing about the user's code.
+  const files = {
+    "index.html": '<html><body><script type="module" src="./main.js"></script></body></html>',
+    "main.js": 'import { u } from "./util.js";\nu();',
+    "util.js": "export function u() {}",
+  };
+  const out = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.doesNotMatch(out, /import \{ u \}/);
+});
+
+test("a module without relative imports is inlined", () => {
+  const files = {
+    "index.html": '<html><body><script type="module" src="./main.js"></script></body></html>',
+    "main.js": "document.title = 'ok';",
+  };
+  const out = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.match(out, /document\.title = 'ok';/);
+});
+
+test("embedding and navigation stay blocked whether scripts run or not", () => {
+  const files = {
+    "index.html":
+      '<html><body><iframe src="x"></iframe><base href="/evil/"><object data="x"></object>' +
+      '<meta http-equiv="refresh" content="0"><form action="x"></form></body></html>',
+  };
+  for (const runScripts of [false, true]) {
+    const out = assembleHtmlPreview(files, "index.html", { runScripts });
+    assert.doesNotMatch(out, /<iframe/i, `iframe leaked (runScripts=${runScripts})`);
+    assert.doesNotMatch(out, /<base/i, `base leaked (runScripts=${runScripts})`);
+    assert.doesNotMatch(out, /<object/i, `object leaked (runScripts=${runScripts})`);
+    assert.doesNotMatch(out, /http-equiv/i, `meta refresh leaked (runScripts=${runScripts})`);
+    assert.doesNotMatch(out, /<form/i, `form leaked (runScripts=${runScripts})`);
+  }
+});
+
+test("inline handlers and javascript: URLs follow the switch", () => {
+  const files = {
+    "index.html": '<html><body><a href="javascript:void(0)" onclick="go()">x</a></body></html>',
+  };
+  const off = assembleHtmlPreview(files, "index.html");
+  assert.doesNotMatch(off, /onclick/i);
+  assert.doesNotMatch(off, /javascript:/i);
+  // With scripts on they are the same capability as a <script> block, so
+  // stripping them would only be theatre.
+  const on = assembleHtmlPreview(files, "index.html", { runScripts: true });
+  assert.match(on, /onclick/i);
+});

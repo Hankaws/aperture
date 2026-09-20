@@ -18,6 +18,16 @@ function readCrew(): string[] {
   }
 }
 
+const RUN_SCRIPTS_KEY = "aperture-run-preview-scripts";
+
+function readRunScripts(): boolean {
+  try {
+    return window.localStorage.getItem(RUN_SCRIPTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function persistCrew(ids: string[]) {
   if (typeof window === "undefined") return;
   try {
@@ -43,6 +53,7 @@ type IdeUiState = {
   codePeek: boolean;
   captures: DesignCapture[];
   previewErrors: string[];
+  runPreviewScripts: boolean;
   mobilePane: MobilePane;
   theme: EditorTheme;
   density: Density;
@@ -65,6 +76,7 @@ type IdeUiState = {
   setCodePeek: (open: boolean) => void;
   addCapture: (capture: DesignCapture) => void;
   setPreviewErrors: (errors: string[]) => void;
+  setRunPreviewScripts: (on: boolean) => void;
   updateCapture: (id: string, patch: Partial<DesignCapture>) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
@@ -96,6 +108,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   codePeek: false,
   captures: [],
   previewErrors: [],
+  runPreviewScripts: false,
   mobilePane: "editor",
   theme: "cursor",
   density: "compact",
@@ -113,6 +126,18 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setGithubOpen: (open) => set({ githubOpen: open }),
   setInlineOpen: (open) => set({ inlineOpen: open }),
   setHistoryOpen: (open) => set({ historyOpen: open }),
+  setRunPreviewScripts: (on) => {
+    // Off by default and remembered per browser: turning it on is a deliberate
+    // act, so it should not silently reset, nor silently follow a shared link.
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(RUN_SCRIPTS_KEY, on ? "1" : "0");
+      } catch {
+        // quota
+      }
+    }
+    set({ runPreviewScripts: on, previewErrors: [] });
+  },
   setDebug: (on) => {
     if (typeof window !== "undefined") {
       try {
@@ -197,5 +222,10 @@ export function hydrateAppearance() {
   const theme = readTheme();
   const density = readDensity();
   applyAppearance(theme, density);
-  useIdeUi.setState({ theme, density, crewIds: readCrew() });
+  useIdeUi.setState({
+    theme,
+    density,
+    crewIds: readCrew(),
+    runPreviewScripts: readRunScripts(),
+  });
 }

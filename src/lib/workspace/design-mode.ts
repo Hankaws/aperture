@@ -1,3 +1,5 @@
+import { collectImports } from "./module-graph.ts";
+
 export type DesignCapture = {
   id: string;
   path: string;
@@ -134,12 +136,32 @@ function resolveRel(from: string, href: string): string | null {
   return out.join("/");
 }
 
-export function sanitizePreviewHtml(html: string): string {
-  return html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/<script\b[^>]*\/?>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/javascript:/gi, "")
+/**
+ * Strip what the preview must never run or navigate to.
+ *
+ * `keepScripts` is the opt-in half of Design Mode's "Run scripts" switch. It
+ * relaxes exactly one thing — script execution — and does so uniformly, since
+ * an `onclick` attribute and a `<script>` block are the same capability. The
+ * embedding and navigation blocks stay on either way: they are what keeps the
+ * picker's view of the document honest, and `<base>` would silently repoint
+ * every relative URL.
+ *
+ * The frame itself is the real boundary. It is `sandbox="allow-scripts"`
+ * *without* `allow-same-origin`, so anything running here sits in an opaque
+ * origin with no reach into Aperture's storage, cookies or DOM.
+ */
+export function sanitizePreviewHtml(
+  html: string,
+  options: { keepScripts?: boolean } = {},
+): string {
+  const base = options.keepScripts
+    ? html
+    : html
+        .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+        .replace(/<script\b[^>]*\/?>/gi, "")
+        .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/javascript:/gi, "");
+  return base
     .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "")
     .replace(/<(object|embed|applet|form)\b[\s\S]*?<\/\1>/gi, "")
     .replace(/<base\b[^>]*>/gi, "")
@@ -172,9 +194,44 @@ export function isDesignPayload(value: unknown): value is Omit<DesignCapture, "i
   );
 }
 
-export function assembleHtmlPreview(files: Record<string, string>, entry: string): string {
-  let html = sanitizePreviewHtml(files[entry] ?? "");
+/**
+ * Whether a module can run inlined into the document.
+ *
+ * An inlined `type="module"` resolves its relative imports against
+ * `about:srcdoc`, where they cannot be found. Running it anyway would raise a
+ * module-resolution error that says nothing about the user's code — a false
+ * failure reported to the agent is worse than no signal at all.
+ */
+function moduleCanInline(path: string, source: string): boolean {
+  return !collectImports(path, source).some((ref) => ref.spec.startsWith("."));
+}
+
+function inlineScripts(html: string, files: Record<string, string>, entry: string): string {
+  return html.replace(/<script\b[^>]*>/gi, (tag) => {
+    const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+    if (!src) return tag; // An inline script already carries its own body.
+    const path = resolveRel(entry, src);
+    // A remote script is left for a later, deliberate decision; today it is
+    // dropped rather than fetched, which is what the preview already did.
+    if (!path || files[path] === undefined) return "<script>";
+    const source = files[path]!;
+    if (/\btype\s*=\s*["']module["']/i.test(tag) && !moduleCanInline(path, source)) {
+      return "<script>";
+    }
+    const opened = tag.replace(/\s*\bsrc\s*=\s*["'][^"']*["']/i, "");
+    return `${opened.replace(/>$/, "")} data-from="${path}">\n${source}\n`;
+  });
+}
+
+export function assembleHtmlPreview(
+  files: Record<string, string>,
+  entry: string,
+  options: { runScripts?: boolean } = {},
+): string {
+  const runScripts = options.runScripts === true;
+  let html = sanitizePreviewHtml(files[entry] ?? "", { keepScripts: runScripts });
   if (!html.trim()) html = STARTER_PREVIEW_HTML;
+  if (runScripts) html = inlineScripts(html, files, entry);
   html = html.replace(/<link\b[^>]*>/gi, (tag) => {
     const href = /href\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
     if (!href) return tag;

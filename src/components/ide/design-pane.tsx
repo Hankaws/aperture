@@ -37,7 +37,12 @@ export function DesignPane() {
   const lastHtml = useRef("");
   const pulseTimer = useRef<number>(0);
   const [pulse, setPulse] = useState<string | null>(null);
-  const srcdoc = entry && files[entry] !== undefined ? assembleHtmlPreview(files, entry) : "";
+  const runScripts = useIdeUi((s) => s.runPreviewScripts);
+  const setRunScripts = useIdeUi((s) => s.setRunPreviewScripts);
+  const srcdoc =
+    entry && files[entry] !== undefined
+      ? assembleHtmlPreview(files, entry, { runScripts })
+      : "";
 
   useEffect(() => {
     const next = pickHtmlEntry(files, activePath);
@@ -174,6 +179,24 @@ export function DesignPane() {
         <span className={cn("text-[11px]", pulse ? "text-ok" : "hidden text-subtle sm:inline")}>
           {pulse ? `Hot reload · ${pulse}` : "Click to pin"}
         </span>
+        <button
+          type="button"
+          onClick={() => setRunScripts(!runScripts)}
+          aria-pressed={runScripts}
+          title={
+            runScripts
+              ? "The page's own scripts run in the preview, and their errors are reported. Click to stop running them."
+              : "Run the page's own scripts in the preview, so real runtime errors are reported."
+          }
+          className={cn(
+            "h-6 shrink-0 rounded-md border px-2 text-[11px] font-medium transition-colors",
+            runScripts
+              ? "border-accent/40 bg-accent/10 text-accent"
+              : "border-border bg-bg text-subtle hover:text-fg",
+          )}
+        >
+          {runScripts ? "Scripts on" : "Scripts off"}
+        </button>
       </div>
       <div className="relative min-h-0 flex-1">
         <iframe

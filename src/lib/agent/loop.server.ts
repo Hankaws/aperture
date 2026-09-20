@@ -8,6 +8,9 @@ import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
+import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
+import { compactLoopMessages } from "./compact";
+import { applyStackMemory, formatStackContext } from "./stack";
 import type { ProviderId } from "@/lib/billing/plans";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
@@ -56,6 +59,8 @@ function systemPrompt(
       : "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
     "The user may attach files with @path, @codebase (indexed search), or @repo-map. Treat those as the primary context.",
     "Never repeat API keys, tokens, passwords, private keys, or secret-looking strings. If one appears, write [redacted].",
+    "For UI work, reuse tokens and classes from the UI context. Do not invent a palette.",
+    "The ## Stack section in project rules is auto-maintained. Reuse that runtime, layout, and tokens.",
     mode === "inline"
       ? "Inline mode: return one focused replacement for the selection."
       : mode === "composer"
@@ -189,6 +194,9 @@ function buildContextMessage(
   }
   const autoBlock = formatAutoContext(auto, files);
   if (autoBlock) parts.push(autoBlock);
+  const graph = formatUiGraph(files, input.instruction, input.activePath ?? null);
+  if (graph) parts.push(graph);
+  if (!findRules(files)) parts.push(formatStackContext(files));
   return parts.filter(Boolean).join("\n\n");
 }
 
@@ -206,7 +214,9 @@ export async function runAgentLoopStreaming(
   signal?: AbortSignal,
 ): Promise<AgentResult> {
   const flavor = flavorOf(input);
-  const fileMap = sanitizeFileMap(Object.fromEntries(input.files.map((f) => [f.path, f.content])));
+  const fileMap = applyStackMemory(
+    sanitizeFileMap(Object.fromEntries(input.files.map((f) => [f.path, f.content]))),
+  );
   const mentioned = parseMentions(input.instruction, fileMap);
   const auto = input.focusPaths?.length
     ? input.focusPaths
@@ -215,6 +225,9 @@ export async function runAgentLoopStreaming(
         openTabs: input.openTabs ?? [],
         recentPaths: input.recentPaths ?? [],
         mentioned,
+        extra: isUiTask(input.instruction)
+          ? nearestUiFiles(fileMap, input.instruction, input.activePath ?? null, 3)
+          : [],
       });
   const files = capFiles(
     Object.entries(fileMap).map(([path, content]) => ({ path, content })),
@@ -247,12 +260,12 @@ export async function runAgentLoopStreaming(
 
   const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
   const userCtx = buildContextMessage(input, files, chunks);
-  const messages: ChatMessage[] = [
+  let messages: ChatMessage[] = [
     { role: "system", content: sys },
     { role: "user", content: userCtx },
   ];
 
-  for (const turn of input.history.slice(-8)) {
+  for (const turn of input.history) {
     messages.push({ role: turn.role, content: turn.content });
   }
   messages.push({ role: "user", content: input.instruction });
@@ -284,14 +297,16 @@ export async function runAgentLoopStreaming(
       emit({
         type: "status",
         text:
-          step === 0
+          (step === 0
             ? phase === "plan" && input.mode === "composer"
               ? "Planning…"
               : phase === "build"
                 ? "Building…"
                 : "Reading the index…"
-            : "Continuing…",
+            : "Continuing…") +
+          (step === 0 && input.compacted ? ` · thread memory (${input.compacted})` : ""),
       });
+      messages = compactLoopMessages(messages);
       const completion = await completeStreaming(
         cfg,
         messages,

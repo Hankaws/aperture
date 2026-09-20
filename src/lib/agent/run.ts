@@ -11,6 +11,8 @@ import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 import { parseMentions } from "@/lib/workspace/mentions";
 import { attachNotesToPending, listPendingEdits } from "@/lib/workspace/edits";
 import { autoContextPaths } from "./auto-context";
+import { compactHistory, priorMessages } from "./compact";
+import { isUiTask, nearestUiFiles } from "./ui-graph";
 import type { WorkerRole, WorkerSpec } from "./crew";
 
 function describeError(error: unknown): string {
@@ -66,28 +68,30 @@ export function agentPayload(
   extra?: { phase?: AgentPhase; approvedPlan?: PlanEntry[]; workers?: WorkerSpec[]; role?: WorkerRole; pendingEdits?: ProposedEdit[] },
 ) {
   const state = useWorkspace.getState();
-  const history = state.messages
-    .filter((m) => m.content.trim().length > 0)
-    .slice(-8)
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  state.syncStackMemory();
+  const latest = useWorkspace.getState();
+  const { history, compacted } = compactHistory(priorMessages(latest.messages, instruction));
   const captures = formatDesignCaptures(useIdeUi.getState().captures);
-  const mentioned = parseMentions(instruction, state.files);
+  const mentioned = parseMentions(instruction, latest.files);
   const focusPaths = autoContextPaths({
-    activePath: state.activePath,
-    openTabs: state.openTabs,
-    recentPaths: state.recentPaths,
+    activePath: latest.activePath,
+    openTabs: latest.openTabs,
+    recentPaths: latest.recentPaths,
     mentioned,
-    extra: listPendingEdits(state.messages).map((e) => e.path),
+    extra: [
+      ...listPendingEdits(latest.messages).map((e) => e.path),
+      ...(isUiTask(instruction) ? nearestUiFiles(latest.files, instruction, latest.activePath, 3) : []),
+    ],
   });
   return {
     mode,
     instruction: captures ? `${captures}\n\n${instruction}` : instruction,
     history,
-    files: Object.entries(state.files).map(([path, content]) => ({ path, content })),
-    activePath: state.activePath,
-    selection: state.selection,
-    openTabs: state.openTabs,
-    recentPaths: state.recentPaths,
+    files: Object.entries(latest.files).map(([path, content]) => ({ path, content })),
+    activePath: latest.activePath,
+    selection: latest.selection,
+    openTabs: latest.openTabs,
+    recentPaths: latest.recentPaths,
     focusPaths,
     source: source ?? undefined,
     agentId: agentId ?? null,
@@ -95,8 +99,9 @@ export function agentPayload(
     approvedPlan: extra?.approvedPlan,
     workers: extra?.workers,
     role: extra?.role,
-    pendingEdits: extra?.pendingEdits ?? listPendingEdits(state.messages),
+    pendingEdits: extra?.pendingEdits ?? listPendingEdits(latest.messages),
     debug: useIdeUi.getState().debug,
+    compacted: compacted || undefined,
   };
 }
 

@@ -244,6 +244,11 @@ export function formatDesignCaptures(captures: DesignCapture[]): string {
 }
 
 export const PICKER_SCRIPT = `(() => {
+  function report(msg) {
+    try { parent.postMessage({ type: "aperture-preview-error", message: String(msg).slice(0, 180) }, "*"); } catch (e) {}
+  }
+  window.addEventListener("error", function (e) { report(e.message || e.type); });
+  window.addEventListener("unhandledrejection", function (e) { report(e.reason); });
   document.documentElement.style.cursor = "crosshair";
   const box = document.createElement("div");
   box.setAttribute("data-aperture-picker", "1");

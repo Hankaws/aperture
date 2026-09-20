@@ -35,6 +35,8 @@ export type AgentInput = {
   pendingEdits?: ProposedEdit[];
   /** When true, the done event includes the redacted prompt + response. */
   debug?: boolean;
+  /** How many earlier chat turns were folded into thread memory. */
+  compacted?: number;
 };
 
 export type AgentResult =

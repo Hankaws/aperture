@@ -179,5 +179,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     role: parseWorkerRole(input.role) === "review" ? "review" : undefined,
     pendingEdits: pendingEdits.length ? pendingEdits : undefined,
     debug: input.debug === true,
+    compacted:
+      typeof input.compacted === "number" && Number.isFinite(input.compacted) && input.compacted > 0
+        ? Math.min(200, Math.floor(input.compacted))
+        : undefined,
   };
 }

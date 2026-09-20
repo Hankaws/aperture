@@ -28,10 +28,11 @@ export function isContextSource(path: string): boolean {
   return CONTEXT_SOURCES.some((item) => item.path === path);
 }
 
-export function mentionItems(files: Record<string, string>): MentionItem[] {
+export function mentionItems(files: Record<string, string> | readonly string[]): MentionItem[] {
+  const paths = Array.isArray(files) ? files : Object.keys(files);
   const folders = new Set<string>();
   const items: MentionItem[] = [...CONTEXT_SOURCES];
-  for (const path of Object.keys(files)) {
+  for (const path of paths) {
     items.push({ path, kind: "file", description: "File" });
     const parts = path.split("/");
     let acc = "";

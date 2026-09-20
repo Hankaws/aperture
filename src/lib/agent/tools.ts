@@ -1,5 +1,6 @@
 import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
+import { previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { safeRelPath } from "@/lib/security/redact";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
@@ -269,14 +270,20 @@ export function executeTool(
       return `Edit rejected: ${applied.error}\nNearby:\n${nearbySnippet(current, search)}`;
     }
     ctx.files[path] = applied.next;
-    ctx.edits.push({
+    const edit: ProposedEdit = {
       id: `edit_${ctx.edits.length + 1}_${path}`,
       path,
       oldText: current,
       newText: applied.next,
       description,
       status: "pending",
-    });
+    };
+    const notes = previewNotesForEdit(edit, ctx.files);
+    if (notes.length) edit.notes = notes;
+    ctx.edits.push(edit);
+    if (notes.length) {
+      return `Edit staged for ${path}, but preview check failed: ${notes.map((n) => n.text.replace("Preview check: ", "")).join("; ")}. Fix before the user can Apply.`;
+    }
     return `Edit staged for ${path}. The user must accept it in the UI.`;
   }
 

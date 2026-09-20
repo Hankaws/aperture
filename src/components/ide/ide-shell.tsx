@@ -34,7 +34,7 @@ function useKeyboardInset() {
     if (!vv) return;
     const sync = () => {
       const next = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      setInset(next);
+      setInset((prev) => (prev === next ? prev : next));
     };
     sync();
     vv.addEventListener("resize", sync);
@@ -334,67 +334,55 @@ export function IdeShell() {
       <div className="ide-shell">
         <TitleBar />
 
-        {desktop ? (
-          <div className="ide-workspace">
-            <Group orientation="horizontal" className="h-full min-h-0 min-w-0">
-              {sidebarOpen && (
-                <>
-                  <Panel id="files" defaultSize="16%" minSize="12%" maxSize="28%" className="min-h-0 overflow-hidden">
-                    <FileTree />
-                  </Panel>
-                  <Separator className="w-px bg-border hover:bg-accent/40" />
-                </>
-              )}
-              <Panel id="editor" minSize="32%" className="min-h-0 overflow-hidden">
-                <EditorColumn />
-              </Panel>
-              {chatOpen && (
-                <>
-                  <Separator className="w-px bg-border hover:bg-accent/40" />
-                  <Panel id="agent" defaultSize="26%" minSize="22%" maxSize="40%" className="min-h-0 overflow-hidden">
-                    <AgentPanel composerRef={composerRef} />
-                  </Panel>
-                </>
-              )}
-            </Group>
-          </div>
-        ) : (
-          <div className="ide-mobile" style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}>
-            <div className="relative min-h-0 min-w-0 overflow-hidden">
-              {mobilePane === "files" && <FileTree />}
-              {mobilePane === "editor" && <EditorColumn />}
-              {mobilePane === "agent" && <AgentPanel composerRef={composerRef} />}
-            </div>
-            <nav className="grid grid-cols-3 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
-              {(
-                [
-                  ["files", FolderTree, "Files"],
-                  ["editor", Code2, "Code"],
-                  ["agent", Sparkles, "Composer"],
-                ] as const
-              ).map(([id, Icon, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMobilePane(id)}
-                  className={cn(
-                    "relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px]",
-                    mobilePane === id ? "text-fg" : "text-subtle",
+        <div
+          className="ide-workspace"
+          data-pane={mobilePane}
+          data-files={sidebarOpen ? "on" : "off"}
+          data-agent={chatOpen ? "on" : "off"}
+          style={!desktop && keyboardInset ? { paddingBottom: keyboardInset } : undefined}
+        >
+          <Group orientation="horizontal" className="h-full min-h-0 min-w-0">
+            <Panel id="files" defaultSize="16%" minSize="12%" maxSize="28%" className="min-h-0 overflow-hidden">
+              <FileTree />
+            </Panel>
+            <Separator id="sep-files" className="w-px bg-border hover:bg-accent/40" />
+            <Panel id="editor" minSize="32%" className="min-h-0 overflow-hidden">
+              <EditorColumn />
+            </Panel>
+            <Separator id="sep-agent" className="w-px bg-border hover:bg-accent/40" />
+            <Panel id="agent" defaultSize="26%" minSize="22%" maxSize="40%" className="min-h-0 overflow-hidden">
+              <AgentPanel composerRef={composerRef} />
+            </Panel>
+          </Group>
+          <nav className="ide-dock grid-cols-3 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
+            {(
+              [
+                ["files", FolderTree, "Files"],
+                ["editor", Code2, "Code"],
+                ["agent", Sparkles, "Composer"],
+              ] as const
+            ).map(([id, Icon, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMobilePane(id)}
+                className={cn(
+                  "relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px]",
+                  mobilePane === id ? "text-fg" : "text-subtle",
+                )}
+              >
+                {mobilePane === id && <span className="absolute top-0 h-0.5 w-10 rounded-full bg-accent" />}
+                <span className="relative">
+                  <Icon className="size-5" />
+                  {id === "agent" && composerAlert && mobilePane !== "agent" && (
+                    <span className="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-accent" />
                   )}
-                >
-                  {mobilePane === id && <span className="absolute top-0 h-0.5 w-10 rounded-full bg-accent" />}
-                  <span className="relative">
-                    <Icon className="size-5" />
-                    {id === "agent" && composerAlert && mobilePane !== "agent" && (
-                      <span className="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-accent" />
-                    )}
-                  </span>
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        )}
+                </span>
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
 
         <StatusBar aiLabel={aiLabel} />
       </div>

@@ -156,6 +156,16 @@ function languageExtension(path: string) {
   return [];
 }
 
+function languageKey(path: string) {
+  const lang = languageFromPath(path);
+  return `${lang}:${path.endsWith("x") ? "x" : ""}`;
+}
+
+function pendingKeyOf(edit: { id: string; newText: string; oldText: string; notes?: unknown[] } | null) {
+  if (!edit) return "";
+  return `${edit.id}:${edit.oldText.length}:${edit.newText.length}:${edit.notes?.length ?? 0}`;
+}
+
 const syncAnn = Annotation.define<boolean>();
 
 export function CodePane() {
@@ -176,6 +186,9 @@ export function CodePane() {
   const wrapConf = useRef(new Compartment()).current;
   const scrolledFor = useRef<string | null>(null);
   const jumpedFor = useRef<string | null>(null);
+  const langKeyRef = useRef("");
+  const ghostOnRef = useRef(false);
+  const diffKeyRef = useRef("");
 
   const activePath = useWorkspace((s) => s.activePath);
   const chunks = useWorkspace((s) => s.chunks);
@@ -185,16 +198,17 @@ export function CodePane() {
   const setSelection = useWorkspace((s) => s.setSelection);
   const applyEdit = useWorkspace((s) => s.applyEdit);
   const rejectEdit = useWorkspace((s) => s.rejectEdit);
+  const pendingRef = useRef(pendingEdit);
   const { account } = useAccount();
   const reveal = useIdeUi((s) => s.reveal);
   const findTick = useIdeUi((s) => s.findTick);
   const tabOn = Boolean(account?.tab) && !pendingEdit;
-  pathRef.current = activePath;
   chunksRef.current = chunks;
   writeFileRef.current = writeFile;
   setSelectionRef.current = setSelection;
   applyRef.current = applyEdit;
   rejectRef.current = rejectEdit;
+  pendingRef.current = pendingEdit;
 
   useEffect(() => {
     if (!parentRef.current || viewRef.current) return;
@@ -270,6 +284,7 @@ export function CodePane() {
     viewRef.current = view;
     lastValue.current = value;
     pathRef.current = activePath;
+    langKeyRef.current = languageKey(activePath ?? "");
     return () => {
       view.destroy();
       viewRef.current = null;
@@ -280,6 +295,8 @@ export function CodePane() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    if (ghostOnRef.current === tabOn) return;
+    ghostOnRef.current = tabOn;
     view.dispatch({
       effects: ghostConf.reconfigure(tabOn ? ghostText(() => pathRef.current) : []),
       annotations: syncAnn.of(true),
@@ -296,8 +313,13 @@ export function CodePane() {
       saveSession(prev, { anchor: sel.anchor, head: sel.head, scrollTop: view.scrollDOM.scrollTop });
     }
     pathRef.current = activePath;
+    const nextLang = languageKey(activePath);
+    const langChanged = langKeyRef.current !== nextLang;
+    if (langChanged) langKeyRef.current = nextLang;
     const wrap = languageFromPath(activePath) === "markdown" ? EditorView.lineWrapping : [];
-    const effects = [langConf.reconfigure(languageExtension(activePath)), wrapConf.reconfigure(wrap)];
+    const effects = langChanged
+      ? [langConf.reconfigure(languageExtension(activePath)), wrapConf.reconfigure(wrap)]
+      : [];
     if (value !== lastValue.current) {
       lastValue.current = value;
       const current = view.state.selection.main;
@@ -323,6 +345,7 @@ export function CodePane() {
       }
       return;
     }
+    if (effects.length === 0) return;
     view.dispatch({
       effects,
       annotations: syncAnn.of(true),
@@ -332,6 +355,9 @@ export function CodePane() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    const key = pendingKeyOf(pendingEdit);
+    if (diffKeyRef.current === key) return;
+    diffKeyRef.current = key;
     view.dispatch({
       effects: diffConf.reconfigure(
         pendingDiff(pendingEdit, {
@@ -339,14 +365,26 @@ export function CodePane() {
           reject: (id) => rejectRef.current(id),
           keep: () => jumpReview(1),
           drop: (line) => {
-            if (!pendingEdit) return;
-            useWorkspace.getState().dropHunkAt(pendingEdit.id, line);
+            const edit = pendingRef.current;
+            if (!edit) return;
+            useWorkspace.getState().dropHunkAt(edit.id, line);
             jumpReview(1);
           },
         }),
       ),
       annotations: syncAnn.of(true),
     });
+  }, [pendingEdit]);
+
+  useEffect(() => {
+    if (!pendingEdit) {
+      jumpedFor.current = null;
+      return;
+    }
+    if (jumpedFor.current === pendingEdit.id) return;
+    jumpedFor.current = pendingEdit.id;
+    const ui = useIdeUi.getState();
+    if (ui.mobilePane !== "editor") ui.setMobilePane("editor");
   }, [pendingEdit]);
 
   useEffect(() => {
@@ -397,16 +435,6 @@ export function CodePane() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [pendingEdit, value]);
-
-  useEffect(() => {
-    if (!pendingEdit) {
-      jumpedFor.current = null;
-      return;
-    }
-    if (jumpedFor.current === pendingEdit.id) return;
-    jumpedFor.current = pendingEdit.id;
-    useIdeUi.getState().setMobilePane("editor");
-  }, [pendingEdit]);
 
   useEffect(() => {
     const view = viewRef.current;

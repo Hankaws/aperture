@@ -72,6 +72,10 @@ export function DesignPane() {
     iframe.srcdoc = srcdoc;
   }, [srcdoc, entry]);
 
+  useEffect(() => {
+    useIdeUi.getState().setPreviewErrors([]);
+  }, [srcdoc]);
+
   function flash(kind: string) {
     setPulse(kind);
     window.clearTimeout(pulseTimer.current);
@@ -81,7 +85,20 @@ export function DesignPane() {
   useEffect(() => {
     function onMsg(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; payload?: Omit<DesignCapture, "id" | "path" | "source" | "note"> };
+      const data = event.data as {
+        type?: string;
+        message?: string;
+        payload?: Omit<DesignCapture, "id" | "path" | "source" | "note">;
+      };
+      if (data?.type === "aperture-preview-error") {
+        const line = (data.message ?? "Preview error").trim();
+        if (!line) return;
+        const prev = useIdeUi.getState().previewErrors;
+        if (prev.includes(line)) return;
+        useIdeUi.getState().setPreviewErrors([...prev, line]);
+        if (prev.length === 0) toast.error(line.slice(0, 80));
+        return;
+      }
       if (data?.type !== "aperture-design-pick" || !isDesignPayload(data.payload) || !entry) return;
       const id = `d_${Date.now()}`;
       addCapture({

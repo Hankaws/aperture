@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
@@ -16,6 +16,7 @@ import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { quoteRun, quoteRuns } from "@/lib/billing/cost";
+import type { AccountSnapshot } from "@/lib/billing/api";
 import { billedWorkers } from "@/lib/agent/fanout";
 import { availableSeats, modelSeats, proposeReviewer, proposeWorkers, selectedSeats, type WorkerSpec } from "@/lib/agent/crew";
 import { formatDiffNotes, notesOn } from "@/lib/workspace/diff-notes";
@@ -31,7 +32,8 @@ import {
   type MentionItem,
 } from "@/lib/workspace/mentions";
 import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-local";
-import { DEFAULT_RULES, findRules } from "@/lib/workspace/rules";
+import { DEFAULT_RULES, findRules, RULE_CANDIDATES } from "@/lib/workspace/rules";
+import { formatStackBody, extractStack, mergeStackSection } from "@/lib/agent/stack";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
@@ -39,7 +41,7 @@ import { resolveAgentTask } from "@/lib/workspace/agent-task";
 import { nextAction } from "@/lib/workspace/next-action";
 import type { AgentMode, AgentDebug, ChatMessage, ToolTrace } from "@/lib/workspace/types";
 import type { AgentPhase } from "@/lib/agent/phase";
-import { nextComposerPhase } from "@/lib/agent/phase";
+import { nextComposerPhase, isBuildIntent } from "@/lib/agent/phase";
 import { activeSlash, expandSlash, filterSlash, parseSlash } from "@/lib/agent/slash";
 import { autoContextPaths } from "@/lib/agent/auto-context";
 
@@ -58,9 +60,15 @@ const GENERIC_SUGGESTIONS = [
 ];
 
 export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAreaElement | null> }) {
-  const messages = useWorkspace((s) => s.messages);
+  const chatEmpty = useWorkspace((s) => s.messages.length === 0);
+  const phaseHint = useWorkspace((s) => {
+    const last = [...s.messages].reverse().find((m) => m.role === "assistant");
+    if (last?.awaitingBuild && last.plan?.length) return "awaiting";
+    if (last?.edits?.some((e) => e.status === "pending" || e.status === "applied")) return "edits";
+    return "plan";
+  });
   const agentRunning = useWorkspace((s) => s.agentRunning);
-  const files = useWorkspace((s) => s.files);
+  const fileList = useWorkspace((s) => s.fileList);
   const activePath = useWorkspace((s) => s.activePath);
   const openTabs = useWorkspace((s) => s.openTabs);
   const recentPaths = useWorkspace((s) => s.recentPaths);
@@ -85,10 +93,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const [target, setTarget] = useState<RunTarget>({ kind: "model", source: "hosted" });
   const [dropOn, setDropOn] = useState(false);
   const attachRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const listEndRef = useRef<HTMLDivElement>(null);
-  const stickToBottom = useRef(true);
-  const messageCount = useRef(0);
 
   const jobsOn = Boolean(account && (account.backgroundJobs > 0 || account.acp));
   const { jobs, setJobs, refresh: refreshJobs, liveCount } = useJobs(jobsOn);
@@ -114,7 +118,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       .catch(() => setAgents([]));
   }, [account?.acp]);
 
-  const catalog = useMemo(() => mentionItems(files), [files]);
+  const catalog = useMemo(() => mentionItems(fileList), [fileList]);
   const mention = dismissMention ? null : activeMention(draft, caret);
   const mentionHits = mention ? filterMentions(catalog, mention.query) : [];
   const slash = dismissMention ? null : activeSlash(draft, caret);
@@ -125,7 +129,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     recentPaths,
     mentioned: [],
   });
-  const rules = findRules(files);
+  const rulesPath = RULE_CANDIDATES.find((path) => fileList.includes(path)) ?? null;
   const signedOut = mounted && !isPending && !user;
   const suggestions = name === DEMO_WORKSPACE_NAME ? DEMO_SUGGESTIONS : GENERIC_SUGGESTIONS;
   const source = target.kind === "model" ? target.source : account?.modelSource ?? "hosted";
@@ -136,17 +140,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   useEffect(() => {
     setMentionHi(0);
   }, [mention?.query, mention?.start, slash?.query]);
-
-  const last = messages[messages.length - 1];
-  const streamKey = `${messages.length}:${last?.id ?? ""}:${last?.content.length ?? 0}:${last?.edits?.length ?? 0}:${last?.traces?.length ?? 0}:${agentRunning ? "1" : "0"}`;
-
-  useEffect(() => {
-    const grew = messages.length > messageCount.current;
-    messageCount.current = messages.length;
-    if (grew) stickToBottom.current = true;
-    if (!stickToBottom.current) return;
-    listEndRef.current?.scrollIntoView({ behavior: grew ? "smooth" : "auto", block: "end" });
-  }, [streamKey, messages.length]);
 
   function syncCaret(el: HTMLTextAreaElement) {
     setCaret(el.selectionStart ?? el.value.length);
@@ -414,14 +407,18 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     if (existing) {
       ws.openFile(existing.path);
     } else {
-      ws.createFile(".aperture.md", DEFAULT_RULES);
+      ws.createFile(
+        ".aperture.md",
+        mergeStackSection(DEFAULT_RULES, formatStackBody(extractStack(ws.files, ws.name))),
+      );
     }
     useIdeUi.getState().setMobilePane("editor");
   }
 
   const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !user || blocked || acpBlocked;
-  const autoPhase = nextComposerPhase(messages, draft);
-  const sendPhase: AgentPhase = mode === "composer" ? (phaseLock === "auto" ? autoPhase.phase : phaseLock) : "plan";
+  const autoPhase: AgentPhase =
+    phaseHint === "awaiting" && isBuildIntent(draft) ? "build" : phaseHint === "edits" ? "skip" : "plan";
+  const sendPhase: AgentPhase = mode === "composer" ? (phaseLock === "auto" ? autoPhase : phaseLock) : "plan";
   const sendLabel = mode === "chat" ? "Ask" : sendPhase === "build" ? "Build" : sendPhase === "skip" ? "Iterate" : "Plan";
 
   useEffect(() => {
@@ -431,68 +428,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     useIdeUi.getState().shiftSteer();
     void send(next);
   }, [agentRunning, user, steerQueue[0]]);
-
-  const awaitingMsg = [...messages].reverse().find((m) => m.awaitingBuild && (m.plan?.length ?? 0) > 0);
-  const pendingCount = listPendingEdits(messages).length;
-  const seats = availableSeats(account);
-  const crew = selectedSeats(seats, crewIds);
-  const proposed = awaitingMsg?.plan ? proposeWorkers(awaitingMsg.plan, Object.keys(files), crew) : [];
-  const hint = nextAction({
-    running: agentRunning,
-    awaiting: Boolean(awaitingMsg),
-    pending: pendingCount,
-    workerCount: proposed.length,
-    crewModels: modelSeats(crew).length,
-    keyReady: seats.filter((s) => s.kind === "model" && s.ready).length,
-    messages: messages.length,
-    noteCount: notesOn(listPendingEdits(messages)),
-    reviewerLabel: modelSeats(crew).find((s) => s.source && s.source !== source)?.label,
-  });
-
-  function actOnHint() {
-    if (hint.kind === "workers" && awaitingMsg) {
-      void buildPlan(awaitingMsg, proposed);
-      return;
-    }
-    if (hint.kind === "build" && awaitingMsg) {
-      void buildPlan(awaitingMsg);
-      return;
-    }
-    if (hint.kind === "notes") {
-      void sendNotes(listPendingEdits(messages));
-      return;
-    }
-    if (hint.kind === "reviewer") {
-      const pending = listPendingEdits(messages);
-      const workers = proposeReviewer(
-        pending.map((e) => e.path),
-        crew,
-        source,
-      );
-      if (!workers.length || agentRunning || !user) return;
-      void submitAgent("Review the staged diffs.", "composer", workers[0]?.source ?? source, {
-        agentId: null,
-        agentLabel: "Review",
-        phase: "skip",
-        workers,
-        role: "review",
-        pendingEdits: pending,
-      });
-      return;
-    }
-    if (hint.kind === "review") {
-      const first = listPendingEdits(messages)[0];
-      if (first) useWorkspace.getState().openFile(first.path);
-      useIdeUi.getState().setMobilePane("editor");
-      if (useIdeUi.getState().designOpen) useIdeUi.getState().setCodePeek(true);
-      return;
-    }
-    if (hint.kind === "crew") {
-      useIdeUi.getState().setChatOpen(true);
-      return;
-    }
-    composerRef.current?.focus();
-  }
 
   return (
     <div className="ide-stack bg-surface">
@@ -523,8 +458,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             variant="ghost"
             size="icon-sm"
             className="size-7"
-            title={rules ? `Open ${rules.path}` : "Create project rules"}
-            aria-label={rules ? `Open ${rules.path}` : "Create project rules"}
+            title={rulesPath ? `Open ${rulesPath}` : "Create project rules"}
+            aria-label={rulesPath ? `Open ${rulesPath}` : "Create project rules"}
             onClick={openRules}
           >
             <ScrollText className="size-3.5" />
@@ -546,73 +481,42 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             title="Clear chat"
             aria-label="Clear chat"
             onClick={clearChat}
-            disabled={messages.length === 0}
+            disabled={chatEmpty}
           >
             <Trash2 className="size-3.5" />
           </Button>
         </div>
       </div>
 
-      <TaskStrip
+      <PlanChrome
         mode={mode}
-        activePhase={sendPhase}
+        sendPhase={sendPhase}
         locked={phaseLock !== "auto"}
         onPhase={(next) => setPhaseLock(next)}
-        hint={hint}
-        onAct={actOnHint}
         actDisabled={agentRunning || !user}
+        account={account}
+        source={source}
+        crewIds={crewIds}
+        fileList={fileList}
+        canRun={Boolean(user) && !agentRunning}
+        onBuild={buildPlan}
+        onSendNotes={sendNotes}
+        onFocus={() => composerRef.current?.focus()}
       />
-      {awaitingMsg && !agentRunning && (
-        <WorkerConfirm
-          plan={awaitingMsg.plan ?? []}
-          account={account}
-          quoteSource={source}
-          disabled={!user}
-          onConfirm={(workers) => void buildPlan(awaitingMsg, workers)}
-          onSingle={() => void buildPlan(awaitingMsg)}
-        />
-      )}
-
-      <div
-        ref={listRef}
-        className="aperture-scroll min-h-0 overflow-y-auto px-2.5 py-2"
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 56;
+      <MessageList
+        running={agentRunning}
+        quoteLabel={quote.label}
+        account={account}
+        source={source}
+        fileList={fileList}
+        suggestions={suggestions}
+        onPick={(text) => {
+          setDraft(text);
+          if (user && !blocked && !acpBlocked) void send(text);
         }}
-      >
-        {messages.length === 0 ? (
-          <EmptyComposer
-            suggestions={suggestions}
-            onPick={(s) => {
-              setDraft(s);
-              if (user && !blocked && !acpBlocked) void send(s);
-            }}
-          />
-        ) : (
-          <div className="space-y-3">
-            {messages.map((message) => (
-              <MessageBlock
-                key={message.id}
-                message={message}
-                running={agentRunning}
-                quoteLabel={
-                  message.awaitingBuild
-                    ? quoteRuns(
-                        account,
-                        source,
-                        billedWorkers(message.plan, Object.keys(files), (n) => !quoteRuns(account, source, n).blocked),
-                      ).label
-                    : quote.label
-                }
-                onBuild={() => void buildPlan(message)}
-                onSendNotes={() => void sendNotes(message.edits)}
-              />
-            ))}
-            <div ref={listEndRef} aria-hidden className="h-px" />
-          </div>
-        )}
-      </div>
+        onBuild={buildPlan}
+        onSendNotes={sendNotes}
+      />
 
       <div>
       {checkpoints.length > 0 && (
@@ -735,6 +639,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             <textarea
               ref={composerRef}
               value={draft}
+              suppressHydrationWarning
               onChange={(e) => {
                 setDraft(e.target.value);
                 setDismissMention(false);
@@ -865,6 +770,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           type="file"
           multiple
           className="hidden"
+          suppressHydrationWarning
           onChange={(e) => {
             const list = e.target.files ? Array.from(e.target.files) : [];
             e.target.value = "";
@@ -899,6 +805,212 @@ function EmptyComposer({ suggestions, onPick }: { suggestions: string[]; onPick:
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function PlanChrome({
+  mode,
+  sendPhase,
+  locked,
+  onPhase,
+  actDisabled,
+  account,
+  source,
+  crewIds,
+  fileList,
+  canRun,
+  onBuild,
+  onSendNotes,
+  onFocus,
+}: {
+  mode: AgentMode;
+  sendPhase: AgentPhase;
+  locked: boolean;
+  onPhase: (phase: AgentPhase) => void;
+  actDisabled?: boolean;
+  account: AccountSnapshot | null | undefined;
+  source: Parameters<typeof quoteRuns>[1];
+  crewIds: string[];
+  fileList: string[];
+  canRun: boolean;
+  onBuild: (message: ChatMessage, workers?: WorkerSpec[]) => void;
+  onSendNotes: (edits: ChatMessage["edits"]) => void;
+  onFocus: () => void;
+}) {
+  const messages = useWorkspace((s) => s.messages);
+  const agentRunning = useWorkspace((s) => s.agentRunning);
+  const awaitingMsg = [...messages].reverse().find((m) => m.awaitingBuild && (m.plan?.length ?? 0) > 0);
+  const pendingCount = listPendingEdits(messages).length;
+  const seats = availableSeats(account);
+  const crew = selectedSeats(seats, crewIds);
+  const proposed = awaitingMsg?.plan ? proposeWorkers(awaitingMsg.plan, fileList, crew) : [];
+  const hint = nextAction({
+    running: agentRunning,
+    awaiting: Boolean(awaitingMsg),
+    pending: pendingCount,
+    workerCount: proposed.length,
+    crewModels: modelSeats(crew).length,
+    keyReady: seats.filter((s) => s.kind === "model" && s.ready).length,
+    messages: messages.length,
+    noteCount: notesOn(listPendingEdits(messages)),
+    reviewerLabel: modelSeats(crew).find((s) => s.source && s.source !== source)?.label,
+  });
+
+  function actOnHint() {
+    if (hint.kind === "workers" && awaitingMsg) {
+      void onBuild(awaitingMsg, proposed);
+      return;
+    }
+    if (hint.kind === "build" && awaitingMsg) {
+      void onBuild(awaitingMsg);
+      return;
+    }
+    if (hint.kind === "notes") {
+      void onSendNotes(listPendingEdits(messages));
+      return;
+    }
+    if (hint.kind === "reviewer") {
+      const pending = listPendingEdits(messages);
+      const workers = proposeReviewer(
+        pending.map((e) => e.path),
+        crew,
+        source,
+      );
+      if (!workers.length || !canRun) return;
+      void submitAgent("Review the staged diffs.", "composer", workers[0]?.source ?? source, {
+        agentId: null,
+        agentLabel: "Review",
+        phase: "skip",
+        workers,
+        role: "review",
+        pendingEdits: pending,
+      });
+      return;
+    }
+    if (hint.kind === "review") {
+      const first = listPendingEdits(messages)[0];
+      if (first) useWorkspace.getState().openFile(first.path);
+      useIdeUi.getState().setMobilePane("editor");
+      if (useIdeUi.getState().designOpen) useIdeUi.getState().setCodePeek(true);
+      return;
+    }
+    if (hint.kind === "crew") {
+      useIdeUi.getState().setChatOpen(true);
+      return;
+    }
+    onFocus();
+  }
+
+  return (
+    <>
+      <TaskStrip
+        mode={mode}
+        activePhase={sendPhase}
+        locked={locked}
+        onPhase={onPhase}
+        hint={hint}
+        onAct={actOnHint}
+        actDisabled={actDisabled}
+      />
+      {awaitingMsg && !agentRunning && (
+        <WorkerConfirm
+          plan={awaitingMsg.plan ?? []}
+          account={account}
+          quoteSource={source}
+          disabled={!canRun}
+          onConfirm={(workers) => void onBuild(awaitingMsg, workers)}
+          onSingle={() => void onBuild(awaitingMsg)}
+        />
+      )}
+    </>
+  );
+}
+
+function MessageList({
+  running,
+  quoteLabel,
+  account,
+  source,
+  fileList,
+  suggestions,
+  onPick,
+  onBuild,
+  onSendNotes,
+}: {
+  running: boolean;
+  quoteLabel: string;
+  account: AccountSnapshot | null | undefined;
+  source: Parameters<typeof quoteRuns>[1];
+  fileList: string[];
+  suggestions: string[];
+  onPick: (text: string) => void;
+  onBuild: (message: ChatMessage) => void;
+  onSendNotes: (edits: ChatMessage["edits"]) => void;
+}) {
+  const messages = useWorkspace((s) => s.messages);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listEndRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const messageCount = useRef(0);
+  const buildRef = useRef(onBuild);
+  const notesRef = useRef(onSendNotes);
+  buildRef.current = onBuild;
+  notesRef.current = onSendNotes;
+  const last = messages[messages.length - 1];
+  const streamKey = `${messages.length}:${last?.id ?? ""}:${last?.content.length ?? 0}:${last?.edits?.length ?? 0}:${last?.traces?.length ?? 0}:${running ? "1" : "0"}`;
+
+  useEffect(() => {
+    const grew = messages.length > messageCount.current;
+    messageCount.current = messages.length;
+    if (grew) stickToBottom.current = true;
+    if (!stickToBottom.current) return;
+    listEndRef.current?.scrollIntoView({ behavior: grew ? "smooth" : "auto", block: "end" });
+  }, [streamKey, messages.length]);
+
+  const buildById = useCallback((id: string) => {
+    const msg = useWorkspace.getState().messages.find((m) => m.id === id);
+    if (msg) buildRef.current(msg);
+  }, []);
+  const notesById = useCallback((id: string) => {
+    const msg = useWorkspace.getState().messages.find((m) => m.id === id);
+    if (msg) notesRef.current(msg.edits);
+  }, []);
+
+  return (
+    <div
+      ref={listRef}
+      className="aperture-scroll min-h-0 overflow-y-auto px-2.5 py-2"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 56;
+      }}
+    >
+      {messages.length === 0 ? (
+        <EmptyComposer suggestions={suggestions} onPick={onPick} />
+      ) : (
+        <div className="space-y-3">
+          {messages.map((message) => (
+            <MessageBlock
+              key={message.id}
+              message={message}
+              running={running}
+              quoteLabel={
+                message.awaitingBuild
+                  ? quoteRuns(
+                      account ?? null,
+                      source,
+                      billedWorkers(message.plan, fileList, (n) => !quoteRuns(account ?? null, source, n).blocked),
+                    ).label
+                  : quoteLabel
+              }
+              onBuild={buildById}
+              onSendNotes={notesById}
+            />
+          ))}
+          <div ref={listEndRef} aria-hidden className="h-px" />
+        </div>
+      )}
     </div>
   );
 }
@@ -979,7 +1091,7 @@ function AnalyzingCard({ status }: { status?: string }) {
   );
 }
 
-function MessageBlock({
+const MessageBlock = memo(function MessageBlock({
   message,
   running,
   quoteLabel,
@@ -989,8 +1101,8 @@ function MessageBlock({
   message: ChatMessage;
   running: boolean;
   quoteLabel: string;
-  onBuild: () => void;
-  onSendNotes: () => void;
+  onBuild: (id: string) => void;
+  onSendNotes: (id: string) => void;
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
   if (message.role === "user") {
@@ -1037,7 +1149,7 @@ function MessageBlock({
       {waiting && (
         <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
           <p className="min-w-0 text-xs text-muted">Nothing is written until you build. {quoteLabel}.</p>
-          <Button size="sm" disabled={running} onClick={onBuild}>
+          <Button size="sm" disabled={running} onClick={() => onBuild(message.id)}>
             <Play className="size-3.5" />
             Build it
           </Button>
@@ -1071,7 +1183,7 @@ function MessageBlock({
               <p className="min-w-0 text-xs text-muted">
                 {noteCount} {noteCount === 1 ? "note" : "notes"} for Composer. {quoteLabel}.
               </p>
-              <Button size="sm" disabled={running} onClick={onSendNotes}>
+              <Button size="sm" disabled={running} onClick={() => onSendNotes(message.id)}>
                 <MessageSquare className="size-3.5" />
                 Send notes
               </Button>
@@ -1096,7 +1208,7 @@ function MessageBlock({
       {message.debug && <DebugBlock debug={message.debug} />}
     </div>
   );
-}
+});
 
 function DebugBlock({ debug }: { debug: AgentDebug }) {
   return (

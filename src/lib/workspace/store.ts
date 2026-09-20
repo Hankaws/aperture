@@ -5,6 +5,11 @@ import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
+import { useIdeUi } from "@/lib/ui-store";
+import { previewNotesForEdit } from "./preview-check";
+import { fileListOf, keepFileList, withFiles } from "./file-list";
+import { applyStackMemory } from "@/lib/agent/stack";
+import { findRules } from "./rules";
 import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
 
 const STORAGE_KEY = "aperture-workspace-v2";
@@ -21,6 +26,7 @@ type WorkspaceState = {
   ready: boolean;
   name: string;
   files: Record<string, string>;
+  fileList: string[];
   openTabs: string[];
   recentPaths: string[];
   activePath: string | null;
@@ -59,6 +65,7 @@ type WorkspaceState = {
   undoCheckpoint: (id: string) => Checkpoint | null;
   undoLast: () => Checkpoint | null;
   clearChat: () => void;
+  syncStackMemory: () => void;
 };
 
 type PersistShape = {
@@ -102,6 +109,7 @@ function persist(state: WorkspaceState) {
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+const previewForce = new Set<string>();
 function schedulePersist() {
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => persist(useWorkspace.getState()), 180);
@@ -151,6 +159,12 @@ function withPath(list: string[], path: string) {
   return list.includes(path) ? list : [...list, path];
 }
 
+function seedFiles(files: Record<string, string>, name: string) {
+  return applyStackMemory(files, name);
+}
+
+const SEEDED_DEMO = seedFiles({ ...DEMO_FILES }, DEMO_WORKSPACE_NAME);
+
 export const useWorkspace = create<WorkspaceState>((set, get) => {
   function ensureCheckpointForMessage(messageId: string): string | null {
     const state = get();
@@ -184,7 +198,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
   }
 
   function applyOne(edit: ProposedEdit) {
-    const files = { ...get().files, [edit.path]: edit.newText };
+    let files = { ...get().files, [edit.path]: edit.newText };
+    const rules = findRules(files);
+    if (!rules || rules.path !== edit.path) files = applyStackMemory(files, get().name);
     const openTabs = get().openTabs.includes(edit.path) ? get().openTabs : [...get().openTabs, edit.path];
     const messages = get().messages.map((m) => ({
       ...m,
@@ -198,6 +214,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       dirtyPaths: withPath(get().dirtyPaths, edit.path),
       chunks: buildIndex(files),
       messages,
+      fileList: keepFileList(get().fileList, files),
     });
   }
 
@@ -223,6 +240,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       previewPath,
       chunks: buildIndex(files),
       messages,
+      fileList: keepFileList(get().fileList, files),
     });
     schedulePersist();
     return ck;
@@ -231,7 +249,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
   return {
     ready: true,
     name: DEMO_WORKSPACE_NAME,
-    files: { ...DEMO_FILES },
+    files: SEEDED_DEMO,
+    fileList: fileListOf(SEEDED_DEMO),
     openTabs: ["src/store.ts", "src/index.ts"],
     recentPaths: ["src/store.ts", "src/index.ts"],
     activePath: "src/store.ts",
@@ -253,7 +272,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         if (raw) {
           const parsed = JSON.parse(raw) as PersistShape;
           const storedFiles = parsed.files && Object.keys(parsed.files).length > 0 ? parsed.files : null;
-          const nextFiles = storedFiles ?? get().files;
+          const nextFiles = seedFiles(
+            storedFiles ?? get().files,
+            parsed.name || DEMO_WORKSPACE_NAME,
+          );
           if (nextFiles && Object.keys(nextFiles).length > 0) {
             const nextTabs = parsed.openTabs?.length
               ? parsed.openTabs.filter((p) => nextFiles[p] !== undefined)
@@ -270,6 +292,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
             set({
               name: parsed.name || DEMO_WORKSPACE_NAME,
               files: nextFiles,
+              fileList: fileListOf(nextFiles),
               openTabs: nextTabs,
               recentPaths: nextRecent.length ? nextRecent : nextTabs,
               activePath: nextActive,
@@ -294,16 +317,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     loadDemo: () => {
+      const files = applyStackMemory({ ...DEMO_FILES }, DEMO_WORKSPACE_NAME);
       set({
         name: DEMO_WORKSPACE_NAME,
-        files: { ...DEMO_FILES },
+        files,
+        fileList: fileListOf(files),
         openTabs: ["src/store.ts", "src/index.ts"],
         recentPaths: ["src/store.ts", "src/index.ts"],
         activePath: "src/store.ts",
         previewPath: null,
         pinned: [],
         dirtyPaths: [],
-        chunks: buildIndex(DEMO_FILES),
+        chunks: buildIndex(files),
         messages: [],
         checkpoints: [],
         selection: null,
@@ -313,7 +338,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
-    loadProject: (name, nextFiles) => {
+    loadProject: (name, incoming) => {
+      const nextFiles = seedFiles(incoming, name);
       const paths = Object.keys(nextFiles).sort();
       if (paths.length === 0) return;
       const preferred =
@@ -324,6 +350,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         indexing: true,
         name,
         files: nextFiles,
+        fileList: fileListOf(nextFiles),
         openTabs: [preferred],
         recentPaths: [preferred],
         activePath: preferred,
@@ -424,7 +451,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       if (get().files[path] === content) return;
       const files = { ...get().files, [path]: content };
       const previewPath = get().previewPath === path ? null : get().previewPath;
-      set({ files, dirtyPaths: withPath(get().dirtyPaths, path), previewPath });
+      set({
+        ...withFiles(files, get().fileList),
+        dirtyPaths: withPath(get().dirtyPaths, path),
+        previewPath,
+      });
       schedulePersist();
       scheduleReindex();
     },
@@ -432,13 +463,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     createFile: (path, content = "") => {
       const clean = safeRelPath(path);
       if (!clean || isSecretPath(clean)) return;
-      const files = { ...get().files, [clean]: content };
+      let files = { ...get().files, [clean]: content };
+      files = seedFiles(files, get().name);
       const openTabs = orderTabs(
         get().openTabs.includes(clean) ? get().openTabs : [...get().openTabs, clean],
         get().pinned,
       );
       set({
         files,
+        fileList: keepFileList(get().fileList, files),
         openTabs,
         activePath: clean,
         previewPath: get().previewPath === clean ? null : get().previewPath,
@@ -456,7 +489,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const pinned = get().pinned.filter((p) => p !== path);
       const previewPath = get().previewPath === path ? null : get().previewPath;
       const dirtyPaths = get().dirtyPaths.filter((p) => p !== path);
-      set({ files, openTabs, activePath: active, pinned, previewPath, dirtyPaths, chunks: buildIndex(files) });
+      set({ files, fileList: keepFileList(get().fileList, files), openTabs, activePath: active, pinned, previewPath, dirtyPaths, chunks: buildIndex(files) });
       schedulePersist();
     },
 
@@ -494,9 +527,24 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     applyEdit: (edit) => {
       if (edit.notes?.length) return;
+      if (!previewForce.has(edit.id)) {
+        const live = useIdeUi.getState().previewErrors;
+        const notes = previewNotesForEdit(edit, get().files, live);
+        if (notes.length) {
+          set({
+            messages: get().messages.map((m) => ({
+              ...m,
+              edits: m.edits?.map((e) => (e.id === edit.id ? { ...e, notes } : e)),
+            })),
+          });
+          schedulePersist();
+          return;
+        }
+      }
       const message = get().messages.find((m) => m.edits?.some((e) => e.id === edit.id));
       if (message) ensureCheckpointForMessage(message.id);
       applyOne(edit);
+      previewForce.delete(edit.id);
       schedulePersist();
     },
 
@@ -515,9 +563,29 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         .messages.flatMap((m) => m.edits ?? [])
         .filter((e) => e.status === "pending");
       if (pending.some((e) => (e.notes?.length ?? 0) > 0)) return;
+      const live = useIdeUi.getState().previewErrors;
+      const bounced: Record<string, ProposedEdit["notes"]> = {};
+      for (const edit of pending) {
+        if (previewForce.has(edit.id)) continue;
+        const notes = previewNotesForEdit(edit, get().files, live);
+        if (notes.length) bounced[edit.id] = notes;
+      }
+      if (Object.keys(bounced).length) {
+        set({
+          messages: get().messages.map((m) => ({
+            ...m,
+            edits: m.edits?.map((e) => (bounced[e.id] ? { ...e, notes: bounced[e.id] } : e)),
+          })),
+        });
+        schedulePersist();
+        return;
+      }
       const pendingByMessage = get().messages.filter((m) => m.edits?.some((e) => e.status === "pending"));
       for (const message of pendingByMessage) ensureCheckpointForMessage(message.id);
-      for (const edit of pending) applyOne(edit);
+      for (const edit of pending) {
+        applyOne(edit);
+        previewForce.delete(edit.id);
+      }
       schedulePersist();
     },
 
@@ -562,6 +630,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     clearPendingNotes: (editId) => {
+      for (const message of get().messages) {
+        for (const edit of message.edits ?? []) {
+          if (edit.status === "pending" && (!editId || edit.id === editId)) previewForce.add(edit.id);
+        }
+      }
       set({
         messages: get().messages.map((m) => ({
           ...m,
@@ -583,6 +656,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     clearChat: () => {
       set({ messages: [] });
+      schedulePersist();
+    },
+
+    syncStackMemory: () => {
+      const files = seedFiles(get().files, get().name);
+      if (files === get().files) return;
+      set({ ...withFiles(files, get().fileList) });
       schedulePersist();
     },
   };

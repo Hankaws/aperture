@@ -1147,4 +1147,4 @@ var searchExtensions = [
 	baseTheme
 ];
 //#endregion
-export { searchKeymap as n, highlightSelectionMatches as t };
+export { openSearchPanel as n, searchKeymap as r, highlightSelectionMatches as t };

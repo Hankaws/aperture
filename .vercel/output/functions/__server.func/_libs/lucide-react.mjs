@@ -282,6 +282,21 @@ var Download = createLucideIcon("download", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Eye = createLucideIcon("eye", [["path", {
+	d: "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0",
+	key: "1nclc0"
+}], ["circle", {
+	cx: "12",
+	cy: "12",
+	r: "3",
+	key: "1v7zrd"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var FileArchive = createLucideIcon("file-archive", [
 	["path", {
 		d: "M10 12v-1",
@@ -697,6 +712,29 @@ var LoaderCircle = createLucideIcon("loader-circle", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var LogOut = createLucideIcon("log-out", [
+	["path", {
+		d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
+		key: "1uf3rs"
+	}],
+	["polyline", {
+		points: "16 17 21 12 16 7",
+		key: "1gabdz"
+	}],
+	["line", {
+		x1: "21",
+		x2: "9",
+		y1: "12",
+		y2: "12",
+		key: "1uyos4"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var MessageSquare = createLucideIcon("message-square", [["path", {
 	d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
 	key: "1lielz"
@@ -858,6 +896,19 @@ var Search = createLucideIcon("search", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Send = createLucideIcon("send", [["path", {
+	d: "M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z",
+	key: "1ffxy3"
+}], ["path", {
+	d: "m21.854 2.147-10.94 10.939",
+	key: "12cjpa"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Settings = createLucideIcon("settings", [["path", {
 	d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
 	key: "1qme2f"
@@ -995,6 +1046,32 @@ var Undo2 = createLucideIcon("undo-2", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Users = createLucideIcon("users", [
+	["path", {
+		d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+		key: "1yyitq"
+	}],
+	["path", {
+		d: "M16 3.128a4 4 0 0 1 0 7.744",
+		key: "16gr8j"
+	}],
+	["path", {
+		d: "M22 21v-2a4 4 0 0 0-3-3.87",
+		key: "kshegd"
+	}],
+	["circle", {
+		cx: "9",
+		cy: "7",
+		r: "4",
+		key: "nufk8"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var WandSparkles = createLucideIcon("wand-sparkles", [
 	["path", {
 		d: "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
@@ -1053,4 +1130,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { Folder as A, CodeXml as B, ListTodo as C, KeyRound as D, Keyboard as E, FileJson as F, Check as G, Circle as H, FileDiff as I, ArrowUp as J, Bug as K, FileCode as L, FolderOpen as M, FileText as N, History as O, FileSearch as P, FileArchive as R, ListTree as S, Layers as T, CircleDot as U, Clock as V, ChevronRight as W, ArrowRight as Y, Paperclip as _, TriangleAlert as a, MessageSquare as b, Sparkles as c, Search as d, ScrollText as f, Pin as g, Play as h, Undo2 as i, FolderTree as j, Github as k, ShieldCheck as l, Plus as m, Wrench as n, Trash2 as o, RotateCcw as p, AtSign as q, WandSparkles as r, Square as s, X as t, Settings as u, Palette as v, Library as w, LoaderCircle as x, MousePointer2 as y, Download as z };
+export { ArrowRight as $, KeyRound as A, FileCode as B, LogOut as C, Library as D, ListTodo as E, FolderOpen as F, Clock as G, Eye as H, FileText as I, ChevronRight as J, Circle as K, FileSearch as L, Github as M, Folder as N, Layers as O, FolderTree as P, ArrowUp as Q, FileJson as R, MessageSquare as S, ListTree as T, Download as U, FileArchive as V, CodeXml as W, Bug as X, Check as Y, AtSign as Z, Play as _, Undo2 as a, Palette as b, Square as c, Settings as d, Send as f, Plus as g, RotateCcw as h, Users as i, History as j, Keyboard as k, Sparkles as l, ScrollText as m, Wrench as n, TriangleAlert as o, Search as p, CircleDot as q, WandSparkles as r, Trash2 as s, X as t, ShieldCheck as u, Pin as v, LoaderCircle as w, MousePointer2 as x, Paperclip as y, FileDiff as z };

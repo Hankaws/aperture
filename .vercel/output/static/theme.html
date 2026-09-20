@@ -31,28 +31,38 @@
       --keyword: #6cb2ff;
       --string: #5ee0a8;
       --fn: #e8c27a;
-      --type: #6ed4e0;
-      --comment: #545761;
-      --number: #d7bc96;
-      --property: #d2d6de;
-      --operator: #8b909c;
+      --type: #5bc6d4;
+      --comment: #646770;
+      --number: #c9ae86;
+      --property: #b8bcc6;
+      --operator: #8b8e98;
       --tab-hover: #1a1a20;
       --tab-modified: #c4c4cc;
-      --ghost: #52525b;
+      --tab-preview: #a1a1aa;
+      --ghost: #5e616c;
       --inlay-bg: #1c1c22;
       --inlay-fg: #8b8e98;
       --sticky-bg: #141418;
       --sticky-hover: #1a1a20;
       --list-hover: #1a1a20;
       --list-selected: #1c1c22;
-      --list-selected-inactive: #141416;
+      --list-selected-inactive: #141418;
       --list-focus: #1c2430;
       --list-drop: #1a2a38;
       --palette-focus: #1c2430;
+      --quick-input: #111113;
+      --peek-bg: #18181b;
+      --peek-border: #93c5fd;
+      --toast-bg: #18181b;
+      --toast-border: #27272a;
       --minimap-slider: rgba(255, 255, 255, 0.10);
       --minimap-slider-hover: rgba(255, 255, 255, 0.18);
       --scrollbar: #27272a;
       --scrollbar-hover: #3f3f46;
+      --diff-add: rgba(110, 231, 183, 0.12);
+      --diff-del: rgba(248, 113, 113, 0.12);
+      --merge-current: #2d5c4c;
+      --merge-incoming: #1a2a38;
       --ansi-black: #18181b;
       --ansi-red: #f87171;
       --ansi-green: #6ee7b7;
@@ -89,10 +99,7 @@
       text-rendering: optimizeSpeed;
       tab-size: 2;
     }
-    .page {
-      min-height: 100%;
-      padding: 28px 20px 40px;
-    }
+    .page { min-height: 100%; padding: 28px 20px 40px; }
     .caption {
       max-width: 1120px;
       margin: 0 auto 14px;
@@ -122,18 +129,18 @@
     .traffic { display: flex; gap: 6px; }
     .traffic i {
       width: 10px; height: 10px; border-radius: 99px; display: block;
-      background: #3f3f46;
+      background: var(--scrollbar-hover);
     }
-    .traffic i:nth-child(1) { background: #f87171; }
-    .traffic i:nth-child(2) { background: #fbbf24; }
-    .traffic i:nth-child(3) { background: #6ee7b7; }
+    .traffic i:nth-child(1) { background: var(--danger); }
+    .traffic i:nth-child(2) { background: var(--warn); }
+    .traffic i:nth-child(3) { background: var(--ok); }
     .titlebar .name {
       flex: 1;
       text-align: center;
       font-size: 12px;
       color: var(--muted);
     }
-    .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 640px; }
+    .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 720px; }
     .sidebar {
       background: var(--surface);
       border-right: 1px solid var(--border);
@@ -152,11 +159,7 @@
     }
     .side-head span { color: var(--subtle); font-weight: 400; font-size: 11px; }
     .tree { padding: 8px; flex: 1; }
-    .folder {
-      color: var(--muted);
-      font-size: 12px;
-      padding: 4px 8px;
-    }
+    .folder { color: var(--muted); font-size: 12px; padding: 4px 8px; }
     .row {
       display: flex;
       align-items: center;
@@ -168,13 +171,8 @@
       color: var(--muted);
       position: relative;
     }
-    .row .dot {
-      width: 6px; height: 6px; border-radius: 99px; background: var(--ok);
-    }
-    .row.selected {
-      background: var(--list-selected);
-      color: var(--fg);
-    }
+    .row .dot { width: 6px; height: 6px; border-radius: 99px; background: var(--ok); }
+    .row.selected { background: var(--list-selected); color: var(--fg); }
     .row.selected::before {
       content: "";
       position: absolute;
@@ -183,10 +181,7 @@
       border-radius: 99px;
       background: var(--accent);
     }
-    .row.inactive-sel {
-      background: var(--list-selected-inactive);
-      color: var(--fg);
-    }
+    .row.inactive-sel { background: var(--list-selected-inactive); color: var(--fg); }
     .row.hover { background: var(--list-hover); color: var(--fg); }
     .row.focused {
       background: var(--list-focus);
@@ -198,7 +193,7 @@
       color: var(--fg);
       box-shadow: inset 0 0 0 1px var(--accent);
     }
-    .main { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+    .main { display: flex; flex-direction: column; min-width: 0; background: var(--bg); position: relative; }
     .tabs {
       display: flex;
       height: 40px;
@@ -216,11 +211,7 @@
       color: var(--muted);
       min-width: 0;
     }
-    .tab.active {
-      background: var(--bg);
-      color: var(--fg-bright);
-      font-weight: 550;
-    }
+    .tab.active { background: var(--bg); color: var(--fg-bright); font-weight: 550; }
     .tab.active::before {
       content: "";
       position: absolute;
@@ -229,18 +220,12 @@
       background: var(--accent);
     }
     .tab.inactive:hover { background: var(--tab-hover); color: var(--fg); }
-    .tab.preview {
-      font-style: italic;
-      color: var(--muted);
-      font-weight: 400;
-    }
+    .tab.preview { font-style: italic; color: var(--tab-preview); font-weight: 400; }
     .tab .pin {
       width: 8px; height: 8px; border: 1.5px solid var(--subtle); border-radius: 1px;
       transform: rotate(45deg);
     }
-    .tab .mod {
-      width: 7px; height: 7px; border-radius: 99px; background: var(--tab-modified);
-    }
+    .tab .mod { width: 7px; height: 7px; border-radius: 99px; background: var(--tab-modified); }
     .crumbs {
       display: flex;
       align-items: center;
@@ -260,7 +245,7 @@
       padding: 1px 6px;
       border-radius: 4px;
     }
-    .editors { display: grid; grid-template-rows: 1.15fr 0.85fr; min-height: 0; flex: 1; }
+    .editors { display: grid; grid-template-rows: 1.2fr 0.7fr auto; min-height: 0; flex: 1; }
     .pane {
       display: grid;
       grid-template-columns: 46px 1fr 52px;
@@ -279,7 +264,7 @@
       text-align: right;
     }
     .gutter div { padding: 0 10px 0 8px; }
-    .gutter .on { background: var(--active-line); color: #c4c4cc; }
+    .gutter .on { background: var(--active-line); color: var(--tab-modified); }
     .code {
       margin: 0;
       padding: 8px 14px 8px 12px;
@@ -320,6 +305,9 @@
       margin: 0 3px;
       vertical-align: 1px;
     }
+    .err { box-shadow: inset 0 -2px 0 var(--danger); }
+    .warn { box-shadow: inset 0 -2px 0 var(--warn); }
+    .info { box-shadow: inset 0 -2px 0 var(--accent); }
     .sticky {
       position: absolute;
       left: 46px; right: 52px; top: 0;
@@ -358,6 +346,25 @@
       border-radius: 3px;
     }
     .minimap:hover .slider { background: var(--minimap-slider-hover); }
+    .diff {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .diff .h {
+      padding: 4px 12px;
+      color: var(--subtle);
+      background: var(--elevated);
+      border-bottom: 1px solid var(--border);
+    }
+    .diff .add { background: var(--diff-add); color: var(--ok); }
+    .diff .del { background: var(--diff-del); color: var(--danger); }
+    .diff .eq { color: var(--subtle); }
+    .diff .cur { background: var(--merge-current); color: var(--fg); }
+    .diff .inc { background: var(--merge-incoming); color: var(--fg); }
+    .diff pre { margin: 0; padding: 4px 12px; }
     .terminal {
       border-top: 1px solid var(--border);
       background: var(--bg);
@@ -393,7 +400,7 @@
       top: 86px;
       transform: translateX(-18%);
       width: 340px;
-      background: var(--surface);
+      background: var(--quick-input);
       border: 1px solid var(--border);
       border-radius: 12px;
       box-shadow: 0 16px 40px -24px rgb(0 0 0 / 0.7), 0 0 0 1px rgba(255,255,255,0.06);
@@ -425,6 +432,45 @@
     .pitem.hover { background: var(--list-hover); }
     .pitem.focus { background: var(--palette-focus); }
     .pitem .meta { margin-left: auto; color: var(--subtle); font-size: 11px; }
+    .peek {
+      position: absolute;
+      right: 64px;
+      bottom: 132px;
+      width: 280px;
+      background: var(--peek-bg);
+      border: 1px solid var(--peek-border);
+      border-radius: 10px;
+      z-index: 7;
+      overflow: hidden;
+    }
+    .peek .h {
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .peek pre {
+      margin: 0;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .toast {
+      position: absolute;
+      right: 16px;
+      top: 52px;
+      z-index: 9;
+      background: var(--toast-bg);
+      border: 1px solid var(--toast-border);
+      border-left: 2px solid var(--ok);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--fg);
+      box-shadow: 0 16px 40px -24px rgb(0 0 0 / 0.7);
+    }
     .scroll-demo {
       position: absolute;
       right: 54px;
@@ -446,12 +492,13 @@
       .shell { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       .palette { left: 12px; right: 12px; width: auto; transform: none; }
+      .peek { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="page">
-    <p class="caption"><strong>Aperture editor theme</strong> — hardcoded hex from the theme file. Active / italic preview / pinned / unsaved tabs, list states, ghost text, inlays, sticky scroll, minimap, ANSI 16.</p>
+    <p class="caption"><strong>Aperture editor theme</strong> — hardcoded hex from the theme file. Active / italic preview / pinned / unsaved tabs, list states, ghost text, inlays, sticky scroll, minimap, diff, ANSI 16.</p>
     <div class="window" role="img" aria-label="Aperture editor theme preview">
       <div class="titlebar">
         <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -462,7 +509,7 @@
           <div class="side-head">harbor-api <span>6 files</span></div>
           <div class="tree">
             <div class="folder">src</div>
-            <div class="row selected">store.ts <span class="dot" title="staged"></span></div>
+            <div class="row selected">store.tsx <span class="dot" title="staged"></span></div>
             <div class="row hover">index.ts</div>
             <div class="row focused">router.ts</div>
             <div class="row drop">app.py</div>
@@ -474,7 +521,7 @@
           <div class="tabs">
             <div class="tab active" title="Active, pinned, unsaved">
               <span class="pin" aria-hidden="true"></span>
-              store.ts
+              store.tsx
               <span class="mod" title="Modified"></span>
             </div>
             <div class="tab inactive" title="Inactive">index.ts</div>
@@ -482,37 +529,39 @@
           </div>
           <div class="crumbs">
             <span>src</span><span>/</span>
-            <span class="focus">store.ts</span>
+            <span class="focus">store.tsx</span>
             <span class="here">· TypeScript</span>
           </div>
-          <div class="editors" style="position:relative">
+          <div class="editors">
             <div class="pane">
-              <div class="sticky">export function createStore() {</div>
+              <div class="sticky">export function TaskList({ seed = 0 }: Props) {</div>
               <div class="gutter">
                 <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div>
-                <div>6</div><div>7</div><div class="on">8</div><div>9</div><div>10</div>
+                <div>6</div><div>7</div><div>8</div><div class="on">9</div><div>10</div>
                 <div>11</div><div>12</div><div>13</div><div>14</div><div>15</div>
-                <div>16</div><div>17</div><div>18</div>
+                <div>16</div><div>17</div><div>18</div><div>19</div><div>20</div>
               </div>
-              <pre class="code"><span class="ln"><span class="k">import</span> { randomUUID } <span class="k">from</span> <span class="s">"node:crypto"</span><span class="o">;</span></span>
+              <pre class="code"><span class="ln"><span class="k">import</span> { useState } <span class="k">from</span> <span class="s">"react"</span><span class="o">;</span></span>
 <span class="ln"></span>
-<span class="ln"><span class="k">export</span> <span class="k">type</span> <span class="wh-read">Task</span> = {</span>
+<span class="ln"><span class="k">type</span> <span class="wh-read">Task</span> = {</span>
 <span class="ln">  <span class="p">id</span><span class="o">:</span> <span class="t">string</span><span class="o">;</span></span>
 <span class="ln">  <span class="p">title</span><span class="o">:</span> <span class="t">string</span><span class="o">;</span></span>
 <span class="ln">  <span class="p">done</span><span class="o">:</span> <span class="t">boolean</span><span class="o">;</span></span>
 <span class="ln"><span class="br">}</span><span class="o">;</span></span>
-<span class="ln on"><span class="k">export</span> <span class="k">function</span> <span class="f">createStore</span><span class="br">()</span> <span class="br">{</span></span>
-<span class="ln">  <span class="k">const</span> tasks<span class="o">:</span> <span class="wh-read">Task</span>[] = <span class="br">[]</span><span class="o">;</span></span>
 <span class="ln"></span>
-<span class="ln">  <span class="k">function</span> <span class="f sel wh-write">listTasks</span>(offset = <span class="inlay">int</span><span class="n">0</span>)<span class="o">:</span> <span class="wh-read">Task</span>[] {</span>
-<span class="ln">    <span class="k">return</span> tasks<span class="o">.</span><span class="f">slice</span>(offset)<span class="o">;</span><span class="ghost"> // skip the first item</span></span>
-<span class="ln">  <span class="br">}</span></span>
-<span class="ln"></span>
-<span class="ln">  <span class="k">function</span> <span class="f">createTask</span>(title<span class="o">:</span> <span class="t">string</span>)<span class="o">:</span> <span class="wh-read">Task</span> {</span>
-<span class="ln">    <span class="c">// matching Task is a read highlight; listTasks is write</span></span>
-<span class="ln">    <span class="k">const</span> task<span class="o">:</span> <span class="wh-read">Task</span> = { id<span class="o">:</span> <span class="f">randomUUID</span><span class="br">()</span>, title, done<span class="o">:</span> <span class="k">false</span> }<span class="o">;</span></span>
-<span class="ln">    <span class="k">return</span> task<span class="o">;</span></span>
-<span class="ln">  <span class="br">}</span></span></pre>
+<span class="ln on"><span class="k">export</span> <span class="k">function</span> <span class="f">TaskList</span><span class="br">({</span> seed <span class="o">=</span> <span class="inlay">int</span><span class="n">0</span> <span class="br">}</span><span class="o">:</span> { seed<span class="o">?:</span> <span class="t">number</span> <span class="br">}</span><span class="o">)</span> <span class="br">{</span></span>
+<span class="ln">  <span class="k">const</span> <span class="sel">[tasks<span class="o">,</span> setTasks]</span> <span class="o">=</span> <span class="f">useState</span><span class="o"><</span><span class="wh-read">Task</span><span class="o">[]>([]);</span></span>
+<span class="ln">  <span class="k">function</span> <span class="f sel wh-write">listTasks</span>(offset <span class="o">=</span> seed<span class="o">)</span> <span class="o">{</span></span>
+<span class="ln">    <span class="k">return</span> tasks<span class="o">.</span><span class="f">slice</span>(<span class="err">offset</span>)<span class="o">;</span><span class="ghost"> // skip the first item</span></span>
+<span class="ln">  <span class="o">}</span></span>
+<span class="ln">  <span class="c">// matching Task is a read highlight; listTasks is write</span></span>
+<span class="ln">  <span class="k">return</span> <span class="o">(</span></span>
+<span class="ln">    <span class="o"><</span><span class="k">ul</span><span class="o">></span></span>
+<span class="ln">      <span class="br">{</span>tasks<span class="o">.</span><span class="f">map</span>((task) <span class="o">=></span> (</span>
+<span class="ln">        <span class="o"><</span><span class="k">li</span> <span class="p">key</span><span class="o">=</span><span class="br">{</span>task<span class="o">.</span><span class="p">id</span><span class="br">}</span><span class="o">></span><span class="br">{</span>task<span class="o">.</span><span class="p">title</span><span class="br">}</span><span class="o"></</span><span class="k">li</span><span class="o">></span></span>
+<span class="ln">      <span class="o">))}</span></span>
+<span class="ln">    <span class="o"></</span><span class="k">ul</span><span class="o">></span></span>
+<span class="ln">  <span class="o">);</span></span></pre>
               <div class="minimap" title="Minimap">
                 <div class="slider"></div>
                 <div class="bars">
@@ -522,6 +571,7 @@
                   <i style="width:10%"></i><i style="width:75%"></i><i style="width:62%"></i>
                   <i class="c" style="width:50%"></i><i style="width:44%"></i><i style="width:68%"></i>
                   <i style="width:52%"></i><i style="width:38%"></i><i style="width:22%"></i>
+                  <i style="width:66%"></i><i style="width:28%"></i>
                 </div>
               </div>
               <div class="scroll-demo" title="Scrollbar hover"><div class="track"><div class="thumb"></div></div></div>
@@ -538,10 +588,10 @@
 <span class="ln"><span class="k">class</span> <span class="t">Task</span><span class="o">:</span></span>
 <span class="ln">    id<span class="o">:</span> <span class="t">str</span></span>
 <span class="ln">    title<span class="o">:</span> <span class="t">str</span></span>
-<span class="ln">    done<span class="o">:</span> <span class="t">bool</span> = <span class="k">False</span></span>
+<span class="ln">    done<span class="o">:</span> <span class="t">bool</span> <span class="o">=</span> <span class="k">False</span></span>
 <span class="ln"></span>
-<span class="ln"><span class="k">def</span> <span class="f">list_tasks</span>(tasks<span class="o">:</span> list[<span class="t">Task</span>]<span class="o">,</span> offset<span class="o">:</span> <span class="t">int</span> = <span class="n">0</span>) <span class="o">-></span> list[<span class="t">Task</span>]<span class="o">:</span></span>
-<span class="ln">    <span class="sel-off">return tasks[offset:]</span></span>
+<span class="ln"><span class="k">def</span> <span class="f">list_tasks</span>(tasks<span class="o">:</span> list[<span class="t">Task</span>]<span class="o">,</span> offset<span class="o">:</span> <span class="t">int</span> <span class="o">=</span> <span class="n">0</span>) <span class="o">-></span> list[<span class="t">Task</span>]<span class="o">:</span></span>
+<span class="ln">    <span class="sel-off">return tasks[offset:]</span>  <span class="c"># f"{offset=}"</span></span>
 <span class="ln"></span>
 <span class="ln"><span class="c"># Unfocused pane — inactive selection on the return</span></span></pre>
               <div class="minimap">
@@ -553,14 +603,29 @@
                 </div>
               </div>
             </div>
+            <div class="diff" aria-label="Diff hunk">
+              <div class="h">src/store.ts · hunk · merge</div>
+              <pre><span class="eq">   function listTasks(offset = 0) {</span>
+<span class="del">-    return tasks.slice(offset + 1);</span>
+<span class="add">+    return tasks.slice(offset);</span>
+<span class="cur">  <<<<<<< HEAD</span>
+<span class="eq">     return tasks;</span>
+<span class="inc">  >>>>>>> incoming</span>
+<span class="eq">   }</span></pre>
+            </div>
             <div class="palette" aria-label="Command palette">
               <div class="q">Go to file · <em>store</em></div>
               <div class="plist">
-                <div class="pitem focus">src/store.ts <span class="meta">focused</span></div>
+                <div class="pitem focus">src/store.tsx <span class="meta">focused</span></div>
                 <div class="pitem hover">src/index.ts <span class="meta">hover</span></div>
                 <div class="pitem">README.md</div>
               </div>
             </div>
+            <div class="peek" aria-label="Peek view">
+              <div class="h">Peek · Task</div>
+              <pre><span class="k">type</span> <span class="t">Task</span> = { <span class="p">id</span>: <span class="t">string</span> }</pre>
+            </div>
+            <div class="toast">Applied 1 diff</div>
           </div>
           <div class="terminal">
             <div class="label">Terminal · 16 ANSI colors</div>
@@ -586,7 +651,7 @@
           </div>
           <div class="status">
             <span><b>Ready</b> · 6 files · 1 unsaved</span>
-            <span>Ln 8 · TypeScript · Hosted Grok</span>
+            <span>Ln 9 · TypeScript · Hosted Grok</span>
           </div>
         </section>
       </div>

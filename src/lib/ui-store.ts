@@ -42,6 +42,7 @@ type IdeUiState = {
   designOpen: boolean;
   codePeek: boolean;
   captures: DesignCapture[];
+  previewErrors: string[];
   mobilePane: MobilePane;
   theme: EditorTheme;
   density: Density;
@@ -63,6 +64,7 @@ type IdeUiState = {
   setDesignOpen: (open: boolean) => void;
   setCodePeek: (open: boolean) => void;
   addCapture: (capture: DesignCapture) => void;
+  setPreviewErrors: (errors: string[]) => void;
   updateCapture: (id: string, patch: Partial<DesignCapture>) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
@@ -93,6 +95,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   designOpen: false,
   codePeek: false,
   captures: [],
+  previewErrors: [],
   mobilePane: "editor",
   theme: "cursor",
   density: "compact",
@@ -126,13 +129,24 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     set((s) => ({
       captures: [...s.captures, capture].slice(-8),
     })),
+  setPreviewErrors: (errors) =>
+    set((s) => {
+      const next = [...new Set(errors.map((row) => row.trim()).filter(Boolean))].slice(0, 6);
+      if (s.previewErrors.length === next.length && s.previewErrors.every((row, i) => row === next[i])) return s;
+      return { previewErrors: next };
+    }),
   updateCapture: (id, patch) =>
     set((s) => ({
       captures: s.captures.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     })),
   removeCapture: (id) => set((s) => ({ captures: s.captures.filter((c) => c.id !== id) })),
   clearCaptures: () => set({ captures: [] }),
-  setMobilePane: (pane) => set((s) => ({ mobilePane: pane, composerUnread: pane === "agent" ? false : s.composerUnread })),
+  setMobilePane: (pane) =>
+    set((s) => {
+      const unread = pane === "agent" ? false : s.composerUnread;
+      if (s.mobilePane === pane && s.composerUnread === unread) return s;
+      return { mobilePane: pane, composerUnread: unread };
+    }),
   setTheme: (theme) => {
     set((s) => {
       applyAppearance(theme, s.density);

@@ -11,7 +11,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const activePath = useWorkspace((s) => s.activePath);
   const indexing = useWorkspace((s) => s.indexing);
   const agentRunning = useWorkspace((s) => s.agentRunning);
-  const files = useWorkspace((s) => s.files);
+  const files = useWorkspace((s) => s.fileList);
   const selection = useWorkspace((s) => s.selection);
   const messages = useWorkspace((s) => s.messages);
   const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
@@ -24,7 +24,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const lang = activePath ? languageLabel(activePath) : "";
   const line = selection && selection.path === activePath ? selection.fromLine : null;
-  const fileCount = Object.keys(files).length;
+  const fileCount = files.length;
   const task = resolveAgentTask({
     running: agentRunning,
     indexing,

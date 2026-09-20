@@ -108,6 +108,7 @@ export function OpenProjectHost() {
         type="file"
         multiple
         className="hidden"
+        suppressHydrationWarning
         onChange={(e) => {
           const files = e.target.files ? Array.from(e.target.files) : [];
           e.target.value = "";
@@ -119,6 +120,7 @@ export function OpenProjectHost() {
         type="file"
         accept=".zip,application/zip"
         className="hidden"
+        suppressHydrationWarning
         onChange={(e) => {
           const files = e.target.files ? Array.from(e.target.files) : [];
           e.target.value = "";

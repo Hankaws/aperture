@@ -216,14 +216,14 @@ function OpenMenu() {
 }
 
 export function FileTree() {
-  const files = useWorkspace((s) => s.files);
+  const files = useWorkspace((s) => s.fileList);
   const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
   const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
-  const tree = useMemo(() => buildTree(Object.keys(files)), [files]);
+  const tree = useMemo(() => buildTree(files), [files]);
   const [dropOver, setDropOver] = useState(false);
-  const count = Object.keys(files).length;
+  const count = files.length;
 
   return (
     <div

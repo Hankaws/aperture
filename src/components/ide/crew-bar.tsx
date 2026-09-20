@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Plus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addWorker, availableSeats, canConfirm, dropWorker, proposeWorkers, selectedSeats, toggleWorkerRole, type WorkerSpec } from "@/lib/agent/crew";
@@ -55,10 +55,10 @@ export function WorkerConfirm({
   onConfirm: (workers: WorkerSpec[]) => void;
   onSingle: () => void;
 }) {
-  const fileMap = useWorkspace((s) => s.files);
+  const fileList = useWorkspace((s) => s.fileList);
   const crewIds = useIdeUi((s) => s.crewIds);
   const seats = selectedSeats(availableSeats(account), crewIds);
-  const files = useMemo(() => Object.keys(fileMap), [fileMap]);
+  const files = fileList;
   const suggested = proposeWorkers(plan, files, seats);
   const planKey = plan.map((p) => p.id).join("|");
   const [workers, setWorkers] = useState<WorkerSpec[]>(suggested);

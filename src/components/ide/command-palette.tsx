@@ -23,7 +23,7 @@ export function CommandPalette() {
   const density = useIdeUi((s) => s.density);
   const debug = useIdeUi((s) => s.debug);
   const setDebug = useIdeUi((s) => s.setDebug);
-  const files = useWorkspace((s) => s.files);
+  const files = useWorkspace((s) => s.fileList);
   const openFile = useWorkspace((s) => s.openFile);
   const activePath = useWorkspace((s) => s.activePath);
   const loadDemo = useWorkspace((s) => s.loadDemo);
@@ -37,10 +37,10 @@ export function CommandPalette() {
   }, [open]);
 
   const paths = useMemo(
-    () => Object.keys(files).filter((p) => fuzzyMatch(query, p)),
+    () => files.filter((p) => fuzzyMatch(query, p)),
     [files, query],
   );
-  const fileList = useMemo(() => Object.keys(files), [files]);
+  const fileList = files;
   const goto = parseGoto(query);
   const gotoPath = goto ? resolveGotoPath(fileList, goto.path, activePath) : null;
 

@@ -1,5 +1,6 @@
 import { lineDiff } from "./apply-edit.ts";
 import type { PlanEntry, ProposedEdit } from "../workspace/types.ts";
+import { previewIssues } from "../workspace/preview-check.ts";
 
 const DECL =
   /(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_][\w]*)/;
@@ -75,7 +76,14 @@ export function verifyRecap(edits: ProposedEdit[], files: Record<string, string>
 
   const open = plan.filter((e) => e.status !== "completed").map((e) => e.content);
   const line3 = open.length ? `Left: ${open.slice(0, 2).join("; ")}` : "Left: nothing on the plan.";
-  return [line1, line2, line3].join("\n");
+  const preview = previewIssues(files, edits);
+  const line4 = preview.length
+    ? `Preview: ${preview
+        .map((row) => `${row.path} ${row.issues[0]}`)
+        .slice(0, 2)
+        .join("; ")}`
+    : "";
+  return [line1, line2, line3, line4].filter(Boolean).join("\n");
 }
 
 export function appendVerify(

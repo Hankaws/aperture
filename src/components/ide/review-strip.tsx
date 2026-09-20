@@ -21,6 +21,7 @@ export function ReviewStrip() {
   const openFile = useWorkspace((s) => s.openFile);
   const rows = pendingByPath(messages);
   const noteCount = notesOn(rows);
+  const previewErrors = useIdeUi((s) => s.previewErrors);
   if (running || rows.length === 0) return null;
 
   function jump(path: string) {
@@ -38,6 +39,7 @@ export function ReviewStrip() {
             {" "}
             · {rows.length} {rows.length === 1 ? "file" : "files"} · Enter keep · Backspace skip
             {noteCount > 0 ? ` · ${noteCount} notes` : ""}
+            {previewErrors.length > 0 ? ` · preview ${previewErrors[0]}` : ""}
           </span>
         </p>
         <Button

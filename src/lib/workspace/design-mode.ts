@@ -185,7 +185,9 @@ export function assembleHtmlPreview(files: Record<string, string>, entry: string
   if (!/<body[\s>]/i.test(html)) {
     html = `<!doctype html><html><body>${html}</body></html>`;
   }
-  const script = `<script>${PICKER_SCRIPT}<\/script>`;
+  // `\u002f` keeps the literal `</script>` sequence out of this source, so the
+  // tag cannot close early if this module is ever inlined into a document.
+  const script = `<script>${PICKER_SCRIPT}<\u002fscript>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
 }

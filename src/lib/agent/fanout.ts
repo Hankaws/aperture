@@ -69,7 +69,7 @@ export function fanoutWorkers(plan: PlanEntry[], knownFiles: string[]): FanoutWo
   }
   if (groups.size < 2) return [];
 
-  let workers: FanoutWorker[] = [...groups.values()].map((files) => ({
+  const workers: FanoutWorker[] = [...groups.values()].map((files) => ({
     files: [...files].sort(),
     steps: plan.filter((_, i) => stepFiles[i]!.some((f) => files.has(f))),
   }));

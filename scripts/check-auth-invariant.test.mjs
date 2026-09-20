@@ -12,7 +12,7 @@ import {
   compareAuthInvariant,
   probeDevAuthEnabled,
 } from "./check-auth-invariant.mjs";
-import { projectRoot } from "./with-app-env.mjs";
+import { projectRoot, readAppEnv } from "./with-app-env.mjs";
 
 /**
  * The JSON body `/__app-env` would serve. Do not start a real Vite server —
@@ -90,9 +90,14 @@ test("only a divergence warns the smoke verdict", () => {
   }
 });
 
-test("the build side resolves the template's shipped app-env", () => {
-  assert.equal(buildAuthEnabled(projectRoot(), {}), false);
+test("the build side resolves this workspace's app-env, and an override wins", () => {
+  // Auth is on here, so the file carries no `VITE_AUTH_ENABLED` and the flag
+  // falls back to on. What matters either way: the resolved value tracks the
+  // file, and an explicit process-env value still overrides it.
+  const fromFile = readAppEnv(projectRoot()).VITE_AUTH_ENABLED;
+  assert.equal(buildAuthEnabled(projectRoot(), {}), fromFile !== "false");
   assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "true" }), true);
+  assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "false" }), false);
 });
 
 test("the CLI reports rather than silently passing when run via a symlink", async () => {

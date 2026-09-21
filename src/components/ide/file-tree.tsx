@@ -185,13 +185,14 @@ function OpenMenu() {
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 px-1.5"
+        className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0"
         aria-label="Open project"
+        title="Open project"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         <FolderOpen className="size-3.5" />
-        Open
+        <span className="md:hidden">Open</span>
       </Button>
       {open && (
         <div className="absolute right-0 top-8 z-20 w-48 overflow-hidden rounded-lg border border-border bg-elevated py-1 shadow-[var(--shadow-float)]">
@@ -239,17 +240,17 @@ export function FileTree() {
       }}
       onDrop={() => setDropOver(false)}
     >
-      <div className="flex h-11 items-center justify-between gap-1 border-b border-border px-1.5 md:h-8">
-        <p className="px-1 text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">Workspace</p>
+      <div className="ide-chrome-row flex min-w-0 items-center gap-0.5 overflow-hidden border-b border-border px-1.5">
+        <p className="min-w-0 flex-1 truncate px-1 text-[11px] font-medium text-subtle">Workspace</p>
         <div className="flex shrink-0 items-center">
-          <Button variant="ghost" size="sm" className="h-9 px-1.5 md:h-7" aria-label="Search files" onClick={() => setCommandOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="Search files" title="Search files" onClick={() => setCommandOpen(true)}>
             <Search className="size-3.5" />
             <span className="md:hidden">Search</span>
           </Button>
           <OpenMenu />
-          <Button variant="ghost" size="sm" className="h-9 px-1.5 md:h-7" aria-label="New file" onClick={() => setNewFileOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="New file" title="New file" onClick={() => setNewFileOpen(true)}>
             <Plus className="size-3.5" />
-            New
+            <span className="md:hidden">New</span>
           </Button>
         </div>
       </div>

@@ -342,7 +342,7 @@ export function IdeShell() {
           style={!desktop && keyboardInset ? { paddingBottom: keyboardInset } : undefined}
         >
           <Group orientation="horizontal" className="h-full min-h-0 min-w-0">
-            <Panel id="files" defaultSize="16%" minSize="12%" maxSize="28%" className="min-h-0 overflow-hidden">
+            <Panel id="files" defaultSize="20%" minSize="14%" maxSize="32%" className="min-h-0 overflow-hidden">
               <FileTree />
             </Panel>
             <Separator id="sep-files" className="w-px bg-border hover:bg-accent/40" />

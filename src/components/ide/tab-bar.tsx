@@ -67,8 +67,8 @@ export function TabBar() {
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 
   return (
-    <div className="flex h-10 items-stretch border-b border-border bg-surface md:h-8">
-      <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
+    <div className="ide-chrome-row flex items-stretch border-b border-border bg-surface">
+      <div className="tab-strip flex min-w-0 flex-1 items-stretch">
         {openTabs.length === 0 ? (
           <span className="flex items-center px-3 text-xs text-subtle">Open a file from Workspace to start</span>
         ) : (
@@ -83,7 +83,7 @@ export function TabBar() {
               <div
                 key={path}
                 className={cn(
-                  "group relative flex min-w-0 shrink-0 items-center gap-0.5 border-r border-border px-1.5",
+                  "group relative flex min-w-0 shrink-0 items-center gap-1 border-r border-border px-2",
                   active ? "bg-bg text-fg" : "text-muted hover:bg-tab-hover hover:text-fg",
                 )}
                 onDoubleClick={() => openFile(path)}
@@ -97,12 +97,12 @@ export function TabBar() {
                 {active && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
                 <button
                   type="button"
-                  className="flex max-w-44 items-center gap-1 truncate px-1 py-1.5 text-xs"
+                  className="flex max-w-52 items-center gap-1.5 truncate py-1.5 text-[13px]"
                   title={preview ? "Preview tab — double-click to keep" : isPinned ? "Pinned" : basename(path)}
                   onClick={() => setActive(path)}
                 >
-                  {isPinned && <Pin className="size-3 shrink-0 text-subtle" strokeWidth={1.8} />}
-                  <Icon className="size-3 shrink-0 text-subtle" strokeWidth={1.6} />
+                  {isPinned && <Pin className="size-3.5 shrink-0 text-subtle" strokeWidth={1.8} />}
+                  <Icon className="size-3.5 shrink-0 text-subtle" strokeWidth={1.6} />
                   <span className={cn("truncate", active && "font-medium", preview && "tab-preview")}>
                     {basename(path)}
                   </span>
@@ -123,8 +123,8 @@ export function TabBar() {
                   type="button"
                   aria-label={dirty ? `Unsaved · Close ${basename(path)}` : `Close ${basename(path)}`}
                   className={cn(
-                    "relative flex size-6 items-center justify-center rounded-md hover:bg-elevated",
-                    active || dirty ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                    "relative items-center justify-center rounded-md hover:bg-elevated",
+                    active || dirty ? "flex size-6 opacity-100" : "hidden size-6 group-hover:flex",
                   )}
                   onClick={() => closeTab(path)}
                 >
@@ -136,7 +136,7 @@ export function TabBar() {
           })
         )}
       </div>
-      <div className="hidden shrink-0 items-center border-l border-border px-1.5 md:flex">
+      <div className="hidden shrink-0 items-center border-l border-border px-2 md:flex">
         <PreviewToggle />
       </div>
     </div>

@@ -8,6 +8,7 @@ import type { JobRecord } from "@/lib/jobs/types";
 import { parseUnifiedDiff } from "@/lib/acp/patch";
 import { useWorkspace } from "@/lib/workspace/store";
 import { cn } from "@/lib/utils";
+import { acpAgentNames } from "@/lib/acp/kinds";
 
 export function JobsTray({
   jobs,
@@ -135,7 +136,7 @@ export function JobsTray({
           <Textarea
             value={patch}
             onChange={(e) => setPatch(e.target.value)}
-            placeholder="Paste a unified diff from Claude Code, Codex, or OpenCode"
+            placeholder={`Paste a unified diff from ${acpAgentNames("or")}`}
             className="min-h-24 font-mono text-[12px]"
           />
           <div className="mt-2 flex justify-end gap-2">

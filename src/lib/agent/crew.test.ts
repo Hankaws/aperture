@@ -66,3 +66,15 @@ test("proposeReviewer picks a different seat when it can", () => {
   assert.equal(reviewer?.role, "review");
   assert.equal(reviewer?.source, "openai");
 });
+
+test("Grok Build appears as a crew seat alongside the other ACP agents", () => {
+  const seats = availableSeats(twoKeys);
+  const grokBuild = seats.find((s) => s.id === "builtin:grok-build");
+  assert.equal(grokBuild?.kind, "acp");
+  assert.equal(grokBuild?.label, "Grok Build");
+  assert.equal(grokBuild?.ready, true);
+  // The hosted xAI model seat is labelled "Grok" — the agent seat must not
+  // collide with it or be mistaken for it.
+  assert.equal(seats.filter((s) => s.label === "Grok").length, 1);
+  assert.equal(seats.filter((s) => s.kind === "acp").length, 4);
+});

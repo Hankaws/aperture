@@ -1,3 +1,5 @@
+import { acpAgentNames } from "../acp/kinds.ts";
+
 export type PlanId = "hobby" | "pro" | "team";
 export type ProviderId = "grok" | "openai" | "anthropic" | "gemini" | "deepseek";
 export type ModelSource = "hosted" | ProviderId;
@@ -63,7 +65,7 @@ export const PLANS: Plan[] = [
       "You pick the model. No Auto",
       "Tab ghost-text — fast model, 250 hosted / day",
       "One background job",
-      "ACP: Claude Code, Codex, OpenCode in the same diffs",
+      `ACP: ${acpAgentNames()} in the same diffs`,
     ],
   },
   {

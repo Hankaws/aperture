@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { isAcpKind, type AcpKind } from "./kinds";
+import { acpAgentNames, isAcpKind, type AcpKind } from "./kinds";
 
 export type AgentConnection = {
   id: string;
@@ -69,7 +69,9 @@ export const saveAgent = createServerFn({ method: "POST" })
     const { planById } = await import("@/lib/billing/plans");
     const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${context.userId}`;
     if (!planById(settings[0]?.plan ?? "hobby").acp) {
-      throw new Error("External agents are on Pro. Upgrade to plug Claude Code, Codex, or OpenCode into the same diff UI.");
+      throw new Error(
+        `External agents are on Pro. Upgrade to plug ${acpAgentNames("or")} into the same diff UI.`,
+      );
     }
     if (!isAcpKind(data.kind)) throw new Error("Unknown agent kind.");
     const name = data.name.trim().slice(0, 80);

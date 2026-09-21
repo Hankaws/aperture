@@ -32,12 +32,12 @@ function flavorOf(input: AgentInput) {
 function systemPrompt(
   mode: AgentInput["mode"],
   rules: string | null,
-  flavorName: string | null,
+  flavorKind: string | null,
   phase: ReturnType<typeof resolveAgentPhase>,
   role?: AgentInput["role"],
 ): string {
-  const preamble = flavorName
-    ? acpSystemPreamble(flavorName as "claude-code" | "codex" | "opencode")
+  const preamble = flavorKind
+    ? acpSystemPreamble(flavorKind)
     : "You are Aperture, an AI coding agent inside a web IDE.";
   const composerLine =
     role === "review"

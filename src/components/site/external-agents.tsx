@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteAgent, listAgents, saveAgent, type AgentConnection } from "@/lib/acp/api";
-import { ACP_KINDS, BUILTIN_ACP, type AcpKind } from "@/lib/acp/kinds";
+import { ACP_KINDS, BUILTIN_ACP, acpAgentNames, type AcpKind } from "@/lib/acp/kinds";
 import type { AccountSnapshot } from "@/lib/billing/api";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +28,8 @@ export function ExternalAgents({ account }: { account: AccountSnapshot }) {
       <div className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="text-xl font-medium tracking-tight">External agents</h2>
         <p className="mt-2 max-w-xl text-sm text-pretty text-muted">
-          Pro runs Claude Code, Codex, and OpenCode as ACP sessions in Composer — plan, traces, and the same staged
-          diffs. Hobby still has Composer, Chat, and Inline.
+          Pro runs {acpAgentNames("and")} as ACP sessions in Composer — plan, traces, and the same staged diffs.
+          Hobby still has Composer, Chat, and Inline.
         </p>
         <Link to="/pricing" className={cn(buttonVariants(), "mt-4")}>
           See Pro
@@ -59,8 +59,8 @@ export function ExternalAgents({ account }: { account: AccountSnapshot }) {
       <div>
         <h2 className="text-xl font-medium tracking-tight">External agents</h2>
         <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-          Pick Claude Code, Codex, or OpenCode in the Composer model menu. They speak ACP in this panel — checklist,
-          tool calls, staged diffs. A remote JSON-RPC bridge is optional if you already pay for a CLI.
+          Pick {acpAgentNames("or")} in the Composer model menu. They speak ACP in this panel — checklist, tool
+          calls, staged diffs. A remote JSON-RPC bridge is optional if you already pay for a CLI.
         </p>
       </div>
 

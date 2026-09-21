@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ProductDemo } from "./demo";
 import { Reveal, usePrefersReducedMotion } from "./reveal";
 import { SnippetShowcase } from "./snippets";
+import { BUILTIN_ACP, acpAgentNames } from "@/lib/acp/kinds";
 
 const LINE1 = ["See", "the", "whole", "repo."];
 const LINE2 = ["Change", "the", "right", "files."];
@@ -55,7 +56,7 @@ const PILLARS = [
   {
     id: "agents",
     title: "Agents share the same diffs",
-    body: "Claude Code, Codex, and OpenCode stream into this panel. Same plan. Same Apply. Pro, not Ultra-gated.",
+    body: `${acpAgentNames("and")} stream into this panel. Same plan. Same Apply. Pro, not Ultra-gated.`,
     visual: "agents",
   },
 ] as const;
@@ -75,7 +76,7 @@ const FAQ = [
   },
   {
     q: "Are agents only on a high plan?",
-    a: "No. Composer, Chat, and Inline are the product on Hobby. Pro adds Tab ghost-text, one background job, and ACP sessions for Claude Code, Codex, and OpenCode in the same diff UI. Team gets three background jobs.",
+    a: `No. Composer, Chat, and Inline are the product on Hobby. Pro adds Tab ghost-text, one background job, and ACP sessions for ${acpAgentNames("and")} in the same diff UI. Team gets three background jobs.`,
   },
   {
     q: "How do I take the code with me?",
@@ -196,7 +197,7 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
     <div className="rounded-2xl border border-border bg-surface p-5">
       <p className="text-xs tracking-[0.14em] text-subtle uppercase">Same diff UI</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        {["Claude Code", "Codex", "OpenCode"].map((name) => (
+        {BUILTIN_ACP.map(({ name }) => (
           <span key={name} className="rounded-md border border-border bg-bg px-2.5 py-1 text-sm text-fg">
             {name}
           </span>

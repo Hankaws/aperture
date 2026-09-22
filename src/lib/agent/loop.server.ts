@@ -202,14 +202,14 @@ function buildContextMessage(
 
 export async function runAgentLoop(
   input: AgentInput,
-  cfg: { provider: ProviderId; apiKey: string },
+  cfg: { provider: ProviderId; apiKey: string; userId?: string },
 ): Promise<AgentResult> {
   return runAgentLoopStreaming(input, cfg, () => undefined);
 }
 
 export async function runAgentLoopStreaming(
   input: AgentInput,
-  cfg: { provider: ProviderId; apiKey: string },
+  cfg: { provider: ProviderId; apiKey: string; userId?: string },
   emit: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
@@ -246,6 +246,20 @@ export async function runAgentLoopStreaming(
     phase,
     mode: input.mode,
     role: input.role,
+    // Only a request with a known owner may run code: the allowance is per
+    // account, and an unattributed run cannot be counted or capped.
+    runScript: cfg.userId
+      ? async (script: string) => {
+          const { resolveRunner, runScript } = await import("@/lib/sandbox/run.server");
+          const runner = await resolveRunner();
+          const result = await runScript(
+            { userId: cfg.userId!, runner, files: ctx.files, signal },
+            script,
+          );
+          emit({ type: "status", text: result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed` });
+          return { text: result.text, passed: result.passed };
+        }
+      : undefined,
   };
   const traces: ToolTrace[] = [];
   const rules = findRules(fileMap)?.text ?? null;
@@ -347,12 +361,18 @@ export async function runAgentLoopStreaming(
         const parallel = batch.length > 1 && batch.every((c) => isReadTool(c.name));
         if (parallel) emit({ type: "status", text: `Reading ${batch.length} files…` });
 
-        const runOne = (call: (typeof parsed)[number]) => {
+        const runOne = async (call: (typeof parsed)[number]) => {
           const started = Date.now();
-          const result = executeTool(call.name, call.args, ctx);
+          const result = await executeTool(call.name, call.args, ctx);
           return { call, result, ms: Date.now() - started };
         };
-        const outcomes = parallel ? await Promise.all(batch.map(async (c) => runOne(c))) : batch.map(runOne);
+        // Reads fan out; anything that mutates or bills stays strictly ordered.
+        const outcomes = parallel
+          ? await Promise.all(batch.map((c) => runOne(c)))
+          : await batch.reduce<Promise<Array<Awaited<ReturnType<typeof runOne>>>>>(
+              async (acc, call) => [...(await acc), await runOne(call)],
+              Promise.resolve([]),
+            );
 
         for (const outcome of outcomes) {
           const display = acpTraceName(outcome.call.name, flavor?.kind);

@@ -15,6 +15,8 @@ export type Plan = {
   tab: boolean;
   tabDaily: number;
   backgroundJobs: number;
+  /** Sandbox verification runs per day; 0 means the feature is off for this plan. */
+  sandboxRuns: number;
   acp: boolean;
   featured?: boolean;
   cta: string;
@@ -33,6 +35,7 @@ export const PLANS: Plan[] = [
     tab: false,
     tabDaily: 0,
     backgroundJobs: 0,
+    sandboxRuns: 0,
     acp: false,
     cta: "Start free",
     features: [
@@ -56,6 +59,7 @@ export const PLANS: Plan[] = [
     tab: true,
     tabDaily: 250,
     backgroundJobs: 1,
+    sandboxRuns: 40,
     acp: true,
     featured: true,
     cta: "Activate Pro",
@@ -79,6 +83,7 @@ export const PLANS: Plan[] = [
     tab: true,
     tabDaily: 600,
     backgroundJobs: 3,
+    sandboxRuns: 150,
     acp: true,
     cta: "Activate Team",
     features: [

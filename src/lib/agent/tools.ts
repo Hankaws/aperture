@@ -113,6 +113,21 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "run_script",
+      description:
+        "Run one of the project's own package.json scripts in a sandbox and read the real output. Use it to check work before handing it over — a failing test tells you more than re-reading the diff. Only declared scripts run; servers like dev and start cannot.",
+      parameters: {
+        type: "object",
+        properties: {
+          script: { type: "string", description: "A script name declared in package.json, e.g. test or typecheck." },
+        },
+        required: ["script"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "note_diff",
       description:
         "Attach a review note to a staged diff. Use this instead of propose_edit when reviewing. excerpt is the line you are commenting on.",
@@ -134,7 +149,13 @@ export type AgentToolDef = (typeof AGENT_TOOLS)[number];
 
 export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentToolDef[] {
   if (kind === "read") {
-    return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "set_plan" && t.function.name !== "note_diff");
+    return AGENT_TOOLS.filter(
+      (t) =>
+        t.function.name !== "propose_edit" &&
+        t.function.name !== "set_plan" &&
+        t.function.name !== "note_diff" &&
+        t.function.name !== "run_script",
+    );
   }
   if (kind === "plan") {
     return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "note_diff");
@@ -154,6 +175,8 @@ export type ToolContext = {
   phase: AgentPhase;
   mode: "chat" | "composer" | "inline";
   role?: "build" | "review";
+  /** Set when this request may run code; absent leaves `run_script` answering that it cannot. */
+  runScript?: (script: string) => Promise<{ text: string; passed: boolean }>;
 };
 
 function clip(text: string, max = 8000): string {
@@ -184,11 +207,11 @@ function similarPaths(path: string, keys: string[]): string[] {
   return keys.filter((key) => key.toLowerCase() === path.toLowerCase() || key.toLowerCase().endsWith(`/${base}`) || key.toLowerCase().includes(base)).slice(0, 8);
 }
 
-export function executeTool(
+export async function executeTool(
   name: string,
   args: Record<string, unknown>,
   ctx: ToolContext,
-): string {
+): Promise<string> {
   if (name === "set_plan") {
     if (ctx.mode === "chat") return "Ask mode does not plan. Switch to Agent.";
     ctx.plan = normalizePlan(args.entries ?? args);
@@ -288,6 +311,16 @@ export function executeTool(
       return `Edit staged for ${path}, but ${checkLabel(path).toLowerCase()} failed: ${problems}. Fix before the user can Apply.`;
     }
     return `Edit staged for ${path}. The user must accept it in the UI.`;
+  }
+
+  if (name === "run_script") {
+    const script = String(args.script ?? "").trim();
+    if (!script) return "run_script needs a script name.";
+    if (!ctx.runScript) {
+      return "Running is not available for this request. Verify by reading the code instead.";
+    }
+    const result = await ctx.runScript(script);
+    return result.text;
   }
 
   if (name === "note_diff") {

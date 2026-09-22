@@ -63,7 +63,11 @@ export async function runJob(id: string, userId: string, raw: AgentInput, agentI
       return;
     }
     const { runAgentLoop } = await import("@/lib/agent/loop.server");
-    const result = await runAgentLoop(input, { provider: resolved.provider, apiKey: resolved.apiKey });
+    const result = await runAgentLoop(input, {
+      provider: resolved.provider,
+      apiKey: resolved.apiKey,
+      userId,
+    });
     if (ctrl.signal.aborted) return;
     if (!result.ok) {
       await sql`

@@ -20,6 +20,7 @@ export const runAgent = createServerFn({ method: "POST" })
     const result = await runAgentLoop(input, {
       provider: resolved.provider,
       apiKey: resolved.apiKey,
+      userId: context.userId,
     });
     if (result.ok) {
       await recordAgentRun(context.userId, resolved.hosted, resolved.cents);

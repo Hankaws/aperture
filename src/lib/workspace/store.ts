@@ -8,6 +8,7 @@ import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import { useIdeUi } from "@/lib/ui-store";
 import { previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
+import { workspaceHash, type SyncState } from "./sync";
 import { applyStackMemory } from "@/lib/agent/stack";
 import { findRules } from "./rules";
 import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
@@ -39,6 +40,11 @@ type WorkspaceState = {
   checkpoints: Checkpoint[];
   agentRunning: boolean;
   runningMode: AgentMode | null;
+  /** Saved-copy revision this workspace is in step with; null if never synced. */
+  revision: number | null;
+  /** Content hash at that moment, so unsaved edits are detectable after a reload. */
+  syncedHash: string | null;
+  syncState: SyncState;
   selection: Selection;
   hydrate: () => void;
   loadDemo: () => void;
@@ -65,6 +71,9 @@ type WorkspaceState = {
   undoCheckpoint: (id: string) => Checkpoint | null;
   undoLast: () => Checkpoint | null;
   clearChat: () => void;
+  markSynced: (revision: number, hash: string) => void;
+  adoptRemote: (name: string, files: Record<string, string>, revision: number) => void;
+  setSyncState: (state: SyncState) => void;
   syncStackMemory: () => void;
 };
 
@@ -79,6 +88,8 @@ type PersistShape = {
   dirtyPaths?: string[];
   messages: ChatMessage[];
   checkpoints?: Checkpoint[];
+  revision?: number | null;
+  syncedHash?: string | null;
 };
 
 function persist(state: WorkspaceState) {
@@ -93,6 +104,8 @@ function persist(state: WorkspaceState) {
     pinned: state.pinned,
     dirtyPaths: state.dirtyPaths,
     messages: state.messages.slice(-40),
+    revision: state.revision,
+    syncedHash: state.syncedHash,
   };
   try {
     localStorage.setItem(
@@ -164,6 +177,14 @@ function seedFiles(files: Record<string, string>, name: string) {
 }
 
 const SEEDED_DEMO = seedFiles({ ...DEMO_FILES }, DEMO_WORKSPACE_NAME);
+
+/**
+ * Hash of an untouched editor, for deciding whether a local copy is worth
+ * keeping. It must be taken after seeding: `applyStackMemory` rewrites the
+ * rules file on the way in, so hashing `DEMO_FILES` would never match the
+ * state a fresh editor is actually in.
+ */
+export const DEMO_SYNC_HASH = workspaceHash(DEMO_WORKSPACE_NAME, SEEDED_DEMO);
 
 export const useWorkspace = create<WorkspaceState>((set, get) => {
   function ensureCheckpointForMessage(messageId: string): string | null {
@@ -264,6 +285,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     agentRunning: false,
     runningMode: null,
     selection: null,
+    revision: null,
+    syncedHash: null,
+    syncState: "idle",
 
     hydrate: () => {
       if (typeof window === "undefined") return;
@@ -290,6 +314,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
             const nextDirty = (parsed.dirtyPaths ?? []).filter((p) => nextFiles[p] !== undefined);
             const nextRecent = (parsed.recentPaths ?? nextTabs).filter((p) => nextFiles[p] !== undefined);
             set({
+              revision: parsed.revision ?? null,
+              syncedHash: parsed.syncedHash ?? null,
               name: parsed.name || DEMO_WORKSPACE_NAME,
               files: nextFiles,
               fileList: fileListOf(nextFiles),
@@ -340,6 +366,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     loadProject: (name, incoming) => {
       const nextFiles = seedFiles(incoming, name);
+      // Opening a different project detaches from whatever was saved: the next
+      // save is a fresh write, not an edit on top of the old revision.
       const paths = Object.keys(nextFiles).sort();
       if (paths.length === 0) return;
       const preferred =
@@ -348,6 +376,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         paths[0]!;
       set({
         indexing: true,
+        revision: null,
+        syncedHash: null,
+        syncState: "idle",
         name,
         files: nextFiles,
         fileList: fileListOf(nextFiles),
@@ -653,6 +684,33 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       if (!last) return null;
       return restoreCheckpoint(last.id);
     },
+
+    markSynced: (revision, hash) => {
+      set({ revision, syncedHash: hash, syncState: "saved" });
+      schedulePersist();
+    },
+
+    adoptRemote: (name, files, revision) => {
+      const seeded = seedFiles(files, name);
+      const tabs = Object.keys(seeded).slice(0, 1);
+      set({
+        name,
+        ...withFiles(seeded, get().fileList),
+        openTabs: tabs,
+        recentPaths: tabs,
+        activePath: tabs[0] ?? null,
+        previewPath: null,
+        pinned: [],
+        dirtyPaths: [],
+        chunks: buildIndex(seeded),
+        revision,
+        syncedHash: workspaceHash(name, seeded),
+        syncState: "saved",
+      });
+      schedulePersist();
+    },
+
+    setSyncState: (state) => set({ syncState: state }),
 
     clearChat: () => {
       set({ messages: [] });

@@ -25,9 +25,9 @@ export function PreviewToggle({ className }: { className?: string }) {
           type="button"
           onClick={() => setCodePeek(!codePeek)}
           aria-pressed={codePeek}
-          aria-label={codePeek ? "Hide code" : "Show code beside preview"}
+          aria-label={codePeek ? "Hide code" : "Show code above preview"}
           className={cn(
-            "hidden h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium md:inline-flex",
+            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium",
             codePeek ? "bg-elevated text-fg" : "text-muted hover:bg-list-hover hover:text-fg",
           )}
         >
@@ -135,9 +135,6 @@ export function TabBar() {
             );
           })
         )}
-      </div>
-      <div className="hidden shrink-0 items-center border-l border-border px-2 md:flex">
-        <PreviewToggle />
       </div>
     </div>
   );

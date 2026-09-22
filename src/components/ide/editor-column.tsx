@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { TabBar } from "./tab-bar";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -11,11 +11,10 @@ import { DesignPane } from "./design-pane";
 import { languageFromPath } from "@/lib/parser/language";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
-import { cn } from "@/lib/utils";
 
 function CodeStage() {
   return (
-    <div className="relative h-full min-h-0 min-w-0">
+    <div className="relative min-h-0 min-w-0 flex-1">
       <div className="absolute inset-0">
         <CodePane />
       </div>
@@ -25,24 +24,15 @@ function CodeStage() {
   );
 }
 
-function useColumnWide(min: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [wide, setWide] = useState(true);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const read = () => {
-      const next = el.clientWidth >= min;
-      setWide((prev) => (prev === next ? prev : next));
-    };
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [min]);
-
-  return { ref, wide };
+function CodeChrome() {
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <TabBar />
+      <Breadcrumbs />
+      <ReviewStrip />
+      <CodeStage />
+    </div>
+  );
 }
 
 function CodeDesignSplit({
@@ -56,33 +46,27 @@ function CodeDesignSplit({
   split: boolean;
   peek: boolean;
 }) {
-  const together = split && peek;
-  const { ref, wide } = useColumnWide(560);
-  const stack = together && !wide;
-
   return (
     <div
-      ref={ref}
       className="ide-split"
       data-split={split ? "on" : "off"}
       data-peek={peek ? "on" : "off"}
     >
       <Group
-        id="aperture-code-design"
-        orientation={stack ? "vertical" : "horizontal"}
+        id="aperture-code-design-v"
+        orientation="vertical"
         className="h-full min-h-0 min-w-0"
       >
-        <Panel id="code-peek" defaultSize="38%" minSize="16%" maxSize="80%" className="min-h-0 overflow-hidden">
+        <Panel id="code-peek" defaultSize="38%" minSize="18%" maxSize="80%" className="min-h-0 overflow-hidden">
           {code}
         </Panel>
         <Separator
           id="sep-code-design"
-          className={cn(
-            "z-10 bg-border hover:bg-accent data-[active]:bg-accent",
-            stack ? "h-2" : "w-2",
-          )}
+          className="group z-10 flex h-2 shrink-0 items-center justify-center bg-border hover:bg-accent data-[active]:bg-accent"
           title="Drag to resize code and preview"
-        />
+        >
+          <span className="h-0.5 w-8 rounded-full bg-subtle group-hover:bg-bg group-data-[active]:bg-bg" />
+        </Separator>
         <Panel id="design-peek" minSize="20%" className="min-h-0 overflow-hidden">
           {preview}
         </Panel>
@@ -112,13 +96,12 @@ export function EditorColumn() {
   );
 
   return (
-    <div className="ide-editor bg-bg">
-      <TabBar />
-      <div>
-        <Breadcrumbs />
-        <ReviewStrip />
-      </div>
-      <CodeDesignSplit code={<CodeStage />} preview={preview} split={split} peek={codePeek} />
+    <div className="ide-editor bg-bg" data-split={split ? "on" : "off"}>
+      {split ? (
+        <CodeDesignSplit code={<CodeChrome />} preview={preview} split={split} peek={codePeek} />
+      ) : (
+        <CodeChrome />
+      )}
     </div>
   );
 }

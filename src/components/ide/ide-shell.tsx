@@ -166,9 +166,9 @@ function TitleBar() {
       <Link to="/" className="text-fg" aria-label="Aperture home">
         <ApertureMark className="size-3.5" />
       </Link>
-      <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-2">
         <span className="hidden min-w-0 truncate font-mono text-[11px] text-subtle md:block">{title}</span>
-        <PreviewToggle className="md:hidden" />
+        <PreviewToggle />
       </div>
       <div className="flex items-center justify-end">
         <div className="hidden items-center gap-2 md:flex">

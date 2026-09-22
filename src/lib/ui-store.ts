@@ -148,8 +148,14 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     }
     set({ debug: on });
   },
-  setDesignOpen: (open) => set((s) => ({ designOpen: open, codePeek: open ? false : s.codePeek, mobilePane: open ? "editor" : s.mobilePane })),
-  setCodePeek: (open) => set({ codePeek: open }),
+  setDesignOpen: (open) =>
+    set((s) => ({
+      designOpen: open,
+      codePeek: false,
+      sidebarOpen: open ? false : s.sidebarOpen,
+      mobilePane: open ? "editor" : s.mobilePane,
+    })),
+  setCodePeek: (open) => set((s) => ({ codePeek: open, sidebarOpen: open ? true : s.sidebarOpen })),
   addCapture: (capture) =>
     set((s) => ({
       captures: [...s.captures, capture].slice(-8),

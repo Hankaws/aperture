@@ -17,6 +17,7 @@ import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
+import { verifiedLine } from "@/lib/sandbox/auto-verify";
 
 const MAX_PLAN_STEPS = 8;
 const MAX_BUILD_STEPS = 12;
@@ -285,6 +286,8 @@ export async function runAgentLoopStreaming(
   messages.push({ role: "user", content: input.instruction });
 
   let planNudged = false;
+  let verifyAttempted = false;
+  let verifiedScript: string | null = null;
   const maxSteps = phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
@@ -297,10 +300,11 @@ export async function runAgentLoopStreaming(
       body.awaitingBuild || phase === "plan"
         ? body.text
         : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan);
+    const verifiedText = verifiedScript ? `${text}\n\n${verifiedLine(verifiedScript)}` : text;
     if (text !== body.text) emit({ type: "status", text: "Verifying…" });
-    const debug = packDebug(input, cfg.provider, sys, userBlob, text, steps);
-    emit({ type: "done", ...body, text, ...(debug ? { debug } : {}) });
-    return { ok: true, ...body, text, ...(debug ? { debug } : {}) };
+    const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
+    emit({ type: "done", ...body, text: verifiedText, ...(debug ? { debug } : {}) });
+    return { ok: true, ...body, text: verifiedText, ...(debug ? { debug } : {}) };
   };
 
   try {
@@ -345,8 +349,35 @@ export async function runAgentLoopStreaming(
         if (shouldAwaitBuild(phase, hasPlan, [])) {
           return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
         }
+        const staged = mergeEdits(ctx.edits);
+        const { chooseVerifyScript, fixPrompt, shouldAutoVerify } = await import("@/lib/sandbox/auto-verify");
+        const verifyScript = chooseVerifyScript(ctx.files);
+        if (
+          shouldAutoVerify({
+            phase,
+            editCount: staged.length,
+            hasRunner: Boolean(ctx.runScript),
+            attempted: verifyAttempted,
+            script: verifyScript,
+          }) &&
+          ctx.runScript &&
+          verifyScript
+        ) {
+          verifyAttempted = true;
+          emit({ type: "status", text: `Checking with ${verifyScript}…` });
+          const check = await ctx.runScript(verifyScript);
+          if (check.passed) {
+            verifiedScript = verifyScript;
+          } else {
+            // Hand the failure back as this turn's task: one attempt to fix
+            // what it just broke, before the person ever sees the diff.
+            messages.push({ role: "assistant", content: completion.content ?? "" });
+            messages.push({ role: "user", content: fixPrompt(verifyScript, check.text) });
+            continue;
+          }
+        }
         const text = completion.content.trim() || "Done.";
-        return succeed({ text, traces, edits: mergeEdits(ctx.edits), plan: ctx.plan }, step + 1);
+        return succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
       }
 
       messages.push({

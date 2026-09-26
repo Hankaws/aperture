@@ -76,3 +76,23 @@ than re-pinning them to whatever the repo currently holds.
 Run locally with `VITE_AUTH_ENABLED=false` and no `DATABASE_URL` to get the dev
 user and PGLite. Never set that flag false *and* a `DATABASE_URL` — the auth
 layer throws on that combination by design.
+
+## Search ranking has a benchmark — use it
+
+`semantic_search` is measured, not assumed. Before and after any change to
+tokenizing, chunking or scoring in `src/lib/indexer/` or `src/lib/parser/chunk.ts`:
+
+```sh
+node --experimental-strip-types scripts/retrieval-bench.ts             # DEV
+node --experimental-strip-types scripts/retrieval-bench.ts --held-out  # final check only
+```
+
+Tune against DEV. Run HELD-OUT once, at the end, and do not change anything in
+response to what it shows — a held-out set used to make a decision is no longer
+held out. Queries are fixed; add new cases rather than rewording existing ones.
+
+Tried and rejected, with numbers, so it is not rediscovered: chunking on Lezer
+declaration boundaries with their doc comments attached. Neutral on retrieval
+(three queries better, five worse, no pattern) and twice the index time, so it
+was not shipped. Long doc comments seem to help conceptual queries and dilute
+BM25 for code-term ones through length normalization.

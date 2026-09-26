@@ -1,4 +1,4 @@
-import { extOf } from "@/lib/utils";
+import { extOf } from "../utils.ts";
 import type { LanguageId } from "@/lib/workspace/types";
 
 export function languageFromPath(path: string): LanguageId {

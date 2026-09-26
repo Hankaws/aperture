@@ -10,7 +10,7 @@
  * path blocks an edit that would have worked, so anything the resolver cannot
  * be certain about is silently allowed.
  */
-import { parser as jsParser } from "@lezer/javascript";
+import { jsParserFor } from "../parser/lezer.ts";
 import { isScriptPath, stripJsonc } from "./syntax-check.ts";
 
 const MAX_PARSE_CHARS = 400_000;
@@ -41,20 +41,6 @@ const NODE_BUILTINS = new Set([
   "zlib",
 ]);
 
-const parsers = new Map<string, ReturnType<typeof jsParser.configure>>();
-
-function parserFor(path: string) {
-  const ts = /\.(m|c)?tsx?$/i.test(path);
-  const jsx = /x$/i.test(path);
-  const dialect = [ts ? "ts" : "", jsx ? "jsx" : ""].filter(Boolean).join(" ");
-  let cached = parsers.get(dialect);
-  if (!cached) {
-    cached = jsParser.configure(dialect ? { dialect } : {});
-    parsers.set(dialect, cached);
-  }
-  return cached;
-}
-
 export type ImportRef = {
   spec: string;
   /** Names taken from the module; empty for namespace, default-only or side-effect imports. */
@@ -82,7 +68,7 @@ export function collectImports(path: string, text: string): ImportRef[] {
   if (text.length > MAX_PARSE_CHARS) return [];
   let tree;
   try {
-    tree = parserFor(path).parse(text);
+    tree = jsParserFor(path).parse(text);
   } catch {
     return [];
   }
@@ -122,7 +108,7 @@ export function collectExports(path: string, text: string): ExportSet {
     /export\s+\*/.test(text) || /export\s+(?:const|let|var)\s*\{/.test(text);
   let tree;
   try {
-    tree = parserFor(path).parse(text);
+    tree = jsParserFor(path).parse(text);
   } catch {
     return { names, unknown: true };
   }

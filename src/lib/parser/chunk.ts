@@ -1,4 +1,4 @@
-import { languageFromPath } from "./language";
+import { languageFromPath } from "./language.ts";
 import type { ChunkKind, SyntaxChunk } from "@/lib/workspace/types";
 
 const WINDOW = 80;

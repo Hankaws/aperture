@@ -11,7 +11,7 @@
  * ES module, so the same checker runs in the agent loop on the server and in
  * the store on the client.
  */
-import { parser as jsParser } from "@lezer/javascript";
+import { jsParserFor } from "../parser/lezer.ts";
 
 /** Beyond this a parse stops being worth the latency on every staged edit. */
 const MAX_PARSE_CHARS = 400_000;
@@ -26,25 +26,6 @@ export function isScriptPath(path: string): boolean {
 
 export function isJsonPath(path: string): boolean {
   return JSON_EXT.test(path);
-}
-
-/** Lezer dialects, keyed so each configured parser is built once. */
-const parsers = new Map<string, ReturnType<typeof jsParser.configure>>();
-
-function dialectFor(path: string): string {
-  const ts = /\.(m|c)?tsx?$/i.test(path);
-  const jsx = /x$/i.test(path);
-  return [ts ? "ts" : "", jsx ? "jsx" : ""].filter(Boolean).join(" ");
-}
-
-function parserFor(path: string) {
-  const dialect = dialectFor(path);
-  let cached = parsers.get(dialect);
-  if (!cached) {
-    cached = jsParser.configure(dialect ? { dialect } : {});
-    parsers.set(dialect, cached);
-  }
-  return cached;
 }
 
 function lineStarts(text: string): number[] {
@@ -77,7 +58,7 @@ export function scriptIssues(path: string, text: string): string[] {
   if (text.length > MAX_PARSE_CHARS) return [];
   let tree;
   try {
-    tree = parserFor(path).parse(text);
+    tree = jsParserFor(path).parse(text);
   } catch (error) {
     return [error instanceof Error ? error.message.slice(0, 160) : "parse error"];
   }

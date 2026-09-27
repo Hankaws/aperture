@@ -1,0 +1,66 @@
+name: Demo deploy
+
+# Builds `main` with sign-in off and deploys it to the private Vercel project
+# `aperture-demo`. Vercel's own Git deployments can't do this: Grok exports
+# commit a prebuilt `.vercel/output`, and Vercel serves any committed
+# `.vercel/output` as-is instead of building the commit. `vercel build` clears
+# that folder and rebuilds it from source, so the demo always matches `main`.
+#
+# Needs a `VERCEL_TOKEN` repository secret. Without it the job skips with a
+# notice rather than failing.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: demo-deploy
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy:
+    name: Deploy demo to Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check for token
+        id: token
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::notice::VERCEL_TOKEN is not set; skipping the demo deploy."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.token.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.token.outputs.present == 'true'
+        run: npm install --global vercel@60
+
+      # Pulls the project settings and env (VITE_AUTH_ENABLED=false lives there).
+      - if: steps.token.outputs.present == 'true'
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - if: steps.token.outputs.present == 'true'
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - if: steps.token.outputs.present == 'true'
+        name: Deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "Deployed: $url" >> "$GITHUB_STEP_SUMMARY"

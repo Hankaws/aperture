@@ -39,6 +39,16 @@ Same class of problem: `enum`, decorators, namespaces.
 wasm assets deleted. Verify a build if you like, then
 `git checkout -- .vercel && git clean -fd .vercel` before committing.
 
+## The demo deploy builds from source, not from `.vercel/output`
+
+Vercel serves any committed `.vercel/output` as-is and skips the build
+(`.vercelignore` does not change that), so the private `aperture-demo` Vercel
+project does not deploy from Git. `.github/workflows/demo-deploy.yml` runs
+`vercel build` (which rebuilds `.vercel/output` from source with the project's
+env, including `VITE_AUTH_ENABLED=false`) and `vercel deploy --prebuilt` on
+every push to `main`. The demo is sign-in-off, so every visitor is the same
+dev user; keep Vercel Authentication on for all its deployments.
+
 ## Tests are globbed
 
 `npm test` takes `'scripts/**/*.test.mjs' 'src/**/*.test.ts'`. Do not reintroduce

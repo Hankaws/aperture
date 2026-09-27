@@ -1,7 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  SANDBOX_ROOT,
   VercelSandboxRunner,
   sandboxMode,
   toSandboxFiles,
@@ -9,7 +8,7 @@ import {
   type SandboxHandle,
 } from "./vercel.server.ts";
 
-type Call = { cmd: string; args?: string[]; cwd?: string; env?: Record<string, string>; timeoutMs?: number };
+type Call = { cmd: string; args?: string[]; env?: Record<string, string>; timeoutMs?: number };
 
 function fakeSandbox(results: { exitCode: number; output: string }[] | ((call: Call) => never)) {
   const log = { created: 0, stopped: 0, written: [] as { path: string; content: string }[], calls: [] as Call[] };
@@ -44,7 +43,7 @@ const request = {
   timeoutMs: 60_000,
 };
 
-test("writes the workspace, runs each step in the sandbox root, and stops the sandbox", async () => {
+test("writes the workspace, runs each step with the run's env, and stops the sandbox", async () => {
   const { log, create } = fakeSandbox([
     { exitCode: 0, output: "added 3 packages" },
     { exitCode: 0, output: "\u001b[32m1 passing\u001b[0m" },
@@ -60,7 +59,7 @@ test("writes the workspace, runs each step in the sandbox root, and stops the sa
   });
   assert.deepEqual(log.written.map((f) => f.path), ["package.json", "src/a.ts"]);
   assert.deepEqual(log.calls.map((c) => [c.cmd, ...(c.args ?? [])]), [["npm", "install"], ["npm", "run", "test"]]);
-  assert.ok(log.calls.every((c) => c.cwd === SANDBOX_ROOT && c.env?.CI === "1"));
+  assert.ok(log.calls.every((c) => c.env?.CI === "1"));
   assert.ok(log.calls.every((c) => (c.timeoutMs ?? 0) > 0 && (c.timeoutMs ?? 0) <= request.timeoutMs));
   assert.equal(log.stopped, 1);
 });

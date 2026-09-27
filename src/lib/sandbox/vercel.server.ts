@@ -17,9 +17,6 @@
 import { env } from "../env.server.ts";
 import { clipOutput, type RunOutcome, type RunRequest, type SandboxRunner, type StepResult } from "./runner.ts";
 
-/** Where files are written and commands run: the SDK's default working directory. */
-export const SANDBOX_ROOT = "/vercel/sandbox";
-
 /**
  * Package registries only. Installs work; the code under test (which the agent
  * may have written) cannot reach anything else. The sandbox holds no secrets
@@ -56,10 +53,10 @@ export function isConfigured(): boolean {
 /** The slice of the SDK's sandbox this adapter uses, so tests can stand in a fake. */
 export type SandboxHandle = {
   writeFiles(files: { path: string; content: string }[], opts?: { signal?: AbortSignal }): Promise<void>;
+  /** Runs in the sandbox's working directory, where `writeFiles` puts relative paths. */
   runCommand(params: {
     cmd: string;
     args?: string[];
-    cwd?: string;
     env?: Record<string, string>;
     signal?: AbortSignal;
     timeoutMs?: number;
@@ -96,14 +93,17 @@ async function createVercelSandbox(params: {
   return {
     writeFiles: (files, opts) => sandbox.writeFiles(files, opts),
     runCommand: async (run) => {
-      const finished = await sandbox.runCommand(run);
+      // The working directory comes from the sandbox, not a constant: the SDK
+      // docs say /vercel/sandbox, but the default image uses another path, and
+      // writeFiles resolves relative paths against this one.
+      const finished = await sandbox.runCommand({ ...run, cwd: sandbox.cwd });
       return { exitCode: finished.exitCode, output: () => finished.output("both") };
     },
     stop: () => sandbox.stop(),
   };
 }
 
-/** Workspace files as the SDK writes them: relative paths, under the sandbox root. */
+/** Workspace files as the SDK writes them: relative to the sandbox's working directory. */
 export function toSandboxFiles(files: Record<string, string>): { path: string; content: string }[] {
   return Object.entries(files)
     .filter(([path]) => !path.startsWith("/") && !path.split("/").includes(".."))
@@ -143,7 +143,6 @@ export class VercelSandboxRunner implements SandboxRunner {
         const finished = await sandbox.runCommand({
           cmd: step.command,
           args: step.args,
-          cwd: SANDBOX_ROOT,
           env: request.env,
           signal: request.signal,
           timeoutMs: remaining,

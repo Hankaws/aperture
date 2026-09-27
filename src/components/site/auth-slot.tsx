@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { UserButton } from "@/lib/auth/gates";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function AuthSlot({ compact = false }: { compact?: boolean }) {
-  const { user, isPending } = useCurrentUserState();
+  const { user, isPending } = useHydratedUserState();
   if (isPending) {
     return <div className={cn("animate-pulse rounded-lg bg-elevated", compact ? "h-8 w-8 rounded-full" : "h-10 w-28")} />;
   }

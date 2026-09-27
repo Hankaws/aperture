@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { SignedOut } from "@/lib/auth/gates";
+import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { ApertureMark } from "@/components/ide/logo";
 
 export function SiteFooter() {
+  const { user, isPending } = useHydratedUserState();
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -23,11 +24,11 @@ export function SiteFooter() {
           <Link to="/app" className="hover:text-fg">
             Editor
           </Link>
-          <SignedOut>
+          {!isPending && !user && (
             <Link to="/login" search={{ next: "/app" }} className="hover:text-fg">
               Sign in
             </Link>
-          </SignedOut>
+          )}
         </nav>
       </div>
     </footer>

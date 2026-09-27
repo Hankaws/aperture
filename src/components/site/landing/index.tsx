@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { PricingTable } from "@/components/site/pricing-table";
 import { buttonVariants } from "@/components/ui/button";
 import { PROVIDERS } from "@/lib/billing/plans";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { cn } from "@/lib/utils";
 import { ProductDemo } from "./demo";
 import { Reveal } from "./reveal";
@@ -94,7 +94,7 @@ const FAQ = [
 ];
 
 function HeroCtas() {
-  const { user, isPending } = useCurrentUserState();
+  const { user, isPending } = useHydratedUserState();
   if (isPending) {
     return <div className="mt-8 h-12 w-64 animate-pulse rounded-xl bg-elevated" />;
   }

@@ -72,6 +72,21 @@ export type AgentDebug = {
   response: string;
 };
 
+/**
+ * The agent's own run of the project's checks against its edits: what ran and
+ * how it went, or why nothing ran. Never inferred: only a finished run reports
+ * "passed" or "failed".
+ */
+export type VerifyReport = {
+  /** The npm script, or null when the project has none worth running. */
+  script: string | null;
+  status: "passed" | "failed" | "not_run";
+  /** One line: what failed, or why nothing ran. */
+  detail: string;
+  /** True when this is the re-run after the agent revised a failing edit. */
+  rechecked?: boolean;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -86,6 +101,8 @@ export type ChatMessage = {
   /** True when Composer posted a plan and is waiting for Build it. */
   awaitingBuild?: boolean;
   debug?: AgentDebug;
+  /** Set when Composer staged edits and checked (or could not check) them. */
+  verify?: VerifyReport;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

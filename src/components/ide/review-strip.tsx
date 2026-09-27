@@ -1,12 +1,15 @@
+import { useMemo } from "react";
 import { Check, FileDiff, MessageSquare, X } from "lucide-react";
 import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { basename, cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
+import { verifyForPending } from "@/lib/workspace/checks";
 import { pendingByPath } from "@/lib/workspace/edits";
 import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { useWorkspace } from "@/lib/workspace/store";
+import { CheckResults } from "./check-results";
 
 export function ReviewStrip() {
   const messages = useWorkspace((s) => s.messages);
@@ -19,9 +22,10 @@ export function ReviewStrip() {
   const rejectAllPending = useWorkspace((s) => s.rejectAllPending);
   const clearPendingNotes = useWorkspace((s) => s.clearPendingNotes);
   const openFile = useWorkspace((s) => s.openFile);
-  const rows = pendingByPath(messages);
+  const files = useWorkspace((s) => s.files);
+  const rows = useMemo(() => pendingByPath(messages), [messages]);
+  const verify = useMemo(() => verifyForPending(messages), [messages]);
   const noteCount = notesOn(rows);
-  const previewErrors = useIdeUi((s) => s.previewErrors);
   if (running || rows.length === 0) return null;
 
   function jump(path: string) {
@@ -39,7 +43,6 @@ export function ReviewStrip() {
             {" "}
             · {rows.length} {rows.length === 1 ? "file" : "files"} · Enter keep · Backspace skip
             {noteCount > 0 ? ` · ${noteCount} notes` : ""}
-            {previewErrors.length > 0 ? ` · preview ${previewErrors[0]}` : ""}
           </span>
         </p>
         <Button
@@ -78,6 +81,7 @@ export function ReviewStrip() {
           Apply all
         </Button>
       </div>
+      <CheckResults files={files} edits={rows} verify={verify} onOpen={jump} />
       <ul className="max-h-28 overflow-y-auto border-t border-border">
         {rows.map((edit) => {
           const stats = diffStats(edit.oldText, edit.newText);

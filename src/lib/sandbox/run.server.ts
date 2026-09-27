@@ -51,9 +51,9 @@ export async function runScript(
   ctx: RunContext,
   script: string,
   timeoutMs?: number,
-): Promise<{ text: string; passed: boolean; counted: boolean }> {
+): Promise<{ text: string; passed: boolean; counted: boolean; ran: boolean }> {
   const plan = planRun(ctx.files, script);
-  if (!plan.ok) return { text: plan.error, passed: false, counted: false };
+  if (!plan.ok) return { text: plan.error, passed: false, counted: false, ran: false };
 
   if (!ctx.runner) {
     return {
@@ -62,6 +62,7 @@ export async function runScript(
         `Verify by reading the code instead. Runnable scripts would be: ${runnableScripts(ctx.files).join(", ") || "none"}.`,
       passed: false,
       counted: false,
+      ran: false,
     };
   }
 
@@ -76,7 +77,7 @@ export async function runScript(
     row?.sandbox_runs_used ?? 0,
     row?.sandbox_run_day ?? "",
   );
-  if (!gate.ok) return { text: gate.reason, passed: false, counted: false };
+  if (!gate.ok) return { text: gate.reason, passed: false, counted: false, ran: false };
 
   const today = utcDay();
   // Count before running: a crash mid-run must not hand out a free retry loop.
@@ -103,6 +104,8 @@ export async function runScript(
     text: formatOutcome(outcome),
     passed: outcome.ok && outcome.steps.every((s) => s.exitCode === 0),
     counted: true,
+    // Billed either way, but a sandbox that never started ran none of the project's code.
+    ran: outcome.ok,
   };
 }
 

@@ -7,7 +7,8 @@ import type { ModelSource } from "@/lib/billing/plans";
 import type { WorkerSpec } from "./crew";
 import type { ProposedEdit } from "@/lib/workspace/types";
 
-export type WorkerCfg = CompletionCfg & { hosted: boolean; cents: number };
+/** `userId` lets a worker run the project's scripts, counted against that account. */
+export type WorkerCfg = CompletionCfg & { hosted: boolean; cents: number; userId?: string };
 
 function applyNotes(edits: ProposedEdit[], noted: ProposedEdit[]): ProposedEdit[] {
   return edits.map((edit) => {
@@ -49,7 +50,7 @@ export async function runComposerStreaming(
     if (!resolveWorker) return cfg;
     const resolved = await resolveWorker(worker.source);
     bills[index] = { hosted: resolved.hosted, cents: resolved.cents };
-    return resolved;
+    return { ...resolved, userId: cfg.userId };
   }
 
   function forward(tag: string, i: number) {
@@ -153,6 +154,8 @@ export async function runComposerStreaming(
     edits,
     plan: "plan" in merged ? merged.plan : input.approvedPlan,
     awaitingBuild: false,
+    // One builder checked every edit here; parallel builders each checked only their own.
+    ...("verify" in merged && merged.verify && builders.length === 1 ? { verify: merged.verify } : {}),
   };
   emit({
     type: "done",
@@ -161,6 +164,7 @@ export async function runComposerStreaming(
     edits: result.edits,
     plan: result.plan,
     awaitingBuild: false,
+    ...(result.verify ? { verify: result.verify } : {}),
   });
   if (result.edits.length) emit({ type: "edits", edits: result.edits });
   return { result, turns: n, bills };

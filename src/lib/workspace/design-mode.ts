@@ -249,6 +249,40 @@ export function assembleHtmlPreview(
   return `${html}${script}`;
 }
 
+/**
+ * Reports how the page went, once: the script errors it threw and whether it
+ * rendered anything at all. Goes first in the document so errors thrown by the
+ * page's own scripts are caught; resource errors are ignored, because relative
+ * URLs cannot load in a srcdoc frame and would fail every page with an image.
+ */
+export const RENDER_PROBE_SCRIPT = `(() => {
+  var errors = [];
+  function add(msg) { msg = String(msg || "Script error").slice(0, 180); if (errors.indexOf(msg) < 0 && errors.length < 8) errors.push(msg); }
+  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) add(e.message); });
+  window.addEventListener("unhandledrejection", function (e) { add(e.reason && e.reason.message ? e.reason.message : e.reason); });
+  function finish() {
+    var body = document.body;
+    var text = body ? (body.innerText || "").trim().length : 0;
+    var media = body ? body.querySelectorAll("img,svg,canvas,video,input,button,select,textarea").length : 0;
+    try { parent.postMessage({ type: "aperture-render-probe", errors: errors, blank: text === 0 && media === 0 }, "*"); } catch (e) {}
+  }
+  function later() { setTimeout(finish, 300); }
+  if (document.readyState === "complete") later(); else window.addEventListener("load", later);
+})();`;
+
+/** The staged page as the preview would show it, plus the probe that reports back. */
+export function renderProbeDocument(
+  files: Record<string, string>,
+  entry: string,
+  options: { runScripts?: boolean } = {},
+): string {
+  const html = assembleHtmlPreview(files, entry, options);
+  const probe = `<script>${RENDER_PROBE_SCRIPT}<\u002fscript>`;
+  if (/<head(\s[^>]*)?>/i.test(html)) return html.replace(/<head(\s[^>]*)?>/i, (tag) => `${tag}${probe}`);
+  if (/<body(\s[^>]*)?>/i.test(html)) return html.replace(/<body(\s[^>]*)?>/i, (tag) => `${tag}${probe}`);
+  return `${probe}${html}`;
+}
+
 export function previewMarkupKey(html: string): string {
   return html.replace(/<style data-from="[^"]*">[\s\S]*?<\/style>/gi, "<style/>");
 }

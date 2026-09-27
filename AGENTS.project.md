@@ -85,9 +85,32 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
 - The engine decides from what this turn has already done (tool calls and
   their results), never by counting steps, so loop nudges and verify
   failures don't derail it.
-- It never claims tests passed: verify results come from the real run.
+- It never claims tests passed: verify results come from the real run. Locally,
+  with no sandbox, the Tests check reads "not run".
 - Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
 - Try it: `APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev`.
+
+## Check results on every staged change
+
+The review strip shows four checks for whatever is staged: **Parses**,
+**Imports resolve**, **Preview renders**, **Tests**. The rows come from
+`changeChecks` in `src/lib/workspace/checks.ts` (pure and tested). A check that
+did not run reads "not run" with the reason and never counts as a pass.
+
+- **Preview renders** renders the *staged* page in a hidden
+  `sandbox="allow-scripts"` frame (`renderProbeDocument` in `design-mode.ts`).
+  The live preview shows applied files, so its errors say nothing about the
+  change. Scripts run only when the preview's Scripts toggle is on. Resource
+  errors are ignored because relative URLs never load in a srcdoc frame.
+- **Tests** is the agent's own verify run (`VerifyReport` on the message). The
+  run only happens when the request carries a `userId`, since runs are counted
+  per account. `/api/agent` passes it to the main loop and to every worker. If
+  a route drops it, every change reads "Running is not available for this
+  request."
+- `runScript` returns `ran`. A run that never executed (no sandbox, no
+  allowance, the sandbox would not start) is reported as not run. It is never
+  handed to the agent as a failure to fix. A real failure gets one fix attempt.
+  The fix gets one re-run, and only if the edits actually changed.
 
 ## Tests are globbed
 

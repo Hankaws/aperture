@@ -85,7 +85,14 @@ export const Route = createFileRoute("/api/agent")({
                 const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
                 const { result, bills } = await runComposerStreaming(
                   input,
-                  { provider: resolved.provider, apiKey: resolved.apiKey, hosted: resolved.hosted, cents: resolved.cents },
+                  {
+                    provider: resolved.provider,
+                    apiKey: resolved.apiKey,
+                    hosted: resolved.hosted,
+                    cents: resolved.cents,
+                    // Without it the agent cannot run the project's checks: runs are per account.
+                    userId,
+                  },
                   emit,
                   request.signal,
                   (n) => canAffordRuns(userId, resolved.source, n),

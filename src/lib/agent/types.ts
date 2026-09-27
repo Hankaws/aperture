@@ -1,5 +1,5 @@
 import type { ModelSource } from "@/lib/billing/plans";
-import type { AgentMode, AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentMode, AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 import type { WorkerRole, WorkerSpec } from "./crew";
 
@@ -48,6 +48,7 @@ export type AgentResult =
       plan?: PlanEntry[];
       awaitingBuild?: boolean;
       debug?: AgentDebug;
+      verify?: VerifyReport;
     }
   | {
       ok: false;

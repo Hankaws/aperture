@@ -14,10 +14,10 @@ import { applyStackMemory, formatStackContext } from "./stack";
 import type { EngineId } from "./complete.server";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
-import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
-import { verifiedLine } from "@/lib/sandbox/auto-verify";
+import { failedLine, verifiedLine } from "@/lib/sandbox/auto-verify";
 
 const MAX_PLAN_STEPS = 8;
 const MAX_BUILD_STEPS = 12;
@@ -257,8 +257,11 @@ export async function runAgentLoopStreaming(
             { userId: cfg.userId!, runner, files: ctx.files, signal },
             script,
           );
-          emit({ type: "status", text: result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed` });
-          return { text: result.text, passed: result.passed };
+          emit({
+            type: "status",
+            text: !result.ran ? `Could not run ${script}` : result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed`,
+          });
+          return { text: result.text, passed: result.passed, ran: result.ran };
         }
       : undefined,
   };
@@ -286,8 +289,10 @@ export async function runAgentLoopStreaming(
   messages.push({ role: "user", content: input.instruction });
 
   let planNudged = false;
-  let verifyAttempted = false;
-  let verifiedScript: string | null = null;
+  let verifyRuns = 0;
+  /** Staged edits as of the last verify run, to tell a real fix from a shrug. */
+  let lastVerifiedEdits = "";
+  let verify: VerifyReport | undefined;
   const maxSteps = phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
@@ -300,11 +305,18 @@ export async function runAgentLoopStreaming(
       body.awaitingBuild || phase === "plan"
         ? body.text
         : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan);
-    const verifiedText = verifiedScript ? `${text}\n\n${verifiedLine(verifiedScript)}` : text;
+    const line =
+      verify?.script && verify.status === "passed"
+        ? verifiedLine(verify.script)
+        : verify?.script && verify.status === "failed"
+          ? failedLine(verify.script)
+          : "";
+    const verifiedText = line ? `${text}\n\n${line}` : text;
     if (text !== body.text) emit({ type: "status", text: "Verifying…" });
     const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
-    emit({ type: "done", ...body, text: verifiedText, ...(debug ? { debug } : {}) });
-    return { ok: true, ...body, text: verifiedText, ...(debug ? { debug } : {}) };
+    const extra = { ...(debug ? { debug } : {}), ...(verify ? { verify } : {}) };
+    emit({ type: "done", ...body, text: verifiedText, ...extra });
+    return { ok: true, ...body, text: verifiedText, ...extra };
   };
 
   try {
@@ -350,27 +362,35 @@ export async function runAgentLoopStreaming(
           return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
         }
         const staged = mergeEdits(ctx.edits);
-        const { chooseVerifyScript, fixPrompt, shouldAutoVerify } = await import("@/lib/sandbox/auto-verify");
+        const { chooseVerifyScript, fixPrompt, notRunReport, reportFromRun, shouldAutoVerify } = await import(
+          "@/lib/sandbox/auto-verify"
+        );
         const verifyScript = chooseVerifyScript(ctx.files);
+        const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
+        if (phase !== "plan" && staged.length > 0 && (!verifyScript || !ctx.runScript)) {
+          verify = notRunReport({ script: verifyScript, hasRunner: Boolean(ctx.runScript) });
+        }
         if (
           shouldAutoVerify({
             phase,
             editCount: staged.length,
             hasRunner: Boolean(ctx.runScript),
-            attempted: verifyAttempted,
+            runs: verifyRuns,
+            editedSinceLastRun: editsKey !== lastVerifiedEdits,
             script: verifyScript,
           }) &&
           ctx.runScript &&
           verifyScript
         ) {
-          verifyAttempted = true;
+          verifyRuns += 1;
+          lastVerifiedEdits = editsKey;
           emit({ type: "status", text: `Checking with ${verifyScript}…` });
           const check = await ctx.runScript(verifyScript);
-          if (check.passed) {
-            verifiedScript = verifyScript;
-          } else {
-            // Hand the failure back as this turn's task: one attempt to fix
-            // what it just broke, before the person ever sees the diff.
+          verify = reportFromRun(verifyScript, check, verifyRuns);
+          // Only a real failure of the edits is worth a fix. Hand it back as
+          // this turn's task, once, before the person ever sees the diff; a
+          // run that never started is reported, not "fixed".
+          if (verify.status === "failed" && verifyRuns === 1) {
             messages.push({ role: "assistant", content: completion.content ?? "" });
             messages.push({ role: "user", content: fixPrompt(verifyScript, check.text) });
             continue;

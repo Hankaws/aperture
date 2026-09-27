@@ -176,7 +176,7 @@ export type ToolContext = {
   mode: "chat" | "composer" | "inline";
   role?: "build" | "review";
   /** Set when this request may run code; absent leaves `run_script` answering that it cannot. */
-  runScript?: (script: string) => Promise<{ text: string; passed: boolean }>;
+  runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean }>;
 };
 
 function clip(text: string, max = 8000): string {

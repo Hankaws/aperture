@@ -96,3 +96,21 @@ declaration boundaries with their doc comments attached. Neutral on retrieval
 (three queries better, five worse, no pattern) and twice the index time, so it
 was not shipped. Long doc comments seem to help conceptual queries and dilute
 BM25 for code-term ones through length normalization.
+
+## This repository is also edited outside Grok
+
+Work reaches `main` from two places: Grok's export, and pull requests made
+elsewhere. Your workspace may not include everything already on `main`.
+
+- **Do not delete files under `src/`, `scripts/`, `migrations/` or `.github/`
+  unless the user asked for that file to go.** A file you do not recognise is
+  more likely recent work from outside this workspace than something unused.
+- The **Export guard** workflow fails any Grok export that deletes those files,
+  and prints the `git revert` that restores them. A red Export guard after an
+  export means work was dropped. It is not something to route around.
+- It also fails if `main` was force-pushed, since that can remove commits
+  outright where a revert cannot reach them.
+
+What the guard cannot see: a line changed inside a file that both Grok and
+another contributor edited. For those files, check `main`'s version before
+exporting over it.

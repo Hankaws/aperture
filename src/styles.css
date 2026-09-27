@@ -304,19 +304,75 @@ html[data-theme="claude"] {
     height: 100%;
   }
 
-  .ide-split[data-split="off"] [data-testid="design-peek"],
-  .ide-split[data-split="off"] #sep-code-design {
+  /* A maximized preview hides the code; the panel stays mounted so the editor
+     keeps its undo history and scroll position. */
+  .ide-split[data-dock="full"] [data-testid="code"],
+  .ide-split[data-dock="full"] #sep-code-preview {
     display: none !important;
   }
 
-  .ide-split[data-split="on"][data-peek="off"] [data-testid="code-peek"],
-  .ide-split[data-split="on"][data-peek="off"] #sep-code-design {
-    display: none !important;
+  /* Panel separators: a hairline that lights up on hover and while dragging.
+     The grab area comes from each Group's resizeTargetMinimumSize. */
+  .ide-sep-x,
+  .ide-sep-y {
+    position: relative;
+    z-index: 5;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: var(--color-border);
+    outline: none;
+    transition: background-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+  }
+
+  .ide-sep-x {
+    width: 1px;
+  }
+
+  .ide-sep-y {
+    height: 1px;
+  }
+
+  .ide-sep-x:is([data-separator="hover"], [data-separator="active"], [data-separator="focus"]),
+  .ide-sep-y:is([data-separator="hover"], [data-separator="active"], [data-separator="focus"]) {
+    background: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
+
+  /* Visible grip on the splits people are most likely to want to drag. */
+  .ide-sep-grip {
+    border-radius: 9999px;
+    background: var(--color-subtle);
+    pointer-events: none;
+    transition: background-color 150ms var(--ease-out);
+  }
+
+  .ide-sep-x > .ide-sep-grip {
+    width: 3px;
+    height: 28px;
+  }
+
+  .ide-sep-y > .ide-sep-grip {
+    width: 28px;
+    height: 3px;
+  }
+
+  .ide-sep-x:is([data-separator="hover"], [data-separator="active"]) > .ide-sep-grip,
+  .ide-sep-y:is([data-separator="hover"], [data-separator="active"]) > .ide-sep-grip {
+    background: var(--color-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ide-sep-x,
+    .ide-sep-y,
+    .ide-sep-grip {
+      transition: none;
+    }
   }
 
   .ide-title {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 0.5rem;
     height: 2.75rem;
@@ -326,8 +382,10 @@ html[data-theme="claude"] {
   }
 
   @media (min-width: 768px) {
+    /* Search sits dead centre, like the VS Code and Cursor command centre. */
     .ide-title {
-      height: 2rem;
+      grid-template-columns: minmax(0, 1fr) minmax(12rem, 28rem) minmax(0, 1fr);
+      height: 2.25rem;
       padding-inline: 0.625rem;
     }
   }

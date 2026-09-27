@@ -49,6 +49,21 @@ env, including `VITE_AUTH_ENABLED=false`) and `vercel deploy --prebuilt` on
 every push to `main`. The demo is sign-in-off, so every visitor is the same
 dev user; keep Vercel Authentication on for all its deployments.
 
+## Editor layout: resizable groups mount in the browser only
+
+Every resizable split in the editor (`react-resizable-panels`) goes through
+`usePanelLayout` in `src/lib/use-panel-layout.ts`, which saves dragged sizes
+and hands them back as the Group's `defaultLayout`. Layout prefs (which panels
+show, where the preview docks, swapped sidebars) live in `ui-store.ts`, parsed
+by the tested `src/lib/layout-prefs.ts`. Two library behaviours shape this:
+
+- It throws ("Panel constraints not found") if panels are reordered in the
+  commit they first mount. So the workspace Group mounts after hydration, in
+  the saved order; later swaps reorder in place, which keeps panel state.
+- `setLayout` during the first commit updates its state without re-rendering
+  the panels, then ignores the same layout set again. Use `defaultLayout` at
+  mount, not an early `setLayout`.
+
 ## Tests are globbed
 
 `npm test` takes `'scripts/**/*.test.mjs' 'src/**/*.test.ts'`. Do not reintroduce

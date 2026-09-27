@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import type { DesignCapture } from "@/lib/workspace/design-mode";
 import { applyAppearance, readDensity, readTheme, type Density, type EditorTheme } from "@/lib/appearance";
+import {
+  DEFAULT_LAYOUT_PREFS,
+  LAYOUT_PREFS_KEY,
+  PANEL_SIZES_PREFIX,
+  parseLayoutPrefs,
+  type LayoutPrefs,
+  type PreviewDock,
+} from "@/lib/layout-prefs";
 
 const CREW_KEY = "aperture-crew";
 
@@ -51,6 +59,10 @@ type IdeUiState = {
   debug: boolean;
   designOpen: boolean;
   codePeek: boolean;
+  previewDock: PreviewDock;
+  swapSides: boolean;
+  /** Bumped by `resetLayout` so resizable groups remount at their default sizes. */
+  layoutEpoch: number;
   captures: DesignCapture[];
   previewErrors: string[];
   runPreviewScripts: boolean;
@@ -74,6 +86,9 @@ type IdeUiState = {
   setDebug: (on: boolean) => void;
   setDesignOpen: (open: boolean) => void;
   setCodePeek: (open: boolean) => void;
+  setPreviewDock: (dock: PreviewDock) => void;
+  setSwapSides: (swap: boolean) => void;
+  resetLayout: () => void;
   addCapture: (capture: DesignCapture) => void;
   setPreviewErrors: (errors: string[]) => void;
   setRunPreviewScripts: (on: boolean) => void;
@@ -106,6 +121,9 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   debug: false,
   designOpen: false,
   codePeek: false,
+  previewDock: DEFAULT_LAYOUT_PREFS.previewDock,
+  swapSides: DEFAULT_LAYOUT_PREFS.swapSides,
+  layoutEpoch: 0,
   captures: [],
   previewErrors: [],
   runPreviewScripts: false,
@@ -148,14 +166,32 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     }
     set({ debug: on });
   },
+  // The preview opens beside the code (or wherever the user docked it); it no
+  // longer hides the file tree, which made the editor feel like it vanished.
   setDesignOpen: (open) =>
     set((s) => ({
       designOpen: open,
       codePeek: false,
-      sidebarOpen: open ? false : s.sidebarOpen,
       mobilePane: open ? "editor" : s.mobilePane,
     })),
-  setCodePeek: (open) => set((s) => ({ codePeek: open, sidebarOpen: open ? true : s.sidebarOpen })),
+  setCodePeek: (open) => set({ codePeek: open }),
+  setPreviewDock: (dock) => set({ previewDock: dock, codePeek: false }),
+  setSwapSides: (swap) => set({ swapSides: swap }),
+  resetLayout: () => {
+    if (typeof window !== "undefined") {
+      try {
+        const keys: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+          const key = window.localStorage.key(i);
+          if (key?.startsWith(PANEL_SIZES_PREFIX)) keys.push(key);
+        }
+        for (const key of keys) window.localStorage.removeItem(key);
+      } catch {
+        // storage unavailable: the in-memory reset below still applies
+      }
+    }
+    set((s) => ({ ...DEFAULT_LAYOUT_PREFS, codePeek: false, layoutEpoch: s.layoutEpoch + 1 }));
+  },
   addCapture: (capture) =>
     set((s) => ({
       captures: [...s.captures, capture].slice(-8),
@@ -224,6 +260,42 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   },
 }));
 
+function readLayoutPrefs(): LayoutPrefs {
+  try {
+    return parseLayoutPrefs(window.localStorage.getItem(LAYOUT_PREFS_KEY));
+  } catch {
+    return { ...DEFAULT_LAYOUT_PREFS };
+  }
+}
+
+let layoutPersistence: (() => void) | null = null;
+
+/** Save layout prefs whenever they change, however they were set (toggles, shortcuts, `setState`). */
+function persistLayoutPrefs() {
+  if (layoutPersistence) return;
+  layoutPersistence = useIdeUi.subscribe((s, prev) => {
+    if (
+      s.sidebarOpen === prev.sidebarOpen &&
+      s.chatOpen === prev.chatOpen &&
+      s.previewDock === prev.previewDock &&
+      s.swapSides === prev.swapSides
+    ) {
+      return;
+    }
+    const prefs: LayoutPrefs = {
+      sidebarOpen: s.sidebarOpen,
+      chatOpen: s.chatOpen,
+      previewDock: s.previewDock,
+      swapSides: s.swapSides,
+    };
+    try {
+      window.localStorage.setItem(LAYOUT_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // quota
+    }
+  });
+}
+
 export function hydrateAppearance() {
   const theme = readTheme();
   const density = readDensity();
@@ -233,5 +305,7 @@ export function hydrateAppearance() {
     density,
     crewIds: readCrew(),
     runPreviewScripts: readRunScripts(),
+    ...readLayoutPrefs(),
   });
+  persistLayoutPrefs();
 }

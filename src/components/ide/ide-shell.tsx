@@ -14,6 +14,7 @@ import { HelpDialog, NewFileDialog } from "./overlays";
 import { HistoryDialog } from "./history-dialog";
 import { OpenProjectHost } from "./open-project";
 import { PreviewToggle } from "./tab-bar";
+import { LayoutMenu, PanelToggles } from "./layout-controls";
 import { AuthSlot } from "@/components/site/auth-slot";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getAiStatus } from "@/lib/agent/api";
@@ -23,6 +24,7 @@ import { useAccount, modelCaption } from "@/lib/billing/use-account";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { useIdeUi, hydrateAppearance } from "@/lib/ui-store";
+import { RESIZE_TARGET, usePanelLayout } from "@/lib/use-panel-layout";
 import { cn, isModEvent, modSymbol } from "@/lib/utils";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -143,58 +145,70 @@ function MobileAccount() {
 
 function TitleBar() {
   const name = useWorkspace((s) => s.name);
-  const path = useWorkspace((s) => s.activePath);
-  const chunks = useWorkspace((s) => s.chunks.length);
-  const indexing = useWorkspace((s) => s.indexing);
   const running = useWorkspace((s) => s.agentRunning);
   const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
   const [mod, setMod] = useState("Ctrl");
   useEffect(() => setMod(modSymbol()), []);
-  const title = path ? `${name} / ${path}` : name;
-  const status = running
-    ? "Composer running"
-    : staged > 0
-      ? `staged · ${staged} ${staged === 1 ? "file" : "files"}`
-      : indexing
-        ? "Indexing…"
-        : `indexed · ${chunks} chunks`;
+  const modKey = mod === "⌘" ? "⌘" : "Ctrl+";
+  const status = running ? "Composer running" : staged > 0 ? `${staged} staged` : null;
 
   return (
     <div className="ide-title">
-      <Link to="/" className="text-fg" aria-label="Aperture home">
-        <ApertureMark className="size-3.5" />
-      </Link>
       <div className="flex min-w-0 items-center gap-2">
-        <span className="hidden min-w-0 truncate font-mono text-[11px] text-subtle md:block">{title}</span>
-        <PreviewToggle />
-      </div>
-      <div className="flex items-center justify-end">
-        <div className="hidden items-center gap-2 md:flex">
-          <span className={cn("hidden shrink-0 font-mono text-[11px] sm:inline", staged > 0 ? "text-ok" : "text-subtle")}>
+        <Link to="/" className="grid size-6 shrink-0 place-items-center text-fg" aria-label="Aperture home">
+          <ApertureMark className="size-3.5" />
+        </Link>
+        <span className="hidden min-w-0 truncate text-[12px] font-medium text-muted md:block">{name}</span>
+        {status && (
+          <span
+            className={cn(
+              "hidden shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] md:inline-flex",
+              running ? "bg-accent/10 text-accent" : "bg-ok/10 text-ok",
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", running ? "animate-pulse bg-accent" : "bg-ok")} />
             {status}
           </span>
-          <button
-            type="button"
-            onClick={() => setCommandOpen(true)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-subtle hover:bg-elevated hover:text-fg"
-            aria-label="Go to file"
-          >
-            <Search className="size-3" />
-            Go to file
-            <kbd className="font-mono text-[10px] text-subtle">{mod === "⌘" ? "⌘P" : "Ctrl+P"}</kbd>
-          </button>
+        )}
+        <div className="md:hidden">
+          <PreviewToggle />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => setCommandOpen(true)}
+        className="hidden h-6 min-w-0 items-center gap-2 rounded-md border border-border bg-bg px-2.5 text-[12px] text-subtle transition-colors hover:border-subtle/60 hover:text-muted md:flex"
+        aria-label="Go to file"
+      >
+        <Search className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-left">Search {name}</span>
+        <kbd className="shrink-0 font-mono text-[10px] text-subtle">{modKey}P</kbd>
+      </button>
+      <div className="flex items-center justify-end gap-1">
+        <div className="hidden items-center gap-1 md:flex">
+          <PanelToggles mod={modKey} />
+          <LayoutMenu />
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
           <Link
             to="/settings"
             search={{ tab: "models" }}
             aria-label="Model settings"
-            className="grid size-7 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg"
+            title="Settings"
+            className="grid size-7 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
           >
-            <Settings className="size-3.5" />
+            <Settings className="size-4" strokeWidth={1.6} />
           </Link>
-          <Button variant="ghost" size="icon-sm" className="size-7" aria-label="How this editor works" onClick={() => setHelpOpen(true)}>
-            <Keyboard className="size-3.5" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-subtle"
+            aria-label="How this editor works"
+            title={`Shortcuts (${modKey}/)`}
+            onClick={() => setHelpOpen(true)}
+          >
+            <Keyboard className="size-4" strokeWidth={1.6} />
           </Button>
           <AuthSlot compact />
         </div>
@@ -206,6 +220,9 @@ function TitleBar() {
   );
 }
 
+const WORKSPACE_SIZES = { files: 18, editor: 54, agent: 28 } as const;
+const WORKSPACE_ORDER = ["files", "editor", "agent"] as const;
+
 export function IdeShell() {
   const sidebarOpen = useIdeUi((s) => s.sidebarOpen);
   const chatOpen = useIdeUi((s) => s.chatOpen);
@@ -216,6 +233,8 @@ export function IdeShell() {
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const setInlineOpen = useIdeUi((s) => s.setInlineOpen);
   const setMobilePane = useIdeUi((s) => s.setMobilePane);
+  const swap = useIdeUi((s) => s.swapSides);
+  const workspace = usePanelLayout("workspace", WORKSPACE_SIZES);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const [layoutReady, setLayoutReady] = useState(false);
@@ -231,8 +250,8 @@ export function IdeShell() {
   const runningRef = useRef(false);
 
   useLayoutEffect(() => {
-    setLayoutReady(true);
     hydrateAppearance();
+    setLayoutReady(true);
   }, []);
 
   useEffect(() => {
@@ -341,19 +360,45 @@ export function IdeShell() {
           data-agent={chatOpen ? "on" : "off"}
           style={!desktop && keyboardInset ? { paddingBottom: keyboardInset } : undefined}
         >
-          <Group orientation="horizontal" className="h-full min-h-0 min-w-0">
-            <Panel id="files" defaultSize="20%" minSize="14%" maxSize="32%" className="min-h-0 overflow-hidden">
-              <FileTree />
-            </Panel>
-            <Separator id="sep-files" className="w-px bg-border hover:bg-accent/40" />
-            <Panel id="editor" minSize="32%" className="min-h-0 overflow-hidden">
-              <EditorColumn />
-            </Panel>
-            <Separator id="sep-agent" className="w-px bg-border hover:bg-accent/40" />
-            <Panel id="agent" defaultSize="26%" minSize="22%" maxSize="40%" className="min-h-0 overflow-hidden">
-              <AgentPanel composerRef={composerRef} />
-            </Panel>
+          {/* Mounted in the browser only, once the saved layout is known: the
+              panel library can't reorder panels as they first mount, so they
+              start in the saved order at the saved sizes. Nothing in them works
+              before hydration anyway. Swaps from the Layout menu reorder in
+              place, which keeps every panel's state (Composer's draft too). */}
+          {!layoutReady ? (
+            <div className="h-full min-h-0 bg-bg" />
+          ) : (
+          <Group
+            orientation="horizontal"
+            className="h-full min-h-0 min-w-0"
+            groupRef={workspace.groupRef}
+            defaultLayout={workspace.defaultLayout}
+            onLayoutChanged={workspace.onLayoutChanged}
+            resizeTargetMinimumSize={RESIZE_TARGET}
+          >
+            {(swap ? [...WORKSPACE_ORDER].reverse() : WORKSPACE_ORDER).flatMap((id, i, order) => {
+              const panel =
+                id === "files" ? (
+                  <Panel key="files" id="files" defaultSize={workspace.size("files")} minSize="12%" maxSize="35%" className="min-h-0 overflow-hidden">
+                    <FileTree />
+                  </Panel>
+                ) : id === "agent" ? (
+                  <Panel key="agent" id="agent" defaultSize={workspace.size("agent")} minSize="20%" maxSize="45%" className="min-h-0 overflow-hidden">
+                    <AgentPanel composerRef={composerRef} />
+                  </Panel>
+                ) : (
+                  <Panel key="editor" id="editor" defaultSize={workspace.size("editor")} minSize="30%" className="min-h-0 overflow-hidden">
+                    <EditorColumn desktop={desktop} />
+                  </Panel>
+                );
+              if (i === order.length - 1) return [panel];
+              // Each sidebar's separator is named after it, so hiding the
+              // sidebar hides its line too, whichever side it is on.
+              const side = id === "editor" ? order[i + 1] : id;
+              return [panel, <Separator key={`sep-${side}`} id={`sep-${side}`} className="ide-sep-x" />];
+            })}
           </Group>
+          )}
           <nav className="ide-dock grid-cols-3 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
             {(
               [

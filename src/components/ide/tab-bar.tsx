@@ -12,6 +12,7 @@ function tabIcon(path: string) {
   return FileCode;
 }
 
+/** Phone title bar: Preview and, while it is open, Code (shown above the preview). */
 export function PreviewToggle({ className }: { className?: string }) {
   const open = useIdeUi((s) => s.designOpen);
   const codePeek = useIdeUi((s) => s.codePeek);
@@ -44,6 +45,30 @@ export function PreviewToggle({ className }: { className?: string }) {
           "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium md:h-7 md:px-2.5 md:text-[12px]",
           open ? "bg-accent text-bg" : "border border-border bg-elevated text-fg hover:bg-list-hover",
           className,
+        )}
+      >
+        <Eye className="size-3.5" strokeWidth={2} />
+        Preview
+      </button>
+    </div>
+  );
+}
+
+/** Editor action at the right end of the tab bar, where VS Code and Cursor put "Open Preview". */
+function PreviewAction() {
+  const open = useIdeUi((s) => s.designOpen);
+  const setOpen = useIdeUi((s) => s.setDesignOpen);
+  return (
+    <div className="hidden shrink-0 items-center border-l border-border px-1.5 md:flex">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-pressed={open}
+        aria-label={open ? "Close preview" : "Open preview"}
+        title={open ? "Close preview" : "Open preview beside the code"}
+        className={cn(
+          "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium transition-colors",
+          open ? "bg-accent/15 text-accent" : "text-muted hover:bg-list-hover hover:text-fg",
         )}
       >
         <Eye className="size-3.5" strokeWidth={2} />
@@ -136,6 +161,7 @@ export function TabBar() {
           })
         )}
       </div>
+      <PreviewAction />
     </div>
   );
 }

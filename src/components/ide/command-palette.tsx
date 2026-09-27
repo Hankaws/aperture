@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, Palette, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -263,6 +263,50 @@ export function CommandPalette() {
             >
               <RotateCcw className="size-3.5 text-subtle" />
               Reset harbor-api demo
+            </Command.Item>
+          </Command.Group>
+          <Command.Group heading="Layout" className="px-1 text-[11px] text-subtle">
+            {(
+              [
+                ["right", PanelRight, "Preview beside the code"],
+                ["bottom", PanelBottom, "Preview below the code"],
+                ["full", Maximize2, "Preview in the full editor"],
+              ] as const
+            ).map(([dock, Icon, label]) => (
+              <Command.Item
+                key={dock}
+                onSelect={() => {
+                  useIdeUi.getState().setPreviewDock(dock);
+                  setDesignOpen(true);
+                  setMobilePane("editor");
+                  close();
+                }}
+                className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+              >
+                <Icon className="size-3.5 text-subtle" />
+                {label}
+              </Command.Item>
+            ))}
+            <Command.Item
+              onSelect={() => {
+                const ui = useIdeUi.getState();
+                ui.setSwapSides(!ui.swapSides);
+                close();
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <ArrowLeftRight className="size-3.5 text-subtle" />
+              Swap sidebars
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                useIdeUi.getState().resetLayout();
+                close();
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <LayoutPanelLeft className="size-3.5 text-subtle" />
+              Reset layout
             </Command.Item>
           </Command.Group>
         </Command.List>

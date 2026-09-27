@@ -49,6 +49,14 @@ env, including `VITE_AUTH_ENABLED=false`) and `vercel deploy --prebuilt` on
 every push to `main`. The demo is sign-in-off, so every visitor is the same
 dev user; keep Vercel Authentication on for all its deployments.
 
+The agent's verify runs use Vercel Sandbox through `@vercel/sandbox`
+(`src/lib/sandbox/vercel.server.ts`). A deployment opts in with
+`APERTURE_SANDBOX=vercel-oidc` (signs in with the Vercel project's own OIDC
+identity; no stored token), or sets `VERCEL_SANDBOX_TOKEN`, `VERCEL_TEAM_ID`
+and `VERCEL_PROJECT_ID` off Vercel. Merely running on Vercel is not an opt-in.
+`GET /api/sandbox-check` runs one real, billed sandbox end to end; it is a 404
+unless `APERTURE_SANDBOX_CHECK=1`.
+
 ## Editor layout: resizable groups mount in the browser only
 
 Every resizable split in the editor (`react-resizable-panels`) goes through

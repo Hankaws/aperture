@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
+import { Route as ApiSandboxCheckRouteImport } from './routes/api/sandbox-check'
 import { Route as ApiTabRouteImport } from './routes/api/tab'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -48,6 +49,11 @@ const ApiAgentRoute = ApiAgentRouteImport.update({
   path: '/api/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSandboxCheckRoute = ApiSandboxCheckRouteImport.update({
+  id: '/api/sandbox-check',
+  path: '/api/sandbox-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTabRoute = ApiTabRouteImport.update({
   id: '/api/tab',
   path: '/api/tab',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/api/agent': typeof ApiAgentRoute
+  '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/api/agent': typeof ApiAgentRoute
+  '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/api/agent': typeof ApiAgentRoute
+  '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/settings'
     | '/api/agent'
+    | '/api/sandbox-check'
     | '/api/tab'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/settings'
     | '/api/agent'
+    | '/api/sandbox-check'
     | '/api/tab'
     | '/api/auth/$'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/settings'
     | '/api/agent'
+    | '/api/sandbox-check'
     | '/api/tab'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   SettingsRoute: typeof SettingsRoute
   ApiAgentRoute: typeof ApiAgentRoute
+  ApiSandboxCheckRoute: typeof ApiSandboxCheckRoute
   ApiTabRoute: typeof ApiTabRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sandbox-check': {
+      id: '/api/sandbox-check'
+      path: '/api/sandbox-check'
+      fullPath: '/api/sandbox-check'
+      preLoaderRoute: typeof ApiSandboxCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/tab': {
       id: '/api/tab'
       path: '/api/tab'
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   SettingsRoute: SettingsRoute,
   ApiAgentRoute: ApiAgentRoute,
+  ApiSandboxCheckRoute: ApiSandboxCheckRoute,
   ApiTabRoute: ApiTabRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

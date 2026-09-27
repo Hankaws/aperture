@@ -252,6 +252,8 @@ html[data-theme="claude"] {
 
   .ide-stack {
     display: grid;
+    /* minmax(0, 1fr): a no-wrap line that truncates must not widen the pane. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
     min-height: 0;

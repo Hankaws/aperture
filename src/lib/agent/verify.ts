@@ -5,10 +5,10 @@ import { previewIssues } from "../workspace/preview-check.ts";
 const DECL =
   /(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_][\w]*)/;
 
-function declarations(text: string): Array<{ name: string; line: number }> {
+function declarations(text: string): Array<{ name: string; line: number; topLevel: boolean }> {
   return text.split("\n").flatMap((row, i) => {
     const match = DECL.exec(row);
-    return match?.[1] ? [{ name: match[1], line: i + 1 }] : [];
+    return match?.[1] ? [{ name: match[1], line: i + 1, topLevel: !/^\s/.test(row) }] : [];
   });
 }
 
@@ -32,7 +32,9 @@ export function symbolsFromEdit(edit: ProposedEdit): string[] {
       onLine.forEach((d) => names.add(d.name));
       continue;
     }
-    const enclosing = [...decls].reverse().find((d) => d.line <= line);
+    // The enclosing symbol is the top-level one: a local `const start` inside
+    // `listTasks` is not what other files could still reference.
+    const enclosing = [...decls].reverse().find((d) => d.line <= line && d.topLevel);
     if (enclosing) names.add(enclosing.name);
   }
   for (const row of lineDiff(edit.oldText, edit.newText)) {
@@ -44,11 +46,13 @@ export function symbolsFromEdit(edit: ProposedEdit): string[] {
 }
 
 function filesMentioning(files: Record<string, string>, symbol: string, skip: Set<string>): string[] {
-  const needle = symbol.toLowerCase();
+  // Whole identifier, exact case: `listTask` is not a mention of `listTasks`,
+  // and `Start` or "restart" in prose is not a mention of `start`.
+  const needle = new RegExp(`(?<![\\w$])${symbol.replace(/[$]/g, "\\$&")}(?![\\w$])`);
   const out: string[] = [];
   for (const [path, content] of Object.entries(files)) {
     if (skip.has(path)) continue;
-    if (content.toLowerCase().includes(needle)) out.push(path);
+    if (needle.test(content)) out.push(path);
     if (out.length >= 3) break;
   }
   return out;

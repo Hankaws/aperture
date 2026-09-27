@@ -1,5 +1,6 @@
 import { AGENT_TOOLS, type AgentToolDef } from "./tools";
 import type { ProviderId } from "@/lib/billing/plans";
+import { REPLAY_INLINE_ERROR, replayCompletion, streamPieces } from "./replay";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -17,7 +18,16 @@ export type Completion = {
   tool_calls?: ChatMessage["tool_calls"];
 };
 
-export type CompletionCfg = { provider: ProviderId; apiKey: string };
+/** A real provider, or the replay model (recorded runs, no API call). */
+export type EngineId = ProviderId | "replay";
+
+export type CompletionCfg = { provider: EngineId; apiKey: string };
+
+/** Pause between streamed pieces, so a replay reads like a model typing. 0 in tests. */
+function replayDelayMs(): number {
+  const raw = Number(process.env.APERTURE_REPLAY_DELAY_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 12;
+}
 
 function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o";
@@ -49,6 +59,10 @@ export async function complete(
   signal?: AbortSignal,
   tools: AgentToolDef[] = AGENT_TOOLS,
 ): Promise<Completion> {
+  if (cfg.provider === "replay") {
+    if (!useTools) throw new Error(REPLAY_INLINE_ERROR);
+    return replayCompletion(messages, tools.map((t) => t.function.name));
+  }
   if (cfg.provider === "anthropic") {
     return completeAnthropic(cfg.apiKey, messages, useTools, signal, tools);
   }
@@ -89,6 +103,16 @@ export async function completeStreaming(
   signal?: AbortSignal,
   tools: AgentToolDef[] = AGENT_TOOLS,
 ): Promise<Completion> {
+  if (cfg.provider === "replay") {
+    const completion = replayCompletion(messages, useTools ? tools.map((t) => t.function.name) : []);
+    const delay = replayDelayMs();
+    for (const piece of streamPieces(completion.content)) {
+      if (signal?.aborted) throw new Error("This operation was aborted");
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      onText(piece);
+    }
+    return completion;
+  }
   if (cfg.provider === "anthropic") {
     return streamAnthropic(cfg.apiKey, messages, useTools, onText, signal, tools);
   }

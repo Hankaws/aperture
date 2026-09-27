@@ -345,10 +345,17 @@ export const resetSession = createServerFn({ method: "POST" })
   });
 
 export type ResolvedModel =
-  | { ok: true; provider: ProviderId; apiKey: string; hosted: boolean; source: ModelSource; cents: number }
+  | { ok: true; provider: ProviderId | "replay"; apiKey: string; hosted: boolean; source: ModelSource; cents: number }
   | { ok: false; error: string };
 
 export async function resolveModel(userId: string, requested?: ModelSource | null): Promise<ResolvedModel> {
+  // A replay deployment answers every Composer run from recordings: no key,
+  // no quota and no cost, and the UI labels it so nobody mistakes it for a model.
+  const { replayEnabled } = await import("@/lib/agent/replay");
+  if (replayEnabled()) {
+    const source: ModelSource = requested && isModelSource(requested) ? requested : "hosted";
+    return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
+  }
   const { decryptSecret } = await peek();
   const row = await loadSettings(userId);
   const account = await snapshotOf(row);
@@ -384,6 +391,8 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
 }
 
 export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
+  const { replayEnabled } = await import("@/lib/agent/replay");
+  if (replayEnabled()) return { ok: false, error: "Tab needs a real model; replay only plays back Composer tasks." };
   const { decryptSecret } = await peek();
   const row = await loadSettings(userId);
   const account = await snapshotOf(row);

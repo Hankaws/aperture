@@ -72,6 +72,23 @@ by the tested `src/lib/layout-prefs.ts`. Two library behaviours shape this:
   the panels, then ignores the same layout set again. Use `defaultLayout` at
   mount, not an early `setLayout`.
 
+## Replay model: the whole product with no API key
+
+`APERTURE_MODEL=replay` makes every Composer run play back a recorded one
+(`src/lib/agent/replay.ts`) instead of calling a model: reads, plan, staged
+diffs, the loop's own verify step, apply. Use it for product work, end-to-end
+tests and demos. The UI labels it "Replay model" and it costs nothing.
+
+- Tapes cover the harbor-api demo's three known bugs; anything else gets a
+  list of what is recorded. Add a tape by recording its `search` strings
+  against `DEMO_FILES` exactly; `replay.test.ts` fails if one stops applying.
+- The engine decides from what this turn has already done (tool calls and
+  their results), never by counting steps, so loop nudges and verify
+  failures don't derail it.
+- It never claims tests passed: verify results come from the real run.
+- Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
+- Try it: `APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev`.
+
 ## Tests are globbed
 
 `npm test` takes `'scripts/**/*.test.mjs' 'src/**/*.test.ts'`. Do not reintroduce

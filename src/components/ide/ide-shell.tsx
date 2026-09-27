@@ -265,7 +265,10 @@ export function IdeShell() {
 
   useEffect(() => {
     void getAiStatus()
-      .then((s) => setAiAvailable(s.available))
+      .then((s) => {
+        setAiAvailable(s.available);
+        useIdeUi.setState({ aiReplay: s.replay });
+      })
       .catch(() => setAiAvailable(false));
   }, []);
 
@@ -340,13 +343,16 @@ export function IdeShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setCommandOpen, setHelpOpen, setInlineOpen, toggleChat, toggleSidebar]);
 
+  const aiReplay = useIdeUi((s) => s.aiReplay);
   const aiLabel = !user
     ? "Sign in"
-    : account
-      ? modelCaption(account)
-      : aiAvailable === false
-        ? "AI offline"
-        : "grok-4.5";
+    : aiReplay
+      ? "Replay model"
+      : account
+        ? modelCaption(account)
+        : aiAvailable === false
+          ? "AI offline"
+          : "grok-4.5";
 
   return (
     <div className="relative h-dvh bg-bg text-fg">

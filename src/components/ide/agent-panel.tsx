@@ -15,7 +15,7 @@ import { CrewBar, WorkerConfirm } from "./crew-bar";
 import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { quoteRun, quoteRuns } from "@/lib/billing/cost";
+import { quoteRun, quoteRuns, replayQuote } from "@/lib/billing/cost";
 import type { AccountSnapshot } from "@/lib/billing/api";
 import { billedWorkers } from "@/lib/agent/fanout";
 import { availableSeats, modelSeats, proposeReviewer, proposeWorkers, selectedSeats, type WorkerSpec } from "@/lib/agent/crew";
@@ -133,7 +133,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const signedOut = mounted && !isPending && !user;
   const suggestions = name === DEMO_WORKSPACE_NAME ? DEMO_SUGGESTIONS : GENERIC_SUGGESTIONS;
   const source = target.kind === "model" ? target.source : account?.modelSource ?? "hosted";
-  const quote = quoteRun(account, source);
+  const replay = useIdeUi((s) => s.aiReplay);
+  const quote = replay ? replayQuote(quoteRun(account, source)) : quoteRun(account, source);
   const blocked = target.kind === "model" && quote.blocked;
   const acpBlocked = target.kind === "acp" && target.remote === false && quote.blocked;
 
@@ -434,7 +435,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   }, [agentRunning, user, nextSteer]);
 
   return (
-    <div className="ide-stack bg-surface">
+    // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.
+    <div className="ide-stack bg-surface [grid-template-rows:auto_auto_minmax(0,1fr)_auto]">
       <div className="flex h-8 items-center gap-1.5 border-b border-border px-2">
         <div className="flex rounded-md border border-border p-px">
           {(
@@ -906,8 +908,9 @@ function PlanChrome({
     onFocus();
   }
 
+  // One grid row for the strip and the worker card, however many of them show.
   return (
-    <>
+    <div className="min-w-0">
       <TaskStrip
         mode={mode}
         activePhase={sendPhase}
@@ -927,7 +930,7 @@ function PlanChrome({
           onSingle={() => void onBuild(awaitingMsg)}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -981,6 +984,7 @@ function MessageList({
     if (msg) notesRef.current(msg.edits);
   }, []);
 
+  const replay = useIdeUi((s) => s.aiReplay);
   return (
     <div
       ref={listRef}
@@ -1000,7 +1004,7 @@ function MessageList({
               message={message}
               running={running}
               quoteLabel={
-                message.awaitingBuild
+                message.awaitingBuild && !replay
                   ? quoteRuns(
                       account ?? null,
                       source,

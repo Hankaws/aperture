@@ -11,7 +11,7 @@ import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
 import { compactLoopMessages } from "./compact";
 import { applyStackMemory, formatStackContext } from "./stack";
-import type { ProviderId } from "@/lib/billing/plans";
+import type { EngineId } from "./complete.server";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
@@ -203,14 +203,14 @@ function buildContextMessage(
 
 export async function runAgentLoop(
   input: AgentInput,
-  cfg: { provider: ProviderId; apiKey: string; userId?: string },
+  cfg: { provider: EngineId; apiKey: string; userId?: string },
 ): Promise<AgentResult> {
   return runAgentLoopStreaming(input, cfg, () => undefined);
 }
 
 export async function runAgentLoopStreaming(
   input: AgentInput,
-  cfg: { provider: ProviderId; apiKey: string; userId?: string },
+  cfg: { provider: EngineId; apiKey: string; userId?: string },
   emit: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
@@ -456,7 +456,7 @@ export async function runAgentLoopStreaming(
 }
 
 async function runInline(
-  cfg: { provider: ProviderId; apiKey: string },
+  cfg: { provider: EngineId; apiKey: string },
   input: AgentInput,
   files: Record<string, string>,
   signal?: AbortSignal,

@@ -43,6 +43,19 @@ export type RunQuote = {
   blockReason: string | null;
 };
 
+/** What a run costs on a replay deployment: nothing, and never blocked by hosted quota. */
+export function replayQuote(base: RunQuote): RunQuote {
+  return {
+    ...base,
+    hosted: false,
+    cents: 0,
+    label: "Replay model",
+    sub: "recorded runs · no API call · no cost",
+    blocked: false,
+    blockReason: null,
+  };
+}
+
 export function formatUsd(cents: number): string {
   return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }

@@ -3,7 +3,9 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { AgentInput, AgentResult } from "./types";
 
 export const getAiStatus = createServerFn({ method: "POST" }).handler(async () => {
-  return { available: Boolean(process.env.XAI_API_KEY) };
+  const { replayEnabled } = await import("./replay");
+  const replay = replayEnabled();
+  return { available: replay || Boolean(process.env.XAI_API_KEY), replay };
 });
 
 export const runAgent = createServerFn({ method: "POST" })

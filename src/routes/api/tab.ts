@@ -60,6 +60,8 @@ export const Route = createFileRoute("/api/tab")({
         if (!resolved.ok) {
           return Response.json({ error: resolved.error, text: "" }, { status: 200 });
         }
+        // Replay has nothing recorded for ghost text (resolveTabModel already refuses it).
+        if (resolved.provider === "replay") return Response.json({ text: "" });
 
         try {
           const text = await completeTab(

@@ -63,6 +63,8 @@ type IdeUiState = {
   swapSides: boolean;
   /** Bumped by `resetLayout` so resizable groups remount at their default sizes. */
   layoutEpoch: number;
+  /** The server answers Composer from recorded runs (APERTURE_MODEL=replay), not a model. */
+  aiReplay: boolean;
   captures: DesignCapture[];
   previewErrors: string[];
   runPreviewScripts: boolean;
@@ -124,6 +126,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   previewDock: DEFAULT_LAYOUT_PREFS.previewDock,
   swapSides: DEFAULT_LAYOUT_PREFS.swapSides,
   layoutEpoch: 0,
+  aiReplay: false,
   captures: [],
   previewErrors: [],
   runPreviewScripts: false,

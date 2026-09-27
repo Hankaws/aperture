@@ -64,7 +64,6 @@ export function nearestUiFiles(
     .filter((path) => /\.(html?|css|tsx|jsx)$/i.test(path))
     .map((path) => {
       let score = 0;
-      const base = path.toLowerCase();
       if (path === activePath) score += 5;
       if (dir && path.startsWith(`${dir}/`)) score += 2;
       if (/\.html?$/i.test(path)) score += 2;

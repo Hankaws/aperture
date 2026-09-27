@@ -79,6 +79,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const captures = useIdeUi((s) => s.captures);
   const removeCapture = useIdeUi((s) => s.removeCapture);
   const steerQueue = useIdeUi((s) => s.steerQueue);
+  const nextSteer = steerQueue[0];
   const crewIds = useIdeUi((s) => s.crewIds);
   const { user, isPending } = useCurrentUserState();
   const { account, setAccount, refresh } = useAccount();
@@ -101,12 +102,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     setMounted(true);
   }, []);
 
+  const modelSource = account?.modelSource;
   useEffect(() => {
-    if (!account) return;
-    setTarget((prev) =>
-      prev.kind === "model" && prev.source !== account.modelSource ? { kind: "model", source: account.modelSource } : prev,
-    );
-  }, [account?.modelSource]);
+    if (!modelSource) return;
+    setTarget((prev) => (prev.kind === "model" && prev.source !== modelSource ? { kind: "model", source: modelSource } : prev));
+  }, [modelSource]);
 
   useEffect(() => {
     if (!account?.acp) {
@@ -427,7 +427,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     if (!next) return;
     useIdeUi.getState().shiftSteer();
     void send(next);
-  }, [agentRunning, user, steerQueue[0]]);
+    // `send` is recreated every render; the effect always runs with the render
+    // that changed its deps, so it never sees a stale one. Listing it would
+    // re-fire on every render, and the head check above is what drains the queue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentRunning, user, nextSteer]);
 
   return (
     <div className="ide-stack bg-surface">

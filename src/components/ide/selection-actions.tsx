@@ -14,7 +14,7 @@ function explainPrompt(path: string, fromLine: number, toLine: number) {
   return `Explain the selected code in ${path} (L${fromLine}–${toLine}). First say what it is and how it works. Then 2–4 key insights. Do not edit.`;
 }
 
-export function useAssistActions() {
+function useAssistActions() {
   const selection = useWorkspace((s) => s.selection);
   const activePath = useWorkspace((s) => s.activePath);
   const agentRunning = useWorkspace((s) => s.agentRunning);

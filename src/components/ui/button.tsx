@@ -35,4 +35,6 @@ export function Button({
   return <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
+// shadcn convention: variants ship beside the component so links can borrow them.
+// eslint-disable-next-line react-refresh/only-export-components
 export { buttonVariants };

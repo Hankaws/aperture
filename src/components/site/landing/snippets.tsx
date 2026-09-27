@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { usePrefersReducedMotion } from "./reveal";
+import { usePrefersReducedMotion } from "./use-reduced-motion";
 import { useTyped } from "./typed";
 
 type SnipLine = {

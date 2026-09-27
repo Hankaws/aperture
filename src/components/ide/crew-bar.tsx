@@ -61,11 +61,16 @@ export function WorkerConfirm({
   const files = fileList;
   const suggested = proposeWorkers(plan, files, seats);
   const planKey = plan.map((p) => p.id).join("|");
+  const seatKey = seats.map((s) => `${s.id}:${s.ready ? 1 : 0}`).join("|");
   const [workers, setWorkers] = useState<WorkerSpec[]>(suggested);
 
+  // Re-propose when the plan or the crew changes (a seat toggled in the crew
+  // bar, or the account loading after first paint), not on every file edit,
+  // which would wipe the user's Build/Review toggles mid-review.
   useEffect(() => {
     setWorkers(proposeWorkers(plan, files, seats));
-  }, [planKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on planKey/seatKey above
+  }, [planKey, seatKey]);
 
   const quote = quoteRuns(account ?? null, quoteSource, Math.max(workers.length, 1));
   const ok = canConfirm(workers);

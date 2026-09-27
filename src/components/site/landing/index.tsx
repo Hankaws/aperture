@@ -9,7 +9,8 @@ import { PROVIDERS } from "@/lib/billing/plans";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 import { ProductDemo } from "./demo";
-import { Reveal, usePrefersReducedMotion } from "./reveal";
+import { Reveal } from "./reveal";
+import { usePrefersReducedMotion } from "./use-reduced-motion";
 import { SnippetShowcase } from "./snippets";
 import { BUILTIN_ACP, acpAgentNames } from "@/lib/acp/kinds";
 

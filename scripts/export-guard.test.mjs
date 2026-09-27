@@ -24,7 +24,7 @@ test("only an export deleting guarded files is a violation", () => {
   const found = findViolations([
     { sha: "a1", author: GROK, deleted: ["src/lib/sync.ts"] },
     { sha: "b2", author: GROK, deleted: [".vercel/output/old.mjs"] },
-    { sha: "c3", author: HUMAN, deleted: ["src/lib/multiplayer/p2p.ts"] },
+    { sha: "c3", author: HUMAN, deleted: ["src/lib/old-helper.ts"] },
     { sha: "d4", author: GROK, deleted: [] },
   ]);
   assert.deepEqual(found.map((v) => v.sha), ["a1"]);

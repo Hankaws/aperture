@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePrefersReducedMotion } from "./reveal";
+import { usePrefersReducedMotion } from "./use-reduced-motion";
 import { useTyped } from "./typed";
 
 const PROMPT = "Fix pagination in @src/store.ts";

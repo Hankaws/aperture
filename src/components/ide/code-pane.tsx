@@ -301,7 +301,7 @@ export function CodePane() {
       effects: ghostConf.reconfigure(tabOn ? ghostText(() => pathRef.current) : []),
       annotations: syncAnn.of(true),
     });
-  }, [tabOn]);
+  }, [tabOn, ghostConf]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -350,7 +350,7 @@ export function CodePane() {
       effects,
       annotations: syncAnn.of(true),
     });
-  }, [activePath, value]);
+  }, [activePath, value, langConf, wrapConf]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -374,7 +374,7 @@ export function CodePane() {
       ),
       annotations: syncAnn.of(true),
     });
-  }, [pendingEdit]);
+  }, [pendingEdit, diffConf]);
 
   useEffect(() => {
     if (!pendingEdit) {

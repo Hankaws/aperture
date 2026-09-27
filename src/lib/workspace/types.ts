@@ -1,3 +1,4 @@
+import type { ModelSource } from "../billing/plans.ts";
 export type LanguageId =
   | "typescript"
   | "javascript"
@@ -103,6 +104,10 @@ export type ChatMessage = {
   debug?: AgentDebug;
   /** Set when Composer staged edits and checked (or could not check) them. */
   verify?: VerifyReport;
+  /** The model a Composer run used, so a follow-up (a test fix) can use the same one. */
+  modelSource?: ModelSource;
+  /** The one automatic test fix for this change was already sent. */
+  autoFixed?: boolean;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

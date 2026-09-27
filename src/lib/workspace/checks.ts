@@ -12,7 +12,8 @@ import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./pre
 import { isScriptPath } from "./syntax-check.ts";
 
 export type CheckId = "parse" | "imports" | "preview" | "tests";
-export type CheckStatus = "pass" | "fail" | "skip" | "running";
+/** `warn`: failing, but failing the same way before this change. */
+export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
 export type CheckRow = {
   id: CheckId;
@@ -30,6 +31,23 @@ export type RenderResult =
   | { state: "pending" }
   | { state: "done"; errors: string[]; blank: boolean }
   | { state: "timeout" };
+
+/** The project's tests, run in this browser tab against the staged files. */
+export type BrowserTests =
+  | null
+  | { state: "running"; script: string }
+  | { state: "unsupported"; reason: string }
+  | {
+      state: "done";
+      script: string;
+      passed: boolean;
+      /** What failed, one line. */
+      detail: string;
+      /** How many tests passed, when the project uses node:test. */
+      pass?: number;
+      /** The applied files fail the same way: this change did not break it. */
+      preexisting?: boolean;
+    };
 
 const BROWSER_SCRIPT = /\.m?js$/i;
 
@@ -73,6 +91,8 @@ export function changeChecks(input: {
   render: RenderResult;
   /** The agent's own run for this change, if it made one. */
   verify?: VerifyReport | null;
+  /** The same tests, run in the browser. Used when the agent's run did not happen. */
+  browser?: BrowserTests;
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
@@ -127,14 +147,48 @@ export function changeChecks(input: {
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
-  return [parse, imports, preview, testsRow(verify ?? null)];
+  return [parse, imports, preview, testsRow(verify ?? null, input.browser ?? null)];
 }
 
-function testsRow(verify: VerifyReport | null): CheckRow {
+function testLabel(script: string | null): string {
+  return !script ? "Tests" : script === "test" ? "Tests pass" : `${script} passes`;
+}
+
+function browserRow(browser: Exclude<BrowserTests, null>): CheckRow {
+  if (browser.state === "unsupported") {
+    return { id: "tests", label: "Tests", status: "skip", detail: `Not run: ${browser.reason}` };
+  }
+  if (browser.state === "running") {
+    return { id: "tests", label: testLabel(browser.script), status: "running", detail: `Running npm run ${browser.script} in the browser…` };
+  }
+  const label = testLabel(browser.script);
+  if (browser.passed) {
+    const count = browser.pass ? ` (${browser.pass} test${browser.pass === 1 ? "" : "s"})` : "";
+    return { id: "tests", label, status: "pass", detail: `npm run ${browser.script} passed in the browser${count}.` };
+  }
+  if (browser.preexisting) {
+    return {
+      id: "tests",
+      // Not "Tests pass": they do not, this change just did not break them.
+      label: "Tests",
+      status: "warn",
+      detail: `Already failing before this change: ${browser.detail}`,
+    };
+  }
+  return { id: "tests", label, status: "fail", detail: `npm run ${browser.script} fails in the browser: ${browser.detail}` };
+}
+
+/**
+ * The agent's own sandbox run wins when it ran: that is a real Node. The
+ * browser run fills in when it did not, and when neither ran the row says why.
+ */
+function testsRow(verify: VerifyReport | null, browser: BrowserTests): CheckRow {
+  const ranInSandbox = verify && (verify.status === "passed" || verify.status === "failed");
+  if (!ranInSandbox && browser) return browserRow(browser);
   if (!verify) {
     return { id: "tests", label: "Tests", status: "skip", detail: "Not run for this change." };
   }
-  const label = !verify.script ? "Tests" : verify.script === "test" ? "Tests pass" : `${verify.script} passes`;
+  const label = testLabel(verify.script);
   if (verify.status === "not_run") return { id: "tests", label: "Tests", status: "skip", detail: `Not run: ${verify.detail}` };
   const after = verify.rechecked ? " after the agent's fix" : "";
   if (verify.status === "passed") {
@@ -148,13 +202,36 @@ function testsRow(verify: VerifyReport | null): CheckRow {
   };
 }
 
+/** The latest message that still has pending edits: the change the checks describe. */
+export function pendingSource<M extends { edits?: ProposedEdit[] }>(messages: M[]): M | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i]!;
+    if (message.edits?.some((e) => e.status === "pending")) return message;
+  }
+  return null;
+}
+
 /** The verify report for the pending edits: from the latest message that staged any. */
 export function verifyForPending(
   messages: Array<{ edits?: ProposedEdit[]; verify?: VerifyReport }>,
 ): VerifyReport | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i]!;
-    if (message.edits?.some((e) => e.status === "pending")) return message.verify ?? null;
-  }
-  return null;
+  return pendingSource(messages)?.verify ?? null;
+}
+
+/** An automatic fix goes out only right after the run, never for an old change reopened later. */
+export const AUTO_FIX_WINDOW_MS = 10 * 60_000;
+
+/**
+ * Whether a failing browser run should go back to the agent, once: a Composer
+ * change (not an external agent's), freshly made, whose tests fail in a way
+ * the applied files do not, and that has not had its one fix already.
+ */
+export function shouldAutoFix(
+  message: { role: string; createdAt: number; modelSource?: string; autoFixed?: boolean; plan?: unknown[] } | null,
+  tests: BrowserTests,
+  now: number,
+): boolean {
+  if (!message || message.role !== "assistant" || message.autoFixed || !message.modelSource) return false;
+  if (now - message.createdAt > AUTO_FIX_WINDOW_MS) return false;
+  return tests !== null && tests.state === "done" && !tests.passed && !tests.preexisting;
 }

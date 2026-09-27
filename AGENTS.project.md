@@ -107,6 +107,26 @@ did not run reads "not run" with the reason and never counts as a pass.
   per account. `/api/agent` passes it to the main loop and to every worker. If
   a route drops it, every change reads "Running is not available for this
   request."
+- When the sandbox did not run, **Tests** comes from the browser test runner
+  (`src/lib/runner/`). It runs `npm run test` in the tab, free, against the
+  staged files. `plan.ts` reads the script and supports only `node [flags]
+  files`, `node --test [globs]` and `tsx`. `bundle.ts` strips TypeScript with
+  sucrase and resolves every import up front. `runtime.ts` provides
+  `node:assert`, `node:test`, `node:path`, `node:util` and `process`. Anything
+  else (npm packages, `node:http`, jest, vitest) reports "not run" with the
+  reason; it never counts as a failure.
+- The code runs in a Worker inside a hidden `sandbox="allow-scripts"` frame
+  whose CSP blocks all network, so agent-written code cannot call this app's
+  API as the user. A run that passes 10 s is ended by removing the frame.
+  `runner.test.ts` runs the same bundles in a Node `vm` context: keep new
+  runtime behaviour covered there.
+- A failure is re-run against the applied files. If it failed the same way
+  before, it shows amber ("Already failing before this change") and is not
+  blamed on the change. A new failure on a fresh Composer change goes back to
+  Composer once (`shouldAutoFix`); the message's `autoFixed` flag stops a second
+  attempt.
+- The agent loop works on applied files plus staged edits. A follow-up that
+  edited the applied text instead would drop the change it follows up on.
 - `runScript` returns `ran`. A run that never executed (no sandbox, no
   allowance, the sandbox would not start) is reported as not run. It is never
   handed to the agent as a failure to fix. A real failure gets one fix attempt.

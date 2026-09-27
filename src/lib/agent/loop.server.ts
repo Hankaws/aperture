@@ -17,6 +17,7 @@ import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
+import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
 import { failedLine, verifiedLine } from "@/lib/sandbox/auto-verify";
 
 const MAX_PLAN_STEPS = 8;
@@ -215,8 +216,17 @@ export async function runAgentLoopStreaming(
   signal?: AbortSignal,
 ): Promise<AgentResult> {
   const flavor = flavorOf(input);
+  // The agent works on the files as they will be once staged edits apply: a
+  // follow-up (a test fix, answered notes) that edited the applied text
+  // instead would silently drop the change it follows up on.
   const fileMap = applyStackMemory(
-    sanitizeFileMap(Object.fromEntries(input.files.map((f) => [f.path, f.content]))),
+    sanitizeFileMap(
+      overlayEdits(
+        Object.fromEntries(input.files.map((f) => [f.path, f.content])),
+        // The input guard clips edits at 20,000 characters; a clipped one would truncate the file.
+        (input.pendingEdits ?? []).filter((e) => e.status === "pending" && e.newText.length < 20_000),
+      ),
+    ),
   );
   const mentioned = parseMentions(input.instruction, fileMap);
   const auto = input.focusPaths?.length

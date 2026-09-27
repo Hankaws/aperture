@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { changeChecks, renderEntry, verifyForPending, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, changeChecks, renderEntry, shouldAutoFix, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -137,4 +137,41 @@ test("the probe goes first in the page, so it sees the page's own errors", () =>
   const header = renderProbeDocument({ "p.html": "<header>x</header>" }, "p.html");
   assert.ok(header.indexOf("aperture-render-probe") < header.indexOf("<header>"), "<header> is not <head>");
   assert.doesNotMatch(RENDER_PROBE_SCRIPT, /<\/script>/i);
+});
+
+test("the browser run fills the tests row when the sandbox did not run", () => {
+  const at = (browser: BrowserTests, verify: VerifyReport | null = null) =>
+    row(changeChecks({ files: FILES, edits: [edit("src/b.ts", "export const b = 2;\n")], render: null, verify, browser }), "tests");
+  assert.equal(at({ state: "running", script: "test" }).status, "running");
+  const passed = at({ state: "done", script: "test", passed: true, detail: "", pass: 3 });
+  assert.deepEqual([passed.status, passed.detail], ["pass", "npm run test passed in the browser (3 tests)."]);
+  const failed = at({ state: "done", script: "test", passed: false, detail: "Error: first item should be tsk_100" });
+  assert.deepEqual([failed.status, failed.detail], ["fail", "npm run test fails in the browser: Error: first item should be tsk_100"]);
+  const before = at({ state: "done", script: "test", passed: false, detail: "Error: x", preexisting: true });
+  assert.deepEqual([before.status, before.label, before.detail], ["warn", "Tests", "Already failing before this change: Error: x"]);
+  const unsupported = at({ state: "unsupported", reason: "`npm run test` runs vitest, which needs a real Node." });
+  assert.equal(unsupported.status, "skip");
+  assert.match(unsupported.detail, /^Not run: .*vitest/);
+  // A real sandbox run is the stronger evidence and wins.
+  const sandbox = at({ state: "done", script: "test", passed: false, detail: "x" }, { script: "test", status: "passed", detail: "" });
+  assert.equal(sandbox.status, "pass");
+  assert.match(sandbox.detail, /^npm run test passed\.$/);
+  // A sandbox that never ran defers to the browser.
+  const deferred = at({ state: "done", script: "test", passed: true, detail: "" }, { script: "test", status: "not_run", detail: "No sandbox." });
+  assert.equal(deferred.status, "pass");
+});
+
+test("shouldAutoFix: one fix, for a fresh Composer change that broke the tests", () => {
+  const now = 1_000_000;
+  const message = { role: "assistant", createdAt: now - 1000, modelSource: "hosted", plan: [] };
+  const failing: BrowserTests = { state: "done", script: "test", passed: false, detail: "x" };
+  assert.equal(shouldAutoFix(message, failing, now), true);
+  assert.equal(shouldAutoFix({ ...message, autoFixed: true }, failing, now), false, "only once");
+  assert.equal(shouldAutoFix({ ...message, modelSource: undefined }, failing, now), false, "not an external agent's change");
+  assert.equal(shouldAutoFix({ ...message, createdAt: now - AUTO_FIX_WINDOW_MS - 1 }, failing, now), false, "not an old change");
+  assert.equal(shouldAutoFix(message, { ...failing, preexisting: true }, now), false, "not a failure it did not cause");
+  assert.equal(shouldAutoFix(message, { ...failing, passed: true }, now), false);
+  assert.equal(shouldAutoFix(message, { state: "running", script: "test" }, now), false);
+  assert.equal(shouldAutoFix({ ...message, role: "user" }, failing, now), false);
+  assert.equal(shouldAutoFix(null, failing, now), false);
 });

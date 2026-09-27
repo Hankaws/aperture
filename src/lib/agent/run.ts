@@ -3,7 +3,7 @@ import { getBearerToken } from "@/lib/auth/client";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { ModelSource } from "@/lib/billing/plans";
-import type { AgentMode, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentMode, ChatMessage, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
 import type { AgentResult } from "./types";
 import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
@@ -118,6 +118,8 @@ export async function submitAgent(
     workers?: WorkerSpec[];
     role?: WorkerRole;
     pendingEdits?: ProposedEdit[];
+    /** Extra fields for the reply message (e.g. marking an automatic fix). */
+    messageExtra?: Pick<ChatMessage, "autoFixed">;
   },
 ) {
   const trimmed = instruction.trim();
@@ -156,6 +158,8 @@ export async function submitAgent(
               : "Working…",
     agentLabel,
     createdAt: stamp + 1,
+    ...(mode === "composer" && !opts?.agentId && source ? { modelSource: source } : {}),
+    ...opts?.messageExtra,
   });
   state.setAgentRunning(true, mode);
 

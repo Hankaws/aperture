@@ -6,6 +6,7 @@
  * in the agent's own terms, because its reply is what the model reads next.
  */
 import { planById, type PlanId } from "../billing/plans.ts";
+import { spendOwnerId } from "../auth/visitor.ts";
 import { clampTimeout, planRun, runnableScripts, sandboxEnv } from "./policy.ts";
 import { formatOutcome, type RunOutcome, type SandboxRunner } from "./runner.ts";
 import type { WorkspaceFiles } from "../workspace/sync.ts";
@@ -68,8 +69,10 @@ export async function runScript(
 
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
+  // Runs bill the operator: anonymous visitors share one daily allowance.
+  const payer = spendOwnerId(ctx.userId);
   const rows = await sql<{ plan: string; sandbox_runs_used: number; sandbox_run_day: string }>`
-    select plan, sandbox_runs_used, sandbox_run_day from user_settings where user_id = ${ctx.userId}
+    select plan, sandbox_runs_used, sandbox_run_day from user_settings where user_id = ${payer}
   `;
   const row = rows[0];
   const gate = checkAllowance(
@@ -83,7 +86,7 @@ export async function runScript(
   // Count before running: a crash mid-run must not hand out a free retry loop.
   await sql`
     insert into user_settings (user_id, sandbox_runs_used, sandbox_run_day)
-    values (${ctx.userId}, 1, ${today})
+    values (${payer}, 1, ${today})
     on conflict (user_id) do update set
       sandbox_runs_used = case
         when user_settings.sandbox_run_day = ${today} then user_settings.sandbox_runs_used + 1

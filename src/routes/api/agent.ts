@@ -50,7 +50,8 @@ export const Route = createFileRoute("/api/agent")({
           const { acpAgentNames } = await import("@/lib/acp/kinds");
           const { getSql } = await import("@/lib/db");
           const sql = await getSql();
-          const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${userId}`;
+          const { spendOwnerId } = await import("@/lib/auth/visitor");
+          const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(userId)}`;
           if (!planById(settings[0]?.plan ?? "hobby").acp) {
             return Response.json(
               {

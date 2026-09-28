@@ -72,7 +72,7 @@ environment settings, never in a committed file.
 | Variable | What it does |
 | --- | --- |
 | `APERTURE_MODEL=replay` | Recorded runs instead of a model; no key, no cost |
-| `VITE_AUTH_ENABLED=false` | No sign-in; every visitor is one local user |
+| `VITE_AUTH_ENABLED=false` | No sign-in. Each browser gets its own anonymous workspace, settings and keys; the plan and usage limits are shared by all anonymous visitors |
 | `XAI_API_KEY` | Server key for hosted Grok |
 | `DATABASE_URL` | Postgres for accounts and saved work. Without it, an in-process PGlite database |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Session signing and the public URL when sign-in is on |

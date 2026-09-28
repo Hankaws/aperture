@@ -67,7 +67,8 @@ export const saveAgent = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const { planById } = await import("@/lib/billing/plans");
-    const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${context.userId}`;
+    const { spendOwnerId } = await import("@/lib/auth/visitor");
+    const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(context.userId)}`;
     if (!planById(settings[0]?.plan ?? "hobby").acp) {
       throw new Error(
         `External agents are on Pro. Upgrade to plug ${acpAgentNames("or")} into the same diff UI.`,

@@ -48,9 +48,30 @@ again rather than route around the ignore rule.
 The private `aperture-demo` Vercel project does not deploy from Git; its Git
 builds are skipped. `.github/workflows/demo-deploy.yml` runs `vercel build`
 from source with the project's env (including `VITE_AUTH_ENABLED=false`), then
-`vercel deploy --prebuilt`, on every push to `main`. The demo has sign-in off,
-so every visitor is the same dev user. Keep Vercel Authentication on for all
-its deployments.
+`vercel deploy --prebuilt`, on every push to `main`. Keep Vercel
+Authentication on for its deployments until the repository is public.
+
+## Sign-in off: one anonymous user per browser, one shared spending pool
+
+With `VITE_AUTH_ENABLED=false`, `requireUserId` gives each browser its own
+`visitor:<uuid>` id from an HttpOnly `aperture_visitor` cookie
+(`src/lib/auth/visitor.ts`). Saved files, the thread, settings and the
+visitor's own API keys are theirs alone. The `/app` route's `beforeLoad`
+issues the cookie first, so the editor's parallel first requests share one id.
+
+Anything the operator pays for is charged to one shared row, `dev-user`, via
+`spendOwnerId`: the plan, hosted turns, Tab, session caps and sandbox runs.
+In billing, `loadAccount` merges your own row (keys, model choice) with the
+payer's row (plan, counters). A new place that reads the plan or a usage
+counter must go through `spendOwnerId`. Otherwise clearing cookies hands out a
+fresh allowance and the demo's cost has no bound.
+
+Verified by hand, with two browsers against the dev server:
+
+- B never sees A's applied edit, thread or model choice.
+- A's work comes back from the server after `localStorage` is cleared.
+- Clearing the cookie makes a new visitor.
+- A setting the plan changes it for B.
 
 The agent's verify runs use Vercel Sandbox through `@vercel/sandbox`
 (`src/lib/sandbox/vercel.server.ts`). A deployment opts in with

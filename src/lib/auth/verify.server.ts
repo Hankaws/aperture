@@ -1,6 +1,13 @@
 import { getRequest } from "@tanstack/react-start/server";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
+import {
+  ANONYMOUS_POOL_ID,
+  VISITOR_COOKIE,
+  VISITOR_COOKIE_MAX_AGE,
+  isVisitorCookie,
+  visitorUserId,
+} from "./visitor";
 
 /**
  * Server-side session resolution (server-only).
@@ -26,8 +33,34 @@ if (databaseConfigured && !authConfigured) {
   );
 }
 
-/** Dev fallback user id, used only when auth is disabled (VITE_AUTH_ENABLED=false). */
-export const DEV_USER_ID = "dev-user";
+/**
+ * Fallback user id when sign-in is off and there is no request to read a
+ * visitor cookie from. Also the shared pool that anonymous visitors' spending
+ * is counted against (`ANONYMOUS_POOL_ID`).
+ */
+export const DEV_USER_ID = ANONYMOUS_POOL_ID;
+
+/**
+ * This browser's anonymous id, from its cookie, or a fresh one set on the
+ * response. Only an id this server could have minted is accepted, so a made-up
+ * cookie value gets a new id rather than another visitor's.
+ */
+export async function anonymousUserId(): Promise<string> {
+  const request = getRequest();
+  if (!request) return DEV_USER_ID;
+  const { getCookie, setCookie } = await import("@tanstack/react-start/server");
+  const existing = getCookie(VISITOR_COOKIE);
+  if (isVisitorCookie(existing)) return visitorUserId(existing);
+  const id = crypto.randomUUID();
+  setCookie(VISITOR_COOKIE, id, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: new URL(request.url).protocol === "https:",
+    maxAge: VISITOR_COOKIE_MAX_AGE,
+  });
+  return visitorUserId(id);
+}
 
 /**
  * Thrown by `requireUserId` when the caller has no valid session. Carries
@@ -79,7 +112,8 @@ export async function getSessionUser(
  * - Auth disabled (`VITE_AUTH_ENABLED=false`) + `DATABASE_URL` set -> throw (fail
  *   closed): one shared dev user on a real database would let every visitor
  *   read/write everyone's rows.
- * - Auth disabled + no database -> the shared dev user id.
+ * - Auth disabled + no database -> this browser's anonymous visitor id (see
+ *   `./visitor`), minted into an HttpOnly cookie on first use.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
   if (!authConfigured && !gateIdentityEnabled()) {
@@ -89,7 +123,7 @@ export async function requireUserId(bearerToken?: string): Promise<string> {
           "refusing to fall back to the shared dev user against a real database.",
       );
     }
-    return DEV_USER_ID;
+    return anonymousUserId();
   }
   const user = await getSessionUser(bearerToken);
   if (!user) throw new UnauthorizedError();

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { spendOwnerId } from "@/lib/auth/visitor";
 import {
   DEFAULT_SESSION_CENTS,
   DEFAULT_SESSION_TURNS,
@@ -171,6 +172,33 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
   return row;
 }
 
+/**
+ * The account as its owner sees it: keys and model choice from the user's own
+ * row, the plan and every usage counter from whoever pays. For a signed-in user
+ * those are the same row. Anonymous visitors each keep their own keys but share
+ * one pool (`spendOwnerId`), so clearing cookies never resets an allowance.
+ */
+async function loadAccount(userId: string): Promise<SettingsRow> {
+  const own = await loadSettings(userId);
+  const payer = spendOwnerId(userId);
+  if (payer === userId) return own;
+  const pool = await loadSettings(payer);
+  return {
+    ...own,
+    plan: pool.plan,
+    hosted_used: pool.hosted_used,
+    usage_month: pool.usage_month,
+    session_cap_on: pool.session_cap_on,
+    session_cap_turns: pool.session_cap_turns,
+    session_cap_cents: pool.session_cap_cents,
+    session_id: pool.session_id,
+    session_turns: pool.session_turns,
+    session_cents: pool.session_cents,
+    tab_used: pool.tab_used,
+    tab_day: pool.tab_day,
+  };
+}
+
 async function migratePlaintextKeys(userId: string, row: SettingsRow) {
   const { encryptSecret, isEncryptedSecret } = await peek();
   const { getSql } = await import("@/lib/db");
@@ -246,14 +274,13 @@ async function applyModelSource(userId: string, source: ModelSource): Promise<Ac
     set model_source = ${source}, preferred_provider = ${preferred}, updated_at = now()
     where user_id = ${userId}
   `;
-  return snapshotOf(await loadSettings(userId));
+  return snapshotOf(await loadAccount(userId));
 }
 
 export const getAccount = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<AccountSnapshot> => {
-    const row = await loadSettings(context.userId);
-    return snapshotOf(row);
+    return snapshotOf(await loadAccount(context.userId));
   });
 
 export const setPlan = createServerFn({ method: "POST" })
@@ -265,13 +292,14 @@ export const setPlan = createServerFn({ method: "POST" })
     }
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    await loadSettings(context.userId);
+    const payer = spendOwnerId(context.userId);
+    await loadSettings(payer);
     await sql`
       update user_settings
       set plan = ${plan}, updated_at = now()
-      where user_id = ${context.userId}
+      where user_id = ${payer}
     `;
-    return snapshotOf(await loadSettings(context.userId));
+    return snapshotOf(await loadAccount(context.userId));
   });
 
 export const saveProviderKey = createServerFn({ method: "POST" })
@@ -280,7 +308,7 @@ export const saveProviderKey = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<AccountSnapshot> => {
     if (!isProvider(data.provider)) throw new Error("Unknown provider");
     const { encryptSecret, validateProviderKey } = await peek();
-    const row = await loadSettings(context.userId);
+    const row = await loadAccount(context.userId);
     const plan = planById(row.plan);
     const col = PROVIDER_COLS[data.provider];
     const trimmed = data.key.trim();
@@ -293,7 +321,7 @@ export const saveProviderKey = createServerFn({ method: "POST" })
     const sql = await getSql();
     const value = trimmed.length === 0 ? null : encryptSecret(validateProviderKey(data.provider, trimmed));
     await writeKeyColumn(sql, context.userId, col, value);
-    return snapshotOf(await loadSettings(context.userId));
+    return snapshotOf(await loadAccount(context.userId));
   });
 
 export const setModelSource = createServerFn({ method: "POST" })
@@ -320,13 +348,14 @@ export const setSessionCap = createServerFn({ method: "POST" })
     const cents = Math.min(MAX_SESSION_CENTS, Math.max(MIN_SESSION_CENTS, Math.trunc(data.cents) || DEFAULT_SESSION_CENTS));
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    await loadSettings(context.userId);
+    const payer = spendOwnerId(context.userId);
+    await loadSettings(payer);
     await sql`
       update user_settings
       set session_cap_on = ${data.on}, session_cap_turns = ${turns}, session_cap_cents = ${cents}, updated_at = now()
-      where user_id = ${context.userId}
+      where user_id = ${payer}
     `;
-    return snapshotOf(await loadSettings(context.userId));
+    return snapshotOf(await loadAccount(context.userId));
   });
 
 export const resetSession = createServerFn({ method: "POST" })
@@ -334,14 +363,15 @@ export const resetSession = createServerFn({ method: "POST" })
   .handler(async ({ context }): Promise<AccountSnapshot> => {
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    await loadSettings(context.userId);
+    const payer = spendOwnerId(context.userId);
+    await loadSettings(payer);
     const id = crypto.randomUUID();
     await sql`
       update user_settings
       set session_id = ${id}, session_turns = 0, session_cents = 0, session_started_at = now(), updated_at = now()
-      where user_id = ${context.userId}
+      where user_id = ${payer}
     `;
-    return snapshotOf(await loadSettings(context.userId));
+    return snapshotOf(await loadAccount(context.userId));
   });
 
 export type ResolvedModel =
@@ -357,7 +387,7 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
     return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
   }
   const { decryptSecret } = await peek();
-  const row = await loadSettings(userId);
+  const row = await loadAccount(userId);
   const account = await snapshotOf(row);
   const source: ModelSource = requested && isModelSource(requested) ? requested : account.modelSource;
 
@@ -394,7 +424,7 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
   const { replayEnabled } = await import("@/lib/agent/replay");
   if (replayEnabled()) return { ok: false, error: "Tab needs a real model; replay only plays back Composer tasks." };
   const { decryptSecret } = await peek();
-  const row = await loadSettings(userId);
+  const row = await loadAccount(userId);
   const account = await snapshotOf(row);
   if (!account.tab) {
     return { ok: false, error: "Tab ghost-text is on Pro." };
@@ -437,14 +467,15 @@ function formatCap(cents: number) {
 }
 
 export async function consumeHostedTurn(userId: string) {
-  const row = await loadSettings(userId);
+  const payer = spendOwnerId(userId);
+  const row = await loadSettings(payer);
   const plan = planById(row.plan);
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   await sql`
     update user_settings
     set hosted_used = hosted_used + 1, updated_at = now()
-    where user_id = ${userId} and hosted_used < ${plan.hostedTurns}
+    where user_id = ${payer} and hosted_used < ${plan.hostedTurns}
   `;
 }
 
@@ -452,13 +483,14 @@ export async function recordTabUse(userId: string, hosted: boolean) {
   if (!hosted) return;
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
-  const row = await loadSettings(userId);
+  const payer = spendOwnerId(userId);
+  const row = await loadSettings(payer);
   const plan = planById(row.plan);
   if (plan.tabDaily <= 0) return;
   await sql`
     update user_settings
     set tab_used = tab_used + 1, updated_at = now()
-    where user_id = ${userId} and tab_used < ${plan.tabDaily}
+    where user_id = ${payer} and tab_used < ${plan.tabDaily}
   `;
 }
 
@@ -467,20 +499,21 @@ export async function canAffordRuns(
   source: ModelSource | null | undefined,
   n: number,
 ): Promise<boolean> {
-  const account = await snapshotOf(await loadSettings(userId));
+  const account = await snapshotOf(await loadAccount(userId));
   return !quoteRuns(account, source ?? account.modelSource, n).blocked;
 }
 
 export async function recordAgentRun(userId: string, hosted: boolean, cents: number) {
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
-  const row = await loadSettings(userId);
+  const payer = spendOwnerId(userId);
+  const row = await loadSettings(payer);
   if (!row.session_id) {
     const id = crypto.randomUUID();
     await sql`
       update user_settings
       set session_id = ${id}, session_started_at = now(), updated_at = now()
-      where user_id = ${userId} and session_id is null
+      where user_id = ${payer} and session_id is null
     `;
   }
   if (hosted) {
@@ -488,7 +521,7 @@ export async function recordAgentRun(userId: string, hosted: boolean, cents: num
     await sql`
       update user_settings
       set session_turns = session_turns + 1, updated_at = now()
-      where user_id = ${userId}
+      where user_id = ${payer}
     `;
     return;
   }
@@ -496,6 +529,6 @@ export async function recordAgentRun(userId: string, hosted: boolean, cents: num
   await sql`
     update user_settings
     set session_cents = session_cents + ${add}, session_turns = session_turns + 1, updated_at = now()
-    where user_id = ${userId}
+    where user_id = ${payer}
   `;
 }

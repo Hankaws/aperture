@@ -70,7 +70,8 @@ async function loadJobs(userId: string): Promise<JobRecord[]> {
 async function planOf(userId: string) {
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
-  const rows = await sql<{ plan: string }>`select plan from user_settings where user_id = ${userId}`;
+  const { spendOwnerId } = await import("@/lib/auth/visitor");
+  const rows = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(userId)}`;
   return planById(rows[0]?.plan ?? "hobby");
 }
 

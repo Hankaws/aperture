@@ -1,5 +1,12 @@
 {
-  "name": "app-builder-workspace",
+  "name": "aperture",
+  "version": "0.1.0",
+  "description": "An AI code editor that checks its own work: every staged change is parsed, import-checked, rendered and tested before you apply it.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hankaws/aperturesais.git"
+  },
   "private": true,
   "sideEffects": false,
   "type": "module",

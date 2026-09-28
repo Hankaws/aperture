@@ -32,22 +32,25 @@ constructor(x: T) { this.x = x; }            // fine
 
 Same class of problem: `enum`, decorators, namespaces.
 
-## Never commit `.vercel/output` from a partial build
+## Build output is not committed
 
-`npm run build` is `vite build` **plus** `copy-pglite-assets` **plus**
-`db:migrate`. Running `vite build` alone produces an output tree with the pglite
-wasm assets deleted. Verify a build if you like, then
-`git checkout -- .vercel && git clean -fd .vercel` before committing.
+`.vercel/` is in `.gitignore`: the repository is open source, and 40 MB of
+generated files in it helped nobody. `npm run build` is `vite build` **plus**
+`copy-pglite-assets` **plus** `db:migrate`; running `vite build` alone produces
+an output tree with the pglite wasm assets missing.
 
-## The demo deploy builds from source, not from `.vercel/output`
+Grok App Builder's own publish used to deploy the committed `.vercel/output`.
+It no longer can. If an export from Grok puts build output back, remove it
+again rather than route around the ignore rule.
 
-Vercel serves any committed `.vercel/output` as-is and skips the build
-(`.vercelignore` does not change that), so the private `aperture-demo` Vercel
-project does not deploy from Git. `.github/workflows/demo-deploy.yml` runs
-`vercel build` (which rebuilds `.vercel/output` from source with the project's
-env, including `VITE_AUTH_ENABLED=false`) and `vercel deploy --prebuilt` on
-every push to `main`. The demo is sign-in-off, so every visitor is the same
-dev user; keep Vercel Authentication on for all its deployments.
+## The demo deploy builds from source
+
+The private `aperture-demo` Vercel project does not deploy from Git; its Git
+builds are skipped. `.github/workflows/demo-deploy.yml` runs `vercel build`
+from source with the project's env (including `VITE_AUTH_ENABLED=false`), then
+`vercel deploy --prebuilt`, on every push to `main`. The demo has sign-in off,
+so every visitor is the same dev user. Keep Vercel Authentication on for all
+its deployments.
 
 The agent's verify runs use Vercel Sandbox through `@vercel/sandbox`
 (`src/lib/sandbox/vercel.server.ts`). A deployment opts in with

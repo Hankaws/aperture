@@ -3,3 +3,13 @@ node_modules/
 .github_repo
 .env
 .env.*
+
+# Build output. The demo deploy builds from source (.github/workflows/demo-deploy.yml).
+.vercel/
+
+# Local only: uploads, generated files, QA screenshots and logs.
+attachments/
+artifacts/
+screenshots/*
+!screenshots/.gitkeep
+.grok/preview.log

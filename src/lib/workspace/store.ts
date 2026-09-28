@@ -5,7 +5,6 @@ import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
-import { useIdeUi } from "@/lib/ui-store";
 import { previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
 import { workspaceHash, type SyncState } from "./sync";
@@ -559,8 +558,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     applyEdit: (edit) => {
       if (edit.notes?.length) return;
       if (!previewForce.has(edit.id)) {
-        const live = useIdeUi.getState().previewErrors;
-        const notes = previewNotesForEdit(edit, get().files, live);
+        // Only what the staged text itself shows (parse, markup, imports). The
+        // live preview's errors belong to the applied page, so a fix for the
+        // very error it would be blocked by could never be applied.
+        const notes = previewNotesForEdit(edit, get().files);
         if (notes.length) {
           set({
             messages: get().messages.map((m) => ({
@@ -594,11 +595,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         .messages.flatMap((m) => m.edits ?? [])
         .filter((e) => e.status === "pending");
       if (pending.some((e) => (e.notes?.length ?? 0) > 0)) return;
-      const live = useIdeUi.getState().previewErrors;
       const bounced: Record<string, ProposedEdit["notes"]> = {};
       for (const edit of pending) {
         if (previewForce.has(edit.id)) continue;
-        const notes = previewNotesForEdit(edit, get().files, live);
+        // Static checks only; see applyEdit. The staged page's own render is in the check results.
+        const notes = previewNotesForEdit(edit, get().files);
         if (notes.length) bounced[edit.id] = notes;
       }
       if (Object.keys(bounced).length) {

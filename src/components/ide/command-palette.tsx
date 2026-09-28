@@ -66,6 +66,9 @@ export function CommandPalette() {
         <div className="flex items-center gap-2 border-b border-border px-3">
           <Search className="size-4 text-subtle" />
           <Command.Input
+            // Ctrl+P is usually pressed with the cursor in the code: without
+            // taking focus, the query was typed into the open file.
+            autoFocus
             value={query}
             onValueChange={setQuery}
             placeholder="Go to file or run a command"

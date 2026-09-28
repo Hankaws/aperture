@@ -659,7 +659,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   ? "Steer this run — Enter queues, sends when it finishes"
                   : mode === "chat"
                     ? "Ask about the repo. Use @ for context."
-                    : "Describe the change. Use @ for context — Composer plans first."
+                    : sendPhase === "skip"
+                      ? "Describe the change. Use @ for context — Iterate edits straight away."
+                      : sendPhase === "build"
+                        ? "Describe the change. Use @ for context — Build edits straight away."
+                        : "Describe the change. Use @ for context — Composer plans first."
               }
               rows={2}
               className="min-h-14 w-full resize-none rounded-[11px] border-0 bg-bg px-2.5 py-2 text-sm leading-snug text-fg placeholder:text-subtle focus-visible:outline-none"

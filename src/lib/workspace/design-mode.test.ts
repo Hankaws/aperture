@@ -50,7 +50,8 @@ test("assembleHtmlPreview does not keep page scripts", () => {
     { "evil.html": `<body><button>Go</button><script>parent.postMessage({type:'aperture-design-pick'},'*')</script></body>` },
     "evil.html",
   );
-  assert.equal((html.match(/<script/gi) ?? []).length, 1);
+  // Only ours remain: the error reporter and the picker.
+  assert.equal((html.match(/<script/gi) ?? []).length, 2);
   assert.match(html, /aperture-design-pick/);
   assert.doesNotMatch(html, /parent\.postMessage\(\{type:'aperture-design-pick'\}/);
 });
@@ -205,4 +206,16 @@ test("inline handlers and javascript: URLs follow the switch", () => {
   // stripping them would only be theatre.
   const on = assembleHtmlPreview(files, "index.html", { runScripts: true });
   assert.match(on, /onclick/i);
+});
+
+test("the live preview's error reporter runs before the page's own scripts", () => {
+  // An error thrown while the page loads was missed when the listener sat in the
+  // picker at the end of <body>.
+  const page = "<!doctype html><html><head><title>t</title></head><body><script>boom()</script></body></html>";
+  const html = assembleHtmlPreview({ "index.html": page }, "index.html", { runScripts: true });
+  const reporter = html.indexOf("aperture-preview-error");
+  assert.ok(reporter > 0);
+  assert.ok(reporter < html.indexOf("boom()"), "reporter must come first");
+  assert.ok(html.indexOf("<title>") > reporter, "first thing in <head>");
+  assert.equal(html.split("aperture-preview-error").length - 1, 1, "exactly one reporter");
 });

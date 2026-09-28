@@ -104,7 +104,6 @@ export function mergeEdits(files: Record<string, string>, edits: ProposedEdit[])
 export function previewIssues(
   files: Record<string, string>,
   edits: ProposedEdit[],
-  liveErrors: string[] = [],
 ): Array<{ path: string; issues: string[] }> {
   const snapshot = mergeEdits(files, edits);
   const out: Array<{ path: string; issues: string[] }> = [];
@@ -115,14 +114,6 @@ export function previewIssues(
     // yields a partial import list, and reporting both at once buries the cause.
     if (issues.length === 0 && isScriptPath(path)) issues.push(...importIssues(path, snapshot));
     if (issues.length) out.push({ path, issues });
-  }
-  const previewPaths = [...paths].filter(isPreviewPath);
-  if (liveErrors.length && previewPaths.length) {
-    const htmlPath = previewPaths.find((p) => /\.html?$/i.test(p)) ?? previewPaths[0]!;
-    const row = out.find((r) => r.path === htmlPath);
-    const extra = liveErrors.slice(0, 4);
-    if (row) row.issues.push(...extra);
-    else out.push({ path: htmlPath, issues: extra });
   }
   return out;
 }
@@ -137,13 +128,14 @@ export function notesFromPreviewIssues(path: string, issues: string[]): DiffNote
   }));
 }
 
-export function previewNotesForEdit(
-  edit: ProposedEdit,
-  files: Record<string, string>,
-  liveErrors: string[] = [],
-): DiffNote[] {
+/**
+ * Notes that block Apply: only what the staged text itself shows. How the
+ * staged page renders is a check result (`checks.ts`), not a gate, and the
+ * live preview's errors are the applied page's, never the edit's.
+ */
+export function previewNotesForEdit(edit: ProposedEdit, files: Record<string, string>): DiffNote[] {
   if (!isCheckablePath(edit.path)) return [];
-  const rows = previewIssues(files, [edit], liveErrors);
+  const rows = previewIssues(files, [edit]);
   const hit = rows.find((r) => r.path === edit.path) ?? rows[0];
   if (!hit) return [];
   return notesFromPreviewIssues(edit.path, hit.issues);

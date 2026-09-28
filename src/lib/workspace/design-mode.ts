@@ -245,9 +245,31 @@ export function assembleHtmlPreview(
   // `\u002f` keeps the literal `</script>` sequence out of this source, so the
   // tag cannot close early if this module is ever inlined into a document.
   const script = `<script>${PICKER_SCRIPT}<\u002fscript>`;
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
-  return `${html}${script}`;
+  html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}</body>`) : `${html}${script}`;
+  // The error reporter goes first: the page's own scripts run before the
+  // picker at the end, and an error they throw while loading would be missed.
+  return injectFirst(html, `<script>${ERROR_REPORTER_SCRIPT}<\u002fscript>`);
 }
+
+/** Puts `script` before anything the page runs: first in <head>, else first in <body>. */
+function injectFirst(html: string, script: string): string {
+  if (/<head(\s[^>]*)?>/i.test(html)) return html.replace(/<head(\s[^>]*)?>/i, (tag) => `${tag}${script}`);
+  if (/<body(\s[^>]*)?>/i.test(html)) return html.replace(/<body(\s[^>]*)?>/i, (tag) => `${tag}${script}`);
+  return `${script}${html}`;
+}
+
+/** Tells the editor about script errors in the live preview, once each. */
+export const ERROR_REPORTER_SCRIPT = `(() => {
+  var seen = [];
+  function report(msg) {
+    msg = String(msg || "Script error").slice(0, 180);
+    if (seen.indexOf(msg) >= 0 || seen.length >= 20) return;
+    seen.push(msg);
+    try { parent.postMessage({ type: "aperture-preview-error", message: msg }, "*"); } catch (e) {}
+  }
+  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) report(e.message); });
+  window.addEventListener("unhandledrejection", function (e) { report(e.reason && e.reason.message ? e.reason.message : e.reason); });
+})();`;
 
 /**
  * Reports how the page went, once: the script errors it threw and whether it
@@ -276,11 +298,7 @@ export function renderProbeDocument(
   entry: string,
   options: { runScripts?: boolean } = {},
 ): string {
-  const html = assembleHtmlPreview(files, entry, options);
-  const probe = `<script>${RENDER_PROBE_SCRIPT}<\u002fscript>`;
-  if (/<head(\s[^>]*)?>/i.test(html)) return html.replace(/<head(\s[^>]*)?>/i, (tag) => `${tag}${probe}`);
-  if (/<body(\s[^>]*)?>/i.test(html)) return html.replace(/<body(\s[^>]*)?>/i, (tag) => `${tag}${probe}`);
-  return `${probe}${html}`;
+  return injectFirst(assembleHtmlPreview(files, entry, options), `<script>${RENDER_PROBE_SCRIPT}<\u002fscript>`);
 }
 
 export function previewMarkupKey(html: string): string {
@@ -337,11 +355,6 @@ export function formatDesignCaptures(captures: DesignCapture[]): string {
 }
 
 export const PICKER_SCRIPT = `(() => {
-  function report(msg) {
-    try { parent.postMessage({ type: "aperture-preview-error", message: String(msg).slice(0, 180) }, "*"); } catch (e) {}
-  }
-  window.addEventListener("error", function (e) { report(e.message || e.type); });
-  window.addEventListener("unhandledrejection", function (e) { report(e.reason); });
   document.documentElement.style.cursor = "crosshair";
   const box = document.createElement("div");
   box.setAttribute("data-aperture-picker", "1");

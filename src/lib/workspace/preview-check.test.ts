@@ -90,17 +90,19 @@ test("a broken package.json edit is labelled as a JSON check", () => {
   assert.match(notes[0]!.text, /^JSON check: /);
 });
 
-test("live preview errors never attach to a script edit", () => {
-  // They come from the rendered document; pinning them on a module the preview
-  // never loaded would blame the wrong edit.
-  const files = { "src/a.ts": "export const a = 1;\n" };
+test("a page edit that fixes a broken page gets no notes", () => {
+  // Apply is gated on the staged text only. The live preview's errors come from
+  // the applied page, so gating on them would block the very fix for them.
+  const broken = "<!doctype html><html><body><script>missingThing.name</script></body></html>";
+  const files = { "index.html": broken };
   const edit = {
     id: "e4",
-    path: "src/a.ts",
-    oldText: files["src/a.ts"],
-    newText: "export const a = 2;\n",
-    description: "fine",
+    path: "index.html",
+    oldText: broken,
+    newText: "<!doctype html><html><body><script>document.title = 'ok'</script></body></html>",
+    description: "fix",
     status: "pending" as const,
   };
-  assert.deepEqual(previewNotesForEdit(edit, files, ["ReferenceError: x is not defined"]), []);
+  assert.deepEqual(previewNotesForEdit(edit, files), []);
+  assert.equal(previewNotesForEdit.length, 2, "no live-error parameter to pass stale errors through");
 });

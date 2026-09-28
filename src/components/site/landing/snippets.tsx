@@ -135,7 +135,9 @@ export function SnippetShowcase() {
 
   return (
     <div
-      className="grid items-start gap-8 lg:grid-cols-[14rem_1fr]"
+      // grid-cols-1 is minmax(0, 1fr): without it the column sizes to the longest
+      // code line, and the section scrolls the whole page sideways on a phone.
+      className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[14rem_1fr]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >

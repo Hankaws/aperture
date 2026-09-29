@@ -60,6 +60,8 @@ type DoneMessage = {
   fail: number;
   durationMs: number;
   firstFailure: string | null;
+  /** Set when the tests reached code the browser cannot run (a mocked-away module that was loaded after all). */
+  unsupported?: string | null;
   output: string;
 };
 type WorkerMessage = { type: "out"; text: string } | DoneMessage | { type: "fatal"; error: string };
@@ -147,7 +149,7 @@ export async function runTestsInBrowser(
   if (!plan.ok) return { kind: "unsupported", reason: plan.reason };
   // sucrase is only needed once there is something to run.
   const { buildBundle } = await import("./bundle.ts");
-  const bundle = buildBundle(files, plan.entries);
+  const bundle = buildBundle(files, plan.entries, plan);
   if (!bundle.ok) {
     if (bundle.kind === "unsupported") return { kind: "unsupported", reason: `${bundle.reason}.` };
     return failed(bundle.reason, 1);
@@ -169,6 +171,7 @@ export async function runTestsInBrowser(
     return remember(bundle.code, failed([...run.out, run.fatal ?? "The test run crashed."].join("\n"), 1));
   }
   const done = run.done;
+  if (done.unsupported) return remember(bundle.code, { kind: "unsupported", reason: done.unsupported });
   if (done.passed) {
     return remember(bundle.code, {
       kind: "done",

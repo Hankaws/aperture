@@ -9,7 +9,11 @@
  * `__host.report(message)`; everything else is defined here.
  *
  * Messages: `{ type: "out", text }` per output line, then exactly one
- * `{ type: "done", passed, exitCode, pass, fail, output }`.
+ * `{ type: "done", passed, exitCode, pass, fail, firstFailure, unsupported, output }`.
+ *
+ * Vitest and Jest runs add `FRAMEWORK_RUNTIME_SOURCE` (runtime-framework.ts),
+ * which uses the hooks marked below: the real timers, the module-mock registry
+ * and the stack of modules being loaded.
  */
 
 /** Built-ins this runtime implements; importing any other `node:` module means the run needs a real Node. */
@@ -17,6 +21,21 @@ export const BROWSER_BUILTINS = ["assert", "assert/strict", "test", "path", "uti
 
 export const RUNTIME_SOURCE = String.raw`
 "use strict";
+// Taken before a test can swap them for fakes: the runner's own waiting must stay real.
+// Bound, because a browser throws "Illegal invocation" for a timer called on another object.
+function __bindGlobal(name) {
+  const f = globalThis[name];
+  return typeof f === "function" ? f.bind(globalThis) : undefined;
+}
+const __timers = {
+  setTimeout: __bindGlobal("setTimeout"),
+  clearTimeout: __bindGlobal("clearTimeout"),
+  setInterval: __bindGlobal("setInterval"),
+  clearInterval: __bindGlobal("clearInterval"),
+  Date: globalThis.Date,
+  /** The globals as they were, for putting back after fake timers. */
+  originals: { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval },
+};
 const __out = [];
 const __stats = { pass: 0, fail: 0, skip: 0 };
 let __uncaught = null;
@@ -477,13 +496,27 @@ const __builtins = {
 
 let __cache = {};
 const __pending = [];
+/** Module mocks by resolved target (jest.mock / vi.mock); always empty in a plain Node run. */
+let __moduleMocks = {};
+/** The modules whose top level is running, innermost last: who called jest.mock. */
+const __loadStack = [];
+
+/** A resolved target, bypassing mocks. "virtual:" targets exist only as mocks. */
+function __actual(target, spec) {
+  if (target.startsWith("builtin:")) return __builtins[target.slice(8)];
+  if (target.startsWith("virtual:")) {
+    // Another test file mocks this package; this one loads the real thing, which would need installing.
+    throw __unsupported("A test loads the package " + (spec || target.slice(8)) + " without mocking it, and the browser runner cannot install packages.");
+  }
+  return __load(target);
+}
 
 function __require(from) {
   return function require(spec) {
     const target = (__resolve[from] || {})[spec];
     if (target === undefined) throw new Error("Cannot find module '" + spec + "' imported from " + from);
-    if (target.startsWith("builtin:")) return __builtins[target.slice(8)];
-    return __load(target);
+    if (Object.prototype.hasOwnProperty.call(__moduleMocks, target)) return __mocked(target);
+    return __actual(target, spec);
   };
 }
 
@@ -493,7 +526,13 @@ function __load(path) {
   __cache[path] = module;
   const dir = "/" + (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
   const meta = { url: "file:///" + path, filename: "/" + path, dirname: dir };
-  const done = __modules[path](__require(path), module, module.exports, "/" + path, dir, meta);
+  __loadStack.push(path);
+  let done;
+  try {
+    done = __modules[path](__require(path), module, module.exports, "/" + path, dir, meta);
+  } finally {
+    __loadStack.pop();
+  }
   // Handled here so the rejection is not reported twice; __settle still awaits it and sees the error.
   done.catch(() => {});
   __pending.push(done);
@@ -504,9 +543,18 @@ async function __settle() {
   for (let round = 0; round < 50; round++) {
     while (__pending.length) await __pending.shift();
     await __rootChain;
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => __timers.setTimeout(r, 0));
     if (!__pending.length) return;
   }
+}
+
+/** Set when the run reaches code the browser cannot run: the result is "not run here", whatever the tests said. */
+let __unsupportedReason = null;
+function __unsupported(reason) {
+  if (__unsupportedReason === null) __unsupportedReason = reason;
+  const error = new Error(reason);
+  error.name = "Unsupported";
+  return error;
 }
 
 function __onUncaught(error) {
@@ -523,8 +571,12 @@ if (typeof addEventListener === "function") {
 async function __main() {
   const started = Date.now();
   for (const entry of __entries) {
-    if (__exitCode !== null || __uncaught) break;
+    if (__exitCode !== null || __uncaught || __unsupportedReason !== null) break;
     __cache = {};
+    if (__framework !== "node") {
+      await __runFrameworkFile(entry);
+      continue;
+    }
     try {
       __load(entry);
       await __settle();
@@ -548,6 +600,7 @@ async function __main() {
     fail: __stats.fail,
     durationMs: Date.now() - started,
     firstFailure: __firstFailure,
+    unsupported: __unsupportedReason,
     output: __out.join("\n"),
   });
 }

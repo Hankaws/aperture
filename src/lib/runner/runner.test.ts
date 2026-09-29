@@ -9,6 +9,25 @@ import { globToRegExp, planBrowserRun } from "./plan.ts";
 
 type Done = { type: "done"; passed: boolean; exitCode: number; pass: number; fail: number; firstFailure: string | null; output: string };
 
+/**
+ * The context's globals, with timers that throw as a browser's do when called
+ * on another object ("Illegal invocation"), which Node's own do not.
+ */
+function browserLikeGlobals(host: unknown): Record<string, unknown> {
+  const context: Record<string, unknown> = { __host: host, queueMicrotask, performance };
+  const strict = <F extends (...args: never[]) => unknown>(f: F) =>
+    function (this: unknown, ...args: Parameters<F>) {
+      // Inside the vm, the global object is the context's proxy: it carries __host.
+      if (this !== undefined && (this as { __host?: unknown } | null)?.__host !== host) throw new TypeError("Illegal invocation");
+      return f(...args);
+    };
+  context.setTimeout = strict(setTimeout);
+  context.clearTimeout = strict(clearTimeout);
+  context.setInterval = strict(setInterval);
+  context.clearInterval = strict(clearInterval);
+  return context;
+}
+
 /** Runs a bundle the way the worker does: its own globals, one report channel. */
 function execute(code: string, timeoutMs = 3000): Promise<Done> {
   return new Promise((resolve, reject) => {
@@ -21,7 +40,7 @@ function execute(code: string, timeoutMs = 3000): Promise<Done> {
         }
       },
     };
-    vm.runInNewContext(code, { __host: host, setTimeout, clearTimeout, queueMicrotask, performance });
+    vm.runInNewContext(code, browserLikeGlobals(host));
   });
 }
 
@@ -222,6 +241,8 @@ test("planBrowserRun reads the script the way npm and Node would", () => {
     script: "test",
     command: "node --test",
     entries: ["src/a.test.ts", "test/c.js"],
+    framework: "node",
+    options: { globals: false, namePattern: null, testTimeout: null, clearMocks: false, resetMocks: false, restoreMocks: false },
   });
   assert.deepEqual((plan("node --experimental-strip-types --test 'src/**/*.spec.ts'") as { entries: string[] }).entries, ["src/b.spec.ts"]);
   assert.deepEqual((plan("NODE_ENV=test tsx tests/d.ts && node --test") as { entries: string[] }).entries, [
@@ -229,7 +250,8 @@ test("planBrowserRun reads the script the way npm and Node would", () => {
     "src/a.test.ts",
     "test/c.js",
   ]);
-  assert.match((plan("vitest run") as { reason: string }).reason, /runs vitest, which needs a real Node/);
+  assert.match((plan("vitest run") as { reason: string }).reason, /runs vitest, which package\.json does not list as a dependency/);
+  assert.match((plan("tsc --noEmit && node --test") as { reason: string }).reason, /runs tsc, which needs a real Node/);
   assert.match((plan("node --inspect t.js") as { reason: string }).reason, /--inspect/);
   assert.match((plan("node missing.ts") as { reason: string }).reason, /missing\.ts, which is not in the project/);
   assert.match((planBrowserRun({ "package.json": "{}" }) as { reason: string }).reason, /no "test" script/);

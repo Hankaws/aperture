@@ -44,7 +44,11 @@ local in-process database (PGlite), so nothing else needs setting up.
   A check that could not run says why. It never shows as a pass.
 - **Tests in the browser.** `npm run test` runs in a sandboxed Worker in your
   tab. This covers `node`, `node --test` and `tsx` scripts, with `node:test`
-  and `node:assert`. The sandbox blocks all network access, so code the agent
+  and `node:assert`. It also covers Vitest and Jest: `describe`, `it`,
+  `expect`, mock functions, `vi.mock` and `jest.mock`, and fake timers. A
+  Vitest or Jest config is honoured when it only picks test files or turns
+  on globals. A DOM environment, plugins, aliases, setup files and snapshots
+  need a real Node. The sandbox blocks all network access, so code the agent
   just wrote cannot reach the app or anything else.
   - If a test fails, it is re-run on your current files. A failure that was
     already there is reported as such.

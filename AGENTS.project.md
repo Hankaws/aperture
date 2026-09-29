@@ -133,17 +133,26 @@ did not run reads "not run" with the reason and never counts as a pass.
   request."
 - When the sandbox did not run, **Tests** comes from the browser test runner
   (`src/lib/runner/`). It runs `npm run test` in the tab, free, against the
-  staged files. `plan.ts` reads the script and supports only `node [flags]
-  files`, `node --test [globs]` and `tsx`. `bundle.ts` strips TypeScript with
-  sucrase and resolves every import up front. `runtime.ts` provides
-  `node:assert`, `node:test`, `node:path`, `node:util` and `process`. Anything
-  else (npm packages, `node:http`, jest, vitest) reports "not run" with the
-  reason; it never counts as a failure.
+  staged files. `plan.ts` reads the script and supports `node [flags] files`,
+  `node --test [globs]`, `tsx`, `vitest` and `jest`. `config.ts` accepts a
+  Vitest or Jest config only when every key in it is one the runner honours;
+  an unknown key refuses. `bundle.ts` strips TypeScript with sucrase and
+  resolves every import up front. `runtime.ts` provides `node:assert`,
+  `node:test`, `node:path`, `node:util` and `process`. For Vitest and Jest
+  runs, `runtime-framework.ts` adds the test API, `expect`, mocks and fake
+  timers. Anything else (npm packages, `node:http`, jsdom, snapshots) reports
+  "not run" with the reason; it never counts as a failure.
+- In a Vitest or Jest run, `jest.mock` / `vi.mock` calls are hoisted by
+  sucrase's `jest` transform. A top-level `vi.mock(` is rewritten to
+  `jest.mock(` first, and the runtime points the global `jest` at `vi`. A
+  module that imports something the browser cannot run compiles to a stub.
+  The stub marks the whole run unsupported only if it is loaded, because a
+  test that mocks the module never loads it.
 - The code runs in a Worker inside a hidden `sandbox="allow-scripts"` frame
   whose CSP blocks all network, so agent-written code cannot call this app's
   API as the user. A run that passes 10 s is ended by removing the frame.
-  `runner.test.ts` runs the same bundles in a Node `vm` context: keep new
-  runtime behaviour covered there.
+  `runner.test.ts` and `frameworks.test.ts` run the same bundles in a Node
+  `vm` context: keep new runtime behaviour covered there.
 - A failure is re-run against the applied files. If it failed the same way
   before, it shows amber ("Already failing before this change") and is not
   blamed on the change. A new failure on a fresh Composer change goes back to

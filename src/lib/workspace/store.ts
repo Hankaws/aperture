@@ -68,6 +68,8 @@ type WorkspaceState = {
   dropHunkAt: (editId: string, line: number) => void;
   clearPendingNotes: (editId?: string) => void;
   undoCheckpoint: (id: string) => Checkpoint | null;
+  /** Snapshots files before a direct edit (Design Mode), so Undo can put them back. */
+  checkpointFiles: (paths: string[], label: string) => string;
   undoLast: () => Checkpoint | null;
   clearChat: () => void;
   markSynced: (revision: number, hash: string) => void;
@@ -679,6 +681,20 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     undoCheckpoint: (id) => restoreCheckpoint(id),
+
+    checkpointFiles: (paths, label) => {
+      const id = `ck_${crypto.randomUUID()}`;
+      const checkpoint: Checkpoint = {
+        id,
+        createdAt: Date.now(),
+        label,
+        messageId: null,
+        before: snapshotPaths(get().files, paths),
+      };
+      set({ checkpoints: pushCheckpoint(get().checkpoints, checkpoint) });
+      schedulePersist();
+      return id;
+    },
 
     undoLast: () => {
       const last = get().checkpoints[get().checkpoints.length - 1];

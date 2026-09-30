@@ -81,7 +81,7 @@ export function agentPayload(
   state.syncStackMemory();
   const latest = useWorkspace.getState();
   const { history, compacted } = compactHistory(priorMessages(latest.messages, instruction));
-  const captures = formatDesignCaptures(useIdeUi.getState().captures);
+  const captures = formatDesignCaptures(useIdeUi.getState().captures, latest.files);
   const mentioned = parseMentions(instruction, latest.files);
   const focusPaths = autoContextPaths({
     activePath: latest.activePath,

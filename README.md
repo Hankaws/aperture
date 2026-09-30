@@ -58,8 +58,17 @@ local in-process database (PGlite), so nothing else needs setting up.
     output goes straight back to it as the next turn. It can check a fix,
     see a failure and try again, at no cost, up to three runs per task.
   - Projects that need a real Node can run in Vercel Sandbox instead.
-- **Design mode.** Click an element in the preview, write what you want, and
-  send those notes to Composer.
+- **Design mode.** Click an element in the preview to work on it. No model
+  needed for the first two tabs:
+  - **Style** edits the CSS rule behind the element: colours (or one of
+    the page's tokens), size, weight, spacing, corners. The change goes
+    into your stylesheet and the preview updates at once.
+  - **Theme** edits the page's design tokens (`:root { --accent: … }`) and
+    has one-click themes.
+  - **Notes** sends what you want changed to Composer, along with the
+    rules that style the element and the page's tokens.
+  - Every edit session is one undo step, and the preview can be shown at
+    phone and tablet widths.
 - **Your layout.** Every panel resizes and moves. The preview can dock right,
   below or full-screen, and the sidebars can swap sides.
 - **Any model.** Hosted Grok, or your own key for Grok, OpenAI, Anthropic,

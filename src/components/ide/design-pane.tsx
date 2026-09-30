@@ -1,14 +1,31 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Maximize2, Minimize2, MousePointer2, PanelBottom, PanelRight, Pin, Plus, Send, X } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Monitor,
+  MousePointer2,
+  PanelBottom,
+  PanelRight,
+  Palette,
+  Pin,
+  Plus,
+  Send,
+  SlidersHorizontal,
+  Smartphone,
+  Tablet,
+  X,
+} from "lucide-react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { useIdeUi } from "@/lib/ui-store";
 import { RESIZE_TARGET, usePanelLayout } from "@/lib/use-panel-layout";
 import { useWorkspace } from "@/lib/workspace/store";
 import { cn, isModEvent } from "@/lib/utils";
+import { StyleInspector, ThemePanel } from "@/components/ide/design-inspector";
 import {
   assembleHtmlPreview,
+  cssFromPreview,
   guessSource,
   hotReloadStyles,
   htmlFiles,
@@ -60,10 +77,18 @@ export function PreviewDockControls() {
   return (
     <div className="flex items-center gap-0.5">
       <div className="hidden items-center gap-0.5 md:flex">
-        <DockButton active={dock === "right"} label="Preview beside the code" onClick={() => setDock("right")}>
+        <DockButton
+          active={dock === "right"}
+          label="Preview beside the code"
+          onClick={() => setDock("right")}
+        >
           <PanelRight className="size-4" strokeWidth={1.6} />
         </DockButton>
-        <DockButton active={dock === "bottom"} label="Preview below the code" onClick={() => setDock("bottom")}>
+        <DockButton
+          active={dock === "bottom"}
+          label="Preview below the code"
+          onClick={() => setDock("bottom")}
+        >
           <PanelBottom className="size-4" strokeWidth={1.6} />
         </DockButton>
         <DockButton
@@ -71,7 +96,11 @@ export function PreviewDockControls() {
           label={full ? "Restore preview beside the code" : "Maximize preview"}
           onClick={() => setDock(full ? "right" : "full")}
         >
-          {full ? <Minimize2 className="size-4" strokeWidth={1.6} /> : <Maximize2 className="size-4" strokeWidth={1.6} />}
+          {full ? (
+            <Minimize2 className="size-4" strokeWidth={1.6} />
+          ) : (
+            <Maximize2 className="size-4" strokeWidth={1.6} />
+          )}
         </DockButton>
         <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
       </div>
@@ -82,9 +111,50 @@ export function PreviewDockControls() {
   );
 }
 
-const NOTES_SIZES = { canvas: 64, notes: 36 } as const;
-/** The notes header stays visible when the panel is collapsed. */
+const NOTES_SIZES = { canvas: 60, notes: 40 } as const;
+/** The tab row stays visible when the panel is collapsed. */
 const NOTES_COLLAPSED = "2.5rem";
+
+type DesignTab = "style" | "theme" | "notes";
+type Viewport = "full" | "tablet" | "phone";
+const VIEWPORTS: Array<{
+  id: Viewport;
+  label: string;
+  width: number | null;
+  icon: typeof Monitor;
+}> = [
+  { id: "full", label: "Full width", width: null, icon: Monitor },
+  { id: "tablet", label: "Tablet, 768px", width: 768, icon: Tablet },
+  { id: "phone", label: "Phone, 390px", width: 390, icon: Smartphone },
+];
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium transition-colors",
+        active ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
+      )}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
 
 export function DesignPane() {
   const files = useWorkspace((s) => s.files);
@@ -107,12 +177,19 @@ export function DesignPane() {
   const setRunScripts = useIdeUi((s) => s.setRunPreviewScripts);
   const notesLayout = usePanelLayout("preview-notes", NOTES_SIZES);
   const notesRef = usePanelRef();
-  const noteCount = captures.length;
-  const hadNotes = useRef(noteCount > 0);
+  const noteCount = captures.filter((c) => c.note).length;
+  const [tab, setTab] = useState<DesignTab>("style");
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewport, setViewport] = useState<Viewport>("full");
   const srcdoc =
-    entry && files[entry] !== undefined
-      ? assembleHtmlPreview(files, entry, { runScripts })
-      : "";
+    entry && files[entry] !== undefined ? assembleHtmlPreview(files, entry, { runScripts }) : "";
+  // The stylesheets the page links, in order: what the inspector and theme panel edit.
+  const pageCss = useMemo(() => Object.keys(cssFromPreview(srcdoc)), [srcdoc]);
+  const selected =
+    captures.find((c) => c.id === selectedId) ?? captures[captures.length - 1] ?? null;
+  const frameWidth = VIEWPORTS.find((v) => v.id === viewport)!.width;
 
   useEffect(() => {
     const next = pickHtmlEntry(files, activePath);
@@ -124,7 +201,8 @@ export function DesignPane() {
     if (!iframe || !srcdoc || !entry) return;
     if (srcdoc === lastHtml.current && lastEntry.current === entry) return;
     const doc = iframe.contentDocument;
-    const samePage = lastEntry.current === entry && Boolean(doc?.documentElement) && lastHtml.current !== "";
+    const samePage =
+      lastEntry.current === entry && Boolean(doc?.documentElement) && lastHtml.current !== "";
 
     if (samePage && previewMarkupKey(lastHtml.current) === previewMarkupKey(srcdoc)) {
       lastHtml.current = srcdoc;
@@ -184,23 +262,18 @@ export function DesignPane() {
         source: guessSource(useWorkspace.getState().files, data.payload.selector),
         note: "",
       });
-      setEditingId(id);
-      setDraft("");
-      toast.success(`Pinned ${data.payload.selector}`);
+      setSelectedId(id);
+      // The open tab decides what a click is for: a note to write, or a style to change.
+      if (tabRef.current === "notes") {
+        setEditingId(id);
+        setDraft("");
+      } else setTab("style");
+      const panel = notesRef.current;
+      if (panel?.isCollapsed()) panel.expand();
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [addCapture, entry]);
-
-  // Notes open when the first one is pinned and fold back to their header when
-  // the last is removed or sent, so the preview gets the room otherwise.
-  useLayoutEffect(() => {
-    const panel = notesRef.current;
-    if (!panel) return;
-    if (noteCount === 0) panel.collapse();
-    else if (!hadNotes.current && panel.isCollapsed()) panel.expand();
-    hadNotes.current = noteCount > 0;
-  }, [noteCount, notesRef]);
+  }, [addCapture, entry, notesRef]);
 
   function seedPreview() {
     if (files[PREVIEW_CSS_PATH] === undefined) createFile(PREVIEW_CSS_PATH, STARTER_PREVIEW_CSS);
@@ -218,7 +291,7 @@ export function DesignPane() {
   function sendToComposer() {
     if (editingId) saveNote();
     useIdeUi.setState({ chatOpen: true, mobilePane: "agent", designOpen: true });
-    toast.success(`${captures.length} note${captures.length === 1 ? "" : "s"} in Composer`);
+    toast.success(`${captures.length} element${captures.length === 1 ? "" : "s"} in Composer`);
   }
 
   function cancelNote() {
@@ -251,6 +324,25 @@ export function DesignPane() {
       )}
       {pulse && <span className="shrink-0 text-[11px] text-ok">Hot reload · {pulse}</span>}
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        {pages.length > 0 && (
+          <div
+            className="flex items-center gap-0.5 @max-sm:hidden"
+            role="group"
+            aria-label="Preview width"
+          >
+            {VIEWPORTS.map((v) => (
+              <DockButton
+                key={v.id}
+                active={viewport === v.id}
+                label={v.label}
+                onClick={() => setViewport(v.id)}
+              >
+                <v.icon className="size-4" strokeWidth={1.6} />
+              </DockButton>
+            ))}
+            <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          </div>
+        )}
         {pages.length > 0 && (
           <button
             type="button"
@@ -285,7 +377,8 @@ export function DesignPane() {
             <MousePointer2 className="mx-auto size-6 text-accent" />
             <p className="mt-3 text-sm font-medium text-fg">Design Mode</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              Click any element on a page to pin it. Write what should change, then send your notes to Composer.
+              Click any element on a page to restyle it, retheme the whole page from its design
+              tokens, or pin notes for Composer.
             </p>
             <Button size="sm" className="mt-4" onClick={seedPreview}>
               <Plus className="size-3.5" />
@@ -308,38 +401,58 @@ export function DesignPane() {
         onLayoutChanged={notesLayout.onLayoutChanged}
         resizeTargetMinimumSize={RESIZE_TARGET}
       >
-        <Panel id="canvas" defaultSize={notesLayout.size("canvas")} minSize="25%" className="min-h-0 overflow-hidden">
-          <div className="relative h-full">
-            <iframe
-              ref={frameRef}
-              title="Design Mode"
-              sandbox="allow-scripts"
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full border-0 bg-white"
-            />
-            {captures.map((cap, i) => (
-              <button
-                key={cap.id}
-                type="button"
-                // Sits just above the element (below it when it touches the top),
-                // so it never covers the text it points at.
-                className={cn(
-                  "absolute z-10 grid size-5 place-items-center rounded-full text-[10px] font-semibold shadow-sm ring-2 ring-bg",
-                  editingId === cap.id ? "bg-accent text-bg" : "bg-fg text-bg",
-                )}
-                style={{
-                  left: Math.max(2, cap.bounds.x),
-                  top: cap.bounds.y >= 24 ? cap.bounds.y - 22 : cap.bounds.y + cap.bounds.h + 2,
-                }}
-                aria-label={`Note ${i + 1}: ${cap.selector}`}
-                onClick={() => startEditing(cap)}
-              >
-                {i + 1}
-              </button>
-            ))}
+        <Panel
+          id="canvas"
+          defaultSize={notesLayout.size("canvas")}
+          minSize="25%"
+          className="min-h-0 overflow-hidden"
+        >
+          <div className={cn("h-full", frameWidth && "overflow-auto bg-bg")}>
+            <div
+              className={cn("relative h-full", frameWidth && "mx-auto ring-1 ring-border")}
+              style={frameWidth ? { width: frameWidth, maxWidth: "100%" } : undefined}
+            >
+              <iframe
+                ref={frameRef}
+                title="Design Mode"
+                sandbox="allow-scripts"
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 h-full w-full border-0 bg-white"
+              />
+              {captures.map((cap, i) => (
+                <button
+                  key={cap.id}
+                  type="button"
+                  // Sits just above the element (below it when it touches the top),
+                  // so it never covers the text it points at.
+                  className={cn(
+                    "absolute z-10 grid size-5 place-items-center rounded-full text-[10px] font-semibold shadow-sm ring-2 ring-bg",
+                    editingId === cap.id || selected?.id === cap.id
+                      ? "bg-accent text-bg"
+                      : "bg-fg text-bg",
+                  )}
+                  style={{
+                    left: Math.max(2, cap.bounds.x),
+                    top: cap.bounds.y >= 24 ? cap.bounds.y - 22 : cap.bounds.y + cap.bounds.h + 2,
+                  }}
+                  aria-label={`Pin ${i + 1}: ${cap.selector}`}
+                  onClick={() => {
+                    setSelectedId(cap.id);
+                    if (tab === "notes") startEditing(cap);
+                    else setTab("style");
+                  }}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
           </div>
         </Panel>
-        <Separator id="sep-preview-notes" className="ide-sep-y" title="Drag to resize the preview and notes">
+        <Separator
+          id="sep-preview-notes"
+          className="ide-sep-y"
+          title="Drag to resize the preview and the design panel"
+        >
           <span className="ide-sep-grip" />
         </Separator>
         <Panel
@@ -352,96 +465,156 @@ export function DesignPane() {
           className="min-h-0 overflow-hidden"
         >
           <div className="flex h-full min-h-0 flex-col bg-surface">
-            <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-              <Pin className="size-3.5 shrink-0 text-subtle" />
-              <span className="shrink-0 text-[12px] font-medium text-fg">Notes</span>
-              {noteCount > 0 ? (
-                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-elevated px-1.5 text-[11px] text-muted">
-                  {noteCount}
-                </span>
-              ) : (
-                <span className="min-w-0 truncate text-[12px] text-subtle">Click any element in the preview to pin it</span>
-              )}
-              {noteCount > 0 && (
+            <div
+              className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2"
+              role="tablist"
+              aria-label="Design"
+            >
+              <TabButton
+                active={tab === "style"}
+                onClick={() => setTab("style")}
+                icon={<SlidersHorizontal className="size-3.5" />}
+              >
+                Style
+              </TabButton>
+              <TabButton
+                active={tab === "theme"}
+                onClick={() => setTab("theme")}
+                icon={<Palette className="size-3.5" />}
+              >
+                Theme
+              </TabButton>
+              <TabButton
+                active={tab === "notes"}
+                onClick={() => setTab("notes")}
+                icon={<Pin className="size-3.5" />}
+              >
+                Notes
+                {noteCount > 0 && (
+                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-bg px-1 text-[10px] text-muted">
+                    {noteCount}
+                  </span>
+                )}
+              </TabButton>
+              {tab === "notes" && captures.length > 0 && (
                 <Button size="sm" className="ml-auto h-7 shrink-0" onClick={sendToComposer}>
                   <Send className="size-3.5" />
-                  Send to Composer
+                  <span className="@max-sm:hidden">Send to Composer</span>
+                  <span className="@sm:hidden">Send</span>
                 </Button>
               )}
             </div>
-            <ul className="aperture-scroll min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-              {captures.map((cap, i) => (
-                <li key={cap.id} className="rounded-lg border border-border bg-bg p-3">
-                  <div className="flex items-start gap-3">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-elevated text-[11px] font-semibold text-fg">
-                      {i + 1}
-                    </span>
-                    {cap.screenshot ? (
-                      <img
-                        src={cap.screenshot}
-                        alt=""
-                        className="size-12 shrink-0 rounded-md border border-border object-cover"
-                      />
-                    ) : null}
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <p className="truncate font-mono text-[12px] text-fg">{cap.selector}</p>
-                      {cap.source && <p className="mt-0.5 truncate text-[11px] text-subtle">{cap.source}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${cap.selector}`}
-                      title="Remove note"
-                      className="grid size-8 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-danger"
-                      onClick={() => {
-                        if (editingId === cap.id) cancelNote();
-                        removeCapture(cap.id);
-                      }}
+            {tab === "style" && (
+              <div className="aperture-scroll @container min-h-0 flex-1 overflow-y-auto p-3">
+                {selected ? (
+                  <>
+                    <p
+                      className="mb-3 truncate font-mono text-[12px] text-fg"
+                      title={selected.selector}
                     >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                  {editingId === cap.id ? (
-                    <div className="mt-3">
-                      <textarea
-                        autoFocus
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && isModEvent(e)) {
-                            e.preventDefault();
-                            saveNote();
-                          } else if (e.key === "Escape") {
-                            // Cancel the note only; the editor's Escape would close the preview.
-                            e.stopPropagation();
-                            cancelNote();
-                          }
-                        }}
-                        placeholder="What should change? For example: make the title bolder and add space above it."
-                        rows={3}
-                        className="block max-h-48 min-h-20 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-[13px] leading-relaxed text-fg [field-sizing:content] placeholder:text-subtle focus:border-accent/60 focus:outline-none"
-                      />
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="mr-auto truncate text-[11px] text-subtle @max-sm:hidden">Ctrl/⌘ ↵ to save</span>
-                        <Button size="sm" variant="ghost" className="h-8" onClick={cancelNote}>
-                          Cancel
-                        </Button>
-                        <Button size="sm" className="h-8" onClick={saveNote}>
-                          Save note
-                        </Button>
+                      {selected.selector}
+                    </p>
+                    <StyleInspector capture={selected} pageCss={pageCss} />
+                  </>
+                ) : (
+                  <p className="text-[13px] leading-relaxed text-muted">
+                    Click any element in the preview to style it. Changes are written to your CSS
+                    and show up at once.
+                  </p>
+                )}
+              </div>
+            )}
+            {tab === "theme" && (
+              <div className="aperture-scroll @container min-h-0 flex-1 overflow-y-auto p-3">
+                <ThemePanel pageCss={pageCss} />
+              </div>
+            )}
+            {tab === "notes" && captures.length === 0 && (
+              <p className="p-3 text-[13px] leading-relaxed text-muted">
+                Click an element in the preview, write what should change, then send your notes to
+                Composer.
+              </p>
+            )}
+            {tab === "notes" && (
+              <ul className="aperture-scroll min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+                {captures.map((cap, i) => (
+                  <li key={cap.id} className="rounded-lg border border-border bg-bg p-3">
+                    <div className="flex items-start gap-3">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-elevated text-[11px] font-semibold text-fg">
+                        {i + 1}
+                      </span>
+                      {cap.screenshot ? (
+                        <img
+                          src={cap.screenshot}
+                          alt=""
+                          className="size-12 shrink-0 rounded-md border border-border object-cover"
+                        />
+                      ) : null}
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="truncate font-mono text-[12px] text-fg">{cap.selector}</p>
+                        {cap.source && (
+                          <p className="mt-0.5 truncate text-[11px] text-subtle">{cap.source}</p>
+                        )}
                       </div>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${cap.selector}`}
+                        title="Remove note"
+                        className="grid size-8 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-danger"
+                        onClick={() => {
+                          if (editingId === cap.id) cancelNote();
+                          if (selectedId === cap.id) setSelectedId(null);
+                          removeCapture(cap.id);
+                        }}
+                      >
+                        <X className="size-4" />
+                      </button>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="mt-2.5 block w-full rounded-md px-0 text-left text-[13px] leading-relaxed text-muted transition-colors hover:text-fg"
-                      onClick={() => startEditing(cap)}
-                    >
-                      {cap.note || <span className="text-subtle">Add what should change…</span>}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+                    {editingId === cap.id ? (
+                      <div className="mt-3">
+                        <textarea
+                          autoFocus
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && isModEvent(e)) {
+                              e.preventDefault();
+                              saveNote();
+                            } else if (e.key === "Escape") {
+                              // Cancel the note only; the editor's Escape would close the preview.
+                              e.stopPropagation();
+                              cancelNote();
+                            }
+                          }}
+                          placeholder="What should change? For example: make the title bolder and add space above it."
+                          rows={3}
+                          className="block max-h-48 min-h-20 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-[13px] leading-relaxed text-fg [field-sizing:content] placeholder:text-subtle focus:border-accent/60 focus:outline-none"
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="mr-auto truncate text-[11px] text-subtle @max-sm:hidden">
+                            Ctrl/⌘ ↵ to save
+                          </span>
+                          <Button size="sm" variant="ghost" className="h-8" onClick={cancelNote}>
+                            Cancel
+                          </Button>
+                          <Button size="sm" className="h-8" onClick={saveNote}>
+                            Save note
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mt-2.5 block w-full rounded-md px-0 text-left text-[13px] leading-relaxed text-muted transition-colors hover:text-fg"
+                        onClick={() => startEditing(cap)}
+                      >
+                        {cap.note || <span className="text-subtle">Add what should change…</span>}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </Panel>
       </Group>

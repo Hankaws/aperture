@@ -924,7 +924,7 @@ function PlanChrome({
         onAct={actOnHint}
         actDisabled={actDisabled}
       />
-      {awaitingMsg && !agentRunning && (
+      {awaitingMsg && !agentRunning && proposed.length > 0 && (
         <WorkerConfirm
           plan={awaitingMsg.plan ?? []}
           account={account}

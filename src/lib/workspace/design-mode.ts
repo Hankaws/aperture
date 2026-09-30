@@ -1,4 +1,5 @@
 import { collectImports } from "./module-graph.ts";
+import { formatTokens, readTokens, type DesignToken, type MatchedRule } from "./design-styles.ts";
 
 export type DesignCapture = {
   id: string;
@@ -13,6 +14,13 @@ export type DesignCapture = {
   screenshot: string | null;
   source: string | null;
   note: string;
+  /** The element's own classes and id, for picking the rule a style edit goes to. */
+  classes?: string[];
+  elementId?: string | null;
+  /** The nearest ancestor's class or id (`.card`), to scope a new rule for a classless element. */
+  scope?: string | null;
+  /** Rules in the project's stylesheets that match the element, in cascade order. */
+  rules?: MatchedRule[];
 };
 
 export const PREVIEW_HTML_PATH = "preview.html";
@@ -190,7 +198,17 @@ export function isDesignPayload(value: unknown): value is Omit<DesignCapture, "i
     typeof bounds!.y === "number" &&
     typeof bounds!.w === "number" &&
     typeof bounds!.h === "number" &&
-    (o.screenshot === null || typeof o.screenshot === "string")
+    (o.screenshot === null || typeof o.screenshot === "string") &&
+    (o.classes === undefined || (Array.isArray(o.classes) && o.classes.length <= 40 && o.classes.every((c) => typeof c === "string" && c.length <= 120))) &&
+    (o.elementId === undefined || o.elementId === null || (typeof o.elementId === "string" && o.elementId.length <= 120)) &&
+    (o.scope === undefined || o.scope === null || (typeof o.scope === "string" && o.scope.length <= 200)) &&
+    (o.rules === undefined ||
+      (Array.isArray(o.rules) &&
+        o.rules.length <= 40 &&
+        o.rules.every((r) => {
+          const rule = r as Record<string, unknown> | null;
+          return Boolean(rule) && typeof rule!.from === "string" && rule!.from.length <= 300 && typeof rule!.selector === "string" && rule!.selector.length <= 400;
+        })))
   );
 }
 
@@ -327,9 +345,27 @@ export function hotReloadStyles(doc: { querySelectorAll: (sel: string) => Iterab
   return changed;
 }
 
-export function formatDesignCaptures(captures: DesignCapture[]): string {
+/** Every design token the captured pages' stylesheets declare, for Composer. */
+function pageTokens(captures: DesignCapture[], files: Record<string, string>): string {
+  const seen = new Set<string>();
+  const tokens: DesignToken[] = [];
+  for (const path of new Set(captures.map((c) => c.path))) {
+    if (files[path] === undefined) continue;
+    for (const css of Object.values(cssFromPreview(assembleHtmlPreview(files, path)))) {
+      for (const t of readTokens(css)) {
+        if (seen.has(t.name)) continue;
+        seen.add(t.name);
+        tokens.push(t);
+      }
+    }
+  }
+  return formatTokens(tokens);
+}
+
+export function formatDesignCaptures(captures: DesignCapture[], files?: Record<string, string>): string {
   if (captures.length === 0) return "";
-  return captures
+  const tokens = files ? pageTokens(captures, files) : "";
+  const text = captures
     .map((c) => {
       const shot =
         c.screenshot && c.screenshot.length < 14000
@@ -345,6 +381,7 @@ export function formatDesignCaptures(captures: DesignCapture[]): string {
         `bounds: ${c.bounds.w}×${c.bounds.h} at (${c.bounds.x}, ${c.bounds.y})`,
         `html:\n${c.html}`,
         c.neighborhood ? `neighborhood:\n${c.neighborhood}` : null,
+        c.rules?.length ? `styled by: ${c.rules.map((r) => `${r.selector} (${r.from})`).join(", ")}` : null,
         `css:\n${c.css}`,
         shot,
       ]
@@ -352,6 +389,7 @@ export function formatDesignCaptures(captures: DesignCapture[]): string {
         .join("\n");
     })
     .join("\n\n---\n\n");
+  return tokens ? `${text}\n\n${tokens}` : text;
 }
 
 export const PICKER_SCRIPT = `(() => {
@@ -360,7 +398,7 @@ export const PICKER_SCRIPT = `(() => {
   box.setAttribute("data-aperture-picker", "1");
   box.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #3b9eff;background:rgba(59,158,255,.14);display:none;";
   document.documentElement.appendChild(box);
-  const keys = ["display","position","top","left","right","bottom","width","height","margin","padding","color","background-color","background-image","font-family","font-size","font-weight","line-height","border","border-radius","flex","gap","align-items","justify-content","text-align","opacity","overflow","box-shadow","z-index"];
+  const keys = ["display","position","top","left","right","bottom","width","height","margin","padding","color","background-color","background-image","font-family","font-size","font-weight","line-height","letter-spacing","border","border-color","border-width","border-radius","flex","gap","align-items","justify-content","text-align","opacity","overflow","box-shadow","z-index"];
   function hit(e) {
     box.style.display = "none";
     const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -377,6 +415,30 @@ export const PICKER_SCRIPT = `(() => {
   function css(el) {
     const s = getComputedStyle(el);
     return keys.map((k) => k + ": " + s.getPropertyValue(k)).join("; ");
+  }
+  function scope(el) {
+    for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+      if (a.id) return "#" + CSS.escape(a.id);
+      const c = typeof a.className === "string" ? a.className.trim().split(/\\s+/)[0] : "";
+      if (c) return "." + CSS.escape(c);
+    }
+    return null;
+  }
+  // The project's own rules that style this element: only stylesheets inlined from workspace files carry data-from.
+  function matched(el) {
+    const out = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      const node = sheet.ownerNode;
+      const from = node && node.getAttribute ? node.getAttribute("data-from") : null;
+      if (!from || !/\\.css$/i.test(from)) continue;
+      let list;
+      try { list = sheet.cssRules; } catch (err) { continue; }
+      for (const r of Array.from(list)) {
+        if (r.type !== 1 || !r.selectorText) continue;
+        try { if (el.matches(r.selectorText)) out.push({ from, selector: r.selectorText }); } catch (err) {}
+      }
+    }
+    return out.slice(-20);
   }
   function snap(el, done) {
     try {
@@ -429,7 +491,11 @@ export const PICKER_SCRIPT = `(() => {
       neighborhood: wrap ? (wrap.outerHTML || "").slice(0, 4000) : "",
       css: css(el),
       bounds: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
-      screenshot: null
+      screenshot: null,
+      classes: typeof el.className === "string" ? el.className.trim().split(/\\s+/).filter(Boolean).slice(0, 20) : [],
+      elementId: el.id || null,
+      scope: scope(el),
+      rules: matched(el)
     };
     snap(el, (shot) => {
       payload.screenshot = shot;

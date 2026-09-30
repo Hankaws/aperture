@@ -9,6 +9,7 @@ import {
   htmlFiles,
   isDesignPayload,
   pickHtmlEntry,
+  PICKER_SCRIPT,
   previewMarkupKey,
   sanitizePreviewHtml,
   type DesignCapture,
@@ -120,6 +121,35 @@ test("formatDesignCaptures includes intent and neighborhood", () => {
   assert.match(text, /source: preview.css:1/);
   assert.match(text, /neighborhood:/);
   assert.match(text, /<button class="cta">Go<\/button>/);
+});
+
+test("formatDesignCaptures names the matched rules and the page's design tokens", () => {
+  const cap: DesignCapture = {
+    id: "1",
+    path: "preview.html",
+    selector: "button.cta",
+    tag: "button",
+    text: "Go",
+    html: `<button class="cta">Go</button>`,
+    neighborhood: "",
+    css: "display: inline-block",
+    bounds: { x: 8, y: 8, w: 80, h: 32 },
+    screenshot: null,
+    source: null,
+    note: "",
+    rules: [{ from: "preview.css", selector: ".cta" }],
+  };
+  const withTokens = { ...files, "preview.css": `:root { --accent: #3b9eff; }\n.cta { color: var(--accent); }` };
+  const text = formatDesignCaptures([cap], withTokens);
+  assert.match(text, /styled by: \.cta \(preview\.css\)/);
+  assert.match(text, /Design tokens[^\n]*\n--accent: #3b9eff/);
+  assert.doesNotMatch(formatDesignCaptures([cap]), /Design tokens/);
+});
+
+test("the picker script keeps its regex escapes once injected", () => {
+  // A template literal eats a lone backslash: /\s+/ would reach the page as /s+/.
+  assert.ok(PICKER_SCRIPT.includes("split(/\\s+/)"));
+  assert.ok(PICKER_SCRIPT.includes("/\\.css$/i"));
 });
 
 test("scripts are stripped by default, exactly as before", () => {

@@ -1097,7 +1097,13 @@ function TaskStrip({
       )}
       <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{hint.title}</span>
       {hint.kind !== "wait" && (
-        <Button type="button" size="sm" className="h-6 shrink-0 px-2" disabled={actDisabled} onClick={onAct}>
+        <Button
+          type="button"
+          size="sm"
+          className="h-6 shrink-0 px-2"
+          disabled={actDisabled && hint.kind !== "apply" && hint.kind !== "fix" && hint.kind !== "review"}
+          onClick={onAct}
+        >
           {hint.cta}
         </Button>
       )}

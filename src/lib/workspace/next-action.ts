@@ -1,4 +1,4 @@
-export type NextKind = "wait" | "build" | "workers" | "notes" | "reviewer" | "review" | "apply" | "crew" | "compose";
+export type NextKind = "wait" | "build" | "workers" | "notes" | "reviewer" | "review" | "apply" | "fix" | "crew" | "compose";
 
 export type NextAction = {
   kind: NextKind;
@@ -17,6 +17,8 @@ export function nextAction(input: {
   messages: number;
   noteCount?: number;
   reviewerLabel?: string;
+  /** Settled check results for the staged change. Absent while nothing is staged. */
+  checks?: "running" | "clear" | "failed";
 }): NextAction {
   if (input.running) {
     return { kind: "wait", title: "Composer is working", detail: "Steer in the box if you want to add a follow-up.", cta: "Wait" };
@@ -39,6 +41,22 @@ export function nextAction(input: {
       title: `Send ${n} ${n === 1 ? "note" : "notes"} to Composer`,
       detail: "Apply is blocked until you send or dismiss the notes.",
       cta: "Send notes",
+    };
+  }
+  if (input.pending > 0 && input.checks === "failed") {
+    return {
+      kind: "fix",
+      title: "A check failed",
+      detail: "Open the file it points at before you apply.",
+      cta: "Open it",
+    };
+  }
+  if (input.pending > 0 && input.checks === "clear") {
+    return {
+      kind: "apply",
+      title: `Apply ${input.pending} staged ${input.pending === 1 ? "file" : "files"}`,
+      detail: "Checks are in. Amber means that failure was already there.",
+      cta: "Apply",
     };
   }
   if (input.pending > 0 && input.crewModels >= 2 && (input.noteCount ?? 0) === 0) {

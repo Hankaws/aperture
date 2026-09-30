@@ -855,6 +855,7 @@ function PlanChrome({
   const seats = availableSeats(account);
   const crew = selectedSeats(seats, crewIds);
   const proposed = awaitingMsg?.plan ? proposeWorkers(awaitingMsg.plan, fileList, crew) : [];
+  const checkHint = useIdeUi((s) => s.checkHint);
   const hint = nextAction({
     running: agentRunning,
     awaiting: Boolean(awaitingMsg),
@@ -865,6 +866,7 @@ function PlanChrome({
     messages: messages.length,
     noteCount: notesOn(listPendingEdits(messages)),
     reviewerLabel: modelSeats(crew).find((s) => s.source && s.source !== source)?.label,
+    checks: pendingCount > 0 ? (checkHint?.state ?? "running") : undefined,
   });
 
   function actOnHint() {
@@ -896,6 +898,16 @@ function PlanChrome({
         role: "review",
         pendingEdits: pending,
       });
+      return;
+    }
+    if (hint.kind === "apply") {
+      useWorkspace.getState().applyAllPending();
+      return;
+    }
+    if (hint.kind === "fix") {
+      const path = useIdeUi.getState().checkHint?.path;
+      if (path) useWorkspace.getState().openFile(path);
+      useIdeUi.getState().setMobilePane("editor");
       return;
     }
     if (hint.kind === "review") {

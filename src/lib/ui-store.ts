@@ -72,6 +72,8 @@ type IdeUiState = {
   theme: EditorTheme;
   density: Density;
   composerUnread: boolean;
+  /** What the staged checks say, so Composer can suggest Apply or Open. */
+  checkHint: { state: "running" | "clear" | "failed"; path?: string } | null;
   reveal: { path: string; line: number } | null;
   findTick: number;
   steerQueue: string[];
@@ -101,6 +103,7 @@ type IdeUiState = {
   setTheme: (theme: EditorTheme) => void;
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
+  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
@@ -134,6 +137,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   theme: "cursor",
   density: "compact",
   composerUnread: false,
+  checkHint: null,
   reveal: null,
   findTick: 0,
   steerQueue: [],
@@ -230,6 +234,11 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     });
   },
   setComposerUnread: (on) => set({ composerUnread: on }),
+  setCheckHint: (hint) =>
+    set((s) => {
+      if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path) return s;
+      return { checkHint: hint };
+    }),
   setReveal: (reveal) => set({ reveal }),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),
   enqueueSteer: (text) =>

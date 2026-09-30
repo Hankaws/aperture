@@ -57,3 +57,46 @@ test("nextAction sends notes instead of applying", () => {
   });
   assert.equal(next.kind, "notes");
 });
+
+test("nextAction applies once the checks are clear", () => {
+  const next = nextAction({
+    running: false,
+    awaiting: false,
+    pending: 1,
+    workerCount: 0,
+    crewModels: 2,
+    keyReady: 2,
+    messages: 4,
+    checks: "clear",
+  });
+  assert.equal(next.kind, "apply");
+  assert.equal(next.cta, "Apply");
+});
+
+test("nextAction opens the file when a check failed", () => {
+  const next = nextAction({
+    running: false,
+    awaiting: false,
+    pending: 1,
+    workerCount: 0,
+    crewModels: 1,
+    keyReady: 1,
+    messages: 4,
+    checks: "failed",
+  });
+  assert.equal(next.kind, "fix");
+});
+
+test("nextAction keeps reviewing while checks are still running", () => {
+  const next = nextAction({
+    running: false,
+    awaiting: false,
+    pending: 1,
+    workerCount: 0,
+    crewModels: 1,
+    keyReady: 1,
+    messages: 4,
+    checks: "running",
+  });
+  assert.equal(next.kind, "review");
+});

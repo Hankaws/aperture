@@ -226,6 +226,13 @@ export function CheckResults({
     () => changeChecks({ files, edits, render: result, verify, browser }),
     [files, edits, result, verify, browser],
   );
+  const failed = rows.find((r) => r.status === "fail");
+  const checkState = rows.some((r) => r.status === "running") ? "running" : failed ? "failed" : "clear";
+  const failedPath = failed?.path;
+  useEffect(() => {
+    useIdeUi.getState().setCheckHint({ state: checkState, path: failedPath });
+    return () => useIdeUi.getState().setCheckHint(null);
+  }, [checkState, failedPath]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const hasOutput = output.trim().length > 0;
   return (

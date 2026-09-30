@@ -491,16 +491,19 @@ export async function runAgentLoopStreaming(
       }
     }
 
+    const staged = mergeEdits(ctx.edits);
     const text =
       phase === "plan" && ctx.plan.length > 0
         ? planReadyText(undefined)
-        : "Stopped after the tool-call limit. Review the staged edits.";
+        : staged.length > 0
+          ? "Stopped after the tool-call limit. Review the staged edits."
+          : "Stopped after the tool-call limit. Nothing was staged.";
     const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
     return succeed(
       {
         text,
         traces,
-        edits: awaitingBuild ? [] : mergeEdits(ctx.edits),
+        edits: awaitingBuild ? [] : staged,
         plan: ctx.plan,
         awaitingBuild,
       },

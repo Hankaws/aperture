@@ -4,7 +4,8 @@ import { FolderOpen, Github, LoaderCircle } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { importGithubRepo } from "@/lib/github/api";
+import { importGithubRepo, listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
+import { readGithubToken, writeGithubToken, clearGithubToken, type GithubSource } from "@/lib/github/roundtrip";
 import { abortAgent } from "@/lib/agent/run";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-local";
@@ -14,14 +15,14 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
-function applyImport(result: ImportResult) {
+function applyImport(result: ImportResult, source?: GithubSource | null) {
   const count = Object.keys(result.files).length;
   if (count === 0) {
     toast.error("No text files found. Binaries and node_modules are skipped.");
     return;
   }
   abortAgent();
-  useWorkspace.getState().loadProject(result.name, result.files);
+  useWorkspace.getState().loadProject(result.name, result.files, source ?? null);
   const extra = [
     result.skipped ? `${result.skipped} skipped` : null,
     result.truncated ? "hit the size cap" : null,
@@ -157,6 +158,26 @@ function GithubDialog({
   const { user, isPending } = useCurrentUserState();
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+  const [tokenOn, setTokenOn] = useState(false);
+  const [repos, setRepos] = useState<GithubRepoSummary[]>([]);
+
+  useEffect(() => {
+    setTokenOn(Boolean(readGithubToken()));
+  }, []);
+
+  useEffect(() => {
+    const saved = readGithubToken();
+    if (!saved || !user) return;
+    let cancel = false;
+    void listGithubRepos({ data: { token: saved } }).then((result) => {
+      if (cancel || !result.ok) return;
+      setRepos(result.repos);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [user, tokenOn]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -171,12 +192,12 @@ function GithubDialog({
     setError(null);
     setBusy(true);
     try {
-      const result = await importGithubRepo({ data: { url } });
+      const result = await importGithubRepo({ data: { url, token: readGithubToken() ?? undefined } });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      applyImport(result);
+      applyImport(result, result.source);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
@@ -199,7 +220,9 @@ function GithubDialog({
           <Github className="size-4" />
           <h2 className="text-base font-medium">Open a GitHub repo</h2>
         </div>
-        <p className="mt-1 text-sm text-muted">Public repos only. Private code: drop a folder or zip.</p>
+        <p className="mt-1 text-sm text-muted">
+          Public repos open with the link. A token opens a private repo you own and lets you send changes back.
+        </p>
         {!isPending && !user ? (
           <div className="mt-4">
             <p className="text-sm text-muted">Sign in so imports count against your account, not a shared quota.</p>
@@ -216,6 +239,67 @@ function GithubDialog({
               placeholder="facebook/react or https://github.com/owner/repo"
               className="mt-4 font-mono text-[13px]"
             />
+            {tokenOn ? (
+              <div className="mt-3 flex items-center justify-between gap-2 text-[12px] text-muted">
+                <span>Token saved on this browser. It is not part of the project.</span>
+                <button
+                  type="button"
+                  className="shrink-0 hover:text-fg"
+                  onClick={() => {
+                    clearGithubToken();
+                    setTokenOn(false);
+                    setRepos([]);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 flex gap-2">
+                <Input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="GitHub token, repo scope"
+                  autoComplete="off"
+                  className="font-mono text-[13px]"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={!token.trim()}
+                  onClick={() => {
+                    const saved = writeGithubToken(token);
+                    if (!saved) {
+                      setError("That does not look like a GitHub token.");
+                      return;
+                    }
+                    setToken("");
+                    setTokenOn(true);
+                    setError(null);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+            {repos.length > 0 && (
+              <ul className="mt-3 max-h-36 overflow-y-auto rounded-md border border-border">
+                {repos.map((repo) => (
+                  <li key={repo.fullName}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left font-mono text-[12px] hover:bg-elevated"
+                      onClick={() => setUrl(repo.fullName)}
+                    >
+                      <span className="truncate">{repo.fullName}</span>
+                      {repo.private && <span className="shrink-0 text-subtle">private</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {error && <p className="mt-2 text-sm text-danger">{error}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={onClose} type="button">

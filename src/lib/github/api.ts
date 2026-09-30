@@ -2,8 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
+import { cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
 
-export type GithubImportResult = (ImportResult & { ok: true }) | { ok: false; error: string };
+export type GithubImportResult =
+  | (ImportResult & { ok: true; source: GithubSource | null })
+  | { ok: false; error: string };
 
 const GITHUB_HOSTS = new Set(["api.github.com", "codeload.github.com", "github.com"]);
 
@@ -48,28 +51,31 @@ async function readCapped(res: Response, cap: number): Promise<ArrayBuffer> {
 }
 
 export const importGithubRepo = createServerFn({ method: "POST" })
-  .validator((input: { url: string }) => input)
+  .validator((input: { url: string; token?: string }) => input)
   .middleware([authMiddleware])
   .handler(async ({ data }): Promise<GithubImportResult> => {
     const parsed = parseGithubUrl(data.url);
     if (!parsed) {
       return { ok: false, error: "Use owner/repo or a github.com URL." };
     }
+    const token = data.token ? cleanGithubToken(data.token) : null;
+    if (data.token && !token) return { ok: false, error: "That token does not look like a GitHub token." };
+    const headers = githubHeaders(token);
     const zipUrl = parsed.ref
       ? `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/zipball/${encodeURIComponent(parsed.ref)}`
       : `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/zipball`;
     let res: Response;
     try {
-      res = await fetchPinned(zipUrl, {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "aperture-editor",
-        "X-GitHub-Api-Version": "2022-11-28",
-      });
+      res = await fetchPinned(zipUrl, headers);
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
     }
+    if (res.status === 401) return { ok: false, error: "GitHub rejected that token." };
     if (res.status === 404) {
-      return { ok: false, error: "Repo not found. Only public GitHub repositories work here." };
+      return {
+        ok: false,
+        error: token ? "Repo not found, or the token cannot see it." : "Repo not found. Public repos work without a token.",
+      };
     }
     if (res.status === 403) {
       return { ok: false, error: "GitHub rate limit. Wait a bit, or drop a folder / zip instead." };
@@ -83,8 +89,223 @@ export const importGithubRepo = createServerFn({ method: "POST" })
       if (Object.keys(imported.files).length === 0) {
         return { ok: false, error: "No text files found in that repo (after skipping node_modules and binaries)." };
       }
-      return { ok: true, ...imported, name: parsed.repo };
+      const source = await readSource(parsed.owner, parsed.repo, parsed.ref, headers);
+      return { ok: true, ...imported, name: parsed.repo, source };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not unpack the repo." };
     }
   });
+
+export type GithubRepoSummary = { fullName: string; private: boolean; branch: string };
+
+export const listGithubRepos = createServerFn({ method: "POST" })
+  .validator((input: { token: string }) => input)
+  .middleware([authMiddleware])
+  .handler(async ({ data }): Promise<{ ok: true; repos: GithubRepoSummary[] } | { ok: false; error: string }> => {
+    const token = cleanGithubToken(data.token);
+    if (!token) return { ok: false, error: "That token does not look like a GitHub token." };
+    const { status, body } = await githubJson(
+      "https://api.github.com/user/repos?per_page=30&sort=updated&affiliation=owner,collaborator",
+      token,
+    );
+    if (status === 401) return { ok: false, error: "GitHub rejected that token." };
+    if (status !== 200 || !Array.isArray(body)) return { ok: false, error: `GitHub returned ${status}.` };
+    const repos = body.slice(0, 30).map((row) => {
+      const rec = row as { full_name?: string; private?: boolean; default_branch?: string };
+      return {
+        fullName: String(rec.full_name ?? ""),
+        private: Boolean(rec.private),
+        branch: String(rec.default_branch ?? "main"),
+      };
+    });
+    return { ok: true, repos: repos.filter((r) => r.fullName.includes("/")) };
+  });
+
+export type GithubPublishResult =
+  | { ok: true; url: string; sha: string; branch: string }
+  | { ok: false; error: string };
+
+export const publishGithub = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      token: string;
+      owner: string;
+      repo: string;
+      branch: string;
+      baseSha: string;
+      mode: "commit" | "pr";
+      message: string;
+      changes: GithubChange[];
+    }) => input,
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ data }): Promise<GithubPublishResult> => {
+    const token = cleanGithubToken(data.token);
+    if (!token) return { ok: false, error: "That token does not look like a GitHub token." };
+    const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
+    if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
+    if (!/^[A-Za-z0-9._/-]+$/.test(data.branch) || data.branch.includes("..")) {
+      return { ok: false, error: "That branch name is not valid." };
+    }
+    if (!/^[0-9a-f]{40}$/i.test(data.baseSha)) return { ok: false, error: "Missing the commit this project was opened at." };
+    const changes = sanitizeChanges(data.changes);
+    if (!changes) return { ok: false, error: "Too many or too large to send. Commit fewer files." };
+    if (changes.length === 0) return { ok: false, error: "Nothing changed since you opened the repo." };
+    const message = data.message.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) || "Update from Aperture";
+    try {
+      const parent = await githubJson(
+        `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/commits/${data.baseSha}`,
+        token,
+      );
+      if (parent.status === 401) return { ok: false, error: "GitHub rejected that token." };
+      if (parent.status !== 200) return { ok: false, error: "Could not read the commit you opened." };
+      const baseTree = String((parent.body as { tree?: { sha?: string } }).tree?.sha ?? "");
+      if (!baseTree) return { ok: false, error: "Could not read the commit you opened." };
+      const tree = [];
+      for (const change of changes) {
+        if ("deleted" in change) {
+          tree.push({ path: change.path, mode: "100644", type: "blob", sha: null });
+          continue;
+        }
+        const blob = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/blobs`, token, {
+          method: "POST",
+          body: JSON.stringify({ content: change.content, encoding: "utf-8" }),
+        });
+        if (blob.status !== 201) return { ok: false, error: `Could not write ${change.path}.` };
+        const sha = String((blob.body as { sha?: string }).sha ?? "");
+        if (!sha) return { ok: false, error: `Could not write ${change.path}.` };
+        tree.push({ path: change.path, mode: "100644", type: "blob", sha });
+      }
+      const nextTree = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/trees`, token, {
+        method: "POST",
+        body: JSON.stringify({ base_tree: baseTree, tree }),
+      });
+      if (nextTree.status !== 201) return { ok: false, error: "GitHub rejected the file tree." };
+      const treeSha = String((nextTree.body as { sha?: string }).sha ?? "");
+      const commit = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/commits`, token, {
+        method: "POST",
+        body: JSON.stringify({ message, tree: treeSha, parents: [data.baseSha] }),
+      });
+      if (commit.status !== 201) return { ok: false, error: "GitHub rejected the commit." };
+      const sha = String((commit.body as { sha?: string }).sha ?? "");
+      if (!sha) return { ok: false, error: "GitHub rejected the commit." };
+      if (data.mode === "commit") {
+        const updated = await githubJson(
+          `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/refs/heads/${encodeURIComponent(data.branch)}`,
+          token,
+          { method: "PATCH", body: JSON.stringify({ sha, force: false }) },
+        );
+        if (updated.status === 422) {
+          return { ok: false, error: "That branch moved on GitHub. Open a pull request instead." };
+        }
+        if (updated.status !== 200) return { ok: false, error: "Could not update the branch." };
+        return {
+          ok: true,
+          sha,
+          branch: data.branch,
+          url: `https://github.com/${parsed.owner}/${parsed.repo}/commit/${sha}`,
+        };
+      }
+      const head = `aperture/${sha.slice(0, 7)}`;
+      const ref = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/refs`, token, {
+        method: "POST",
+        body: JSON.stringify({ ref: `refs/heads/${head}`, sha }),
+      });
+      if (ref.status !== 201) return { ok: false, error: "Could not create the branch." };
+      const pr = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/pulls`, token, {
+        method: "POST",
+        body: JSON.stringify({
+          title: message,
+          head,
+          base: data.branch,
+          body: "Opened from Aperture.",
+        }),
+      });
+      if (pr.status !== 201) return { ok: false, error: "The branch was created, but the pull request was not." };
+      const url = String((pr.body as { html_url?: string }).html_url ?? "");
+      return { ok: true, sha, branch: head, url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
+    }
+  });
+
+function githubHeaders(token: string | null): Record<string, string> {
+  return {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "aperture-editor",
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function githubJson(
+  url: string,
+  token: string,
+  init?: { method?: string; body?: string },
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(url, {
+    method: init?.method ?? "GET",
+    body: init?.body,
+    redirect: "manual",
+    headers: {
+      ...githubHeaders(token),
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+  if (res.status >= 300 && res.status < 400) return { status: res.status, body: {} };
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+async function readSource(
+  owner: string,
+  repo: string,
+  ref: string | undefined,
+  headers: Record<string, string>,
+): Promise<GithubSource | null> {
+  try {
+    const repoRes = await fetchPinned(`https://api.github.com/repos/${owner}/${repo}`, headers);
+    if (!repoRes.ok) return null;
+    const repoBody = (await repoRes.json()) as { default_branch?: string };
+    const branch = ref || repoBody.default_branch || "main";
+    const commitRes = await fetchPinned(
+      `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
+      headers,
+    );
+    if (!commitRes.ok) return null;
+    const commitBody = (await commitRes.json()) as { sha?: string };
+    if (!commitBody.sha) return null;
+    return { owner, repo, branch, sha: commitBody.sha };
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeChanges(changes: GithubChange[]): GithubChange[] | null {
+  if (!Array.isArray(changes) || changes.length === 0 || changes.length > 80) return changes?.length === 0 ? [] : null;
+  let total = 0;
+  const out: GithubChange[] = [];
+  for (const change of changes) {
+    if (!change || typeof change.path !== "string") return null;
+    if (!isSafePath(change.path)) return null;
+    if ("deleted" in change) {
+      out.push({ path: change.path, deleted: true });
+      continue;
+    }
+    if (typeof change.content !== "string" || change.content.length > 300_000) return null;
+    total += change.content.length;
+    if (total > 2_000_000) return null;
+    out.push({ path: change.path, content: change.content });
+  }
+  return out;
+}
+
+function isSafePath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    path.length <= 240 &&
+    !path.startsWith("/") &&
+    !path.includes("\\") &&
+    !path.includes("\0") &&
+    !path.split("/").includes("..")
+  );
+}

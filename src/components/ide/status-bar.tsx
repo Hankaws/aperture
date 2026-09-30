@@ -7,6 +7,7 @@ import { languageLabel } from "@/lib/parser/language";
 import { useIdeUi } from "@/lib/ui-store";
 import { resolveAgentTask } from "@/lib/workspace/agent-task";
 import { cn } from "@/lib/utils";
+import { GithubSendDialog } from "./github-send";
 
 export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const activePath = useWorkspace((s) => s.activePath);
@@ -26,6 +27,8 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const lang = activePath ? languageLabel(activePath) : "";
   const line = selection && selection.path === activePath ? selection.fromLine : null;
   const fileCount = files.length;
+  const github = useWorkspace((s) => s.github);
+  const [sendOpen, setSendOpen] = useState(false);
   const task = resolveAgentTask({
     running: agentRunning,
     indexing,
@@ -39,6 +42,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
 
   return (
     <div className="ide-status">
+      {sendOpen && <GithubSendDialog onClose={() => setSendOpen(false)} />}
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -91,6 +95,11 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
       </div>
       <div className="flex items-center gap-3">
         <SyncBadge />
+        {github && (
+          <button type="button" className="max-w-36 truncate hover:text-fg" onClick={() => setSendOpen(true)}>
+            {github.owner}/{github.repo}
+          </button>
+        )}
         {line != null && <span className="hidden tabular-nums md:inline">Line {line}</span>}
         {lang && <span className="hidden md:inline">{lang}</span>}
         <span className="hidden shrink-0 text-subtle md:inline" title="Agents wait for Build it and Apply. Nothing runs unattended.">

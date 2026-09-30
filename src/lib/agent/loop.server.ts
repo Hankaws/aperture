@@ -253,6 +253,8 @@ export async function runAgentLoopStreaming(
   let browserRun: { script: string } | undefined;
   /** The agent's own last sandbox run: the verify step reuses it when the edits have not changed since. */
   let lastRun: { script: string; editsKey: string; result: { text: string; passed: boolean; ran: boolean } } | undefined;
+  /** run_script calls made before any edit. Two of those end the turn instead of spending it. */
+  let scriptsWithoutEdits = 0;
   const editsKeyOf = (edits: ProposedEdit[]) => JSON.stringify(mergeEdits(edits).map((e) => [e.path, e.newText]));
   const ctx: ToolContext = {
     files,
@@ -484,6 +486,22 @@ export async function runAgentLoopStreaming(
             content: outcome.result,
           });
         }
+      }
+
+      if (ctx.edits.length > 0) scriptsWithoutEdits = 0;
+      else if (callNames.includes("run_script")) {
+        scriptsWithoutEdits += callNames.filter((name) => name === "run_script").length;
+      }
+      // A browser run only starts when the turn ends, and a model that keeps
+      // re-running tests before it stages anything used to spend the whole budget.
+      if (browserRun || scriptsWithoutEdits >= 2) {
+        const staged = mergeEdits(ctx.edits);
+        const text = browserRun
+          ? staged.length > 0
+            ? "Staged. Tests run in your browser next."
+            : "No edit yet. Tests run in your browser on the current files; stage the fix after the result."
+          : "Stopped. Stage the change with propose_edit before running the tests again.";
+        return succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
       }
 
       if (shouldAwaitBuild(phase, ctx.plan.length > 0, callNames)) {

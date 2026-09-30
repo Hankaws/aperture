@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { stampFiles, type GithubOrigin, type GithubSource } from "@/lib/github/roundtrip";
 import { indexFiles } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
@@ -44,10 +45,12 @@ type WorkspaceState = {
   /** Content hash at that moment, so unsaved edits are detectable after a reload. */
   syncedHash: string | null;
   syncState: SyncState;
+  /** Set when this project was opened from GitHub, so changes can go back. */
+  github: GithubOrigin | null;
   selection: Selection;
   hydrate: () => void;
   loadDemo: () => void;
-  loadProject: (name: string, files: Record<string, string>) => void;
+  loadProject: (name: string, files: Record<string, string>, source?: GithubSource | null) => void;
   reindex: () => void;
   openFile: (path: string) => void;
   openPreview: (path: string) => void;
@@ -75,6 +78,7 @@ type WorkspaceState = {
   markSynced: (revision: number, hash: string) => void;
   adoptRemote: (name: string, files: Record<string, string>, revision: number) => void;
   setSyncState: (state: SyncState) => void;
+  setGithub: (github: GithubOrigin | null) => void;
   syncStackMemory: () => void;
 };
 
@@ -91,6 +95,7 @@ type PersistShape = {
   checkpoints?: Checkpoint[];
   revision?: number | null;
   syncedHash?: string | null;
+  github?: GithubOrigin | null;
 };
 
 function persist(state: WorkspaceState) {
@@ -107,6 +112,7 @@ function persist(state: WorkspaceState) {
     messages: state.messages.slice(-40),
     revision: state.revision,
     syncedHash: state.syncedHash,
+    github: state.github,
   };
   try {
     localStorage.setItem(
@@ -175,6 +181,12 @@ function withPath(list: string[], path: string) {
 
 function seedFiles(files: Record<string, string>, name: string) {
   return applyStackMemory(files, name);
+}
+
+function validGithub(value: GithubOrigin | null | undefined): value is GithubOrigin {
+  if (!value || typeof value.owner !== "string" || typeof value.repo !== "string") return false;
+  if (typeof value.branch !== "string" || typeof value.sha !== "string") return false;
+  return Boolean(value.stamps) && typeof value.stamps === "object";
 }
 
 const SEEDED_DEMO = seedFiles({ ...DEMO_FILES }, DEMO_WORKSPACE_NAME);
@@ -289,6 +301,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     revision: null,
     syncedHash: null,
     syncState: "idle",
+    github: null,
 
     hydrate: () => {
       if (typeof window === "undefined") return;
@@ -332,6 +345,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
               indexing: false,
               agentRunning: false,
               runningMode: null,
+              github: validGithub(parsed.github) ? parsed.github! : null,
             });
             return;
           }
@@ -361,11 +375,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         selection: null,
         agentRunning: false,
         runningMode: null,
+        github: null,
       });
       schedulePersist();
     },
 
-    loadProject: (name, incoming) => {
+    loadProject: (name, incoming, source) => {
       const nextFiles = seedFiles(incoming, name);
       // Opening a different project detaches from whatever was saved: the next
       // save is a fresh write, not an edit on top of the old revision.
@@ -394,6 +409,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         selection: null,
         agentRunning: false,
         runningMode: null,
+        github: source ? { ...source, stamps: stampFiles(nextFiles) } : null,
       });
       set({
         chunks: buildIndex(nextFiles),
@@ -723,11 +739,17 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         revision,
         syncedHash: workspaceHash(name, seeded),
         syncState: "saved",
+        github: null,
       });
       schedulePersist();
     },
 
     setSyncState: (state) => set({ syncState: state }),
+
+    setGithub: (github) => {
+      set({ github });
+      schedulePersist();
+    },
 
     clearChat: () => {
       set({ messages: [] });

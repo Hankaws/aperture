@@ -115,7 +115,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "run_script",
       description:
-        "Run one of the project's own package.json scripts in a sandbox and read the real output. Use it to check work before handing it over — a failing test tells you more than re-reading the diff. Only declared scripts run; servers like dev and start cannot.",
+        "Run one of the project's own package.json scripts against your staged edits and read the real output. Use it to check work before handing it over — a failing test tells you more than re-reading the diff. Tests run in the user's browser when they can (the output then arrives as the next message), otherwise in a sandbox. Only declared scripts run; servers like dev and start cannot.",
       parameters: {
         type: "object",
         properties: {
@@ -177,6 +177,12 @@ export type ToolContext = {
   role?: "build" | "review";
   /** Set when this request may run code; absent leaves `run_script` answering that it cannot. */
   runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean }>;
+  /**
+   * Set when the tab can run scripts in its browser: returns the tool's answer
+   * when `script` is handed to the tab at the end of this turn, or null when
+   * the browser cannot run it and `runScript` should.
+   */
+  handOff?: (script: string) => string | null;
 };
 
 function clip(text: string, max = 8000): string {
@@ -316,6 +322,8 @@ export async function executeTool(
   if (name === "run_script") {
     const script = String(args.script ?? "").trim();
     if (!script) return "run_script needs a script name.";
+    const handed = ctx.handOff?.(script);
+    if (handed) return handed;
     if (!ctx.runScript) {
       return "Running is not available for this request. Verify by reading the code instead.";
     }

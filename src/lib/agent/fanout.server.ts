@@ -17,6 +17,14 @@ function applyNotes(edits: ProposedEdit[], noted: ProposedEdit[]): ProposedEdit[
   });
 }
 
+/**
+ * A worker's input. Workers never hand a run to the browser: their results are
+ * merged into one reply, and a run belongs to the reply, not to one worker.
+ */
+function workerInput(input: AgentInput, worker: WorkerSpec): AgentInput {
+  return { ...scopedWorkerInput(input, worker), browserRuns: undefined };
+}
+
 export async function runComposerStreaming(
   input: AgentInput,
   cfg: WorkerCfg,
@@ -79,7 +87,7 @@ export async function runComposerStreaming(
         const tag = worker.label || worker.files[0] || `worker ${i + 1}`;
         try {
           const workerCfg = await cfgOf(worker);
-          return runAgentLoopStreaming(scopedWorkerInput(input, worker), workerCfg, forward(tag, i), signal);
+          return runAgentLoopStreaming(workerInput(input, worker), workerCfg, forward(tag, i), signal);
         } catch (error) {
           return { ok: false as const, error: error instanceof Error ? error.message : "Worker failed to start" };
         }
@@ -91,7 +99,7 @@ export async function runComposerStreaming(
     const tag = worker.label || "Build";
     try {
       const workerCfg = await cfgOf(worker);
-      merged = await runAgentLoopStreaming(scopedWorkerInput(input, worker), workerCfg, forward(tag, 0), signal);
+      merged = await runAgentLoopStreaming(workerInput(input, worker), workerCfg, forward(tag, 0), signal);
     } catch (error) {
       merged = { ok: false, error: error instanceof Error ? error.message : "Worker failed to start" };
     }
@@ -122,7 +130,7 @@ export async function runComposerStreaming(
       try {
         const workerCfg = await cfgOf(worker);
         const reviewed = await runAgentLoopStreaming(
-          scopedWorkerInput({ ...input, files, pendingEdits: edits, workers: undefined }, worker),
+          workerInput({ ...input, files, pendingEdits: edits, workers: undefined }, worker),
           workerCfg,
           forward(tag, index),
           signal,

@@ -53,6 +53,10 @@ local in-process database (PGlite), so nothing else needs setting up.
   - If a test fails, it is re-run on your current files. A failure that was
     already there is reported as such.
   - A new failure goes back to the agent once to fix.
+  - The agent runs them too. When it calls `run_script` for a script the
+    browser can run, the tests run in your tab after its turn, and the
+    output goes straight back to it as the next turn. It can check a fix,
+    see a failure and try again, at no cost, up to three runs per task.
   - Projects that need a real Node can run in Vercel Sandbox instead.
 - **Design mode.** Click an element in the preview, write what you want, and
   send those notes to Composer.

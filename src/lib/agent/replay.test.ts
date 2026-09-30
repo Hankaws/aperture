@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applySearchReplace } from "./apply-edit.ts";
 import { DEMO_FILES } from "../workspace/demo-repo.ts";
+import { continuationInstruction, handoffToolText } from "./browser-handoff.ts";
 import {
   TAPES,
   findTape,
@@ -20,7 +21,13 @@ const BUILD_TOOLS = [...PLAN_TOOLS, "propose_edit"];
 function runTurn(
   instruction: string,
   tools: string[],
-  opts: { plan?: string[]; files?: Record<string, string>; history?: ReplayMessage[] } = {},
+  opts: {
+    plan?: string[];
+    files?: Record<string, string>;
+    history?: ReplayMessage[];
+    /** What run_script answers: the loop's words for a handoff to the browser, or for no runner. */
+    runScript?: "handoff" | "unavailable";
+  } = {},
 ) {
   const files = { ...(opts.files ?? DEMO_FILES) };
   let plan = opts.plan ?? [];
@@ -59,6 +66,11 @@ function runTurn(
             result = `Edit rejected: ${applied.error}\nNearby:\n…`;
           }
         }
+      } else if (call.function.name === "run_script" && opts.runScript) {
+        result =
+          opts.runScript === "handoff"
+            ? handoffToolText(String(args.script))
+            : "Running is not available for this request. Verify by reading the code instead.";
       } else {
         result = `Unexpected tool ${call.function.name}`;
       }
@@ -208,4 +220,80 @@ test("replay is only on when a deployment asks for it", () => {
   assert.equal(replayEnabled({ APERTURE_MODEL: "grok" }), false);
   assert.equal(replayEnabled({ APERTURE_MODEL: "replay" }), true);
   assert.equal(replayEnabled({ APERTURE_MODEL: " replay " }), true);
+});
+
+test("after staging a fix, the replay checks it with run_script and claims nothing yet", () => {
+  const tape = TAPES[0]!;
+  const run = runTurn(tape.title, BUILD_TOOLS, { plan: tape.plan, runScript: "handoff" });
+  const calls = run.messages.flatMap((m) => m.tool_calls ?? []).map((c) => c.function.name);
+  assert.deepEqual(calls.slice(-2), ["set_plan", "run_script"], "checks after ticking the plan off");
+  assert.match(run.text, /^Staged the fix/);
+  assert.match(run.text, /Running `npm run test` in your browser to check it\.$/);
+  assert.doesNotMatch(run.text, /\bpass(ed|es)\b/i);
+});
+
+test("with no runner the replay answers as before and leaves the result to the verify step", () => {
+  const tape = TAPES[0]!;
+  const run = runTurn(tape.title, BUILD_TOOLS, { plan: tape.plan, runScript: "unavailable" });
+  assert.match(run.text, /^Staged the fix/);
+  assert.doesNotMatch(run.text, /in your browser/);
+});
+
+test("the browser run's result comes back next turn and is reported as it is", () => {
+  const tape = TAPES[0]!;
+  const history: ReplayMessage[] = [
+    { role: "user", content: tape.title },
+    { role: "assistant", content: `${tape.doneText}\n\nRunning \`npm run test\` in your browser to check it.` },
+  ];
+  const passed = runTurn(
+    continuationInstruction("test", { kind: "done", passed: true, output: "ℹ tests 1 · pass 1 · fail 0", detail: "", pass: 1, fail: 0 }),
+    BUILD_TOOLS,
+    { plan: tape.plan, history },
+  );
+  assert.equal(passed.steps, 1, "answers straight away: no re-reading, no second edit");
+  assert.equal(passed.text, "Checked: `npm run test` passed in the browser (1 passed). The fix is staged: review the diff, then apply it.");
+
+  const failed = runTurn(
+    continuationInstruction("test", {
+      kind: "done",
+      passed: false,
+      // The output names a test about 404s: it must not pick the 404 tape.
+      output: "✖ returns 404 for a missing task (1ms)\n  Error: expected 404, got 200\nℹ tests 1 · pass 0 · fail 1",
+      detail: "Error: expected 404, got 200",
+      pass: 0,
+      fail: 1,
+    }),
+    BUILD_TOOLS,
+    { plan: tape.plan, history },
+  );
+  assert.equal(failed.steps, 1);
+  assert.match(failed.text, /^The edits are staged, but `npm run test` failed in the browser \(1 failed\): Error: expected 404, got 200/);
+  assert.match(failed.text, /can't write a new fix/);
+  assert.equal(findTape([...failed.messages]), tape, "the ask is still the off-by-one");
+
+  const notRun = runTurn(
+    continuationInstruction("test", { kind: "unsupported", reason: "src/api.ts imports the package zod." }),
+    BUILD_TOOLS,
+    { plan: tape.plan, history },
+  );
+  assert.match(notRun.text, /^`npm run test` could not run in the editor's browser test runner: src\/api\.ts imports the package zod\./);
+  assert.match(notRun.text, /unchecked/);
+
+  const before = runTurn(
+    continuationInstruction("test", {
+      kind: "done",
+      passed: false,
+      output: "Error: first item should be tsk_100",
+      detail: "Error: first item should be tsk_100",
+      pass: 0,
+      fail: 0,
+      preexisting: true,
+    }),
+    BUILD_TOOLS,
+    { plan: tape.plan, history },
+  );
+  assert.equal(
+    before.text,
+    "The fix is staged. `npm run test` failed in the browser (Error: first item should be tsk_100), but it fails the same way without these edits, so the failure was already there.",
+  );
 });

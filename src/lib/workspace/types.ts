@@ -108,6 +108,8 @@ export type ChatMessage = {
   modelSource?: ModelSource;
   /** The one automatic test fix for this change was already sent. */
   autoFixed?: boolean;
+  /** Runs handed to the browser so far in this chain of turns, counting this reply's own. */
+  browserRunsUsed?: number;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

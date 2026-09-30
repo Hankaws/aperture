@@ -10,6 +10,15 @@ export function listPendingEdits(messages: ChatMessage[]): ProposedEdit[] {
   return out;
 }
 
+/**
+ * A follow-up reply's edits, minus those already pending, unchanged, on an
+ * earlier message: a follow-up turn is sent the staged edits and returns them.
+ */
+export function withoutUnchanged(edits: ProposedEdit[], earlier: ChatMessage[]): ProposedEdit[] {
+  const pending = listPendingEdits(earlier);
+  return edits.filter((e) => !pending.some((p) => p.id === e.id && p.path === e.path && p.newText === e.newText));
+}
+
 export function pendingEditFor(messages: ChatMessage[], path: string | null): ProposedEdit | null {
   if (!path) return null;
   let found: ProposedEdit | null = null;

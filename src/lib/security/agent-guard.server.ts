@@ -183,5 +183,16 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
       typeof input.compacted === "number" && Number.isFinite(input.compacted) && input.compacted > 0
         ? Math.min(200, Math.floor(input.compacted))
         : undefined,
+    browserRuns: parseBrowserRuns(input.browserRuns),
   };
+}
+
+function parseBrowserRuns(raw: unknown): AgentInput["browserRuns"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const rec = raw as Record<string, unknown>;
+  const used = typeof rec.used === "number" && Number.isFinite(rec.used) ? Math.max(0, Math.floor(rec.used)) : 0;
+  const unsupported = Array.isArray(rec.unsupported)
+    ? rec.unsupported.filter((s): s is string => typeof s === "string").map((s) => s.slice(0, 80)).slice(0, 8)
+    : [];
+  return { used: Math.min(used, 100), unsupported };
 }

@@ -17,6 +17,7 @@ import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
+import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
 import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
 import { failedLine, verifiedLine } from "@/lib/sandbox/auto-verify";
 
@@ -248,6 +249,11 @@ export async function runAgentLoopStreaming(
   const phase = resolveAgentPhase(input.mode, input.phase);
   const requirePlan = (input.mode === "composer" || Boolean(flavor)) && phase !== "skip";
   const approved = input.approvedPlan?.length ? input.approvedPlan : [];
+  /** A run handed to the tab for when this turn ends; replaces the verify run. */
+  let browserRun: { script: string } | undefined;
+  /** The agent's own last sandbox run: the verify step reuses it when the edits have not changed since. */
+  let lastRun: { script: string; editsKey: string; result: { text: string; passed: boolean; ran: boolean } } | undefined;
+  const editsKeyOf = (edits: ProposedEdit[]) => JSON.stringify(mergeEdits(edits).map((e) => [e.path, e.newText]));
   const ctx: ToolContext = {
     files,
     chunks,
@@ -271,7 +277,20 @@ export async function runAgentLoopStreaming(
             type: "status",
             text: !result.ran ? `Could not run ${script}` : result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed`,
           });
-          return { text: result.text, passed: result.passed, ran: result.ran };
+          const outcome = { text: result.text, passed: result.passed, ran: result.ran };
+          lastRun = { script, editsKey: editsKeyOf(ctx.edits), result: outcome };
+          return outcome;
+        }
+      : undefined,
+    // Free and instant when the tab can run it; the sandbox (if any) takes what it cannot.
+    // Not while planning: a plan turn ends waiting for Build it, not for a run.
+    handOff: input.browserRuns && phase !== "plan"
+      ? (script: string) => {
+          if (browserRun) return browserRun.script === script ? alreadyScheduledText(script) : null;
+          if (!canHandOff({ ...fileMap, ...ctx.files }, script, input.browserRuns)) return null;
+          browserRun = { script };
+          emit({ type: "status", text: `npm run ${script} will run in your browser` });
+          return handoffToolText(script);
         }
       : undefined,
   };
@@ -311,8 +330,12 @@ export async function runAgentLoopStreaming(
     steps: number,
   ): AgentResult => {
     const edits = body.edits;
+    // The recap describes this turn's change; a follow-up that changed nothing (a browser run's report) has none.
+    const changed = edits.some(
+      (e) => !(input.pendingEdits ?? []).some((p) => p.id === e.id && p.newText === e.newText),
+    );
     const text =
-      body.awaitingBuild || phase === "plan"
+      body.awaitingBuild || phase === "plan" || !changed
         ? body.text
         : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan);
     const line =
@@ -324,7 +347,7 @@ export async function runAgentLoopStreaming(
     const verifiedText = line ? `${text}\n\n${line}` : text;
     if (text !== body.text) emit({ type: "status", text: "Verifying…" });
     const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
-    const extra = { ...(debug ? { debug } : {}), ...(verify ? { verify } : {}) };
+    const extra = { ...(debug ? { debug } : {}), ...(verify ? { verify } : {}), ...(browserRun ? { browserRun } : {}) };
     emit({ type: "done", ...body, text: verifiedText, ...extra });
     return { ok: true, ...body, text: verifiedText, ...extra };
   };
@@ -377,6 +400,10 @@ export async function runAgentLoopStreaming(
         );
         const verifyScript = chooseVerifyScript(ctx.files);
         const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
+        // The tab runs the agent's own check when this turn ends and reports back: no second run here.
+        if (browserRun) {
+          return succeed({ text: completion.content.trim() || "Done.", traces, edits: staged, plan: ctx.plan }, step + 1);
+        }
         if (phase !== "plan" && staged.length > 0 && (!verifyScript || !ctx.runScript)) {
           verify = notRunReport({ script: verifyScript, hasRunner: Boolean(ctx.runScript) });
         }
@@ -394,8 +421,10 @@ export async function runAgentLoopStreaming(
         ) {
           verifyRuns += 1;
           lastVerifiedEdits = editsKey;
-          emit({ type: "status", text: `Checking with ${verifyScript}…` });
-          const check = await ctx.runScript(verifyScript);
+          // The agent just ran this script on these very edits: that run is the check.
+          const fresh = lastRun?.script === verifyScript && lastRun.editsKey === editsKey && lastRun.result.ran;
+          if (!fresh) emit({ type: "status", text: `Checking with ${verifyScript}…` });
+          const check = fresh ? lastRun!.result : await ctx.runScript(verifyScript);
           verify = reportFromRun(verifyScript, check, verifyRuns);
           // Only a real failure of the edits is worth a fix. Hand it back as
           // this turn's task, once, before the person ever sees the diff; a

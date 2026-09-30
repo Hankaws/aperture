@@ -160,6 +160,30 @@ did not run reads "not run" with the reason and never counts as a pass.
   attempt.
 - The agent loop works on applied files plus staged edits. A follow-up that
   edited the applied text instead would drop the change it follows up on.
+- The agent's own `run_script` goes to the browser when it can
+  (`agent/browser-handoff.ts`). Server instances share no memory, so the loop
+  cannot wait mid-run for the tab. Instead the tab sends `browserRuns` with
+  each Composer request, and `canHandOff` checks the script with
+  `planBrowserRun`. The tool then answers that the run happens when the turn
+  ends. The result carries `browserRun`, and the loop skips its own verify
+  run. `run.ts` (`continueWithBrowserRun`) runs the script against the staged
+  edits, re-runs a failure on the applied files to spot one that was already
+  there, and sends the output as the next turn. That turn counts
+  `browserRuns.used`: at `MAX_BROWSER_RUNS` (3) the tool falls back to the
+  sandbox. A script the tab could not run goes in `browserRuns.unsupported`,
+  so it is not handed off again.
+  - Not while planning, and never for crew workers, whose results merge into
+    one reply.
+  - A handed-off message is marked `autoFixed`, so the automatic test fix
+    does not answer the same run twice.
+  - The report turn drops edits and a plan it returns unchanged
+    (`withoutUnchanged`), and skips the recap when it changed nothing.
+  - When the agent itself just ran the verify script in the sandbox on the
+    same edits, the verify step reuses that run instead of paying for a
+    second one.
+  - The replay model calls `run_script("test")` after staging a fix. It
+    answers the report turn from `parseContinuation`, repeating what the run
+    said, pass or fail.
 - `runScript` returns `ran`. A run that never executed (no sandbox, no
   allowance, the sandbox would not start) is reported as not run. It is never
   handed to the agent as a failure to fix. A real failure gets one fix attempt.

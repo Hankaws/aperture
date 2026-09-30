@@ -12,12 +12,16 @@
  * That keeps it correct when the loop inserts messages of its own, such as the
  * "call set_plan" nudge or a failed verify run.
  *
- * It must never claim more than happened. It does not call run_script; the
- * loop's own verify step runs the tests and reports the real result, and a
- * failed run is reported back as a failure, not papered over.
+ * It must never claim more than happened. After staging a fix it calls
+ * run_script("test") as a model checking its work would. When the tab runs it
+ * in the browser, the output comes back as the next turn and the answer
+ * repeats what the run said, pass or fail. Otherwise the loop's own verify
+ * step reports the result. A failed run is reported as a failure, never
+ * papered over: a recording cannot write a new fix.
  *
- * Pure and dependency-free: tests import it directly.
+ * Pure: tests import it directly.
  */
+import { CONTINUATION_PREFIX, parseContinuation } from "./browser-handoff.ts";
 
 /** Structural twins of the loop's message types (the real ones live in a server-only module). */
 export type ReplayMessage = {
@@ -164,10 +168,12 @@ export const REPLAY_INLINE_ERROR = "Inline edits need a real model. The replay m
 export function findTape(messages: ReplayMessage[]): Tape | null {
   // Skip the system prompt and the context message (which quotes file
   // contents, including the bugs' own comments); search the newest ask first.
+  // A browser run's output can quote any test name: it is not an ask.
   const asks = messages
     .slice(2)
     .filter((m) => m.role === "user" && typeof m.content === "string")
     .map((m) => m.content as string)
+    .filter((text) => !text.startsWith(CONTINUATION_PREFIX))
     .reverse();
   for (const text of asks) {
     const tape = TAPES.find((t) => t.match.test(text));
@@ -245,6 +251,10 @@ export function replayCompletion(messages: ReplayMessage[], toolNames: readonly 
     return { content: tape?.answer ?? OVERVIEW.answer };
   }
 
+  // The browser ran the check this recording asked for: say what it found.
+  const ran = last?.role === "user" ? parseContinuation(String(last.content ?? "")) : null;
+  if (ran) return { content: browserRunAnswer(ran) };
+
   if (!tape) return { content: FALLBACK };
 
   if (!did("read_file")) return callsAt(rounds.length, tape.reads);
@@ -297,7 +307,31 @@ export function replayCompletion(messages: ReplayMessage[], toolNames: readonly 
       { name: "set_plan", args: { entries: tape.plan.map((content) => ({ content, status: "completed" })) } },
     ]);
   }
-  return { content: buildSummary(tape, rounds) };
+  // Then check the work, as a model would.
+  if (staged && toolNames.includes("run_script") && !did("run_script")) {
+    return callsAt(rounds.length, [{ name: "run_script", args: { script: "test" } }]);
+  }
+  const runResult = rounds.find((r) => r.names.includes("run_script"))?.results[0] ?? "";
+  const summary = buildSummary(tape, rounds);
+  // Handed to the browser: the result arrives next turn, so claim nothing yet.
+  if (runResult.includes("will run in the user's browser")) {
+    return { content: `${summary}\n\nRunning \`npm run test\` in your browser to check it.` };
+  }
+  return { content: summary };
+}
+
+function browserRunAnswer(ran: NonNullable<ReturnType<typeof parseContinuation>>): string {
+  if (ran.status === "passed") return `Checked: ${ran.line}. The fix is staged: review the diff, then apply it.`;
+  if (ran.status === "not run") {
+    return `${ran.line.replace(/^It could not run/, `\`npm run ${ran.script}\` could not run`)} The edits are staged but unchecked: review the diff before applying.`;
+  }
+  if (ran.preexisting) {
+    return `The fix is staged. ${ran.line}${ran.detail ? ` (${ran.detail})` : ""}, but it fails the same way without these edits, so the failure was already there.`;
+  }
+  return [
+    `The edits are staged, but ${ran.line}${ran.detail ? `: ${ran.detail}` : "."}`,
+    "This is a recorded replay, so it can't write a new fix. Review the diff, or switch to a real model.",
+  ].join("\n");
 }
 
 function editCall(edit: Edit): Call {

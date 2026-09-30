@@ -9,11 +9,13 @@ import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
 import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 import { parseMentions } from "@/lib/workspace/mentions";
-import { attachNotesToPending, listPendingEdits } from "@/lib/workspace/edits";
+import { attachNotesToPending, listPendingEdits, withoutUnchanged } from "@/lib/workspace/edits";
 import { autoContextPaths } from "./auto-context";
 import { compactHistory, priorMessages } from "./compact";
 import { isUiTask, nearestUiFiles } from "./ui-graph";
 import type { WorkerRole, WorkerSpec } from "./crew";
+import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
+import { mergeEdits } from "@/lib/workspace/preview-check";
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -65,7 +67,14 @@ export function agentPayload(
   mode: AgentMode,
   source?: ModelSource | null,
   agentId?: string | null,
-  extra?: { phase?: AgentPhase; approvedPlan?: PlanEntry[]; workers?: WorkerSpec[]; role?: WorkerRole; pendingEdits?: ProposedEdit[] },
+  extra?: {
+    phase?: AgentPhase;
+    approvedPlan?: PlanEntry[];
+    workers?: WorkerSpec[];
+    role?: WorkerRole;
+    pendingEdits?: ProposedEdit[];
+    browserRuns?: BrowserRuns;
+  },
 ) {
   const state = useWorkspace.getState();
   state.syncStackMemory();
@@ -102,6 +111,7 @@ export function agentPayload(
     pendingEdits: extra?.pendingEdits ?? listPendingEdits(latest.messages),
     debug: useIdeUi.getState().debug,
     compacted: compacted || undefined,
+    browserRuns: extra?.browserRuns,
   };
 }
 
@@ -119,7 +129,9 @@ export async function submitAgent(
     role?: WorkerRole;
     pendingEdits?: ProposedEdit[];
     /** Extra fields for the reply message (e.g. marking an automatic fix). */
-    messageExtra?: Pick<ChatMessage, "autoFixed">;
+    messageExtra?: Pick<ChatMessage, "autoFixed" | "browserRunsUsed">;
+    /** Browser runs already made in this chain of turns (a continuation passes its count on). */
+    browserRuns?: BrowserRuns;
   },
 ) {
   const trimmed = instruction.trim();
@@ -169,12 +181,16 @@ export async function submitAgent(
       ? `${trimmed}\n\nApproved plan:\n${opts.approvedPlan.map((e, i) => `${i + 1}. ${e.content}`).join("\n")}`
       : trimmed);
 
+  // Composer's own agent can hand a run to this tab; external agents run their own way.
+  const browserRuns: BrowserRuns | undefined =
+    mode === "composer" && !opts?.agentId ? (opts?.browserRuns ?? { used: 0, unsupported: [] }) : undefined;
   const input = agentPayload(apiInstruction, mode, source, opts?.agentId, {
     phase,
     approvedPlan: opts?.approvedPlan,
     workers: opts?.workers,
     role: opts?.role,
     pendingEdits: opts?.pendingEdits,
+    browserRuns,
   });
 
   if (mode === "inline") {
@@ -203,6 +219,8 @@ export async function submitAgent(
   currentAbort?.abort();
   const abort = new AbortController();
   currentAbort = abort;
+  /** Set when the reply asks this tab to run a script and report back. */
+  let handoff = null as { script: string; plan: PlanEntry[] } | null;
 
   try {
     const token = getBearerToken();
@@ -285,6 +303,11 @@ export async function submitAgent(
             }
             edits = [];
           }
+          // A follow-up turn (a browser run's result, a test fix) is sent the staged edits and
+          // returns them; one it left as they were is already on an earlier reply.
+          edits = withoutUnchanged(edits, ws.messages.filter((m) => m.id !== asstId));
+          // A browser run's report turn is sent the plan it reports on; showing it again says nothing new.
+          if (opts?.browserRuns?.used && JSON.stringify(plan) === JSON.stringify(opts.approvedPlan ?? [])) plan = [];
           ws.patchMessage(asstId, {
             content: text,
             traces,
@@ -297,6 +320,7 @@ export async function submitAgent(
           });
           const firstPending = edits.find((e) => e.status === "pending");
           if (firstPending?.path) ws.openFile(firstPending.path);
+          if (event.browserRun && browserRuns) handoff = { script: event.browserRun.script, plan };
           return;
         }
         if (event.type === "error") {
@@ -323,4 +347,81 @@ export async function submitAgent(
     if (currentAbort === abort) currentAbort = null;
     useWorkspace.getState().setAgentRunning(false);
   }
+
+  if (handoff && browserRuns && !abort.signal.aborted) {
+    await continueWithBrowserRun({
+      messageId: asstId,
+      script: handoff.script,
+      mode,
+      phase,
+      source,
+      approvedPlan: handoff.plan.length ? handoff.plan : opts?.approvedPlan,
+      runs: browserRuns,
+    });
+  }
+}
+
+/**
+ * Runs the script a reply asked for in this tab's browser test runner, against
+ * the staged edits, then sends the output back as the next turn so the agent
+ * carries on with the real result (see browser-handoff.ts).
+ */
+async function continueWithBrowserRun(args: {
+  messageId: string;
+  script: string;
+  mode: AgentMode;
+  phase?: AgentPhase;
+  source?: ModelSource | null;
+  approvedPlan?: PlanEntry[];
+  runs: BrowserRuns;
+}) {
+  const ws = useWorkspace.getState();
+  if (ws.agentRunning) return;
+  const used = args.runs.used + 1;
+  // This run is the reply's check: the automatic test fix must not answer it a second time.
+  ws.patchMessage(args.messageId, {
+    status: `Running npm run ${args.script} in your browser…`,
+    autoFixed: true,
+    browserRunsUsed: used,
+  });
+  ws.setAgentRunning(true, args.mode);
+  const abort = new AbortController();
+  currentAbort = abort;
+  let outcome: HandoffOutcome;
+  try {
+    const latest = useWorkspace.getState();
+    const files = mergeEdits(latest.files, listPendingEdits(latest.messages));
+    const { runTestsInBrowser } = await import("@/lib/runner/browser");
+    outcome = await runTestsInBrowser(files, { script: args.script, signal: abort.signal });
+    // A failure the edits did not cause is not theirs to fix: check the files without them.
+    if (outcome.kind === "done" && !outcome.passed && !outcome.timedOut) {
+      const before = await runTestsInBrowser(latest.files, { script: args.script, signal: abort.signal });
+      if (before.kind === "done" && !before.passed && before.detail === outcome.detail) outcome = { ...outcome, preexisting: true };
+    }
+  } catch (error) {
+    const ws = useWorkspace.getState();
+    const content = ws.messages.find((m) => m.id === args.messageId)?.content ?? "";
+    const why = error instanceof Error ? error.message : "unknown error";
+    ws.patchMessage(args.messageId, {
+      status: undefined,
+      // Stopped by the person: nothing to add. Otherwise say the check did not happen.
+      ...(abort.signal.aborted ? {} : { content: `${content}\n\nCould not run npm run ${args.script} in the browser: ${why}` }),
+    });
+    return;
+  } finally {
+    if (currentAbort === abort) currentAbort = null;
+    useWorkspace.getState().setAgentRunning(false);
+  }
+  useWorkspace.getState().patchMessage(args.messageId, { status: undefined });
+  await submitAgent(continuationLabel(args.script, outcome), args.mode, args.source, {
+    phase: args.phase,
+    approvedPlan: args.approvedPlan,
+    apiInstruction: continuationInstruction(args.script, outcome),
+    browserRuns: {
+      used,
+      unsupported: outcome.kind === "unsupported" ? [...args.runs.unsupported, args.script] : args.runs.unsupported,
+    },
+    // The chain of runs is this change's automatic check; no separate auto-fix on top of it.
+    messageExtra: { autoFixed: true, browserRunsUsed: used },
+  });
 }

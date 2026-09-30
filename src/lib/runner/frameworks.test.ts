@@ -21,7 +21,20 @@ type Done = {
  * on another object ("Illegal invocation"), which Node's own do not.
  */
 function browserLikeGlobals(host: unknown): Record<string, unknown> {
-  const context: Record<string, unknown> = { __host: host, queueMicrotask, performance };
+  // The Web APIs a Worker has and a bare vm context lacks.
+  const context: Record<string, unknown> = {
+    __host: host,
+    queueMicrotask,
+    performance,
+    URL,
+    URLSearchParams,
+    TextEncoder,
+    TextDecoder,
+    AbortController,
+    structuredClone,
+    atob,
+    btoa,
+  };
   const strict = <F extends (...args: never[]) => unknown>(f: F) =>
     function (this: unknown, ...args: Parameters<F>) {
       // Inside the vm, the global object is the context's proxy: it carries __host.

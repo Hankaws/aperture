@@ -1388,6 +1388,7 @@ function __willRun(node) {
 
 function __recordFailure(name, error) {
   if (__firstFailure === null) __firstFailure = (name ? name + ": " : "") + __errorText(error).split("\n")[0];
+  __failed(name || __currentFile);
 }
 
 function __printError(pad, error) {
@@ -1482,6 +1483,7 @@ function __failAll(node, error) {
     if (child.kind === "suite") { __failAll(child, error); continue; }
     if (__skippedBy(child)) continue;
     __stats.fail++;
+    __failed(__fullName(child));
     __emit("  ".repeat(__depth(child)) + "✖ " + child.name);
   }
   __recordFailure(node === __fileRoot ? __currentFile : __fullName(node), error);

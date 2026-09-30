@@ -28,6 +28,8 @@ export type BrowserTestResult =
       fail: number;
       durationMs: number;
       timedOut?: boolean;
+      /** Failing tests by file and name, to compare against another run. */
+      failures?: string[];
     };
 
 export const BROWSER_RUN_TIMEOUT_MS = 10_000;
@@ -60,6 +62,7 @@ type DoneMessage = {
   fail: number;
   durationMs: number;
   firstFailure: string | null;
+  failures?: string[];
   /** Set when the tests reached code the browser cannot run (a mocked-away module that was loaded after all). */
   unsupported?: string | null;
   output: string;
@@ -189,6 +192,7 @@ export async function runTestsInBrowser(
       pass: done.pass,
       fail: done.fail,
       durationMs: done.durationMs,
+      failures: done.failures ?? [],
       ...(done.firstFailure ? { detail: done.firstFailure.slice(0, 200) } : {}),
     }),
   );

@@ -29,6 +29,8 @@ Tiny in-memory task API used as the default Aperture workspace.
 2. \`createTask\` does not validate title length.
 3. \`getTask\` returns 200 with \`null\` instead of 404.
 
+Each has a failing test in \`tests/\`. \`npm test\` runs them with Vitest.
+
 Ask Composer to fix any of them, or press the inline edit shortcut on a selection.
 `,
 
@@ -39,7 +41,10 @@ Ask Composer to fix any of them, or press the inline edit shortcut on a selectio
   "type": "module",
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",
-    "test": "node --experimental-strip-types tests/store.test.ts"
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.0"
   }
 }
 `,
@@ -301,20 +306,59 @@ export function requireTitle(value: unknown): string {
 }
 `,
 
-  "tests/store.test.ts": `import { createTask, getTask, listTasks } from "../src/store.ts";
+  "tests/store.test.ts": `import { describe, expect, it } from "vitest";
+import { createTask, getTask, listTasks } from "../src/store.ts";
 
-function assert(cond: unknown, message: string) {
-  if (!cond) throw new Error(message);
+describe("store", () => {
+  it("starts page 0 at the first task", () => {
+    expect(listTasks(0, 2).map((task) => task.id)).toEqual(["tsk_100", "tsk_101"]);
+  });
+
+  it("finds a task it just created", () => {
+    const created = createTask("Write embeddings");
+    expect(created.title).toBe("Write embeddings");
+    expect(getTask(created.id)?.id).toBe(created.id);
+  });
+});
+`,
+
+  "tests/tasks.test.ts": `import { describe, expect, it } from "vitest";
+import { handleRequest } from "../src/router.ts";
+
+function request(method: string, pathname: string, body: unknown = undefined) {
+  return handleRequest({
+    method,
+    pathname,
+    search: new URLSearchParams(),
+    body: body === undefined ? "" : JSON.stringify(body),
+  });
 }
 
-const page = listTasks(0, 2);
-assert(page.length === 2, "page 0 should contain the first two seed tasks");
-assert(page[0]?.id === "tsk_100", "first item should be tsk_100");
+describe("GET /tasks/:id", () => {
+  it("returns a task that exists", async () => {
+    const res = await request("GET", "/tasks/tsk_100");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: "tsk_100" });
+  });
 
-const created = createTask("Write embeddings");
-assert(created.title === "Write embeddings", "created title should round-trip");
-assert(getTask(created.id)?.id === created.id, "getTask should find the new row");
+  it("returns 404 for an unknown id", async () => {
+    const res = await request("GET", "/tasks/tsk_missing");
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+});
 
-console.log("store tests would pass once listTasks is fixed");
+describe("POST /tasks", () => {
+  it("creates a task", async () => {
+    const res = await request("POST", "/tasks", { title: "Ship the demo" });
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects a title longer than 80 characters", async () => {
+    const res = await request("POST", "/tasks", { title: "x".repeat(81) });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "invalid_title" });
+  });
+});
 `,
 };

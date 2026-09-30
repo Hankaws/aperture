@@ -6,6 +6,7 @@ import { submitAgent } from "@/lib/agent/run";
 import { fixPrompt } from "@/lib/sandbox/auto-verify";
 import { runTestsInBrowser } from "@/lib/runner/browser";
 import { planBrowserRun } from "@/lib/runner/plan";
+import { compareRuns } from "@/lib/runner/compare";
 import {
   changeChecks,
   pendingSource,
@@ -116,7 +117,7 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
         let preexisting = false;
         if (!staged.passed && !staged.timedOut) {
           const before = await runTestsInBrowser(files, { signal: controller.signal });
-          preexisting = before.kind === "done" && !before.passed && before.detail === staged.detail;
+          preexisting = before.kind === "done" && compareRuns(staged, before).preexisting;
         }
         setSettled({
           key,
@@ -162,6 +163,7 @@ function useAutoFix(tests: BrowserTests, output: string) {
       approvedPlan: source.plan,
       apiInstruction: `${fixPrompt(tests.script, output)}\n\n(This run was in the editor's browser test runner, not a sandbox.)`,
       messageExtra: { autoFixed: true },
+      automatic: true,
     });
   }, [running, source, tests, output]);
 }

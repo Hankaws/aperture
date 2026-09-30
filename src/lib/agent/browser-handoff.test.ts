@@ -68,6 +68,8 @@ test("parseContinuation reads the instruction back", () => {
     line: "`npm run test` passed in the browser (3 passed)",
     detail: "",
     preexisting: false,
+    fixed: [],
+    failing: 0,
   });
   const bad = parseContinuation(continuationInstruction("test", failed))!;
   assert.equal(bad.status, "failed");
@@ -88,4 +90,25 @@ test("a failure that was there before the edits is labelled as such, and the age
   const parsed = parseContinuation(text)!;
   assert.equal(parsed.preexisting, true);
   assert.equal(parsed.line, "`npm run test` failed in the browser (1 failed)");
+});
+
+test("a fix for one of several failing tests names what it fixed, and the rest as already failing", () => {
+  const partial: HandoffOutcome = {
+    kind: "done",
+    passed: false,
+    output: "✖ b\n✖ c",
+    detail: "Error: B",
+    pass: 1,
+    fail: 2,
+    preexisting: true,
+    fixed: ["tasks › returns 404 for an unknown id"],
+  };
+  assert.equal(
+    continuationLabel("test", partial),
+    "npm run test in the browser: now passing tasks › returns 404 for an unknown id; 2 still failing, as before these edits",
+  );
+  const parsed = parseContinuation(continuationInstruction("test", partial))!;
+  assert.deepEqual(parsed.fixed, ["tasks › returns 404 for an unknown id"]);
+  assert.equal(parsed.failing, 2);
+  assert.equal(parsed.preexisting, true);
 });

@@ -6,15 +6,38 @@ import { TAPES } from "../agent/replay.ts";
 import { applySearchReplace } from "../agent/apply-edit.ts";
 import { buildBundle, resolveImport } from "./bundle.ts";
 import { globToRegExp, planBrowserRun } from "./plan.ts";
+import { compareRuns } from "./compare.ts";
 
-type Done = { type: "done"; passed: boolean; exitCode: number; pass: number; fail: number; firstFailure: string | null; output: string };
+type Done = {
+  type: "done";
+  passed: boolean;
+  exitCode: number;
+  pass: number;
+  fail: number;
+  firstFailure: string | null;
+  failures: string[];
+  output: string;
+};
 
 /**
  * The context's globals, with timers that throw as a browser's do when called
  * on another object ("Illegal invocation"), which Node's own do not.
  */
 function browserLikeGlobals(host: unknown): Record<string, unknown> {
-  const context: Record<string, unknown> = { __host: host, queueMicrotask, performance };
+  // The Web APIs a Worker has and a bare vm context lacks.
+  const context: Record<string, unknown> = {
+    __host: host,
+    queueMicrotask,
+    performance,
+    URL,
+    URLSearchParams,
+    TextEncoder,
+    TextDecoder,
+    AbortController,
+    structuredClone,
+    atob,
+    btoa,
+  };
   const strict = <F extends (...args: never[]) => unknown>(f: F) =>
     function (this: unknown, ...args: Parameters<F>) {
       // Inside the vm, the global object is the context's proxy: it carries __host.
@@ -47,7 +70,7 @@ function execute(code: string, timeoutMs = 3000): Promise<Done> {
 async function run(files: Record<string, string>, script = "test"): Promise<Done> {
   const plan = planBrowserRun(files, script);
   assert.ok(plan.ok, plan.ok ? "" : plan.reason);
-  const bundle = buildBundle(files, plan.entries);
+  const bundle = buildBundle(files, plan.entries, plan);
   assert.ok(bundle.ok, bundle.ok ? "" : bundle.reason);
   return execute(bundle.code);
 }
@@ -61,25 +84,48 @@ function project(test: string, extra: Record<string, string> = {}, command = "no
   };
 }
 
-test("the demo's own test fails on the off-by-one, with the test's own message", async () => {
+const DEMO_BUGS = [
+  "tests/store.test.ts › store starts page 0 at the first task",
+  "tests/tasks.test.ts › GET /tasks/:id returns 404 for an unknown id",
+  "tests/tasks.test.ts › POST /tasks rejects a title longer than 80 characters",
+];
+
+function withTape(files: Record<string, string>, id: string): Record<string, string> {
+  const next = { ...files };
+  for (const edit of TAPES.find((t) => t.id === id)!.edits) {
+    const applied = applySearchReplace(next[edit.path]!, edit.search, edit.replace);
+    assert.ok(applied.ok, `${id}: ${edit.path}`);
+    next[edit.path] = applied.next;
+  }
+  return next;
+}
+
+test("the demo's Vitest suite fails exactly on its three known bugs", async () => {
   const done = await run(DEMO_FILES);
   assert.equal(done.passed, false);
-  assert.equal(done.exitCode, 1);
-  assert.match(done.output, /Error: first item should be tsk_100/);
-  assert.equal(done.firstFailure, "Error: first item should be tsk_100");
+  assert.equal(done.pass, 3, done.output);
+  assert.equal(done.fail, 3);
+  assert.deepEqual([...done.failures].sort(), [...DEMO_BUGS].sort());
+  assert.match(done.output, /expected \[ "tsk_101", "tsk_102" \] to deeply equal \[ "tsk_100", "tsk_101" \]/);
 });
 
-test("the demo's test passes once the recorded fix is applied", async () => {
-  const tape = TAPES.find((t) => t.id === "list-off-by-one")!;
-  const files = { ...DEMO_FILES };
-  for (const edit of tape.edits) {
-    const applied = applySearchReplace(files[edit.path]!, edit.search, edit.replace);
-    assert.ok(applied.ok);
-    files[edit.path] = applied.next;
+test("each recorded fix makes its own test pass and leaves the others failing as before", async () => {
+  const before = await run(DEMO_FILES);
+  const expected: Record<string, string> = {
+    "list-off-by-one": "store starts page 0 at the first task",
+    "get-task-404": "GET /tasks/:id returns 404 for an unknown id",
+    "title-length": "POST /tasks rejects a title longer than 80 characters",
+  };
+  for (const [id, name] of Object.entries(expected)) {
+    const after = await run(withTape(DEMO_FILES, id));
+    assert.equal(after.fail, 2, `${id}\n${after.output}`);
+    // Copied out of the vm's realm, so deepEqual compares values rather than Array prototypes.
+    const detail = (d: Done) => ({ passed: d.passed, detail: d.firstFailure ?? "", failures: [...d.failures] });
+    assert.deepEqual(compareRuns(detail(after), detail(before)), { preexisting: true, fixed: [name] }, id);
   }
-  const done = await run(files);
-  assert.equal(done.passed, true, done.output);
-  assert.match(done.output, /store tests would pass/);
+  const all = await run(withTape(withTape(withTape(DEMO_FILES, "list-off-by-one"), "get-task-404"), "title-length"));
+  assert.equal(all.passed, true, all.output);
+  assert.equal(all.pass, 6);
 });
 
 test("node:test and node:assert/strict: passes, failures and the summary", async () => {
@@ -212,12 +258,16 @@ test("code that is wrong is broken, not unsupported", () => {
   assert.match(!syntax.ok ? syntax.reason : "", /^t\.ts: /);
 });
 
-test("the demo's server entry needs a real Node; its test does not", () => {
+test("the demo's server entry needs a real Node; its tests do not", () => {
   const server = buildBundle(DEMO_FILES, ["src/index.ts"]);
   assert.equal(!server.ok && server.kind, "unsupported");
-  const tests = buildBundle(DEMO_FILES, ["tests/store.test.ts"]);
+  const plan = planBrowserRun(DEMO_FILES);
+  assert.ok(plan.ok);
+  assert.equal(plan.framework, "vitest");
+  assert.deepEqual(plan.entries, ["tests/store.test.ts", "tests/tasks.test.ts"]);
+  const tests = buildBundle(DEMO_FILES, plan.entries, plan);
   assert.ok(tests.ok);
-  assert.deepEqual(tests.ok && tests.modules, ["tests/store.test.ts", "src/store.ts"]);
+  assert.ok(tests.ok && !tests.modules.includes("src/index.ts"), "the tests never load the server entry");
 });
 
 test("resolveImport: built-ins the runner has, and the ones it does not", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApertureMark } from "./logo";
 import { PlanCard } from "./plan-card";
@@ -1118,6 +1118,20 @@ const MessageBlock = memo(function MessageBlock({
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
   if (message.role === "user") {
+    if (message.automatic) {
+      return (
+        <div
+          className="rounded-xl border border-dashed border-border px-3 py-2"
+          title="Sent by the editor after running the tests, not typed by you"
+        >
+          <p className="flex items-center gap-1 text-xs font-medium text-subtle">
+            <FlaskConical className="size-3" aria-hidden />
+            Automatic
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{message.content}</p>
+        </div>
+      );
+    }
     return (
       <div className="rounded-xl border border-border bg-bg px-3 py-2">
         <p className="text-xs font-medium text-subtle">You</p>

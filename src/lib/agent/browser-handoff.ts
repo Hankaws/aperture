@@ -43,8 +43,10 @@ export type HandoffOutcome =
       pass: number;
       fail: number;
       timedOut?: boolean;
-      /** A failure that happens the same way without the staged edits: not theirs. */
+      /** Every failing test also fails without the staged edits: not theirs. */
       preexisting?: boolean;
+      /** Tests that failed without the staged edits and pass with them. */
+      fixed?: string[];
     };
 
 /** Whether this turn may hand `script` to the tab. */
@@ -86,9 +88,18 @@ export function outcomeLine(script: string, outcome: HandoffOutcome): string {
   return `\`npm run ${script}\` ${outcome.passed ? "passed" : "failed"} in the browser${counts(outcome)}${before}`;
 }
 
+function fixedOf(outcome: HandoffOutcome): string[] {
+  return outcome.kind === "done" ? (outcome.fixed ?? []) : [];
+}
+
 /** The visible message the follow-up turn is sent under: plain text, as a chat bubble shows it. */
 export function continuationLabel(script: string, outcome: HandoffOutcome): string {
   const line = outcomeLine(script, outcome).replace(/`/g, "");
+  const fixed = fixedOf(outcome);
+  if (fixed.length && outcome.kind === "done") {
+    const still = outcome.fail ? `; ${outcome.fail} still failing, as before these edits` : "";
+    return `npm run ${script} in the browser: now passing ${fixed.join(", ")}${still}`;
+  }
   return outcome.kind === "done" && !outcome.passed && outcome.detail ? `${line}: ${outcome.detail}` : line;
 }
 
@@ -105,6 +116,7 @@ export function continuationInstruction(script: string, outcome: HandoffOutcome)
   return [
     head,
     `Result: ${outcomeLine(script, outcome)}, against your staged edits (the editor's browser test runner).`,
+    ...(fixedOf(outcome).length ? [`Now passing (these failed before your edits): ${fixedOf(outcome).join("; ")}`] : []),
     "",
     "Output:",
     "```",
@@ -114,7 +126,7 @@ export function continuationInstruction(script: string, outcome: HandoffOutcome)
     outcome.passed
       ? "Carry on with the task. If it is done, say so briefly and name what the run checked."
       : outcome.preexisting
-        ? "It fails the same way without your staged edits, so the failure was there before them. Say so; do not try to fix it unless the task asked for it."
+        ? "Every test still failing fails the same way without your staged edits, so those failures were there before them. Say so; do not try to fix them unless the task asked for it."
         : "If your edits caused the failure, fix them with propose_edit. If the failure was there before your edits, say so and leave it. Do not claim it passes until a run shows it.",
   ].join("\n");
 }
@@ -127,6 +139,10 @@ export type ParsedContinuation = {
   detail: string;
   /** The run failed the same way without the staged edits. */
   preexisting: boolean;
+  /** Tests the edits made pass. */
+  fixed: string[];
+  /** How many tests still fail, when the run counted them. */
+  failing: number;
 };
 
 /** Reads a follow-up turn's instruction back, for the replay model. */
@@ -149,5 +165,8 @@ export function parseContinuation(text: string): ParsedContinuation | null {
     trimmed.find((l) => l.startsWith("✖"))?.replace(/^✖\s*/, "") ??
     "";
   const preexisting = text.includes("fails the same way without your staged edits");
-  return { script: m[1]!, status: m[2] as ParsedContinuation["status"], line, detail, preexisting };
+  const fixedLine = lines.find((l) => l.startsWith("Now passing (these failed before your edits): "));
+  const fixed = fixedLine ? fixedLine.slice(fixedLine.indexOf(": ") + 2).split("; ").filter(Boolean) : [];
+  const failing = Number(/\((?:\d+ passed, )?(\d+) failed\)/.exec(line)?.[1] ?? 0);
+  return { script: m[1]!, status: m[2] as ParsedContinuation["status"], line, detail, preexisting, fixed, failing };
 }

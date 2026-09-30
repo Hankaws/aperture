@@ -9,7 +9,7 @@
  * `__host.report(message)`; everything else is defined here.
  *
  * Messages: `{ type: "out", text }` per output line, then exactly one
- * `{ type: "done", passed, exitCode, pass, fail, firstFailure, unsupported, output }`.
+ * `{ type: "done", passed, exitCode, pass, fail, firstFailure, failures, unsupported, output }`.
  *
  * Vitest and Jest runs add `FRAMEWORK_RUNTIME_SOURCE` (runtime-framework.ts),
  * which uses the hooks marked below: the real timers, the module-mock registry
@@ -42,6 +42,19 @@ let __uncaught = null;
 let __exitCode = null;
 /** The first thing that went wrong, one line: what the person reads first. */
 let __firstFailure = null;
+/** Every failing test by file and name: comparing two runs by these tells a new failure from an old one. */
+const __failures = [];
+/** The entry file running now, to key failures by. */
+let __entryNow = "";
+function __failed(name) {
+  const key = __entryNow + " › " + name;
+  if (__failures.length < 200 && __failures.indexOf(key) < 0) __failures.push(key);
+}
+function __pathOf(node) {
+  const names = [];
+  for (let p = node; p && p.parent; p = p.parent) names.unshift(p.name);
+  return names.join(" › ");
+}
 
 function __emit(text) {
   for (const line of String(text).split("\n")) {
@@ -368,6 +381,7 @@ async function __runTest(node) {
     for (let p = node.parent; p; p = p.parent) p.failed = true;
     if (node.children.length === 0 || error) __stats.fail++;
     if (error && __firstFailure === null) __firstFailure = node.name + ": " + __errorText(error).split("\n")[0];
+    if (error) __failed(__pathOf(node));
     __emit(pad + "✖ " + node.name + " (" + ms + "ms)");
     if (error) for (const line of __errorText(error).split("\n")) __emit(pad + "  " + line);
   } else {
@@ -395,6 +409,7 @@ async function __runSuite(node) {
     for (let p = node.parent; p; p = p.parent) p.failed = true;
     __stats.fail++;
     if (__firstFailure === null) __firstFailure = node.name + ": " + __errorText(e).split("\n")[0];
+    __failed(__pathOf(node));
     for (const line of __errorText(e).split("\n")) __emit(pad + "  " + line);
   }
 }
@@ -573,6 +588,7 @@ async function __main() {
   for (const entry of __entries) {
     if (__exitCode !== null || __uncaught || __unsupportedReason !== null) break;
     __cache = {};
+    __entryNow = entry;
     if (__framework !== "node") {
       await __runFrameworkFile(entry);
       continue;
@@ -600,6 +616,7 @@ async function __main() {
     fail: __stats.fail,
     durationMs: Date.now() - started,
     firstFailure: __firstFailure,
+    failures: __failures,
     unsupported: __unsupportedReason,
     output: __out.join("\n"),
   });

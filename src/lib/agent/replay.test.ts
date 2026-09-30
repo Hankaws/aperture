@@ -297,3 +297,26 @@ test("the browser run's result comes back next turn and is reported as it is", (
     "The fix is staged. `npm run test` failed in the browser (Error: first item should be tsk_100), but it fails the same way without these edits, so the failure was already there.",
   );
 });
+
+test("a fix for one of several known bugs says what it fixed and that the rest were already failing", () => {
+  const tape = TAPES[0]!;
+  const history: ReplayMessage[] = [{ role: "user", content: tape.title }];
+  const run = runTurn(
+    continuationInstruction("test", {
+      kind: "done",
+      passed: false,
+      output: "✖ returns 404 for an unknown id\n✖ rejects a title longer than 80 characters",
+      detail: "AssertionError: expected 200 to be 404",
+      pass: 4,
+      fail: 2,
+      preexisting: true,
+      fixed: ["store starts page 0 at the first task"],
+    }),
+    BUILD_TOOLS,
+    { plan: tape.plan, history },
+  );
+  assert.equal(
+    run.text,
+    "Checked in the browser: the fix makes `store starts page 0 at the first task` pass. `npm run test` still fails 2 other tests, which failed the same way before these edits, so they are not from this change.",
+  );
+});

@@ -86,7 +86,7 @@ export const TAPES: Tape[] = [
     id: "get-task-404",
     title: "Return 404 from getTask when the id is missing",
     match: /\b404\b|gettask|not[\s-]found|missing (task|id)/i,
-    reads: [read("src/routes/tasks.ts"), read("src/lib/errors.ts")],
+    reads: [read("src/routes/tasks.ts"), read("src/lib/errors.ts"), read("tests/tasks.test.ts")],
     plan: [
       "In GET /tasks/:id (src/routes/tasks.ts), throw HttpError(404, \"not_found\") when getTask returns null",
       "Leave getTask returning null, since PATCH already handles that case",
@@ -111,7 +111,7 @@ export const TAPES: Tape[] = [
     id: "title-length",
     title: "Reject titles longer than 80 characters",
     match: /\b80\b|long(er)? titles?|title.{0,20}(length|long)/i,
-    reads: [read("src/lib/validate.ts")],
+    reads: [read("src/lib/validate.ts"), read("tests/tasks.test.ts")],
     plan: [
       "Reject titles over 80 characters in `requireTitle` (src/lib/validate.ts) with a 400 invalid_title",
       "Measure the trimmed title, so surrounding spaces don't count",
@@ -324,6 +324,13 @@ function browserRunAnswer(ran: NonNullable<ReturnType<typeof parseContinuation>>
   if (ran.status === "passed") return `Checked: ${ran.line}. The fix is staged: review the diff, then apply it.`;
   if (ran.status === "not run") {
     return `${ran.line.replace(/^It could not run/, `\`npm run ${ran.script}\` could not run`)} The edits are staged but unchecked: review the diff before applying.`;
+  }
+  if (ran.preexisting && ran.fixed.length) {
+    const others = ran.failing === 1 ? "1 other test" : ran.failing > 1 ? `${ran.failing} other tests` : "other tests";
+    return [
+      `Checked in the browser: the fix makes ${ran.fixed.map((t) => `\`${t}\``).join(", ")} pass.`,
+      `\`npm run ${ran.script}\` still fails ${others}, which failed the same way before these edits, so ${ran.failing === 1 ? "it is" : "they are"} not from this change.`,
+    ].join(" ");
   }
   if (ran.preexisting) {
     return `The fix is staged. ${ran.line}${ran.detail ? ` (${ran.detail})` : ""}, but it fails the same way without these edits, so the failure was already there.`;

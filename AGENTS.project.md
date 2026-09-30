@@ -106,11 +106,16 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
 - Tapes cover the harbor-api demo's three known bugs; anything else gets a
   list of what is recorded. Add a tape by recording its `search` strings
   against `DEMO_FILES` exactly; `replay.test.ts` fails if one stops applying.
+- harbor-api's `npm test` is Vitest, with one failing test per known bug
+  (`tests/store.test.ts`, `tests/tasks.test.ts`). `runner.test.ts` checks that
+  each tape's fix makes exactly its own test pass and leaves the other two
+  failing as before. Keep that true when adding a bug or a tape: the demo's
+  answers depend on it.
 - The engine decides from what this turn has already done (tool calls and
   their results), never by counting steps, so loop nudges and verify
   failures don't derail it.
-- It never claims tests passed: verify results come from the real run. Locally,
-  with no sandbox, the Tests check reads "not run".
+- It never claims tests passed: every result it states comes from a real run
+  of the tests.
 - Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
 - Try it: `APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev`.
 
@@ -184,6 +189,13 @@ did not run reads "not run" with the reason and never counts as a pass.
   - The replay model calls `run_script("test")` after staging a fix. It
     answers the report turn from `parseContinuation`, repeating what the run
     said, pass or fail.
+  - "Was it already failing" compares the two runs test by test
+    (`runner/compare.ts`, using each run's `failures`), not by the first error
+    line. With several failing tests, a fix for one changes the first error
+    line, which must not blame the change for the rest. The report turn names
+    the tests the edits fixed ("Now passing").
+  - The report turn and the automatic fix are sent with `automatic: true`.
+    The chat shows them as "Automatic", not "You".
 - `runScript` returns `ran`. A run that never executed (no sandbox, no
   allowance, the sandbox would not start) is reported as not run. It is never
   handed to the agent as a failure to fix. A real failure gets one fix attempt.

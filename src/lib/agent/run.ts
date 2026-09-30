@@ -16,6 +16,7 @@ import { isUiTask, nearestUiFiles } from "./ui-graph";
 import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
+import { compareRuns } from "@/lib/runner/compare";
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -132,6 +133,8 @@ export async function submitAgent(
     messageExtra?: Pick<ChatMessage, "autoFixed" | "browserRunsUsed">;
     /** Browser runs already made in this chain of turns (a continuation passes its count on). */
     browserRuns?: BrowserRuns;
+    /** Sent by the editor itself, not typed by the person: the message says so. */
+    automatic?: boolean;
   },
 ) {
   const trimmed = instruction.trim();
@@ -152,6 +155,7 @@ export async function submitAgent(
     role: "user",
     content: trimmed,
     createdAt: stamp,
+    ...(opts?.automatic ? { automatic: true } : {}),
   });
   state.addMessage({
     id: asstId,
@@ -396,7 +400,10 @@ async function continueWithBrowserRun(args: {
     // A failure the edits did not cause is not theirs to fix: check the files without them.
     if (outcome.kind === "done" && !outcome.passed && !outcome.timedOut) {
       const before = await runTestsInBrowser(latest.files, { script: args.script, signal: abort.signal });
-      if (before.kind === "done" && !before.passed && before.detail === outcome.detail) outcome = { ...outcome, preexisting: true };
+      if (before.kind === "done") {
+        const { preexisting, fixed } = compareRuns(outcome, before);
+        outcome = { ...outcome, preexisting, fixed };
+      }
     }
   } catch (error) {
     const ws = useWorkspace.getState();
@@ -423,5 +430,6 @@ async function continueWithBrowserRun(args: {
     },
     // The chain of runs is this change's automatic check; no separate auto-fix on top of it.
     messageExtra: { autoFixed: true, browserRunsUsed: used },
+    automatic: true,
   });
 }

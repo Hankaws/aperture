@@ -18,7 +18,7 @@ test("extractStack reads harbor-api runtime and layout", () => {
   assert.ok(stack.layout.includes("src/"));
   assert.ok(stack.layout.includes("src/store.ts"));
   assert.ok(stack.scripts.includes("start"));
-  assert.deepEqual(stack.deps, []);
+  assert.deepEqual(stack.deps, ["vitest"]);
 });
 
 test("mergeStackSection replaces the managed block and keeps user rules", () => {

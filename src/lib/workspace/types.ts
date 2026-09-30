@@ -110,6 +110,8 @@ export type ChatMessage = {
   autoFixed?: boolean;
   /** Runs handed to the browser so far in this chain of turns, counting this reply's own. */
   browserRunsUsed?: number;
+  /** A user-side message the editor sent itself (a test run's result, the automatic fix), not the person. */
+  automatic?: boolean;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */

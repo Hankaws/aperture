@@ -146,6 +146,7 @@ async function openaiTab(
         messages: [{ role: "user", content: prompt }],
       }),
       signal,
+      redirect: "manual",
     });
     if (res.ok) {
       const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };

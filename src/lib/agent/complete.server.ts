@@ -45,6 +45,8 @@ async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signa
     headers,
     body: JSON.stringify({ ...body, model }),
     signal,
+    // A redirect could send the request (and the key) to an address the check above refused.
+    redirect: "manual",
   });
   if (!res.ok) {
     throw new Error(`${cfg.provider === "custom" ? "Endpoint" : cfg.provider} refused the request (${res.status}).`);

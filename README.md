@@ -96,6 +96,7 @@ environment settings, never in a committed file.
 | `DATABASE_URL` | Postgres for accounts and saved work. Without it, an in-process PGlite database |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Session signing and the public URL when sign-in is on |
 | `GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET` | "Sign in with Grok". Only apps hosted by Grok App Builder have these; email and password sign-in works without them |
+| `APERTURE_LOCAL_ENDPOINTS` | `1` lets a custom model endpoint on `http://127.0.0.1` (Ollama, LM Studio) be called from a production server you run yourself. On by default in local dev, off when deployed: there, loopback is the server itself, not your machine |
 | `APERTURE_SANDBOX=vercel-oidc` | Lets the agent run projects in Vercel Sandbox, when deployed on Vercel |
 | `VERCEL_SANDBOX_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Vercel Sandbox from any other host |
 

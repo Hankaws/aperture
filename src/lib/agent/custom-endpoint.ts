@@ -84,6 +84,23 @@ export function normalizeCustomBase(raw: string): string | null {
   return `${url.protocol}//${url.host}${path}`;
 }
 
+/**
+ * Whether a loopback base may be called. Loopback is the server's own
+ * machine: Ollama on your laptop when you run Aperture there, but on a
+ * shared deployment it reaches nobody's Ollama and only the server's own
+ * local services. So it is on for local dev and off once deployed, unless
+ * APERTURE_LOCAL_ENDPOINTS says otherwise.
+ */
+export function localEndpointsAllowed(env: Record<string, string | undefined>): boolean {
+  if (env.APERTURE_LOCAL_ENDPOINTS === "1") return true;
+  if (env.APERTURE_LOCAL_ENDPOINTS === "0") return false;
+  return env.NODE_ENV !== "production" && !env.VERCEL;
+}
+
+export const LOCAL_ENDPOINTS_OFF =
+  "Ollama and LM Studio only work when Aperture runs on your own machine. Use an https endpoint, " +
+  "or set APERTURE_LOCAL_ENDPOINTS=1 on a server you run yourself.";
+
 /** Model ids, including OpenRouter's `vendor/name` form. */
 export function cleanCustomModel(raw: string): string | null {
   const model = raw.trim();

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanCustomModel, isPrivateAddress, normalizeCustomBase } from "./custom-endpoint.ts";
+import { cleanCustomModel, isPrivateAddress, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
+import { assertFetchableBase } from "./custom-endpoint.server.ts";
 
 test("normalizeCustomBase accepts the three presets and strips a completions suffix", () => {
   assert.equal(normalizeCustomBase("http://127.0.0.1:11434/v1"), "http://127.0.0.1:11434/v1");
@@ -30,4 +31,17 @@ test("cleanCustomModel allows vendor/name and rejects blanks", () => {
   assert.equal(cleanCustomModel(" llama3.1 "), "llama3.1");
   assert.equal(cleanCustomModel(""), null);
   assert.equal(cleanCustomModel("has space"), null);
+});
+
+test("loopback endpoints are for local dev only, unless the server opts in", async () => {
+  assert.equal(localEndpointsAllowed({ NODE_ENV: "development" }), true);
+  assert.equal(localEndpointsAllowed({ NODE_ENV: "production" }), false);
+  assert.equal(localEndpointsAllowed({ NODE_ENV: "development", VERCEL: "1" }), false);
+  assert.equal(localEndpointsAllowed({ NODE_ENV: "production", APERTURE_LOCAL_ENDPOINTS: "1" }), true);
+  assert.equal(localEndpointsAllowed({ NODE_ENV: "development", APERTURE_LOCAL_ENDPOINTS: "0" }), false);
+
+  const ollama = "http://127.0.0.1:11434/v1";
+  assert.equal(await assertFetchableBase(ollama, { NODE_ENV: "development" }), ollama);
+  await assert.rejects(assertFetchableBase(ollama, { NODE_ENV: "production" }), /your own machine/);
+  await assert.rejects(assertFetchableBase("http://localhost:1234/v1", { VERCEL: "1" }), /your own machine/);
 });

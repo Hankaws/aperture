@@ -1,5 +1,5 @@
 import type { ModelSource } from "@/lib/billing/plans";
-import type { AgentMode, AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
+import type { AgentMode, AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 import type { WorkerRole, WorkerSpec } from "./crew";
 import type { BrowserRuns } from "./browser-handoff";
@@ -38,6 +38,8 @@ export type AgentInput = {
   debug?: boolean;
   /** How many earlier chat turns were folded into thread memory. */
   compacted?: number;
+  /** Rules that follow this account into every project. Not files in the repo. */
+  standing?: string[];
   /** Set when the tab can run scripts in its browser test runner (see browser-handoff.ts). */
   browserRuns?: BrowserRuns;
 };
@@ -54,6 +56,7 @@ export type AgentResult =
       verify?: VerifyReport;
       /** The script the tab should run in the browser now, then report back as the next turn. */
       browserRun?: { script: string };
+      mcpCalls?: McpCall[];
     }
   | {
       ok: false;

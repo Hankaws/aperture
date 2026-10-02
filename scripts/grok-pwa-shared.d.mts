@@ -17,6 +17,7 @@ export declare function renderWebManifest(hostHeader: string | null | undefined)
 export declare function grokPwaHeadTags(appName?: string): Array<[string, string]>;
 export declare const GROK_EXTENSIONS_SCRIPT_SRC: string;
 export declare function readGrokProjectId(): string;
+export declare function readGrokExtensionsEnabled(): boolean;
 export declare function readXCreator(): string;
 export declare function readXCreatorId(): string;
 export declare function grokXCreatorHeadTags(creator?: string, creatorId?: string): string[];

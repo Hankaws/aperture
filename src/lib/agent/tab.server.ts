@@ -1,7 +1,7 @@
 import type { ProviderId } from "@/lib/billing/plans";
-import { openaiCompatBase } from "./complete.server";
+import { openaiCompatBase, type EngineId } from "./complete.server";
 
-type Cfg = { provider: ProviderId; apiKey: string };
+type Cfg = { provider: EngineId; apiKey: string; base?: string; model?: string };
 
 /** Cheap, low-latency models only. Never grok-4.5 / grok-4.6 / sonnet / gpt-4o. */
 function modelOf(provider: ProviderId) {
@@ -109,15 +109,34 @@ export async function completeTab(
     return cleanCompletion(data.content?.map((b) => b.text ?? "").join("") ?? "", prefix, suffix);
   }
 
-  const base = openaiCompatBase(cfg.provider);
-  const models = tabModels(cfg.provider);
+  if (cfg.provider === "replay") return "";
+
+  if (cfg.provider === "custom") {
+    if (!cfg.base || !cfg.model) return "";
+    const { assertFetchableBase } = await import("./custom-endpoint.server");
+    const base = await assertFetchableBase(cfg.base);
+    return openaiTab(base, [cfg.model], cfg.apiKey, prefix, suffix, prompt, signal);
+  }
+
+  return openaiTab(openaiCompatBase(cfg.provider), tabModels(cfg.provider), cfg.apiKey, prefix, suffix, prompt, signal);
+}
+
+async function openaiTab(
+  base: string,
+  models: string[],
+  apiKey: string,
+  prefix: string,
+  suffix: string,
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<string> {
   let lastError: Error | null = null;
   for (const model of models) {
     const res = await fetch(`${base}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${cfg.apiKey}`,
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
         model,

@@ -1,4 +1,5 @@
 import type { ChatMessage, ProposedEdit } from "./types";
+import { pendingForRun } from "./copies.ts";
 
 export function listPendingEdits(messages: ChatMessage[]): ProposedEdit[] {
   const out: ProposedEdit[] = [];
@@ -28,9 +29,9 @@ export function pendingEditFor(messages: ChatMessage[], path: string | null): Pr
   return found;
 }
 
-export function pendingPathKey(messages: ChatMessage[]): string {
+export function pendingPathKey(messages: ChatMessage[], activeCopyId: string | null = null): string {
   const paths = new Set<string>();
-  for (const edit of listPendingEdits(messages)) paths.add(edit.path);
+  for (const edit of pendingForRun(listPendingEdits(messages), undefined, activeCopyId)) paths.add(edit.path);
   return [...paths].sort().join("|");
 }
 
@@ -57,7 +58,9 @@ export function attachNotesToPending(
   for (const inc of incoming) {
     if (!inc.notes?.length) continue;
     for (const [id, edits] of byMessage) {
-      const idx = edits.findIndex((e) => e.path === inc.path && e.status === "pending");
+      const idx = edits.findIndex(
+        (e) => e.path === inc.path && e.status === "pending" && (!inc.copyId || !e.copyId || e.copyId === inc.copyId),
+      );
       if (idx < 0) continue;
       const current = edits[idx]!;
       edits[idx] = { ...current, notes: [...(current.notes ?? []), ...inc.notes] };

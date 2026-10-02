@@ -66,6 +66,8 @@ export async function runJob(id: string, userId: string, raw: AgentInput, agentI
     const result = await runAgentLoop(input, {
       provider: resolved.provider,
       apiKey: resolved.apiKey,
+      base: resolved.base,
+      model: resolved.model,
       userId,
     });
     if (ctrl.signal.aborted) return;

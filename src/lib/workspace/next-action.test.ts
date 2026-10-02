@@ -73,7 +73,7 @@ test("nextAction applies once the checks are clear", () => {
   assert.equal(next.cta, "Apply");
 });
 
-test("nextAction opens the file when a check failed", () => {
+test("nextAction offers to send a failed check back, or apply and remember it", () => {
   const next = nextAction({
     running: false,
     awaiting: false,
@@ -85,6 +85,9 @@ test("nextAction opens the file when a check failed", () => {
     checks: "failed",
   });
   assert.equal(next.kind, "fix");
+  assert.equal(next.cta, "Send back");
+  assert.equal(next.altKind, "apply");
+  assert.equal(next.altCta, "Apply anyway");
 });
 
 test("nextAction keeps reviewing while checks are still running", () => {

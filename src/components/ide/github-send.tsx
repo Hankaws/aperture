@@ -4,7 +4,7 @@ import { Github } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { publishGithub } from "@/lib/github/api";
+import { publishGithub, mergeGithub } from "@/lib/github/api";
 import { changesSince, readGithubToken, stampFiles } from "@/lib/github/roundtrip";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -14,25 +14,24 @@ import { cn } from "@/lib/utils";
 export function GithubSendDialog({ onClose }: { onClose: () => void }) {
   const github = useWorkspace((s) => s.github);
   const files = useWorkspace((s) => s.files);
+  const commits = useWorkspace((s) => s.commits);
+  const revertCommit = useWorkspace((s) => s.revertCommit);
   const { user, isPending } = useCurrentUserState();
-  const [message, setMessage] = useState("Update from Aperture");
+  const [message, setMessage] = useState(commits.at(-1)?.message || "Update from Aperture");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"commit" | "pr" | null>(null);
+  const [busy, setBusy] = useState<"commit" | "pr" | "merge" | null>(null);
   const changes = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
+  const base = github?.defaultBranch || "main";
+  const canMerge = Boolean(github && (github.pull || github.branch !== base));
 
   async function send(mode: "commit" | "pr") {
     if (!github) return;
-    const token = readGithubToken();
-    if (!token) {
-      setError("Save a GitHub token when you open the repo.");
-      return;
-    }
     setError(null);
     setBusy(mode);
     try {
       const result = await publishGithub({
         data: {
-          token,
+          token: readGithubToken() ?? undefined,
           owner: github.owner,
           repo: github.repo,
           branch: github.branch,
@@ -49,9 +48,45 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
       useWorkspace.getState().setGithub({
         ...github,
         sha: result.sha,
+        pull: result.pull ?? github.pull,
         stamps: stampFiles(useWorkspace.getState().files),
       });
-      toast.success(mode === "pr" ? "Pull request opened" : "Committed");
+      toast.success(mode === "pr" ? "Pull request opened" : `Pushed to ${github.branch}`);
+      if (result.url) window.open(result.url, "_blank", "noopener,noreferrer");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reach GitHub.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function merge() {
+    if (!github) return;
+    setError(null);
+    setBusy("merge");
+    try {
+      const result = await mergeGithub({
+        data: {
+          owner: github.owner,
+          repo: github.repo,
+          base,
+          head: github.branch,
+          pull: github.pull,
+          message,
+        },
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      useWorkspace.getState().setGithub({
+        ...github,
+        branch: base,
+        sha: result.sha || github.sha,
+        pull: undefined,
+      });
+      toast.success(github.pull ? `Merged pull request #${github.pull}` : `Merged into ${base}`);
       if (result.url) window.open(result.url, "_blank", "noopener,noreferrer");
       onClose();
     } catch (err) {
@@ -85,6 +120,27 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
               {" · "}
               {changes.length === 0 ? "no changes" : `${changes.length} ${changes.length === 1 ? "file" : "files"}`}
             </p>
+            {commits.length > 0 && (
+              <ul className="mt-3 max-h-32 overflow-y-auto rounded-md border border-border">
+                {commits.slice(-5).map((commit) => {
+                  const latest = commit.id === commits[commits.length - 1]?.id;
+                  return (
+                    <li key={commit.id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-[12px]">
+                      <span className="min-w-0 truncate">{commit.message}</span>
+                      {latest && (
+                        <button
+                          type="button"
+                          className="shrink-0 text-muted hover:text-fg"
+                          onClick={() => revertCommit(commit.id)}
+                        >
+                          Revert
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <Input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -92,7 +148,7 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
               aria-label="Commit message"
             />
             {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
               <Button variant="ghost" size="sm" type="button" onClick={onClose}>
                 Cancel
               </Button>
@@ -103,11 +159,22 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
                 disabled={busy !== null || changes.length === 0}
                 onClick={() => void send("commit")}
               >
-                {busy === "commit" ? "Committing…" : `Commit to ${github.branch}`}
+                {busy === "commit" ? "Pushing…" : `Push to ${github.branch}`}
               </Button>
               <Button size="sm" type="button" disabled={busy !== null || changes.length === 0} onClick={() => void send("pr")}>
                 {busy === "pr" ? "Opening…" : "Open PR"}
               </Button>
+              {canMerge && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  disabled={busy !== null || changes.length > 0}
+                  onClick={() => void merge()}
+                >
+                  {busy === "merge" ? "Merging…" : github.pull ? `Merge #${github.pull}` : `Merge into ${base}`}
+                </Button>
+              )}
             </div>
           </>
         )}

@@ -2,6 +2,7 @@ import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search"
 import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { safeRelPath } from "@/lib/security/redact";
+import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
@@ -128,6 +129,23 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "mcp_call",
+      description:
+        "Call a tool on a connected MCP server. server is the name from Settings. arguments is a JSON object as a string. Read-only tools return immediately. Anything that changes state is staged until the user confirms.",
+      parameters: {
+        type: "object",
+        properties: {
+          server: { type: "string" },
+          tool: { type: "string" },
+          arguments: { type: "string", description: "JSON object. Use {} when the tool takes none." },
+        },
+        required: ["server", "tool"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "note_diff",
       description:
         "Attach a review note to a staged diff. Use this instead of propose_edit when reviewing. excerpt is the line you are commenting on.",
@@ -154,7 +172,8 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
         t.function.name !== "propose_edit" &&
         t.function.name !== "set_plan" &&
         t.function.name !== "note_diff" &&
-        t.function.name !== "run_script",
+        t.function.name !== "run_script" &&
+        t.function.name !== "mcp_call",
     );
   }
   if (kind === "plan") {
@@ -183,6 +202,8 @@ export type ToolContext = {
    * the browser cannot run it and `runScript` should.
    */
   handOff?: (script: string) => string | null;
+  /** Set when this account has MCP servers. Returns the tool text. */
+  mcpCall?: (server: string, tool: string, args: string) => Promise<string>;
 };
 
 function clip(text: string, max = 8000): string {
@@ -293,7 +314,22 @@ export async function executeTool(
     const replace = String(args.replace ?? "");
     const description = String(args.description ?? "Update file");
     const current = ctx.files[path];
-    if (current === undefined) return `File not found: ${path}`;
+    if (current === undefined) {
+      if (path !== LESSONS_PATH || search.trim()) return `File not found: ${path}`;
+      const line = replace.replace(/^- /, "").trim();
+      if (!line) return "A new lessons file needs one bullet.";
+      const next = upsertLesson("", `grow_${ctx.edits.length + 1}`, "down", line);
+      ctx.files[path] = next;
+      ctx.edits.push({
+        id: `edit_${ctx.edits.length + 1}_${path}`,
+        path,
+        oldText: "",
+        newText: next,
+        description,
+        status: "pending",
+      });
+      return `Edit staged for ${path}. The user must accept it in the UI.`;
+    }
     const applied = applySearchReplace(current, search, replace);
     if (!applied.ok) {
       return `Edit rejected: ${applied.error}\nNearby:\n${nearbySnippet(current, search)}`;
@@ -341,6 +377,15 @@ export async function executeTool(
     if (!edit) return `No pending edit for ${path}. Review staged diffs only.`;
     edit.notes = [...(edit.notes ?? []), { id: `n_${(edit.notes?.length ?? 0) + 1}_${path}`, excerpt, type: kind, text }];
     return `Note added on ${path}.`;
+  }
+
+  if (name === "mcp_call") {
+    if (!ctx.mcpCall) return "No MCP servers are connected. Add one in Settings → Agents.";
+    const server = String(args.server ?? "").trim();
+    const tool = String(args.tool ?? "").trim();
+    const raw = typeof args.arguments === "string" ? args.arguments : JSON.stringify(args.arguments ?? {});
+    if (!server || !tool) return "mcp_call needs server and tool.";
+    return ctx.mcpCall(server, tool, raw || "{}");
   }
 
   return `Unknown tool: ${name}`;

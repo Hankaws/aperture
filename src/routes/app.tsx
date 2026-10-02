@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { IdeShell } from "@/components/ide/ide-shell";
 import { authEnabled } from "@/lib/auth/client";
 import { ensureVisitor } from "@/lib/auth/visitor.api";
-import { useWorkspace } from "@/lib/workspace/store";
+import { flushWorkspacePersist, useWorkspace } from "@/lib/workspace/store";
 import { startWorkspaceSync } from "@/lib/workspace/sync-controller";
 
 /** Per tab: once the cookie is set, later navigations have nothing to ask for. */
@@ -30,9 +30,14 @@ function AppEditor() {
 
   useEffect(() => {
     hydrate();
-    // Reconcile with the saved copy after the local one is in place, so the
-    // decision sees what this browser actually holds.
-    return startWorkspaceSync();
+    const flush = () => flushWorkspacePersist();
+    window.addEventListener("pagehide", flush);
+    const stop = startWorkspaceSync();
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+      stop();
+    };
   }, [hydrate]);
 
   return <IdeShell />;

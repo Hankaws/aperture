@@ -28,6 +28,7 @@ export type WorkerSpec = {
 export type SeatAccount = {
   keys: Record<ProviderId, { set: boolean }>;
   acp: boolean;
+  custom?: { base: string | null; model: string | null } | null;
 };
 
 export function availableSeats(account: SeatAccount | null | undefined): CrewSeat[] {
@@ -57,6 +58,15 @@ export function availableSeats(account: SeatAccount | null | undefined): CrewSea
       hint: "Your key",
     });
   }
+  const customReady = Boolean(account?.custom?.base && account.custom.model);
+  seats.push({
+    id: "custom",
+    kind: "model",
+    label: "Custom",
+    source: "custom",
+    ready: customReady,
+    hint: customReady ? (account?.custom?.model ?? "Your endpoint") : "Set endpoint in Settings",
+  });
   for (const agent of BUILTIN_ACP) {
     seats.push({
       id: agent.id,

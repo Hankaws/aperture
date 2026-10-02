@@ -1,20 +1,21 @@
 import { indexFiles, semanticSearch } from "@/lib/indexer/search";
+import { repoMap } from "@/lib/indexer/repo-map";
 import { applySearchReplace } from "./apply-edit";
-import { complete, completeStreaming, type ChatMessage } from "./complete.server";
+import { complete, completeStreaming, type ChatMessage, type CompletionCfg } from "./complete.server";
 import type { AgentStreamEvent } from "./events";
 import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
+import { LESSONS_PATH, lessonsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
 import { compactLoopMessages } from "./compact";
 import { applyStackMemory, formatStackContext } from "./stack";
-import type { EngineId } from "./complete.server";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
-import type { AgentDebug, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
+import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
 import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
@@ -53,7 +54,7 @@ function systemPrompt(
   const base = [
     preamble,
     "You operate on a virtual workspace snapshot. Tools see the live snapshot, including staged edits.",
-    "Always inspect code with semantic_search, grep, or read_file before editing.",
+    "Always inspect code with semantic_search, grep, or read_file before editing. A repo map of symbols is in the context — use it to pick the file.",
     "You may call several search and read tools in one step; they run in parallel.",
     "Prefer the smallest unique search/replace. Never invent files that do not exist.",
     "Cite paths as path:line when answering questions.",
@@ -61,15 +62,19 @@ function systemPrompt(
       ? "When you find an issue, call note_diff. Do not dump entire files into chat unless asked."
       : "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
     "The user may attach files with @path, @codebase (indexed search), or @repo-map. Treat those as the primary context.",
+    "mcp_call uses MCP servers from Settings → Agents. Read-only tools return now. Anything that changes state waits for the user to confirm.",
     "Never repeat API keys, tokens, passwords, private keys, or secret-looking strings. If one appears, write [redacted].",
     "For UI work, reuse tokens and classes from the UI context. Do not invent a palette.",
     "The ## Stack section in project rules is auto-maintained. Reuse that runtime, layout, and tokens.",
+    mode === "composer" && role !== "review" && phase !== "plan"
+      ? "Harness loop: follow the committed lessons. When an observation says a turn was missed or a check failed, and no lesson already says it, call propose_edit once on .aperture/lessons.md with one new bullet. If that file does not exist, pass an empty search and the bullet as replace. Do not rewrite the file. Do not edit it for any other reason."
+      : "",
     mode === "inline"
       ? "Inline mode: return one focused replacement for the selection."
       : mode === "composer"
         ? composerLine
         : "Ask mode: answer questions. You may search and read. Do not call set_plan or propose_edit. Nothing is written.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
   if (!rules) return base;
   return `${base}\n\nProject rules (follow these):\n${rules.slice(0, 6000)}`;
 }
@@ -167,13 +172,14 @@ function buildContextMessage(
   ).filter((path) => files[path] !== undefined && !mentioned.includes(path));
   const parts = [
     `Workspace files:\n${fileTree(files)}`,
+    `Repo map:\n${repoMap(files) || "(no symbols)"}`,
     input.activePath ? `Active file: ${input.activePath}` : "",
     input.selection
       ? `Selection in ${input.selection.path} L${input.selection.fromLine}-L${input.selection.toLine}:\n${input.selection.text}`
       : "",
   ];
   if (mentioned.includes("repo-map")) {
-    parts.push("Attached @repo-map: use the workspace file tree above as the map of this repo.");
+    parts.push("Attached @repo-map: the symbol map above is the map of this repo.");
   }
   if (mentioned.includes("codebase")) {
     const query = mentionQuery(input.instruction) || input.instruction;
@@ -205,14 +211,14 @@ function buildContextMessage(
 
 export async function runAgentLoop(
   input: AgentInput,
-  cfg: { provider: EngineId; apiKey: string; userId?: string },
+  cfg: CompletionCfg & { userId?: string },
 ): Promise<AgentResult> {
   return runAgentLoopStreaming(input, cfg, () => undefined);
 }
 
 export async function runAgentLoopStreaming(
   input: AgentInput,
-  cfg: { provider: EngineId; apiKey: string; userId?: string },
+  cfg: CompletionCfg & { userId?: string },
   emit: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
@@ -296,6 +302,32 @@ export async function runAgentLoopStreaming(
         }
       : undefined,
   };
+  const mcpPending: McpCall[] = [];
+  let mcpNote = "";
+  try {
+    const { invokeMcp, mcpToolsFor } = await import("@/lib/mcp/account.server");
+    const mcp = await mcpToolsFor(cfg.userId, fileMap);
+    if (mcp.servers.length > 0) {
+      mcpNote = mcp.note;
+      ctx.mcpCall = async (server, tool, args) => {
+        const outcome = await invokeMcp(mcp.servers, mcp.tools, server, tool, args);
+        if (outcome.pending) {
+          mcpPending.push({
+            id: `mcp_${mcpPending.length + 1}_${tool}`,
+            server,
+            tool,
+            args: args.slice(0, 2000),
+            status: "pending",
+          });
+        }
+        return outcome.text;
+      };
+    } else if (mcp.note) {
+      mcpNote = mcp.note;
+    }
+  } catch {
+    // MCP is optional. A missing table or a server that does not answer must not stop the turn.
+  }
   const traces: ToolTrace[] = [];
   const rules = findRules(fileMap)?.text ?? null;
 
@@ -307,8 +339,17 @@ export async function runAgentLoopStreaming(
     emit({ type: "status", text: `ACP session/new · ${flavor.name}` });
   }
 
-  const sys = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
-  const userCtx = buildContextMessage(input, files, chunks);
+  const sysBase = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
+  const lessons = lessonsForPrompt(fileMap[LESSONS_PATH] ?? "").slice(0, 2000);
+  const standing = standingForPrompt((input.standing ?? []).map((line, i) => ({ id: String(i), line }))).slice(0, 2000);
+  const sys = [
+    sysBase,
+    standing ? `Rules for every project. Follow them:\n${standing}` : "",
+    lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const userCtx = [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
   let messages: ChatMessage[] = [
     { role: "system", content: sys },
     { role: "user", content: userCtx },
@@ -349,7 +390,12 @@ export async function runAgentLoopStreaming(
     const verifiedText = line ? `${text}\n\n${line}` : text;
     if (text !== body.text) emit({ type: "status", text: "Verifying…" });
     const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
-    const extra = { ...(debug ? { debug } : {}), ...(verify ? { verify } : {}), ...(browserRun ? { browserRun } : {}) };
+    const extra = {
+      ...(debug ? { debug } : {}),
+      ...(verify ? { verify } : {}),
+      ...(browserRun ? { browserRun } : {}),
+      ...(mcpPending.length > 0 ? { mcpCalls: mcpPending } : {}),
+    };
     emit({ type: "done", ...body, text: verifiedText, ...extra });
     return { ok: true, ...body, text: verifiedText, ...extra };
   };
@@ -536,7 +582,7 @@ export async function runAgentLoopStreaming(
 }
 
 async function runInline(
-  cfg: { provider: EngineId; apiKey: string },
+  cfg: CompletionCfg,
   input: AgentInput,
   files: Record<string, string>,
   signal?: AbortSignal,

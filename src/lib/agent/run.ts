@@ -10,6 +10,8 @@ import type { AgentPhase } from "./phase";
 import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 import { parseMentions } from "@/lib/workspace/mentions";
 import { attachNotesToPending, listPendingEdits, withoutUnchanged } from "@/lib/workspace/edits";
+import { LESSONS_PATH, formatObservations, lessonEditForFailure, readStanding } from "@/lib/workspace/lessons";
+import { pendingForRun } from "@/lib/workspace/copies";
 import { autoContextPaths } from "./auto-context";
 import { compactHistory, priorMessages } from "./compact";
 import { isUiTask, nearestUiFiles } from "./ui-graph";
@@ -24,6 +26,16 @@ function describeError(error: unknown): string {
     return "Sign in to run Composer. Plans and API keys live on the account.";
   }
   return raw;
+}
+
+/** A failed turn keeps whatever already arrived, then says why it stopped. */
+function keepReply(messageId: string, error: unknown) {
+  const partial = useWorkspace.getState().messages.find((m) => m.id === messageId)?.content ?? "";
+  const why = describeError(error);
+  useWorkspace.getState().patchMessage(messageId, {
+    content: partial.trim() ? `${partial}\n\n${why}` : why,
+    status: undefined,
+  });
 }
 
 let currentAbort: AbortController | null = null;
@@ -56,8 +68,16 @@ async function readSse(res: Response, onEvent: (event: AgentStreamEvent) => void
       if (!payload) continue;
       try {
         onEvent(JSON.parse(payload) as AgentStreamEvent);
-      } catch {
-        // ignore malformed
+      } catch (error) {
+        if (error instanceof SyntaxError) continue;
+        try {
+          onEvent({
+            type: "error",
+            error: error instanceof Error ? error.message : "Composer hit a problem applying that update.",
+          });
+        } catch {
+          // The reply already on screen stays. One bad event must not end the turn.
+        }
       }
     }
   }
@@ -75,6 +95,8 @@ export function agentPayload(
     role?: WorkerRole;
     pendingEdits?: ProposedEdit[];
     browserRuns?: BrowserRuns;
+    /** Limit the run to one composer's copy. Omit to follow the copy on screen. */
+    copyId?: string;
   },
 ) {
   const state = useWorkspace.getState();
@@ -82,6 +104,16 @@ export function agentPayload(
   const latest = useWorkspace.getState();
   const { history, compacted } = compactHistory(priorMessages(latest.messages, instruction));
   const captures = formatDesignCaptures(useIdeUi.getState().captures, latest.files);
+  const observations =
+    mode === "composer"
+      ? formatObservations(
+          latest.messages,
+          latest.files[LESSONS_PATH] ?? "",
+          listPendingEdits(latest.messages)
+            .filter((edit) => edit.path === LESSONS_PATH)
+            .map((edit) => edit.newText),
+        )
+      : "";
   const mentioned = parseMentions(instruction, latest.files);
   const focusPaths = autoContextPaths({
     activePath: latest.activePath,
@@ -95,7 +127,7 @@ export function agentPayload(
   });
   return {
     mode,
-    instruction: captures ? `${captures}\n\n${instruction}` : instruction,
+    instruction: [captures, observations, instruction].filter(Boolean).join("\n\n"),
     history,
     files: Object.entries(latest.files).map(([path, content]) => ({ path, content })),
     activePath: latest.activePath,
@@ -109,10 +141,17 @@ export function agentPayload(
     approvedPlan: extra?.approvedPlan,
     workers: extra?.workers,
     role: extra?.role,
-    pendingEdits: extra?.pendingEdits ?? listPendingEdits(latest.messages),
+    pendingEdits:
+      extra?.pendingEdits ??
+      pendingForRun(
+        listPendingEdits(latest.messages),
+        extra?.copyId,
+        latest.activeCopyId,
+      ),
     debug: useIdeUi.getState().debug,
     compacted: compacted || undefined,
     browserRuns: extra?.browserRuns,
+    standing: readStanding().map((rule) => rule.line),
   };
 }
 
@@ -133,6 +172,8 @@ export async function submitAgent(
     messageExtra?: Pick<ChatMessage, "autoFixed" | "browserRunsUsed">;
     /** Browser runs already made in this chain of turns (a continuation passes its count on). */
     browserRuns?: BrowserRuns;
+    /** Stay on this copy. A new plan or build while another run is pending forks instead. */
+    copyId?: string;
     /** Sent by the editor itself, not typed by the person: the message says so. */
     automatic?: boolean;
   },
@@ -143,6 +184,14 @@ export async function submitAgent(
   const state = useWorkspace.getState();
   if (state.agentRunning) return;
 
+  const followUp = Boolean(
+    opts?.automatic || opts?.phase === "skip" || opts?.pendingEdits || opts?.role === "review" || opts?.copyId,
+  );
+  const pendingNow = listPendingEdits(state.messages);
+  let copyId = opts?.copyId;
+  if (!copyId && state.agentRunning === false && mode === "composer" && !opts?.agentId && !followUp && pendingNow.length > 0) {
+    copyId = state.forkCopy(trimmed);
+  }
   const stamp = Date.now();
   const userId = `u_${stamp}`;
   const asstId = `a_${stamp}`;
@@ -155,6 +204,7 @@ export async function submitAgent(
     role: "user",
     content: trimmed,
     createdAt: stamp,
+    ...(copyId ? { copyId } : {}),
     ...(opts?.automatic ? { automatic: true } : {}),
   });
   state.addMessage({
@@ -175,6 +225,7 @@ export async function submitAgent(
     agentLabel,
     createdAt: stamp + 1,
     ...(mode === "composer" && !opts?.agentId && source ? { modelSource: source } : {}),
+    ...(copyId ? { copyId } : {}),
     ...opts?.messageExtra,
   });
   state.setAgentRunning(true, mode);
@@ -195,6 +246,7 @@ export async function submitAgent(
     role: opts?.role,
     pendingEdits: opts?.pendingEdits,
     browserRuns,
+    copyId,
   });
 
   if (mode === "inline") {
@@ -264,6 +316,7 @@ export async function submitAgent(
     let traces: ToolTrace[] = [];
     let edits: ProposedEdit[] = [];
     let plan: PlanEntry[] = [];
+    const tagCopy = (next: ProposedEdit[]) => (copyId ? next.map((edit) => (edit.copyId ? edit : { ...edit, copyId })) : next);
 
     await readSse(
       res,
@@ -289,7 +342,7 @@ export async function submitAgent(
           return;
         }
         if (event.type === "edits") {
-          edits = event.edits;
+          edits = tagCopy(event.edits);
           ws.patchMessage(asstId, { content: text, traces, edits, plan });
           const last = edits[edits.length - 1];
           if (last?.path) ws.openFile(last.path);
@@ -298,7 +351,7 @@ export async function submitAgent(
         if (event.type === "done") {
           text = event.text;
           traces = event.traces;
-          edits = event.edits;
+          edits = tagCopy(event.edits);
           plan = event.plan ?? plan;
           const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
           if (reviewOnly && edits.length) {
@@ -312,6 +365,10 @@ export async function submitAgent(
           edits = withoutUnchanged(edits, ws.messages.filter((m) => m.id !== asstId));
           // A browser run's report turn is sent the plan it reports on; showing it again says nothing new.
           if (opts?.browserRuns?.used && JSON.stringify(plan) === JSON.stringify(opts.approvedPlan ?? [])) plan = [];
+          if (mode === "composer" && !opts?.automatic && !reviewOnly && event.verify?.status === "failed" && !edits.some((edit) => edit.path === LESSONS_PATH)) {
+            const grown = lessonEditForFailure(ws.files[LESSONS_PATH] ?? "", event.verify.detail, `lesson_${asstId}`);
+            if (grown) edits = [...edits, ...(copyId ? [{ ...grown, status: "pending" as const, copyId }] : [{ ...grown, status: "pending" as const }])];
+          }
           ws.patchMessage(asstId, {
             content: text,
             traces,
@@ -321,6 +378,7 @@ export async function submitAgent(
             awaitingBuild: Boolean(event.awaitingBuild),
             debug: event.debug,
             verify: edits.length ? event.verify : undefined,
+            ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
           });
           const firstPending = edits.find((e) => e.status === "pending");
           if (firstPending?.path) ws.openFile(firstPending.path);
@@ -328,7 +386,10 @@ export async function submitAgent(
           return;
         }
         if (event.type === "error") {
-          ws.patchMessage(asstId, { content: event.error || "Agent failed", traces, edits, plan, status: undefined });
+          const current = ws.messages.find((m) => m.id === asstId)?.content ?? text;
+          const why = event.error || "Agent failed";
+          const content = current.trim() && current.trim() !== why ? `${current}\n\n${why}` : why;
+          ws.patchMessage(asstId, { content, traces, edits, plan, status: undefined });
         }
       },
       abort.signal,
@@ -346,7 +407,7 @@ export async function submitAgent(
       }
       return;
     }
-    useWorkspace.getState().patchMessage(asstId, { content: describeError(error), status: undefined });
+    keepReply(asstId, error);
   } finally {
     if (currentAbort === abort) currentAbort = null;
     useWorkspace.getState().setAgentRunning(false);
@@ -394,7 +455,11 @@ async function continueWithBrowserRun(args: {
   let outcome: HandoffOutcome;
   try {
     const latest = useWorkspace.getState();
-    const files = mergeEdits(latest.files, listPendingEdits(latest.messages));
+    const owner = latest.messages.find((m) => m.id === args.messageId);
+    const files = mergeEdits(
+      latest.files,
+      pendingForRun(listPendingEdits(latest.messages), owner?.copyId, latest.activeCopyId),
+    );
     const { runTestsInBrowser } = await import("@/lib/runner/browser");
     outcome = await runTestsInBrowser(files, { script: args.script, signal: abort.signal });
     // A failure the edits did not cause is not theirs to fix: check the files without them.
@@ -431,5 +496,6 @@ async function continueWithBrowserRun(args: {
     // The chain of runs is this change's automatic check; no separate auto-fix on top of it.
     messageExtra: { autoFixed: true, browserRunsUsed: used },
     automatic: true,
+    copyId: useWorkspace.getState().messages.find((m) => m.id === args.messageId)?.copyId,
   });
 }

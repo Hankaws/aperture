@@ -18,10 +18,39 @@ export type Completion = {
   tool_calls?: ChatMessage["tool_calls"];
 };
 
-/** A real provider, or the replay model (recorded runs, no API call). */
-export type EngineId = ProviderId | "replay";
+/** A real provider, the replay model, or an OpenAI-compatible custom endpoint. */
+export type EngineId = ProviderId | "replay" | "custom";
 
-export type CompletionCfg = { provider: EngineId; apiKey: string };
+export type CompletionCfg = { provider: EngineId; apiKey: string; base?: string; model?: string };
+
+function endpointOf(cfg: CompletionCfg): { base: string; model: string } {
+  if (cfg.provider === "custom") {
+    if (!cfg.base || !cfg.model) throw new Error("Custom endpoint is not configured.");
+    return { base: cfg.base, model: cfg.model };
+  }
+  if (cfg.provider === "replay") throw new Error("Replay has no endpoint.");
+  return { base: openaiCompatBase(cfg.provider), model: modelOf(cfg.provider) };
+}
+
+async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  const { base, model } = endpointOf(cfg);
+  if (cfg.provider === "custom") {
+    const { assertFetchableBase } = await import("./custom-endpoint.server");
+    await assertFetchableBase(base);
+  }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ ...body, model }),
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(`${cfg.provider === "custom" ? "Endpoint" : cfg.provider} refused the request (${res.status}).`);
+  }
+  return res;
+}
 
 /** Pause between streamed pieces, so a replay reads like a model typing. 0 in tests. */
 function replayDelayMs(): number {
@@ -67,7 +96,6 @@ export async function complete(
     return completeAnthropic(cfg.apiKey, messages, useTools, signal, tools);
   }
   const body: Record<string, unknown> = {
-    model: modelOf(cfg.provider),
     messages,
     temperature: 0.2,
     max_tokens: 1800,
@@ -76,18 +104,7 @@ export async function complete(
     body.tools = tools;
     body.tool_choice = "auto";
   }
-  const res = await fetch(`${openaiCompatBase(cfg.provider)}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    throw new Error(`${cfg.provider} refused the request (${res.status}).`);
-  }
+  const res = await postChat(cfg, body, signal);
   const data = (await res.json()) as {
     choices: Array<{ message: ChatMessage }>;
   };
@@ -117,7 +134,6 @@ export async function completeStreaming(
     return streamAnthropic(cfg.apiKey, messages, useTools, onText, signal, tools);
   }
   const body: Record<string, unknown> = {
-    model: modelOf(cfg.provider),
     messages,
     temperature: 0.2,
     max_tokens: 1800,
@@ -127,18 +143,7 @@ export async function completeStreaming(
     body.tools = tools;
     body.tool_choice = "auto";
   }
-  const res = await fetch(`${openaiCompatBase(cfg.provider)}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    throw new Error(`${cfg.provider} refused the request (${res.status}).`);
-  }
+  const res = await postChat(cfg, body, signal);
   const acc: Completion = { content: "", tool_calls: [] };
   const calls: NonNullable<ChatMessage["tool_calls"]> = [];
   let streamedText = false;

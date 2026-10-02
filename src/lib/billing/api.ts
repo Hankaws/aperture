@@ -13,6 +13,7 @@ import {
   type SessionSnapshot,
 } from "./cost";
 import { isModelSource, isProvider, planById, providerShort, type ModelSource, type PlanId, type ProviderId } from "./plans";
+import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
 
 export type KeyStatus = { set: boolean; last4: string | null };
 
@@ -33,6 +34,7 @@ export type AccountSnapshot = {
   backgroundJobs: number;
   acp: boolean;
   session: SessionSnapshot;
+  custom: { base: string | null; model: string | null; keySet: boolean; last4: string | null };
 };
 
 const PROVIDER_COLS: Record<ProviderId, "grok_key" | "openai_key" | "anthropic_key" | "gemini_key" | "deepseek_key"> = {
@@ -85,6 +87,9 @@ type SettingsRow = {
   anthropic_key: string | null;
   gemini_key: string | null;
   deepseek_key: string | null;
+  custom_base: string | null;
+  custom_model: string | null;
+  custom_key: string | null;
   hosted_used: number;
   usage_month: string;
   session_cap_on: unknown;
@@ -108,6 +113,7 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
   const day = dayStamp();
   const existing = await sql<SettingsRow>`
     select plan, preferred_provider, model_source, grok_key, openai_key, anthropic_key, gemini_key, deepseek_key,
+           custom_base, custom_model, custom_key,
            hosted_used, usage_month, session_cap_on, session_cap_turns, session_cap_cents,
            session_id, session_turns, session_cents, tab_used, tab_day
     from user_settings where user_id = ${userId}
@@ -126,6 +132,9 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
       anthropic_key: null,
       gemini_key: null,
       deepseek_key: null,
+      custom_base: null,
+      custom_model: null,
+      custom_key: null,
       hosted_used: 0,
       usage_month: month,
       session_cap_on: true,
@@ -210,6 +219,11 @@ async function migratePlaintextKeys(userId: string, row: SettingsRow) {
     row[col] = wrapped;
     await writeKeyColumn(sql, userId, col, wrapped);
   }
+  if (row.custom_key && !isEncryptedSecret(row.custom_key)) {
+    const wrapped = encryptSecret(row.custom_key);
+    row.custom_key = wrapped;
+    await sql.query(`update user_settings set custom_key = $1, updated_at = now() where user_id = $2`, [wrapped, userId]);
+  }
 }
 
 function snapshot(row: SettingsRow, peekLast4: (stored: string | null) => string | null): AccountSnapshot {
@@ -256,6 +270,12 @@ function snapshot(row: SettingsRow, peekLast4: (stored: string | null) => string
       turns: Math.max(0, asInt(row.session_turns, 0)),
       cents: Math.max(0, asInt(row.session_cents, 0)),
     },
+    custom: {
+      base: row.custom_base,
+      model: row.custom_model,
+      keySet: Boolean(row.custom_key),
+      last4: peekLast4(row.custom_key),
+    },
   };
 }
 
@@ -268,6 +288,14 @@ async function applyModelSource(userId: string, source: ModelSource): Promise<Ac
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   await loadSettings(userId);
+  if (source === "custom") {
+    await sql`
+      update user_settings
+      set model_source = 'custom', updated_at = now()
+      where user_id = ${userId}
+    `;
+    return snapshotOf(await loadAccount(userId));
+  }
   const preferred: ProviderId = source === "hosted" ? "grok" : source;
   await sql`
     update user_settings
@@ -332,6 +360,30 @@ export const setModelSource = createServerFn({ method: "POST" })
     return applyModelSource(context.userId, source);
   });
 
+export const saveCustomEndpoint = createServerFn({ method: "POST" })
+  .validator((input: { base: string; model: string; key?: string; clearKey?: boolean }) => input)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<AccountSnapshot> => {
+    const { assertFetchableBase } = await import("@/lib/agent/custom-endpoint.server");
+    const base = await assertFetchableBase(data.base);
+    const model = cleanCustomModel(data.model);
+    if (!model) throw new Error("Model id looks wrong. Use llama3.1 or openai/gpt-4o-mini.");
+    const typed = (data.key ?? "").trim();
+    if (typed && (typed.length > 300 || /\s/.test(typed))) throw new Error("That key does not look right.");
+    const { encryptSecret } = await peek();
+    const row = await loadSettings(context.userId);
+    const { getSql } = await import("@/lib/db");
+    const sql = await getSql();
+    const key = data.clearKey ? null : typed ? encryptSecret(typed) : row.custom_key;
+    await sql`
+      update user_settings
+      set custom_base = ${base}, custom_model = ${model}, custom_key = ${key},
+          model_source = 'custom', updated_at = now()
+      where user_id = ${context.userId}
+    `;
+    return snapshotOf(await loadAccount(context.userId));
+  });
+
 export const setPreferredProvider = createServerFn({ method: "POST" })
   .validator((provider: ProviderId) => provider)
   .middleware([authMiddleware])
@@ -375,7 +427,16 @@ export const resetSession = createServerFn({ method: "POST" })
   });
 
 export type ResolvedModel =
-  | { ok: true; provider: ProviderId | "replay"; apiKey: string; hosted: boolean; source: ModelSource; cents: number }
+  | {
+      ok: true;
+      provider: ProviderId | "replay" | "custom";
+      apiKey: string;
+      hosted: boolean;
+      source: ModelSource;
+      cents: number;
+      base?: string;
+      model?: string;
+    }
   | { ok: false; error: string };
 
 export async function resolveModel(userId: string, requested?: ModelSource | null): Promise<ResolvedModel> {
@@ -407,6 +468,24 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
     return { ok: true, provider: "grok", apiKey: hosted, hosted: true, source: "hosted", cents: 0 };
   }
 
+  if (source === "custom") {
+    const base = normalizeCustomBase(row.custom_base ?? "");
+    const model = cleanCustomModel(row.custom_model ?? "");
+    if (!base || !model) {
+      return { ok: false, error: "Set an Ollama, LM Studio, or OpenRouter endpoint in Settings." };
+    }
+    return {
+      ok: true,
+      provider: "custom",
+      apiKey: decryptSecret(row.custom_key) ?? "",
+      hosted: false,
+      source: "custom",
+      cents: 0,
+      base,
+      model,
+    };
+  }
+
   const own = decryptSecret(row[PROVIDER_COLS[source]]);
   if (!own) {
     return {
@@ -430,7 +509,23 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
     return { ok: false, error: "Tab ghost-text is on Pro." };
   }
   const source = account.modelSource;
-  if (source !== "hosted") {
+  if (source === "custom" && row.custom_base && row.custom_model) {
+    const base = normalizeCustomBase(row.custom_base);
+    const model = cleanCustomModel(row.custom_model);
+    if (base && model) {
+      return {
+        ok: true,
+        provider: "custom",
+        apiKey: decryptSecret(row.custom_key) ?? "",
+        hosted: false,
+        source,
+        cents: 0,
+        base,
+        model,
+      };
+    }
+  }
+  if (source !== "hosted" && source !== "custom") {
     const own = decryptSecret(row[PROVIDER_COLS[source]]);
     if (own) {
       return { ok: true, provider: source, apiKey: own, hosted: false, source, cents: 0 };

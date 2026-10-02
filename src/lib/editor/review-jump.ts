@@ -1,11 +1,20 @@
 import { pendingByPath } from "@/lib/workspace/edits";
+import { pendingForRun } from "@/lib/workspace/copies";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { hunkAnchorLines, stepReview } from "./review-nav";
 
 export function jumpReview(dir: 1 | -1, fileOnly = false) {
   const ws = useWorkspace.getState();
-  const files = pendingByPath(ws.messages).map((edit) => ({ path: edit.path, lines: hunkAnchorLines(edit) }));
+  const visible = pendingForRun(
+    ws.messages.flatMap((m) => m.edits ?? []),
+    undefined,
+    ws.activeCopyId,
+  );
+  const ids = new Set(visible.map((edit) => edit.id));
+  const files = pendingByPath(
+    ws.messages.map((m) => ({ ...m, edits: m.edits?.filter((edit) => ids.has(edit.id)) })),
+  ).map((edit) => ({ path: edit.path, lines: hunkAnchorLines(edit) }));
   const line = ws.selection && ws.selection.path === ws.activePath ? ws.selection.fromLine : 0;
   const next = stepReview(files, ws.activePath, line, dir, fileOnly);
   if (!next) return;

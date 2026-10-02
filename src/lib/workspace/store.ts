@@ -4,6 +4,11 @@ import { indexFiles } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
+import { commitMessage, editsAfterRevert } from "./commits";
+import { LESSONS_PATH, lessonAfterKeep, lessonsForPrompt, removeLesson, upsertLesson } from "./lessons";
+import { useIdeUi } from "@/lib/ui-store";
+import { validCheckpoints, validFiles, validMessages } from "./persist";
+import { copyLabel, keepSet, type RunCopy } from "./copies";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import { previewNotesForEdit } from "./preview-check";
@@ -11,7 +16,7 @@ import { fileListOf, keepFileList, withFiles } from "./file-list";
 import { workspaceHash, type SyncState } from "./sync";
 import { applyStackMemory } from "@/lib/agent/stack";
 import { findRules } from "./rules";
-import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, ProposedEdit } from "./types";
+import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, LocalCommit, ProposedEdit } from "./types";
 
 const STORAGE_KEY = "aperture-workspace-v2";
 
@@ -38,6 +43,11 @@ type WorkspaceState = {
   indexing: boolean;
   messages: ChatMessage[];
   checkpoints: Checkpoint[];
+  commits: LocalCommit[];
+  /** Composer runs that each have their own pending edits. */
+  copies: RunCopy[];
+  /** The copy the review strip is showing. Null when there is nothing to choose. */
+  activeCopyId: string | null;
   agentRunning: boolean;
   runningMode: AgentMode | null;
   /** Saved-copy revision this workspace is in step with; null if never synced. */
@@ -74,7 +84,12 @@ type WorkspaceState = {
   /** Snapshots files before a direct edit (Design Mode), so Undo can put them back. */
   checkpointFiles: (paths: string[], label: string) => string;
   undoLast: () => Checkpoint | null;
+  revertCommit: (id: string) => LocalCommit | null;
+  forkCopy: (label: string) => string;
+  setActiveCopy: (id: string | null) => void;
   clearChat: () => void;
+  recordLesson: (messageId: string, score: "up" | "down", note: string) => void;
+  clearLesson: (messageId: string) => void;
   markSynced: (revision: number, hash: string) => void;
   adoptRemote: (name: string, files: Record<string, string>, revision: number) => void;
   setSyncState: (state: SyncState) => void;
@@ -93,6 +108,9 @@ type PersistShape = {
   dirtyPaths?: string[];
   messages: ChatMessage[];
   checkpoints?: Checkpoint[];
+  commits?: LocalCommit[];
+  copies?: RunCopy[];
+  activeCopyId?: string | null;
   revision?: number | null;
   syncedHash?: string | null;
   github?: GithubOrigin | null;
@@ -117,7 +135,13 @@ function persist(state: WorkspaceState) {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ ...base, checkpoints: state.checkpoints.slice(-6) }),
+      JSON.stringify({
+        ...base,
+        checkpoints: state.checkpoints.slice(-6),
+        commits: state.commits.slice(-20),
+        copies: state.copies.slice(-6),
+        activeCopyId: state.activeCopyId,
+      }),
     );
   } catch {
     try {
@@ -130,9 +154,30 @@ function persist(state: WorkspaceState) {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 const previewForce = new Set<string>();
-function schedulePersist() {
+function schedulePersist(delay = 180) {
   if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => persist(useWorkspace.getState()), 180);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persist(useWorkspace.getState());
+  }, delay);
+}
+
+/** Write the local copy now. Used when the tab is closing, so the last reply is not lost to the debounce. */
+export function flushWorkspacePersist() {
+  if (typeof window === "undefined") return;
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  persist(useWorkspace.getState());
+}
+
+function safeIndex(files: Record<string, string>): IndexedChunk[] {
+  try {
+    return buildIndex(files);
+  } catch {
+    return [];
+  }
 }
 
 let reindexTimer: ReturnType<typeof setTimeout> | null = null;
@@ -183,6 +228,28 @@ function seedFiles(files: Record<string, string>, name: string) {
   return applyStackMemory(files, name);
 }
 
+function validCommits(value: unknown): LocalCommit[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is LocalCommit => {
+      if (!row || typeof row !== "object") return false;
+      const commit = row as LocalCommit;
+      return typeof commit.id === "string" && typeof commit.message === "string" && Boolean(commit.before);
+    })
+    .slice(-20);
+}
+
+function validCopies(value: unknown): RunCopy[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is RunCopy => {
+      if (!row || typeof row !== "object") return false;
+      const copy = row as RunCopy;
+      return typeof copy.id === "string" && typeof copy.label === "string";
+    })
+    .slice(-6);
+}
+
 function validGithub(value: GithubOrigin | null | undefined): value is GithubOrigin {
   if (!value || typeof value.owner !== "string" || typeof value.repo !== "string") return false;
   if (typeof value.branch !== "string" || typeof value.sha !== "string") return false;
@@ -229,6 +296,28 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       messages: state.messages.map((m) => (m.id === messageId ? { ...m, checkpointId: id } : m)),
     });
     return id;
+  }
+
+  function recordCommit(
+    descriptions: string[],
+    paths: string[],
+    before: Record<string, string | null>,
+    messageId: string | null,
+    editIds: string[] = [],
+    rejectedIds: string[] = [],
+  ) {
+    if (paths.length === 0) return;
+    const commit: LocalCommit = {
+      id: `cm_${crypto.randomUUID()}`,
+      createdAt: Date.now(),
+      message: commitMessage(descriptions),
+      paths,
+      before,
+      messageId,
+      ...(editIds.length > 0 ? { editIds } : {}),
+      ...(rejectedIds.length > 0 ? { rejectedIds } : {}),
+    };
+    set({ commits: [...get().commits, commit].slice(-20) });
   }
 
   function applyOne(edit: ProposedEdit) {
@@ -280,6 +369,28 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     return ck;
   }
 
+  function rememberFailedCheck(messageId: string | null, copyId?: string) {
+    const hint = useIdeUi.getState().checkHint;
+    const detail = hint?.detail ?? null;
+    const edits = get().messages.flatMap((m) => m.edits ?? []);
+    const grown = lessonAfterKeep(get().files[LESSONS_PATH] ?? "", detail, `lesson_keep_${messageId ?? "local"}`, {
+      keepingLessons: false,
+      alreadyPending: edits.some((edit) => edit.status === "pending" && edit.path === LESSONS_PATH),
+    });
+    if (!grown) return;
+    if (edits.some((edit) => edit.id === grown.id)) return;
+    const target =
+      messageId && get().messages.some((m) => m.id === messageId)
+        ? messageId
+        : [...get().messages].reverse().find((m) => m.role === "assistant")?.id;
+    if (!target) return;
+    set({
+      messages: get().messages.map((m) =>
+        m.id === target ? { ...m, edits: [...(m.edits ?? []), { ...grown, status: "pending" as const, ...(copyId ? { copyId } : {}) }] } : m,
+      ),
+    });
+  }
+
   return {
     ready: true,
     name: DEMO_WORKSPACE_NAME,
@@ -295,6 +406,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     indexing: false,
     messages: [],
     checkpoints: [],
+    commits: [],
+    copies: [],
+    activeCopyId: null,
     agentRunning: false,
     runningMode: null,
     selection: null,
@@ -309,39 +423,48 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw) as PersistShape;
-          const storedFiles = parsed.files && Object.keys(parsed.files).length > 0 ? parsed.files : null;
-          const nextFiles = seedFiles(
-            storedFiles ?? get().files,
-            parsed.name || DEMO_WORKSPACE_NAME,
-          );
+          const storedFiles = validFiles(parsed.files);
+          const nextFiles = seedFiles(storedFiles ?? get().files, parsed.name || DEMO_WORKSPACE_NAME);
           if (nextFiles && Object.keys(nextFiles).length > 0) {
-            const nextTabs = parsed.openTabs?.length
-              ? parsed.openTabs.filter((p) => nextFiles[p] !== undefined)
+            const nextTabs = Array.isArray(parsed.openTabs)
+              ? parsed.openTabs.filter((p) => typeof p === "string" && nextFiles[p] !== undefined)
               : [Object.keys(nextFiles)[0]!];
+            const tabs = nextTabs.length > 0 ? nextTabs : [Object.keys(nextFiles)[0]!];
             const nextActive =
-              parsed.activePath && nextFiles[parsed.activePath] !== undefined
+              typeof parsed.activePath === "string" && nextFiles[parsed.activePath] !== undefined
                 ? parsed.activePath
-                : nextTabs[0]!;
+                : tabs[0]!;
             const nextPreview =
-              parsed.previewPath && nextFiles[parsed.previewPath] !== undefined ? parsed.previewPath : null;
-            const nextPinned = (parsed.pinned ?? []).filter((p) => nextFiles[p] !== undefined);
-            const nextDirty = (parsed.dirtyPaths ?? []).filter((p) => nextFiles[p] !== undefined);
-            const nextRecent = (parsed.recentPaths ?? nextTabs).filter((p) => nextFiles[p] !== undefined);
+              typeof parsed.previewPath === "string" && nextFiles[parsed.previewPath] !== undefined
+                ? parsed.previewPath
+                : null;
+            const nextPinned = (Array.isArray(parsed.pinned) ? parsed.pinned : []).filter(
+              (p) => typeof p === "string" && nextFiles[p] !== undefined,
+            );
+            const nextDirty = (Array.isArray(parsed.dirtyPaths) ? parsed.dirtyPaths : []).filter(
+              (p) => typeof p === "string" && nextFiles[p] !== undefined,
+            );
+            const nextRecent = (Array.isArray(parsed.recentPaths) ? parsed.recentPaths : tabs).filter(
+              (p) => typeof p === "string" && nextFiles[p] !== undefined,
+            );
             set({
-              revision: parsed.revision ?? null,
-              syncedHash: parsed.syncedHash ?? null,
-              name: parsed.name || DEMO_WORKSPACE_NAME,
+              revision: typeof parsed.revision === "number" ? parsed.revision : null,
+              syncedHash: typeof parsed.syncedHash === "string" ? parsed.syncedHash : null,
+              name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name : DEMO_WORKSPACE_NAME,
               files: nextFiles,
               fileList: fileListOf(nextFiles),
-              openTabs: nextTabs,
-              recentPaths: nextRecent.length ? nextRecent : nextTabs,
+              openTabs: tabs,
+              recentPaths: nextRecent.length ? nextRecent : tabs,
               activePath: nextActive,
               previewPath: nextPreview,
               pinned: nextPinned,
               dirtyPaths: nextDirty,
-              messages: parsed.messages ?? [],
-              checkpoints: parsed.checkpoints ?? [],
-              chunks: buildIndex(nextFiles),
+              messages: validMessages(parsed.messages),
+              checkpoints: validCheckpoints(parsed.checkpoints),
+              commits: validCommits(parsed.commits),
+              copies: validCopies(parsed.copies),
+              activeCopyId: typeof parsed.activeCopyId === "string" ? parsed.activeCopyId : null,
+              chunks: safeIndex(nextFiles),
               indexing: false,
               agentRunning: false,
               runningMode: null,
@@ -372,6 +495,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         chunks: buildIndex(files),
         messages: [],
         checkpoints: [],
+        commits: [],
+        copies: [],
+        activeCopyId: null,
         selection: null,
         agentRunning: false,
         runningMode: null,
@@ -406,6 +532,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         dirtyPaths: [],
         messages: [],
         checkpoints: [],
+        commits: [],
+        copies: [],
+        activeCopyId: null,
         selection: null,
         agentRunning: false,
         runningMode: null,
@@ -567,13 +696,17 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       set({
         messages: get().messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
       });
-      schedulePersist();
+      const keys = Object.keys(patch);
+      const chatter = keys.length > 0 && keys.every((key) => key === "status" || key === "content" || key === "traces");
+      schedulePersist(chatter ? 1500 : 180);
     },
 
     setAgentRunning: (running, mode) =>
       set({ agentRunning: running, runningMode: running ? (mode ?? get().runningMode) : null }),
 
     applyEdit: (edit) => {
+      const live = get().messages.flatMap((m) => m.edits ?? []).find((row) => row.id === edit.id);
+      if (live && live.status !== "pending") return;
       if (edit.notes?.length) return;
       if (!previewForce.has(edit.id)) {
         // Only what the staged text itself shows (parse, markup, imports). The
@@ -593,12 +726,32 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       }
       const message = get().messages.find((m) => m.edits?.some((e) => e.id === edit.id));
       if (message) ensureCheckpointForMessage(message.id);
+      const before = snapshotPaths(get().files, [edit.path]);
+      const rejectedIds = edit.copyId
+        ? get()
+            .messages.flatMap((m) => m.edits ?? [])
+            .filter((row) => row.status === "pending" && row.path === edit.path && row.id !== edit.id && row.copyId !== edit.copyId)
+            .map((row) => row.id)
+        : [];
       applyOne(edit);
+      if (rejectedIds.length > 0) {
+        const drop = new Set(rejectedIds);
+        set({
+          messages: get().messages.map((m) => ({
+            ...m,
+            edits: m.edits?.map((row) => (drop.has(row.id) ? { ...row, status: "rejected" as const } : row)),
+          })),
+        });
+      }
+      recordCommit([edit.description], [edit.path], before, message?.id ?? null, [edit.id], rejectedIds);
       previewForce.delete(edit.id);
+      if (edit.path !== LESSONS_PATH) rememberFailedCheck(message?.id ?? null, edit.copyId);
       schedulePersist();
     },
 
     rejectEdit: (editId) => {
+      const live = get().messages.flatMap((m) => m.edits ?? []).find((row) => row.id === editId);
+      if (live && live.status !== "pending") return;
       set({
         messages: get().messages.map((m) => ({
           ...m,
@@ -609,9 +762,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     applyAllPending: () => {
-      const pending = get()
-        .messages.flatMap((m) => m.edits ?? [])
-        .filter((e) => e.status === "pending");
+      const flat = get().messages.flatMap((m) => m.edits ?? []);
+      const { apply: pending, rejectIds } = keepSet(flat, get().activeCopyId);
+      if (pending.length === 0) return;
       if (pending.some((e) => (e.notes?.length ?? 0) > 0)) return;
       const bounced: Record<string, ProposedEdit["notes"]> = {};
       for (const edit of pending) {
@@ -630,20 +783,49 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         schedulePersist();
         return;
       }
-      const pendingByMessage = get().messages.filter((m) => m.edits?.some((e) => e.status === "pending"));
+      const owned = new Set(pending.map((edit) => edit.id));
+      const pendingByMessage = get().messages.filter((m) => m.edits?.some((e) => e.status === "pending" && owned.has(e.id)));
       for (const message of pendingByMessage) ensureCheckpointForMessage(message.id);
+      const paths = [...new Set(pending.map((edit) => edit.path))];
+      const before = snapshotPaths(get().files, paths);
       for (const edit of pending) {
         applyOne(edit);
         previewForce.delete(edit.id);
+      }
+      recordCommit(
+        pending.map((edit) => edit.description),
+        paths,
+        before,
+        [...get().messages].reverse().find((m) => m.edits?.some((e) => pending.some((p) => p.id === e.id)))?.id ?? null,
+        pending.map((edit) => edit.id),
+        rejectIds,
+      );
+      if (rejectIds.length > 0) {
+        const drop = new Set(rejectIds);
+        set({
+          messages: get().messages.map((m) => ({
+            ...m,
+            edits: m.edits?.map((e) => (drop.has(e.id) && e.status === "pending" ? { ...e, status: "rejected" as const } : e)),
+          })),
+        });
+      }
+      if (!paths.every((path) => path === LESSONS_PATH)) {
+        const owner = [...get().messages].reverse().find((m) => m.edits?.some((e) => pending.some((p) => p.id === e.id)));
+        rememberFailedCheck(owner?.id ?? null, pending.find((edit) => edit.copyId)?.copyId);
       }
       schedulePersist();
     },
 
     rejectAllPending: () => {
+      const { apply } = keepSet(
+        get().messages.flatMap((m) => m.edits ?? []),
+        get().activeCopyId,
+      );
+      const ids = new Set(apply.map((edit) => edit.id));
       set({
         messages: get().messages.map((m) => ({
           ...m,
-          edits: m.edits?.map((e) => (e.status === "pending" ? { ...e, status: "rejected" as const } : e)),
+          edits: m.edits?.map((e) => (e.status === "pending" && ids.has(e.id) ? { ...e, status: "rejected" as const } : e)),
         })),
       });
       schedulePersist();
@@ -718,6 +900,25 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       return restoreCheckpoint(last.id);
     },
 
+    revertCommit: (id) => {
+      const list = get().commits;
+      const last = list[list.length - 1];
+      if (!last || last.id !== id) return null;
+      const files = restoreFiles(get().files, last.before);
+      const messages = get().messages.map((m) => ({
+        ...m,
+        edits: editsAfterRevert(m.edits, last, m.id),
+      }));
+      set({
+        commits: list.slice(0, -1),
+        messages,
+        ...withFiles(files, get().fileList),
+        dirtyPaths: [...new Set([...get().dirtyPaths, ...last.paths])],
+      });
+      schedulePersist();
+      return last;
+    },
+
     markSynced: (revision, hash) => {
       set({ revision, syncedHash: hash, syncState: "saved" });
       schedulePersist();
@@ -751,9 +952,58 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
+    forkCopy: (label) => {
+      const id = `cp_${crypto.randomUUID()}`;
+      const copies = [...get().copies];
+      let messages = get().messages;
+      const pending = messages.flatMap((m) => m.edits ?? []).some((e) => e.status === "pending" && !e.copyId);
+      if (pending) {
+        const legacy = `cp_${crypto.randomUUID()}`;
+        copies.push({ id: legacy, label: "Earlier run", createdAt: Date.now() });
+        messages = messages.map((m) => {
+          if (!m.edits?.some((e) => e.status === "pending" && !e.copyId)) return m;
+          return {
+            ...m,
+            copyId: m.copyId ?? legacy,
+            edits: m.edits?.map((e) => (e.status === "pending" && !e.copyId ? { ...e, copyId: legacy } : e)),
+          };
+        });
+      }
+      copies.push({ id, label: copyLabel(label), createdAt: Date.now() });
+      set({ copies: copies.slice(-6), messages, activeCopyId: id });
+      schedulePersist();
+      return id;
+    },
+
+    setActiveCopy: (id) => {
+      if (get().activeCopyId === id) return;
+      set({ activeCopyId: id });
+      schedulePersist();
+    },
+
     clearChat: () => {
       set({ messages: [] });
       schedulePersist();
+    },
+
+    recordLesson: (messageId, score, note) => {
+      const message = get().messages.find((row) => row.id === messageId);
+      if (!message || message.role !== "assistant") return;
+      const line = (note.trim() || (score === "up" ? "Keep this approach." : "")).slice(0, 240);
+      if (!line) return;
+      const next = upsertLesson(get().files[LESSONS_PATH] ?? "", messageId, score, line);
+      get().writeFile(LESSONS_PATH, next);
+      get().patchMessage(messageId, { lesson: score });
+    },
+
+    clearLesson: (messageId) => {
+      const current = get().files[LESSONS_PATH];
+      if (current) {
+        const next = removeLesson(current, messageId);
+        if (lessonsForPrompt(next).trim()) get().writeFile(LESSONS_PATH, next);
+        else get().deleteFile(LESSONS_PATH);
+      }
+      get().patchMessage(messageId, { lesson: undefined });
     },
 
     syncStackMemory: () => {

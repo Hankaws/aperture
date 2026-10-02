@@ -2,7 +2,7 @@ import { acpAgentNames } from "../acp/kinds.ts";
 
 export type PlanId = "hobby" | "pro" | "team";
 export type ProviderId = "grok" | "openai" | "anthropic" | "gemini" | "deepseek";
-export type ModelSource = "hosted" | ProviderId;
+export type ModelSource = "hosted" | "custom" | ProviderId;
 
 export type Plan = {
   id: PlanId;
@@ -119,7 +119,7 @@ export function isProvider(value: string): value is ProviderId {
 }
 
 export function isModelSource(value: string): value is ModelSource {
-  return value === "hosted" || isProvider(value);
+  return value === "hosted" || value === "custom" || isProvider(value);
 }
 
 export function providerShort(id: ProviderId): string {

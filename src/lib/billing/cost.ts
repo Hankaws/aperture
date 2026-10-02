@@ -30,6 +30,8 @@ export type QuoteAccount = {
   modelSource: ModelSource;
   keys: Record<ProviderId, { set: boolean; last4: string | null }>;
   session: SessionSnapshot;
+  /** Set when a custom OpenAI-compatible endpoint is saved. */
+  custom?: { base: string | null; model: string | null } | null;
 };
 
 export type RunQuote = {
@@ -61,12 +63,30 @@ export function formatUsd(cents: number): string {
 }
 
 export function estimateCents(source: ModelSource): number {
-  if (source === "hosted") return 0;
+  if (source === "hosted" || source === "custom") return 0;
   return TURN_COST_CENTS[source];
 }
 
 export function quoteRun(account: QuoteAccount | null, source?: ModelSource): RunQuote {
   const src = source ?? account?.modelSource ?? "hosted";
+  if (src === "custom") {
+    const ready = Boolean(account?.custom?.base && account.custom.model);
+    const model = account?.custom?.model;
+    return {
+      source: "custom",
+      hosted: false,
+      provider: "grok",
+      cents: 0,
+      label: model ? `Custom · ${model}` : "Custom endpoint",
+      sub: ready ? "you pay the host · no hosted turn" : "Set the endpoint in Settings",
+      blocked: !account || !ready,
+      blockReason: !account
+        ? null
+        : ready
+          ? null
+          : "Set an Ollama, LM Studio, or OpenRouter endpoint in Settings.",
+    };
+  }
   const provider: ProviderId = src === "hosted" ? "grok" : src;
   const hosted = src === "hosted";
   const cents = estimateCents(src);
@@ -147,7 +167,9 @@ export function quoteRuns(
   const cents = one.cents * count;
   const label = one.hosted
     ? `This build = ${count} hosted turns`
-    : `on your ${providerShort(one.provider)} key, ~${formatUsd(cents)}`;
+    : one.source === "custom"
+      ? `Custom endpoint · ${count} calls`
+      : `on your ${providerShort(one.provider)} key, ~${formatUsd(cents)}`;
 
   if (!account) {
     return { ...one, cents, label, sub: "Sign in to send", blocked: true, blockReason: null };

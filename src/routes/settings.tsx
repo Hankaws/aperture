@@ -2,9 +2,11 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ModelKeys } from "@/components/site/model-keys";
+import { GithubAccountCard } from "@/components/site/github-account";
 import { PricingTable } from "@/components/site/pricing-table";
 import { SessionLimits } from "@/components/site/session-limits";
 import { ExternalAgents } from "@/components/site/external-agents";
+import { McpServersCard } from "@/components/site/mcp-servers";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useAccount } from "@/lib/billing/use-account";
 import { planById } from "@/lib/billing/plans";
@@ -113,6 +115,7 @@ function SettingsPage() {
                 </Link>
               </div>
             </div>
+            <GithubAccountCard />
             <div>
               <h2 className="mb-4 text-lg font-medium tracking-tight">Switch plan</h2>
               <PricingTable currentPlan={account.plan} />
@@ -133,8 +136,9 @@ function SettingsPage() {
         )}
 
         {tab === "agents" && account && (
-          <section className="mt-8">
+          <section className="mt-8 space-y-8">
             <ExternalAgents account={account} />
+            <McpServersCard />
           </section>
         )}
 

@@ -5,6 +5,10 @@ export type GithubOrigin = {
   branch: string;
   sha: string;
   stamps: Record<string, string>;
+  /** Default branch, so a feature branch can be merged back. */
+  defaultBranch?: string;
+  /** Pull request opened from this editor, if one is still open. */
+  pull?: number;
 };
 
 /** Owner, repo, and the commit that was opened. Stamps are added on the client. */

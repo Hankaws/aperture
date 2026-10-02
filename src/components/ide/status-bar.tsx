@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace/store";
 import { listPendingEdits } from "@/lib/workspace/edits";
+import { pendingForRun } from "@/lib/workspace/copies";
 import { languageLabel } from "@/lib/parser/language";
 import { useIdeUi } from "@/lib/ui-store";
 import { resolveAgentTask } from "@/lib/workspace/agent-task";
@@ -16,7 +17,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const files = useWorkspace((s) => s.fileList);
   const selection = useWorkspace((s) => s.selection);
   const messages = useWorkspace((s) => s.messages);
-  const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
+  const staged = useWorkspace((s) => pendingForRun(listPendingEdits(s.messages), undefined, s.activeCopyId).length);
   const snapshots = useWorkspace((s) => s.checkpoints.length);
   const dirty = useWorkspace((s) => s.dirtyPaths.length);
   const debug = useIdeUi((s) => s.debug);

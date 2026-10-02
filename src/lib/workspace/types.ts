@@ -41,6 +41,8 @@ export type ProposedEdit = {
   description: string;
   status: "pending" | "applied" | "rejected";
   notes?: DiffNote[];
+  /** Set when this edit belongs to one composer's copy of the project. */
+  copyId?: string;
 };
 
 export type JsonScalar = string | number | boolean | null;
@@ -112,6 +114,21 @@ export type ChatMessage = {
   browserRunsUsed?: number;
   /** A user-side message the editor sent itself (a test run's result, the automatic fix), not the person. */
   automatic?: boolean;
+  /** MCP calls from this turn. Writes stay pending until the user confirms. */
+  mcpCalls?: McpCall[];
+  /** The composer copy this turn is working in, when a second run is open. */
+  copyId?: string;
+  /** Set when this turn was saved as a lesson for the next run. */
+  lesson?: "up" | "down";
+};
+
+export type McpCall = {
+  id: string;
+  server: string;
+  tool: string;
+  args: string;
+  status: "pending" | "done" | "rejected" | "failed";
+  result?: string;
 };
 
 /** Files as they were before a Composer apply. `null` = the path did not exist. */
@@ -121,6 +138,21 @@ export type Checkpoint = {
   label: string;
   messageId: string | null;
   before: Record<string, string | null>;
+};
+
+/** One accepted change, so it can be reverted before it is pushed. */
+export type LocalCommit = {
+  id: string;
+  createdAt: number;
+  message: string;
+  paths: string[];
+  before: Record<string, string | null>;
+  /** The assistant message this change came from, when there is one. */
+  messageId?: string | null;
+  /** Edits this commit applied. Revert puts these back, whichever message they are on. */
+  editIds?: string[];
+  /** The other copy's edits that Keep dropped. Revert puts these back too. */
+  rejectedIds?: string[];
 };
 
 export type AgentMode = "chat" | "composer" | "inline";

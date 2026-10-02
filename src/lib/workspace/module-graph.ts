@@ -45,7 +45,16 @@ export type ImportRef = {
   spec: string;
   /** Names taken from the module; empty for namespace, default-only or side-effect imports. */
   names: string[];
+  /** 1-based line of the import statement. */
+  line: number;
 };
+
+function lineNumberAt(text: string, pos: number): number {
+  let line = 1;
+  const end = Math.min(pos, text.length);
+  for (let i = 0; i < end; i++) if (text[i] === "\n") line += 1;
+  return line;
+}
 
 function unquote(raw: string): string {
   return raw.replace(/^['"`]|['"`]$/g, "");
@@ -87,6 +96,7 @@ export function collectImports(path: string, text: string): ImportRef[] {
       refs.push({
         spec: unquote(source[2]),
         names: group ? groupNames(group[0], "left") : [],
+        line: lineNumberAt(text, node.from),
       });
     },
   });
@@ -254,12 +264,12 @@ export function importIssues(path: string, files: Record<string, string>): strin
   for (const ref of collectImports(path, text)) {
     const resolved = resolveSpecifier(path, ref.spec, files);
     if (resolved.kind === "missing") {
-      issues.push(`imports "${ref.spec}", which does not exist in the project`);
+      issues.push(`imports "${ref.spec}" at line ${ref.line}, which does not exist in the project`);
       continue;
     }
     if (resolved.kind === "external") {
       if (packages && !packages.has(resolved.pkg)) {
-        issues.push(`imports "${resolved.pkg}", which is not in package.json`);
+        issues.push(`imports "${resolved.pkg}" at line ${ref.line}, which is not in package.json`);
       }
       continue;
     }
@@ -271,7 +281,7 @@ export function importIssues(path: string, files: Record<string, string>): strin
     if (exported.unknown) continue;
     for (const name of ref.names) {
       if (!exported.names.has(name)) {
-        issues.push(`imports { ${name} } from "${ref.spec}", which does not export it`);
+        issues.push(`imports { ${name} } from "${ref.spec}" at line ${ref.line}, which does not export it`);
       }
     }
   }

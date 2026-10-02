@@ -65,7 +65,7 @@ export const Route = createFileRoute("/api/tab")({
 
         try {
           const text = await completeTab(
-            { provider: resolved.provider, apiKey: resolved.apiKey },
+            { provider: resolved.provider, apiKey: resolved.apiKey, base: resolved.base, model: resolved.model },
             { path, prefix, suffix },
             request.signal,
           );

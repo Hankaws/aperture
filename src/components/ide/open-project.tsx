@@ -4,7 +4,7 @@ import { FolderOpen, Github, LoaderCircle } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { importGithubRepo, listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
+import { importGithubRepo, listGithubRepos, saveGithubToken, clearGithubAccount, githubStatus, type GithubRepoSummary } from "@/lib/github/api";
 import { readGithubToken, writeGithubToken, clearGithubToken, type GithubSource } from "@/lib/github/roundtrip";
 import { abortAgent } from "@/lib/agent/run";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -159,25 +159,31 @@ function GithubDialog({
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
-  const [tokenOn, setTokenOn] = useState(false);
+  const [login, setLogin] = useState<string | null>(null);
   const [repos, setRepos] = useState<GithubRepoSummary[]>([]);
 
   useEffect(() => {
-    setTokenOn(Boolean(readGithubToken()));
-  }, []);
-
-  useEffect(() => {
-    const saved = readGithubToken();
-    if (!saved || !user) return;
+    if (!user) return;
     let cancel = false;
-    void listGithubRepos({ data: { token: saved } }).then((result) => {
-      if (cancel || !result.ok) return;
-      setRepos(result.repos);
-    });
+    void (async () => {
+      let status = await githubStatus();
+      if (!status.connected) {
+        const local = readGithubToken();
+        if (local) {
+          const saved = await saveGithubToken({ data: { token: local } });
+          if (saved.ok) status = saved;
+        }
+      }
+      if (cancel) return;
+      setLogin(status.connected ? status.login : null);
+      if (!status.connected) return;
+      const listed = await listGithubRepos({ data: {} });
+      if (!cancel && listed.ok) setRepos(listed.repos);
+    })();
     return () => {
       cancel = true;
     };
-  }, [user, tokenOn]);
+  }, [user]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -221,7 +227,9 @@ function GithubDialog({
           <h2 className="text-base font-medium">Open a GitHub repo</h2>
         </div>
         <p className="mt-1 text-sm text-muted">
-          Public repos open with the link. A token opens a private repo you own and lets you send changes back.
+          {login
+            ? `Signed in to GitHub as ${login}. Private repos are in the list. Push and merge use this account.`
+            : "Public repos open with the link. Connect GitHub to open a private repo and send changes back."}
         </p>
         {!isPending && !user ? (
           <div className="mt-4">
@@ -239,19 +247,21 @@ function GithubDialog({
               placeholder="facebook/react or https://github.com/owner/repo"
               className="mt-4 font-mono text-[13px]"
             />
-            {tokenOn ? (
+            {login ? (
               <div className="mt-3 flex items-center justify-between gap-2 text-[12px] text-muted">
-                <span>Token saved on this browser. It is not part of the project.</span>
+                <span>GitHub is saved on this account, not in the project.</span>
                 <button
                   type="button"
                   className="shrink-0 hover:text-fg"
                   onClick={() => {
-                    clearGithubToken();
-                    setTokenOn(false);
-                    setRepos([]);
+                    void clearGithubAccount().then(() => {
+                      clearGithubToken();
+                      setLogin(null);
+                      setRepos([]);
+                    });
                   }}
                 >
-                  Remove
+                  Disconnect
                 </button>
               </div>
             ) : (
@@ -270,17 +280,22 @@ function GithubDialog({
                   variant="ghost"
                   disabled={!token.trim()}
                   onClick={() => {
-                    const saved = writeGithubToken(token);
-                    if (!saved) {
-                      setError("That does not look like a GitHub token.");
-                      return;
-                    }
-                    setToken("");
-                    setTokenOn(true);
-                    setError(null);
+                    void (async () => {
+                      const saved = await saveGithubToken({ data: { token } });
+                      if (!saved.ok) {
+                        setError(saved.error);
+                        return;
+                      }
+                      writeGithubToken(token);
+                      setToken("");
+                      setLogin(saved.login);
+                      setError(null);
+                      const listed = await listGithubRepos({ data: {} });
+                      if (listed.ok) setRepos(listed.repos);
+                    })();
                   }}
                 >
-                  Save
+                  Connect
                 </Button>
               </div>
             )}

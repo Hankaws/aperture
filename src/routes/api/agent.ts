@@ -89,6 +89,8 @@ export const Route = createFileRoute("/api/agent")({
                   {
                     provider: resolved.provider,
                     apiKey: resolved.apiKey,
+                    base: resolved.base,
+                    model: resolved.model,
                     hosted: resolved.hosted,
                     cents: resolved.cents,
                     // Without it the agent cannot run the project's checks: runs are per account.
@@ -103,6 +105,8 @@ export const Route = createFileRoute("/api/agent")({
                     return {
                       provider: extra.provider,
                       apiKey: extra.apiKey,
+                      base: extra.base,
+                      model: extra.model,
                       hosted: extra.hosted,
                       cents: extra.cents,
                     };

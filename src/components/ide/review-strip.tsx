@@ -4,10 +4,11 @@ import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { basename, cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
-import { verifyForPending } from "@/lib/workspace/checks";
+import { activeCopyOf, openCopyIds, pendingForRun } from "@/lib/workspace/copies";
 import { pendingByPath } from "@/lib/workspace/edits";
 import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
+import { lineOfIssue } from "@/lib/editor/marks";
 import { useWorkspace } from "@/lib/workspace/store";
 import { CheckResults } from "./check-results";
 
@@ -23,19 +24,65 @@ export function ReviewStrip() {
   const clearPendingNotes = useWorkspace((s) => s.clearPendingNotes);
   const openFile = useWorkspace((s) => s.openFile);
   const files = useWorkspace((s) => s.files);
-  const rows = useMemo(() => pendingByPath(messages), [messages]);
-  const verify = useMemo(() => verifyForPending(messages), [messages]);
+  const copies = useWorkspace((s) => s.copies);
+  const activeCopyId = useWorkspace((s) => s.activeCopyId);
+  const setActiveCopy = useWorkspace((s) => s.setActiveCopy);
+  const rows = useMemo(() => {
+    const visible = pendingForRun(
+      messages.flatMap((m) => m.edits ?? []),
+      undefined,
+      activeCopyId,
+    );
+    const ids = new Set(visible.map((edit) => edit.id));
+    return pendingByPath(
+      messages.map((m) => ({ ...m, edits: m.edits?.filter((edit) => ids.has(edit.id)) })),
+    );
+  }, [messages, activeCopyId]);
+  const verify = useMemo(() => {
+    const ids = new Set(rows.map((edit) => edit.id));
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const message = messages[i]!;
+      if (message.edits?.some((edit) => ids.has(edit.id))) return message.verify ?? null;
+    }
+    return null;
+  }, [messages, rows]);
   const noteCount = notesOn(rows);
+  const openIds = openCopyIds(messages.flatMap((m) => m.edits ?? []));
+  const shownCopy = activeCopyOf(openIds, activeCopyId);
   if (running || rows.length === 0) return null;
 
-  function jump(path: string) {
+  function jump(path: string, detail?: string) {
     openFile(path);
+    const line = detail ? lineOfIssue(detail) : null;
+    if (line) useIdeUi.getState().setReveal({ path, line });
     useIdeUi.getState().setMobilePane("editor");
     if (useIdeUi.getState().designOpen) useIdeUi.getState().setCodePeek(true);
   }
 
   return (
     <div className="border-b border-border bg-elevated">
+      {openIds.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto px-2.5 pt-1.5">
+          {openIds.map((id) => {
+            const label = copies.find((copy) => copy.id === id)?.label ?? "This run";
+            const on = id === shownCopy;
+            return (
+              <button
+                key={id ?? "base"}
+                type="button"
+                onClick={() => setActiveCopy(id)}
+                className={cn(
+                  "h-6 shrink-0 rounded-md border px-2 text-[11px]",
+                  on ? "border-border bg-bg text-fg" : "border-transparent text-subtle hover:text-fg",
+                )}
+                aria-pressed={on}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="flex items-center gap-2 px-2.5 py-1.5">
         <p className="min-w-0 flex-1 truncate text-xs text-muted">
           <span className="text-fg">Review</span>
@@ -61,7 +108,7 @@ export function ReviewStrip() {
           Report
         </Button>
         {noteCount > 0 && (
-          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => clearPendingNotes()}>
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => rows.forEach((edit) => clearPendingNotes(edit.id))}>
             <MessageSquare className="size-3.5" />
             Dismiss notes
           </Button>
@@ -78,7 +125,7 @@ export function ReviewStrip() {
           onClick={() => applyAllPending()}
         >
           <Check className="size-3.5" />
-          Apply all
+          {openIds.length > 1 ? "Keep this" : "Apply all"}
         </Button>
       </div>
       <CheckResults files={files} edits={rows} verify={verify} onOpen={jump} />

@@ -22,7 +22,7 @@ export async function runAcpSession(
     const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
     const { result, bills } = await runComposerStreaming(
       input,
-      { provider: resolved.provider, apiKey: resolved.apiKey, hosted: resolved.hosted, cents: resolved.cents },
+      { provider: resolved.provider, apiKey: resolved.apiKey, base: resolved.base, model: resolved.model, hosted: resolved.hosted, cents: resolved.cents },
       opts.emit,
       opts.signal,
       (n) => canAffordRuns(opts.userId, resolved.source, n),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, memo, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore, memo, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
@@ -12,7 +12,9 @@ import { CostMeter } from "./cost-meter";
 import { JobsTray } from "./jobs-tray";
 import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
+import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
+import { clearStanding, readStanding, saveStanding, subscribeStanding } from "@/lib/workspace/lessons";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { quoteRun, quoteRuns, replayQuote } from "@/lib/billing/cost";
@@ -35,6 +37,7 @@ import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-lo
 import { DEFAULT_RULES, findRules, RULE_CANDIDATES } from "@/lib/workspace/rules";
 import { formatStackBody, extractStack, mergeStackSection } from "@/lib/agent/stack";
 import { listPendingEdits } from "@/lib/workspace/edits";
+import { openCopyIds, pendingForRun } from "@/lib/workspace/copies";
 import { useWorkspace } from "@/lib/workspace/store";
 import { useIdeUi } from "@/lib/ui-store";
 import { resolveAgentTask } from "@/lib/workspace/agent-task";
@@ -849,9 +852,16 @@ function PlanChrome({
   onFocus: () => void;
 }) {
   const messages = useWorkspace((s) => s.messages);
+  const activeCopyId = useWorkspace((s) => s.activeCopyId);
   const agentRunning = useWorkspace((s) => s.agentRunning);
   const awaitingMsg = [...messages].reverse().find((m) => m.awaitingBuild && (m.plan?.length ?? 0) > 0);
-  const pendingCount = listPendingEdits(messages).length;
+  const pendingEdits = pendingForRun(
+    messages.flatMap((m) => m.edits ?? []),
+    undefined,
+    activeCopyId,
+  );
+  const pendingCount = pendingEdits.length;
+  const copyCount = openCopyIds(messages.flatMap((m) => m.edits ?? [])).length;
   const seats = availableSeats(account);
   const crew = selectedSeats(seats, crewIds);
   const proposed = awaitingMsg?.plan ? proposeWorkers(awaitingMsg.plan, fileList, crew) : [];
@@ -864,9 +874,10 @@ function PlanChrome({
     crewModels: modelSeats(crew).length,
     keyReady: seats.filter((s) => s.kind === "model" && s.ready).length,
     messages: messages.length,
-    noteCount: notesOn(listPendingEdits(messages)),
+    noteCount: notesOn(pendingEdits),
     reviewerLabel: modelSeats(crew).find((s) => s.source && s.source !== source)?.label,
     checks: pendingCount > 0 ? (checkHint?.state ?? "running") : undefined,
+    copies: copyCount,
   });
 
   function actOnHint() {
@@ -879,11 +890,11 @@ function PlanChrome({
       return;
     }
     if (hint.kind === "notes") {
-      void onSendNotes(listPendingEdits(messages));
+      void onSendNotes(pendingEdits);
       return;
     }
     if (hint.kind === "reviewer") {
-      const pending = listPendingEdits(messages);
+      const pending = pendingEdits;
       const workers = proposeReviewer(
         pending.map((e) => e.path),
         crew,
@@ -897,6 +908,7 @@ function PlanChrome({
         workers,
         role: "review",
         pendingEdits: pending,
+        copyId: useWorkspace.getState().activeCopyId ?? undefined,
       });
       return;
     }
@@ -905,13 +917,20 @@ function PlanChrome({
       return;
     }
     if (hint.kind === "fix") {
+      const detail = useIdeUi.getState().checkHint?.detail ?? "A check failed.";
       const path = useIdeUi.getState().checkHint?.path;
       if (path) useWorkspace.getState().openFile(path);
       useIdeUi.getState().setMobilePane("editor");
+      void submitAgent("Fix the failing checks", "composer", source, {
+        phase: "skip",
+        apiInstruction: `The editor checks failed:\n${detail}\n\nFix this now with propose_edit. Change only what the failure requires — do not restart the plan or widen the scope. If a failure is unrelated to your edits, say so plainly instead of editing.`,
+        pendingEdits,
+        copyId: useWorkspace.getState().activeCopyId ?? undefined,
+      });
       return;
     }
     if (hint.kind === "review") {
-      const first = listPendingEdits(messages)[0];
+      const first = pendingEdits[0];
       if (first) useWorkspace.getState().openFile(first.path);
       useIdeUi.getState().setMobilePane("editor");
       if (useIdeUi.getState().designOpen) useIdeUi.getState().setCodePeek(true);
@@ -934,6 +953,7 @@ function PlanChrome({
         onPhase={onPhase}
         hint={hint}
         onAct={actOnHint}
+        onAlt={() => useWorkspace.getState().applyAllPending()}
         actDisabled={actDisabled}
       />
       {awaitingMsg && !agentRunning && proposed.length > 0 && (
@@ -973,7 +993,6 @@ function MessageList({
 }) {
   const messages = useWorkspace((s) => s.messages);
   const listRef = useRef<HTMLDivElement>(null);
-  const listEndRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const messageCount = useRef(0);
   const buildRef = useRef(onBuild);
@@ -988,7 +1007,9 @@ function MessageList({
     messageCount.current = messages.length;
     if (grew) stickToBottom.current = true;
     if (!stickToBottom.current) return;
-    listEndRef.current?.scrollIntoView({ behavior: grew ? "smooth" : "auto", block: "end" });
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, [streamKey, messages.length]);
 
   const buildById = useCallback((id: string) => {
@@ -1032,8 +1053,106 @@ function MessageList({
               onSendNotes={notesById}
             />
           ))}
-          <div ref={listEndRef} aria-hidden className="h-px" />
         </div>
+      )}
+    </div>
+  );
+}
+
+function LessonBar({
+  messageId,
+  saved,
+  disabled,
+}: {
+  messageId: string;
+  saved?: "up" | "down";
+  disabled: boolean;
+}) {
+  const [missed, setMissed] = useState(false);
+  const [note, setNote] = useState("");
+  const standing = useSyncExternalStore(
+    subscribeStanding,
+    () => readStanding().find((rule) => rule.id === messageId)?.line ?? null,
+    () => null,
+  );
+  if (standing && !missed) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-[11px] text-subtle">
+        <span>Saved for every project</span>
+        <button type="button" className="underline disabled:opacity-40" disabled={disabled} onClick={() => clearStanding(messageId)}>
+          Undo
+        </button>
+      </div>
+    );
+  }
+  if (saved && !missed) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-[11px] text-subtle">
+        <span>{saved === "up" ? "Saved as a lesson" : "Saved what it missed"}</span>
+        <button
+          type="button"
+          className="underline disabled:opacity-40"
+          disabled={disabled}
+          onClick={() => useWorkspace.getState().clearLesson(messageId)}
+        >
+          Undo
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={disabled}
+          className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-fg disabled:opacity-40"
+          onClick={() => useWorkspace.getState().recordLesson(messageId, "up", "")}
+        >
+          Worked
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-fg disabled:opacity-40"
+          onClick={() => setMissed(true)}
+        >
+          Missed
+        </button>
+      </div>
+      {missed && (
+        <form
+          className="mt-1.5 flex gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!note.trim()) return;
+            useWorkspace.getState().recordLesson(messageId, "down", note);
+            setNote("");
+            setMissed(false);
+          }}
+        >
+          <input
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="What should it do next time?"
+            className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-xs text-fg outline-none"
+          />
+          <button type="submit" disabled={disabled || !note.trim()} className="rounded-md border border-border px-2 text-[11px] text-fg disabled:opacity-40">
+            This project
+          </button>
+          <button
+            type="button"
+            disabled={disabled || !note.trim()}
+            className="rounded-md border border-border px-2 text-[11px] text-fg disabled:opacity-40"
+            onClick={() => {
+              saveStanding(messageId, note);
+              setNote("");
+              setMissed(false);
+            }}
+          >
+            Every project
+          </button>
+        </form>
       )}
     </div>
   );
@@ -1046,14 +1165,16 @@ function TaskStrip({
   onPhase,
   hint,
   onAct,
+  onAlt,
   actDisabled,
 }: {
   mode: AgentMode;
   activePhase: AgentPhase;
   locked: boolean;
   onPhase: (phase: AgentPhase) => void;
-  hint: { title: string; cta: string; kind: string };
+  hint: { title: string; cta: string; kind: string; altCta?: string };
   onAct: () => void;
+  onAlt?: () => void;
   actDisabled?: boolean;
 }) {
   const agentRunning = useWorkspace((s) => s.agentRunning);
@@ -1096,6 +1217,18 @@ function TaskStrip({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{hint.title}</span>
+      {hint.kind !== "wait" && hint.altCta && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 shrink-0 px-2"
+          disabled={actDisabled && hint.kind !== "fix"}
+          onClick={onAlt}
+        >
+          {hint.altCta}
+        </Button>
+      )}
       {hint.kind !== "wait" && (
         <Button
           type="button"
@@ -1121,6 +1254,32 @@ function AnalyzingCard({ status }: { status?: string }) {
   );
 }
 
+function CommitLine({ messageId }: { messageId: string }) {
+  const commit = useWorkspace((s) => [...s.commits].reverse().find((row) => row.messageId === messageId) ?? null);
+  const latest = useWorkspace((s) => s.commits.at(-1)?.id ?? null);
+  if (!commit) return null;
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
+      <p className="min-w-0 truncate font-mono text-[11px] text-muted" title={commit.message}>
+        {commit.message}
+      </p>
+      {commit.id === latest && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const reverted = useWorkspace.getState().revertCommit(commit.id);
+            if (reverted) toast.success(`Reverted “${reverted.message}”`);
+          }}
+        >
+          <Undo2 className="size-3.5" />
+          Revert
+        </Button>
+      )}
+    </div>
+  );
+}
+
 const MessageBlock = memo(function MessageBlock({
   message,
   running,
@@ -1135,6 +1294,7 @@ const MessageBlock = memo(function MessageBlock({
   onSendNotes: (id: string) => void;
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
+  const content = typeof message.content === "string" ? message.content : "";
   if (message.role === "user") {
     if (message.automatic) {
       return (
@@ -1146,23 +1306,23 @@ const MessageBlock = memo(function MessageBlock({
             <FlaskConical className="size-3" aria-hidden />
             Automatic
           </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{message.content}</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{content}</p>
         </div>
       );
     }
     return (
       <div className="rounded-xl border border-border bg-bg px-3 py-2">
         <p className="text-xs font-medium text-subtle">You</p>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{message.content}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{content}</p>
       </div>
     );
   }
 
-  const traces = message.traces ?? [];
-  const edits = message.edits ?? [];
-  const plan = message.plan ?? [];
+  const traces = Array.isArray(message.traces) ? message.traces : [];
+  const edits = Array.isArray(message.edits) ? message.edits : [];
+  const plan = Array.isArray(message.plan) ? message.plan : [];
   const noteCount = notesOn(edits);
-  const empty = !message.content.trim();
+  const empty = !content.trim();
   const live = running && empty && plan.length === 0;
   const waiting = Boolean(message.awaitingBuild && plan.length > 0);
   const analyzing = live && runningMode === "chat";
@@ -1178,6 +1338,9 @@ const MessageBlock = memo(function MessageBlock({
           ))}
         </ul>
       )}
+      {Array.isArray(message.mcpCalls) && message.mcpCalls.length > 0 && (
+        <McpCallList messageId={message.id} calls={message.mcpCalls} />
+      )}
       {analyzing && <AnalyzingCard status={message.status} />}
       {live && !analyzing && (
         <p className="shimmer-text mt-2 text-sm text-muted">
@@ -1188,7 +1351,10 @@ const MessageBlock = memo(function MessageBlock({
         <p className="shimmer-text mt-2 text-sm text-muted">{message.status}</p>
       )}
       {!empty && (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg">{message.content}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg">{content}</p>
+      )}
+      {content.trim() && !message.automatic && !live && (
+        <LessonBar messageId={message.id} saved={message.lesson} disabled={running} />
       )}
       {waiting && (
         <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
@@ -1233,7 +1399,8 @@ const MessageBlock = memo(function MessageBlock({
               </Button>
             </div>
           )}
-          {edits.some((e) => e.status === "applied") && message.checkpointId && (
+          {edits.some((e) => e.status === "applied") && <CommitLine messageId={message.id} />}
+      {edits.some((e) => e.status === "applied") && message.checkpointId && (
             <Button
               size="sm"
               variant="outline"

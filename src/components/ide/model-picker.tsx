@@ -63,6 +63,9 @@ export function ModelPicker({
               : `${provider.short} (add key)`}
           </option>
         ))}
+        <option value="custom" disabled={!account.custom?.base || !account.custom.model}>
+          {account.custom?.model ? `Custom · ${account.custom.model}` : "Custom (set endpoint)"}
+        </option>
         <optgroup label={account.acp ? "ACP · same diff UI" : "ACP (Pro)"}>
           {BUILTIN_ACP.map((agent) => (
             <option key={agent.id} value={`acp:${agent.id}`} disabled={!account.acp}>

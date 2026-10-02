@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, changeChecks, renderEntry, shouldAutoFix, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, changeChecks, checkStripState, renderEntry, shouldAutoFix, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -19,11 +19,23 @@ function row(rows: CheckRow[], id: CheckRow["id"]): CheckRow {
   return rows.find((r) => r.id === id)!;
 }
 
-test("four rows, always in the same order", () => {
+test("a failed parse counts while tests are still running", () => {
+  assert.equal(
+    checkStripState([
+      { status: "fail" },
+      { status: "running" },
+    ]),
+    "failed",
+  );
+  assert.equal(checkStripState([{ status: "running" }]), "running");
+  assert.equal(checkStripState([{ status: "pass" }]), "clear");
+});
+
+test("five rows, always in the same order", () => {
   const rows = changeChecks({ files: FILES, edits: [edit("src/a.ts", FILES["src/a.ts"])], render: null });
   assert.deepEqual(
     rows.map((r) => r.id),
-    ["parse", "imports", "preview", "tests"],
+    ["parse", "imports", "types", "preview", "tests"],
   );
 });
 
@@ -45,6 +57,19 @@ test("a syntax error fails Parses, names the file, and holds the import check", 
   assert.equal(parse.path, "src/a.ts");
   assert.match(parse.detail, /^src\/a\.ts: /);
   assert.equal(row(rows, "imports").status, "skip");
+});
+
+test("a type error fails Types", () => {
+  const rows = changeChecks({
+    files: FILES,
+    edits: [edit("src/a.ts", "const title: string = 1;\n")],
+    render: null,
+  });
+  assert.equal(row(rows, "parse").status, "pass");
+  const types = row(rows, "types");
+  assert.equal(types.status, "fail");
+  assert.equal(types.path, "src/a.ts");
+  assert.match(types.detail, /line 1/);
 });
 
 test("an import of a file that does not exist fails Imports resolve", () => {

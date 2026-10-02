@@ -66,6 +66,12 @@ export function modelCaption(account: AccountSnapshot | null): string {
   if (account.modelSource === "hosted") {
     return `Hosted Grok · ${account.remaining} left`;
   }
+  if (account.modelSource === "custom") {
+    const model = account.custom?.model ?? "endpoint";
+    return account.custom?.keySet && account.custom.last4
+      ? `Custom · ${model} ···${account.custom.last4}`
+      : `Custom · ${model}`;
+  }
   const name = providerShort(account.modelSource);
   const last4 = account.keys[account.modelSource]?.last4;
   return last4 ? `Your ${name} ···${last4}` : `Your ${name}`;

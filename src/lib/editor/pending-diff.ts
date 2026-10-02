@@ -1,23 +1,30 @@
 import { Prec, StateField, type EditorState, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, GutterMarker, WidgetType, gutter, keymap } from "@codemirror/view";
 import { hunksFromDiff } from "@/lib/agent/apply-edit";
+import { placeMark, type LineMark } from "./marks.ts";
 import type { ProposedEdit } from "@/lib/workspace/types";
 
 const MAX_ADD_LINES = 80;
 
 class AddBlockWidget extends WidgetType {
-  constructor(readonly lines: string[]) {
+  constructor(
+    readonly lines: string[],
+    readonly marks: Array<string | null> = [],
+  ) {
     super();
   }
   eq(other: AddBlockWidget) {
-    return this.lines.length === other.lines.length && this.lines.every((line, i) => line === other.lines[i]);
+    return (
+      this.lines.length === other.lines.length &&
+      this.lines.every((line, i) => line === other.lines[i] && this.marks[i] === other.marks[i])
+    );
   }
   toDOM() {
     const wrap = document.createElement("div");
     wrap.className = "cm-aperture-add-block";
     wrap.setAttribute("aria-hidden", "true");
     const shown = this.lines.slice(0, MAX_ADD_LINES);
-    for (const text of shown) {
+    shown.forEach((text, i) => {
       const row = document.createElement("div");
       row.className = "cm-aperture-add-line";
       const sign = document.createElement("span");
@@ -25,9 +32,14 @@ class AddBlockWidget extends WidgetType {
       sign.textContent = "+";
       const body = document.createElement("span");
       body.textContent = text.length ? text : " ";
+      const note = this.marks[i];
+      if (note) {
+        body.className = "cm-lintRange-error";
+        body.title = note;
+      }
       row.append(sign, body);
       wrap.appendChild(row);
-    }
+    });
     if (this.lines.length > MAX_ADD_LINES) {
       const more = document.createElement("div");
       more.className = "cm-aperture-add-more";
@@ -61,7 +73,17 @@ class SignMarker extends GutterMarker {
 
 const delMarker = new SignMarker("−", "cm-aperture-diff-sign cm-aperture-diff-sign-del");
 
-function buildDecorations(state: EditorState, edit: ProposedEdit) {
+function addedNotes(edit: ProposedEdit, hunk: { insertAfter: number; added: string[] }, marks: LineMark[]): Array<string | null> {
+  return hunk.added.map((_, index) => {
+    const hit = marks.find((mark) => {
+      const place = placeMark(edit.oldText, edit.newText, mark.line);
+      return place !== null && "addedIndex" in place && place.insertAfter === hunk.insertAfter && place.addedIndex === index;
+    });
+    return hit?.message ?? null;
+  });
+}
+
+function buildDecorations(state: EditorState, edit: ProposedEdit, marks: LineMark[]) {
   if (state.doc.toString() !== edit.oldText) return Decoration.none;
   const hunks = hunksFromDiff(edit.oldText, edit.newText);
   const ranges = [];
@@ -79,7 +101,7 @@ function buildDecorations(state: EditorState, edit: ProposedEdit) {
           : state.doc.line(hunk.insertAfter).to;
     ranges.push(
       Decoration.widget({
-        widget: new AddBlockWidget(hunk.added),
+        widget: new AddBlockWidget(hunk.added, addedNotes(edit, hunk, marks)),
         block: true,
         side: hunk.insertAfter <= 0 ? -1 : 1,
       }).range(pos),
@@ -105,15 +127,16 @@ export function pendingDiff(
     keep: () => void;
     drop: (line: number) => void;
   },
+  notes: LineMark[] = [],
 ): Extension {
   if (!edit) return [];
 
   const deleted = new Set(hunksFromDiff(edit.oldText, edit.newText).flatMap((hunk) => hunk.deleted));
 
   const decoField = StateField.define({
-    create: (state) => buildDecorations(state, edit),
+    create: (state) => buildDecorations(state, edit, notes),
     update(value, tr) {
-      if (tr.docChanged) return buildDecorations(tr.state, edit);
+      if (tr.docChanged) return buildDecorations(tr.state, edit, notes);
       return value;
     },
     provide: (field) => EditorView.decorations.from(field),

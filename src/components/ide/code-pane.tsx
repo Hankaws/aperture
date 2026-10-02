@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
 import { EditorState, Compartment, Annotation } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -15,9 +15,11 @@ import { css } from "@codemirror/lang-css";
 import { languageFromPath } from "@/lib/parser/language";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pendingEditFor } from "@/lib/workspace/edits";
+import { pendingForRun } from "@/lib/workspace/copies";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
 import { workspaceComplete } from "@/lib/editor/workspace-complete";
+import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { EDITOR, SYNTAX } from "@/lib/editor/theme";
@@ -184,6 +186,7 @@ export function CodePane() {
   const ghostConf = useRef(new Compartment()).current;
   const diffConf = useRef(new Compartment()).current;
   const wrapConf = useRef(new Compartment()).current;
+  const narrowRef = useRef(false);
   const scrolledFor = useRef<string | null>(null);
   const jumpedFor = useRef<string | null>(null);
   const langKeyRef = useRef("");
@@ -193,8 +196,20 @@ export function CodePane() {
   const activePath = useWorkspace((s) => s.activePath);
   const chunks = useWorkspace((s) => s.chunks);
   const value = useWorkspace((s) => (s.activePath ? (s.files[s.activePath] ?? "") : ""));
-  const pendingEdit = useWorkspace((s) => pendingEditFor(s.messages, s.activePath));
+  const pendingEdit = useWorkspace((s) => {
+    const visible = pendingForRun(
+      s.messages.flatMap((m) => m.edits ?? []),
+      undefined,
+      s.activeCopyId,
+    );
+    const ids = new Set(visible.map((edit) => edit.id));
+    return pendingEditFor(
+      s.messages.map((m) => ({ ...m, edits: m.edits?.filter((edit) => ids.has(edit.id)) })),
+      s.activePath,
+    );
+  });
   const writeFile = useWorkspace((s) => s.writeFile);
+  const files = useWorkspace((s) => s.files);
   const setSelection = useWorkspace((s) => s.setSelection);
   const applyEdit = useWorkspace((s) => s.applyEdit);
   const rejectEdit = useWorkspace((s) => s.rejectEdit);
@@ -209,6 +224,11 @@ export function CodePane() {
   applyRef.current = applyEdit;
   rejectRef.current = rejectEdit;
   pendingRef.current = pendingEdit;
+  const lintMarks = useMemo(() => {
+    if (!activePath) return [];
+    const staged = pendingEdit?.path === activePath ? pendingEdit.newText : value;
+    return collectMarks(activePath, staged, { ...files, [activePath]: staged });
+  }, [activePath, pendingEdit, value, files]);
 
   useEffect(() => {
     if (!parentRef.current || viewRef.current) return;
@@ -231,6 +251,7 @@ export function CodePane() {
           workspaceComplete(() => chunksRef.current, () => pathRef.current),
           highlightSelectionMatches({ highlightWordAroundCursor: true }),
           stickyScroll(),
+          lineMarkExtension(),
           keymap.of([
             ...closeBracketsKeymap,
             ...defaultKeymap,
@@ -277,7 +298,11 @@ export function CodePane() {
           ),
           ghostConf.of([]),
           diffConf.of([]),
-          wrapConf.of(languageFromPath(activePath ?? "") === "markdown" ? EditorView.lineWrapping : []),
+          wrapConf.of(
+            (parentRef.current?.clientWidth ?? 9999) < 480 || languageFromPath(activePath ?? "") === "markdown"
+              ? EditorView.lineWrapping
+              : [],
+          ),
         ],
       }),
     });
@@ -285,12 +310,36 @@ export function CodePane() {
     lastValue.current = value;
     pathRef.current = activePath;
     langKeyRef.current = languageKey(activePath ?? "");
+    narrowRef.current = (parentRef.current?.clientWidth ?? 9999) < 480;
     return () => {
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const parent = parentRef.current;
+    if (!parent) return;
+    const apply = (width: number) => {
+      const narrow = width > 0 && width < 480;
+      if (narrowRef.current === narrow) return;
+      narrowRef.current = narrow;
+      const view = viewRef.current;
+      if (!view) return;
+      const path = pathRef.current ?? "";
+      view.dispatch({
+        effects: wrapConf.reconfigure(
+          narrow || languageFromPath(path) === "markdown" ? EditorView.lineWrapping : [],
+        ),
+        annotations: syncAnn.of(true),
+      });
+    };
+    apply(parent.clientWidth);
+    const observer = new ResizeObserver((entries) => apply(entries[0]?.contentRect.width ?? 0));
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [wrapConf]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -316,7 +365,8 @@ export function CodePane() {
     const nextLang = languageKey(activePath);
     const langChanged = langKeyRef.current !== nextLang;
     if (langChanged) langKeyRef.current = nextLang;
-    const wrap = languageFromPath(activePath) === "markdown" ? EditorView.lineWrapping : [];
+    const wrap =
+      narrowRef.current || languageFromPath(activePath) === "markdown" ? EditorView.lineWrapping : [];
     const effects = langChanged
       ? [langConf.reconfigure(languageExtension(activePath)), wrapConf.reconfigure(wrap)]
       : [];
@@ -354,8 +404,25 @@ export function CodePane() {
 
   useEffect(() => {
     const view = viewRef.current;
+    if (!view || !activePath) return;
+    const doc = view.state.doc.toString();
+    const staged = pendingEdit?.path === activePath ? pendingEdit.newText : doc;
+    const shown =
+      doc === staged
+        ? lintMarks
+        : pendingEdit && doc === pendingEdit.oldText
+          ? lintMarks.flatMap((mark) => {
+              const place = placeMark(pendingEdit.oldText, pendingEdit.newText, mark.line);
+              return place && "oldLine" in place ? [{ ...mark, line: place.oldLine }] : [];
+            })
+          : [];
+    view.dispatch({ effects: lineMarkEffect(shown), annotations: syncAnn.of(true) });
+  }, [lintMarks, pendingEdit, activePath, value]);
+
+  useEffect(() => {
+    const view = viewRef.current;
     if (!view) return;
-    const key = pendingKeyOf(pendingEdit);
+    const key = `${pendingKeyOf(pendingEdit)}:${lintMarks.map((mark) => `${mark.line}:${mark.message}`).join("|")}`;
     if (diffKeyRef.current === key) return;
     diffKeyRef.current = key;
     view.dispatch({
@@ -370,11 +437,11 @@ export function CodePane() {
             useWorkspace.getState().dropHunkAt(edit.id, line);
             jumpReview(1);
           },
-        }),
+        }, lintMarks),
       ),
       annotations: syncAnn.of(true),
     });
-  }, [pendingEdit, diffConf]);
+  }, [pendingEdit, lintMarks, diffConf]);
 
   useEffect(() => {
     if (!pendingEdit) {
@@ -422,8 +489,14 @@ export function CodePane() {
     const timer = window.setTimeout(() => {
       const live = viewRef.current;
       if (!live) return;
-      const still = pendingEditFor(useWorkspace.getState().messages, pathRef.current);
-      if (!still || still.id !== id) return;
+      const ws = useWorkspace.getState();
+      const visible = pendingForRun(
+        ws.messages.flatMap((m) => m.edits ?? []),
+        undefined,
+        ws.activeCopyId,
+      );
+      const still = visible.find((edit) => edit.id === id);
+      if (!still) return;
       const pos = firstHunkPos(still, live.state.doc.lines, (n) => live.state.doc.line(n).from);
       if (pos == null) return;
       scrolledFor.current = id;

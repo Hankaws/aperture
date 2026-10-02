@@ -1,6 +1,6 @@
 /**
- * Check results for a staged change: parses, imports resolve, preview renders,
- * tests pass.
+ * Check results for a staged change: parses, imports resolve, types hold,
+ * preview renders, tests pass.
  *
  * Every row is computed from the change itself, never assumed. A check that
  * could not run says "not run" and why; it never shows as a pass, because a
@@ -10,8 +10,9 @@ import type { ProposedEdit, VerifyReport } from "./types";
 import { importIssues } from "./module-graph.ts";
 import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./preview-check.ts";
 import { isScriptPath } from "./syntax-check.ts";
+import { isTypePath, typeIssues } from "./type-check.ts";
 
-export type CheckId = "parse" | "imports" | "preview" | "tests";
+export type CheckId = "parse" | "imports" | "types" | "preview" | "tests";
 /** `warn`: failing, but failing the same way before this change. */
 export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
@@ -62,6 +63,13 @@ function firstIssue(rows: Array<{ path: string; issues: string[] }>): { detail: 
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/** A known failure beats a check that is still running. Tests often finish last. */
+export function checkStripState(rows: Array<{ status: CheckStatus }>): "running" | "clear" | "failed" {
+  if (rows.some((row) => row.status === "fail")) return "failed";
+  if (rows.some((row) => row.status === "running")) return "running";
+  return "clear";
 }
 
 /**
@@ -129,6 +137,24 @@ export function changeChecks(input: {
               detail: `Every import in ${plural(parsed.length, "script")} resolves.`,
             };
 
+  const typed = checkable.filter((path) => isTypePath(path) && !broken.some((row) => row.path === path));
+  const mistyped = typed
+    .map((path) => ({ path, issues: typeIssues(path, snapshot[path] ?? "", snapshot) }))
+    .filter((row) => row.issues.length > 0);
+  const types: CheckRow =
+    !checkable.some(isTypePath)
+      ? { id: "types", label: "Types", status: "skip", detail: "No TypeScript in this change." }
+      : typed.length === 0
+        ? { id: "types", label: "Types", status: "skip", detail: "Checked once the TypeScript parses." }
+        : mistyped.length > 0
+          ? { id: "types", label: "Types", status: "fail", ...firstIssue(mistyped) }
+          : {
+              id: "types",
+              label: "Types",
+              status: "pass",
+              detail: `No type errors in ${plural(typed.length, "file")}.`,
+            };
+
   const preview: CheckRow =
     render === null
       ? { id: "preview", label: "Preview renders", status: "skip", detail: "This change does not touch a page." }
@@ -147,7 +173,7 @@ export function changeChecks(input: {
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
-  return [parse, imports, preview, testsRow(verify ?? null, input.browser ?? null)];
+  return [parse, imports, types, preview, testsRow(verify ?? null, input.browser ?? null)];
 }
 
 function testLabel(script: string | null): string {

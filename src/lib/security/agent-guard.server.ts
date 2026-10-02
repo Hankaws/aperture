@@ -184,7 +184,22 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
         ? Math.min(200, Math.floor(input.compacted))
         : undefined,
     browserRuns: parseBrowserRuns(input.browserRuns),
+    standing: parseStanding(input.standing),
   };
+}
+
+function parseStanding(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const lines: string[] = [];
+  for (const row of raw) {
+    if (typeof row !== "string") continue;
+    const line = row.replace(/\s+/g, " ").trim().slice(0, 240);
+    if (line.length < 8) continue;
+    if (lines.some((kept) => kept.toLowerCase() === line.toLowerCase())) continue;
+    lines.push(line);
+    if (lines.length >= 8) break;
+  }
+  return lines.length ? lines : undefined;
 }
 
 function parseBrowserRuns(raw: unknown): AgentInput["browserRuns"] {

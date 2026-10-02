@@ -5,6 +5,9 @@ export type NextAction = {
   title: string;
   detail: string;
   cta: string;
+  /** A second choice, when the main one is not the only sensible move. */
+  altKind?: NextKind;
+  altCta?: string;
 };
 
 export function nextAction(input: {
@@ -19,6 +22,8 @@ export function nextAction(input: {
   reviewerLabel?: string;
   /** Settled check results for the staged change. Absent while nothing is staged. */
   checks?: "running" | "clear" | "failed";
+  /** How many composer copies still have unapplied edits. */
+  copies?: number;
 }): NextAction {
   if (input.running) {
     return { kind: "wait", title: "Composer is working", detail: "Steer in the box if you want to add a follow-up.", cta: "Wait" };
@@ -46,12 +51,22 @@ export function nextAction(input: {
   if (input.pending > 0 && input.checks === "failed") {
     return {
       kind: "fix",
-      title: "A check failed",
-      detail: "Open the file it points at before you apply.",
-      cta: "Open it",
+      title: "A check failed — send it back, or remember it",
+      detail: "Send it back to Composer, or apply and remember the failure.",
+      cta: "Send back",
+      altKind: "apply",
+      altCta: "Apply anyway",
     };
   }
   if (input.pending > 0 && input.checks === "clear") {
+    if ((input.copies ?? 0) > 1) {
+      return {
+        kind: "apply",
+        title: `Keep this copy · ${input.pending} ${input.pending === 1 ? "file" : "files"}`,
+        detail: "The other run is dropped. Checks are in.",
+        cta: "Keep this",
+      };
+    }
     return {
       kind: "apply",
       title: `Apply ${input.pending} staged ${input.pending === 1 ? "file" : "files"}`,

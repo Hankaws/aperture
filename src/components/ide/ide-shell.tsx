@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, Component, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Code2, FolderTree, Keyboard, LogOut, Search, Settings, Sparkles } from "lucide-react";
@@ -22,6 +22,7 @@ import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useAccount, modelCaption } from "@/lib/billing/use-account";
 import { listPendingEdits } from "@/lib/workspace/edits";
+import { pendingForRun } from "@/lib/workspace/copies";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { useIdeUi, hydrateAppearance } from "@/lib/ui-store";
 import { RESIZE_TARGET, usePanelLayout } from "@/lib/use-panel-layout";
@@ -143,10 +144,40 @@ function MobileAccount() {
   );
 }
 
+type BoundaryProps = { name: string; children: ReactNode };
+type BoundaryState = { error: string | null };
+
+/** One panel can fail without taking the files, the code, and Composer down with it. */
+class PanelBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown): BoundaryState {
+    const message = error instanceof Error && error.message ? error.message : "This panel stopped.";
+    return { error: message };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 px-4 text-center">
+        <p className="text-sm text-fg">{this.props.name} hit a problem</p>
+        <p className="max-w-xs text-xs break-words text-muted">{this.state.error}</p>
+        <button
+          type="button"
+          className="mt-1 rounded-md border border-border px-2.5 py-1 text-xs text-fg hover:bg-elevated"
+          onClick={() => this.setState({ error: null })}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+}
+
 function TitleBar() {
   const name = useWorkspace((s) => s.name);
   const running = useWorkspace((s) => s.agentRunning);
-  const staged = useWorkspace((s) => listPendingEdits(s.messages).length);
+  const staged = useWorkspace((s) => pendingForRun(listPendingEdits(s.messages), undefined, s.activeCopyId).length);
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
   const [mod, setMod] = useState("Ctrl");
@@ -386,15 +417,21 @@ export function IdeShell() {
               const panel =
                 id === "files" ? (
                   <Panel key="files" id="files" defaultSize={workspace.size("files")} minSize="12%" maxSize="35%" className="min-h-0 overflow-hidden">
-                    <FileTree />
+                    <PanelBoundary name="Files">
+                      <FileTree />
+                    </PanelBoundary>
                   </Panel>
                 ) : id === "agent" ? (
                   <Panel key="agent" id="agent" defaultSize={workspace.size("agent")} minSize="20%" maxSize="45%" className="min-h-0 overflow-hidden">
-                    <AgentPanel composerRef={composerRef} />
+                    <PanelBoundary name="Composer">
+                      <AgentPanel composerRef={composerRef} />
+                    </PanelBoundary>
                   </Panel>
                 ) : (
                   <Panel key="editor" id="editor" defaultSize={workspace.size("editor")} minSize="30%" className="min-h-0 overflow-hidden">
-                    <EditorColumn desktop={desktop} />
+                    <PanelBoundary name="Code">
+                      <EditorColumn desktop={desktop} />
+                    </PanelBoundary>
                   </Panel>
                 );
               if (i === order.length - 1) return [panel];

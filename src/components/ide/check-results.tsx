@@ -2,16 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, LoaderCircle, Minus, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
-import { submitAgent } from "@/lib/agent/run";
-import { fixPrompt } from "@/lib/sandbox/auto-verify";
 import { runTestsInBrowser } from "@/lib/runner/browser";
 import { planBrowserRun } from "@/lib/runner/plan";
 import { compareRuns } from "@/lib/runner/compare";
 import {
   changeChecks,
-  pendingSource,
+  checkStripState,
   renderEntry,
-  shouldAutoFix,
   type BrowserTests,
   type CheckRow,
   type RenderResult,
@@ -19,7 +16,6 @@ import {
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
-import { useWorkspace } from "@/lib/workspace/store";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
 
 /** Long enough for a page's own scripts to settle; a page slower than this is a finding. */
@@ -149,25 +145,6 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
   return { tests: { state: "running", script: "test" } as BrowserTests, output: "" };
 }
 
-/** Sends a fresh failing change back to Composer, once, as its next build step. */
-function useAutoFix(tests: BrowserTests, output: string) {
-  const messages = useWorkspace((s) => s.messages);
-  const running = useWorkspace((s) => s.agentRunning);
-  const source = useMemo(() => pendingSource(messages), [messages]);
-  useEffect(() => {
-    if (running || !source || !tests || tests.state !== "done") return;
-    if (!shouldAutoFix(source, tests, Date.now())) return;
-    useWorkspace.getState().patchMessage(source.id, { autoFixed: true });
-    void submitAgent(`Fix the failing tests: ${tests.detail}`, "composer", source.modelSource, {
-      phase: "build",
-      approvedPlan: source.plan,
-      apiInstruction: `${fixPrompt(tests.script, output)}\n\n(This run was in the editor's browser test runner, not a sandbox.)`,
-      messageExtra: { autoFixed: true },
-      automatic: true,
-    });
-  }, [running, source, tests, output]);
-}
-
 const ICON = { pass: Check, fail: X, warn: TriangleAlert, skip: Minus, running: LoaderCircle } as const;
 const SPOKEN = { pass: "passed", fail: "failed", warn: "failing before this change", skip: "not run", running: "running" } as const;
 
@@ -216,23 +193,27 @@ export function CheckResults({
   files: Record<string, string>;
   edits: ProposedEdit[];
   verify: VerifyReport | null;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, detail?: string) => void;
 }) {
   const { result, frame } = useRenderCheck(files, edits);
   const { tests: browser, output } = useBrowserTests(files, edits, verify);
-  useAutoFix(browser, output);
   const [showOutput, setShowOutput] = useState(false);
   const rows = useMemo(
     () => changeChecks({ files, edits, render: result, verify, browser }),
     [files, edits, result, verify, browser],
   );
   const failed = rows.find((r) => r.status === "fail");
-  const checkState = rows.some((r) => r.status === "running") ? "running" : failed ? "failed" : "clear";
+  const checkState = checkStripState(rows);
   const failedPath = failed?.path;
+  const failedDetail = failed?.detail;
   useEffect(() => {
-    useIdeUi.getState().setCheckHint({ state: checkState, path: failedPath });
+    useIdeUi.getState().setCheckHint(
+      failed
+        ? { state: "failed", path: failedPath, detail: failedDetail }
+        : { state: checkState, path: failedPath },
+    );
     return () => useIdeUi.getState().setCheckHint(null);
-  }, [checkState, failedPath]);
+  }, [checkState, failed, failedPath, failedDetail]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const hasOutput = output.trim().length > 0;
   return (
@@ -247,7 +228,7 @@ export function CheckResults({
               row.id === "tests" && hasOutput
                 ? () => setShowOutput((v) => !v)
                 : row.status === "fail" && row.path
-                  ? () => onOpen(row.path!)
+                  ? () => onOpen(row.path!, row.detail)
                   : undefined
             }
           />
@@ -255,8 +236,13 @@ export function CheckResults({
       </ul>
       {problem && (
         <p
-          className={cn("mt-1 truncate font-mono text-[11px]", problem.status === "warn" ? "text-warn" : "text-danger")}
+          className={cn(
+            "mt-1 truncate font-mono text-[11px]",
+            problem.status === "warn" ? "text-warn" : "text-danger",
+            problem.path && "cursor-pointer",
+          )}
           title={problem.detail}
+          onClick={problem.path ? () => onOpen(problem.path!, problem.detail) : undefined}
         >
           {problem.detail}
         </p>

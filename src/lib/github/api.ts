@@ -53,12 +53,12 @@ async function readCapped(res: Response, cap: number): Promise<ArrayBuffer> {
 export const importGithubRepo = createServerFn({ method: "POST" })
   .validator((input: { url: string; token?: string }) => input)
   .middleware([authMiddleware])
-  .handler(async ({ data }): Promise<GithubImportResult> => {
+  .handler(async ({ data, context }): Promise<GithubImportResult> => {
     const parsed = parseGithubUrl(data.url);
     if (!parsed) {
       return { ok: false, error: "Use owner/repo or a github.com URL." };
     }
-    const token = data.token ? cleanGithubToken(data.token) : null;
+    const token = await useToken(context.userId, data.token);
     if (data.token && !token) return { ok: false, error: "That token does not look like a GitHub token." };
     const headers = githubHeaders(token);
     const zipUrl = parsed.ref
@@ -90,7 +90,7 @@ export const importGithubRepo = createServerFn({ method: "POST" })
         return { ok: false, error: "No text files found in that repo (after skipping node_modules and binaries)." };
       }
       const source = await readSource(parsed.owner, parsed.repo, parsed.ref, headers);
-      return { ok: true, ...imported, name: parsed.repo, source };
+    return { ok: true, ...imported, name: parsed.repo, source };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not unpack the repo." };
     }
@@ -99,18 +99,18 @@ export const importGithubRepo = createServerFn({ method: "POST" })
 export type GithubRepoSummary = { fullName: string; private: boolean; branch: string };
 
 export const listGithubRepos = createServerFn({ method: "POST" })
-  .validator((input: { token: string }) => input)
+  .validator((input: { token?: string }) => input)
   .middleware([authMiddleware])
-  .handler(async ({ data }): Promise<{ ok: true; repos: GithubRepoSummary[] } | { ok: false; error: string }> => {
-    const token = cleanGithubToken(data.token);
-    if (!token) return { ok: false, error: "That token does not look like a GitHub token." };
+  .handler(async ({ data, context }): Promise<{ ok: true; repos: GithubRepoSummary[] } | { ok: false; error: string }> => {
+    const token = await useToken(context.userId, data.token);
+    if (!token) return { ok: false, error: "Connect GitHub first. A token with repo access opens private repos." };
     const { status, body } = await githubJson(
-      "https://api.github.com/user/repos?per_page=30&sort=updated&affiliation=owner,collaborator",
+      "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
       token,
     );
     if (status === 401) return { ok: false, error: "GitHub rejected that token." };
     if (status !== 200 || !Array.isArray(body)) return { ok: false, error: `GitHub returned ${status}.` };
-    const repos = body.slice(0, 30).map((row) => {
+    const repos = body.slice(0, 100).map((row) => {
       const rec = row as { full_name?: string; private?: boolean; default_branch?: string };
       return {
         fullName: String(rec.full_name ?? ""),
@@ -122,13 +122,13 @@ export const listGithubRepos = createServerFn({ method: "POST" })
   });
 
 export type GithubPublishResult =
-  | { ok: true; url: string; sha: string; branch: string }
+  | { ok: true; url: string; sha: string; branch: string; pull?: number }
   | { ok: false; error: string };
 
 export const publishGithub = createServerFn({ method: "POST" })
   .validator(
     (input: {
-      token: string;
+      token?: string;
       owner: string;
       repo: string;
       branch: string;
@@ -139,9 +139,9 @@ export const publishGithub = createServerFn({ method: "POST" })
     }) => input,
   )
   .middleware([authMiddleware])
-  .handler(async ({ data }): Promise<GithubPublishResult> => {
-    const token = cleanGithubToken(data.token);
-    if (!token) return { ok: false, error: "That token does not look like a GitHub token." };
+  .handler(async ({ data, context }): Promise<GithubPublishResult> => {
+    const token = await useToken(context.userId, data.token);
+    if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
     if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
     if (!/^[A-Za-z0-9._/-]+$/.test(data.branch) || data.branch.includes("..")) {
@@ -223,11 +223,159 @@ export const publishGithub = createServerFn({ method: "POST" })
       });
       if (pr.status !== 201) return { ok: false, error: "The branch was created, but the pull request was not." };
       const url = String((pr.body as { html_url?: string }).html_url ?? "");
-      return { ok: true, sha, branch: head, url };
+      const pull = Number((pr.body as { number?: number }).number ?? 0);
+      return { ok: true, sha, branch: head, url, pull: pull || undefined };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
     }
   });
+
+export type GithubAccount = { connected: boolean; login: string | null; last4: string | null };
+
+export const githubStatus = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<GithubAccount> => accountGithub(context.userId));
+
+export const saveGithubToken = createServerFn({ method: "POST" })
+  .validator((input: { token: string }) => input)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<GithubAccount & { ok: true } | { ok: false; error: string }> => {
+    const token = cleanGithubToken(data.token);
+    if (!token) return { ok: false, error: "That does not look like a GitHub token." };
+    const who = await githubJson("https://api.github.com/user", token);
+    if (who.status === 401) return { ok: false, error: "GitHub rejected that token." };
+    if (who.status !== 200) return { ok: false, error: `GitHub returned ${who.status}.` };
+    const login = String((who.body as { login?: string }).login ?? "");
+    if (!login) return { ok: false, error: "GitHub did not return an account." };
+    const { encryptSecret } = await import("@/lib/security/secrets.server");
+    await ensureSettings(context.userId);
+    const { getSql } = await import("@/lib/db");
+    const sql = await getSql();
+    await sql`
+      update user_settings
+      set github_token = ${encryptSecret(token)}, github_login = ${login}, updated_at = now()
+      where user_id = ${context.userId}
+    `;
+    return { ok: true, ...(await accountGithub(context.userId)) };
+  });
+
+export const clearGithubAccount = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<GithubAccount> => {
+    await ensureSettings(context.userId);
+    const { getSql } = await import("@/lib/db");
+    const sql = await getSql();
+    await sql`
+      update user_settings
+      set github_token = null, github_login = null, updated_at = now()
+      where user_id = ${context.userId}
+    `;
+    return { connected: false, login: null, last4: null };
+  });
+
+export const mergeGithub = createServerFn({ method: "POST" })
+  .validator(
+    (input: { owner: string; repo: string; base: string; head: string; pull?: number; message: string }) => input,
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<GithubPublishResult> => {
+    const token = await useToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
+    const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
+    if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
+    const message = data.message.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) || "Merge from Aperture";
+    try {
+      if (data.pull && data.pull > 0) {
+        const merged = await githubJson(
+          `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/pulls/${data.pull}/merge`,
+          token,
+          { method: "PUT", body: JSON.stringify({ commit_title: message, merge_method: "merge" }) },
+        );
+        if (merged.status === 405) return { ok: false, error: "That pull request cannot be merged yet." };
+        if (merged.status === 409) return { ok: false, error: "GitHub could not merge — the branches conflict." };
+        if (merged.status === 404) return { ok: false, error: "That pull request is gone." };
+        if (merged.status !== 200) return { ok: false, error: `GitHub returned ${merged.status}.` };
+        const sha = String((merged.body as { sha?: string }).sha ?? "");
+        return {
+          ok: true,
+          sha: sha || data.head,
+          branch: data.base,
+          url: `https://github.com/${parsed.owner}/${parsed.repo}/pull/${data.pull}`,
+        };
+      }
+      if (!/^[A-Za-z0-9._/-]+$/.test(data.base) || !/^[A-Za-z0-9._/-]+$/.test(data.head)) {
+        return { ok: false, error: "That branch name is not valid." };
+      }
+      if (data.base === data.head) return { ok: false, error: "This is already the default branch. Push writes to it." };
+      const merged = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/merges`, token, {
+        method: "POST",
+        body: JSON.stringify({ base: data.base, head: data.head, commit_message: message }),
+      });
+      if (merged.status === 204) {
+        return {
+          ok: true,
+          sha: data.head,
+          branch: data.base,
+          url: `https://github.com/${parsed.owner}/${parsed.repo}/tree/${encodeURIComponent(data.base)}`,
+        };
+      }
+      if (merged.status === 409) return { ok: false, error: "GitHub could not merge — the branches conflict." };
+      if (merged.status === 404) return { ok: false, error: "GitHub could not find that branch." };
+      if (merged.status !== 201) return { ok: false, error: `GitHub returned ${merged.status}.` };
+      const sha = String((merged.body as { sha?: string }).sha ?? "");
+      return {
+        ok: true,
+        sha,
+        branch: data.base,
+        url: sha ? `https://github.com/${parsed.owner}/${parsed.repo}/commit/${sha}` : "",
+      };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
+    }
+  });
+
+async function useToken(userId: string, passed?: string): Promise<string | null> {
+  const stored = await accountToken(userId);
+  if (stored) return stored;
+  return passed ? cleanGithubToken(passed) : null;
+}
+
+async function accountToken(userId: string): Promise<string | null> {
+  const { decryptSecret } = await import("@/lib/security/secrets.server");
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  const rows = await sql<{ github_token: string | null }>`
+    select github_token from user_settings where user_id = ${userId}
+  `;
+  return decryptSecret(rows[0]?.github_token ?? null);
+}
+
+async function accountGithub(userId: string): Promise<GithubAccount> {
+  const { decryptSecret, peekLast4 } = await import("@/lib/security/secrets.server");
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  const rows = await sql<{ github_token: string | null; github_login: string | null }>`
+    select github_token, github_login from user_settings where user_id = ${userId}
+  `;
+  const row = rows[0];
+  const token = decryptSecret(row?.github_token ?? null);
+  return {
+    connected: Boolean(token),
+    login: row?.github_login ?? null,
+    last4: peekLast4(row?.github_token ?? null),
+  };
+}
+
+async function ensureSettings(userId: string) {
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  const month = new Date().toISOString().slice(0, 7);
+  await sql`
+    insert into user_settings (user_id, plan, usage_month, model_source)
+    values (${userId}, 'hobby', ${month}, 'hosted')
+    on conflict (user_id) do nothing
+  `;
+}
 
 function githubHeaders(token: string | null): Record<string, string> {
   return {
@@ -266,7 +414,8 @@ async function readSource(
     const repoRes = await fetchPinned(`https://api.github.com/repos/${owner}/${repo}`, headers);
     if (!repoRes.ok) return null;
     const repoBody = (await repoRes.json()) as { default_branch?: string };
-    const branch = ref || repoBody.default_branch || "main";
+    const defaultBranch = repoBody.default_branch || "main";
+    const branch = ref || defaultBranch;
     const commitRes = await fetchPinned(
       `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
       headers,
@@ -274,7 +423,7 @@ async function readSource(
     if (!commitRes.ok) return null;
     const commitBody = (await commitRes.json()) as { sha?: string };
     if (!commitBody.sha) return null;
-    return { owner, repo, branch, sha: commitBody.sha };
+    return { owner, repo, branch, sha: commitBody.sha, defaultBranch };
   } catch {
     return null;
   }

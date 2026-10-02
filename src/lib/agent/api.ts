@@ -22,6 +22,8 @@ export const runAgent = createServerFn({ method: "POST" })
     const result = await runAgentLoop(input, {
       provider: resolved.provider,
       apiKey: resolved.apiKey,
+      base: resolved.base,
+      model: resolved.model,
       userId: context.userId,
     });
     if (result.ok) {

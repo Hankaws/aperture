@@ -218,7 +218,7 @@ function OpenMenu() {
 
 export function FileTree() {
   const files = useWorkspace((s) => s.fileList);
-  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
+  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages, s.activeCopyId));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
   const setCommandOpen = useIdeUi((s) => s.setCommandOpen);

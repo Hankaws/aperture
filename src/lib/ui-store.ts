@@ -73,7 +73,7 @@ type IdeUiState = {
   density: Density;
   composerUnread: boolean;
   /** What the staged checks say, so Composer can suggest Apply or Open. */
-  checkHint: { state: "running" | "clear" | "failed"; path?: string } | null;
+  checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null;
   reveal: { path: string; line: number } | null;
   findTick: number;
   steerQueue: string[];
@@ -103,7 +103,7 @@ type IdeUiState = {
   setTheme: (theme: EditorTheme) => void;
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
-  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string } | null) => void;
+  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
@@ -236,7 +236,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setComposerUnread: (on) => set({ composerUnread: on }),
   setCheckHint: (hint) =>
     set((s) => {
-      if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path) return s;
+      if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path && s.checkHint?.detail === hint?.detail) return s;
       return { checkHint: hint };
     }),
   setReveal: (reveal) => set({ reveal }),

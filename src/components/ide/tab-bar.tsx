@@ -88,7 +88,7 @@ export function TabBar() {
   const closeTab = useWorkspace((s) => s.closeTab);
   const pinTab = useWorkspace((s) => s.pinTab);
   const openFile = useWorkspace((s) => s.openFile);
-  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages));
+  const pendingKey = useWorkspace((s) => pendingPathKey(s.messages, s.activeCopyId));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
 
   return (

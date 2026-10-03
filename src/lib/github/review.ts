@@ -29,8 +29,9 @@ export function githubReview(edits: ProposedEdit[]): GithubReview | null {
     for (const note of edit.notes) {
       const text = note.text.replace(/\s+/g, " ").trim().slice(0, 400);
       if (text.length < 4) continue;
+      const sure = typeof note.confidence === "number" ? ` (${Math.round(note.confidence * 100)})` : "";
       const line = lineOf(edit.newText, note.excerpt);
-      lines.push(line ? `${edit.path}:${line} ${text}` : `${edit.path} ${text}`);
+      lines.push(line ? `${edit.path}:${line}${sure} ${text}` : `${edit.path}${sure} ${text}`);
       if (!line) continue;
       if (comments.some((row) => row.path === edit.path && row.line === line && row.body === text)) continue;
       comments.push({ path: edit.path, line, side: "RIGHT", body: text });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatDiffNotes, notesOn, reviewInstruction } from "./diff-notes.ts";
+import { formatDiffNotes, keepReviewNote, notesOn, parseConfidence, reviewContext, reviewInstruction, reviewResultLine, withReviewLine } from "./diff-notes.ts";
 import type { ProposedEdit } from "./types.ts";
 
 const edit = (notes: ProposedEdit["notes"], status: ProposedEdit["status"] = "pending"): ProposedEdit => ({
@@ -34,10 +34,38 @@ test("notesOn counts pending only", () => {
   assert.equal(notesOn([edit([{ id: "n", excerpt: "x", type: "del", text: "y" }], "applied")]), 0);
 });
 
-test("reviewInstruction asks for bugs only", () => {
+test("reviewInstruction asks for a typed decision", () => {
   const text = reviewInstruction(["src/list.ts"]);
-  assert.match(text, /real bug/);
-  assert.match(text, /No style notes/);
+  assert.match(text, /confidence/);
+  assert.match(text, /0\.8/);
+});
+
+test("keepReviewNote drops a nit and a low score", () => {
+  assert.equal(keepReviewNote(true, 0.8), true);
+  assert.equal(keepReviewNote(true, 0.79), false);
+  assert.equal(keepReviewNote(false, 0.99), false);
+  assert.equal(keepReviewNote(true, null), false);
+  assert.equal(parseConfidence("90"), 0.9);
+  assert.equal(parseConfidence(1.2), null);
+});
+
+test("reviewResultLine says what was kept and dropped", () => {
+  assert.equal(reviewResultLine(0, 0), "Review kept nothing.");
+  assert.equal(reviewResultLine(1, 2), "Review kept 1 note. 2 were dropped under 0.8.");
+  assert.equal(withReviewLine("Looks fine.", 0, 1), "Looks fine.\n\nReview kept nothing. 1 was dropped under 0.8.");
+});
+
+test("reviewContext is the diff and not the rest of the repo", () => {
+  const edit: ProposedEdit = {
+    id: "e",
+    path: "src/list.ts",
+    oldText: "const n = 1;\n",
+    newText: "const n = items.length;\n",
+    description: "Count",
+    status: "pending",
+  };
+  const text = reviewContext([edit]);
   assert.match(text, /src\/list.ts/);
-  assert.match(text, /already dismissed/);
+  assert.match(text, /\+const n = items.length;/);
+  assert.doesNotMatch(text, /package.json/);
 });

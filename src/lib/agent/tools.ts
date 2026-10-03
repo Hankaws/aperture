@@ -1,6 +1,7 @@
 import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
+import { keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
@@ -148,16 +149,18 @@ export const AGENT_TOOLS = [
     function: {
       name: "note_diff",
       description:
-        "Attach a review note to a staged diff. Use this instead of propose_edit when reviewing. excerpt is the line you are commenting on.",
+        "Typed review decision for one line. bug is true only for a real bug. confidence is 0 to 1. A note is kept only when bug is true and confidence is at least 0.8.",
       parameters: {
         type: "object",
         properties: {
           path: { type: "string" },
           excerpt: { type: "string" },
           type: { type: "string", enum: ["add", "del", "eq"] },
-          text: { type: "string", description: "What should change and why" },
+          text: { type: "string", description: "What is wrong, one sentence" },
+          bug: { type: "boolean", description: "True only if this is a real bug, regression, or missing edge" },
+          confidence: { type: "number", description: "0 to 1. How sure this is a bug" },
         },
-        required: ["path", "text"],
+        required: ["path", "text", "bug", "confidence"],
       },
     },
   },
@@ -180,7 +183,7 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
     return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "note_diff");
   }
   if (kind === "review") {
-    return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "set_plan");
+    return AGENT_TOOLS.filter((t) => t.function.name === "note_diff");
   }
   return AGENT_TOOLS.filter((t) => t.function.name !== "note_diff");
 }
@@ -194,6 +197,8 @@ export type ToolContext = {
   phase: AgentPhase;
   mode: "chat" | "composer" | "inline";
   role?: "build" | "review";
+  /** Counts review decisions so the turn can say what it kept and what it dropped. */
+  reviewTally?: { kept: number; dropped: number };
   /** Set when this request may run code; absent leaves `run_script` answering that it cannot. */
   runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean }>;
   /**
@@ -205,6 +210,11 @@ export type ToolContext = {
   /** Set when this account has MCP servers. Returns the tool text. */
   mcpCall?: (server: string, tool: string, args: string) => Promise<string>;
 };
+
+function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
+  if (!ctx.reviewTally) return;
+  ctx.reviewTally[kind] += 1;
+}
 
 function clip(text: string, max = 8000): string {
   if (text.length <= max) return text;
@@ -302,7 +312,7 @@ export async function executeTool(
     if (ctx.mode === "chat") {
       return "Ask mode does not edit. The user can switch to Agent.";
     }
-    if (ctx.role === "review") return "Review mode: call note_diff. Do not propose_edit.";
+    if (ctx.role === "review") return "Review mode: call note_diff with bug and confidence. Do not propose_edit.";
     if (ctx.phase === "plan") {
       return "Edits are locked until the user clicks Build it.";
     }
@@ -373,9 +383,27 @@ export async function executeTool(
     if (!path || !text) return "Pass path and text.";
     const excerpt = String(args.excerpt ?? "").slice(0, 80);
     const kind = args.type === "del" ? "del" : args.type === "eq" ? "eq" : "add";
+    const bug = args.bug === true || args.bug === "true";
+    const confidence = parseConfidence(args.confidence);
+    if (!bug) {
+      countReview(ctx, "dropped");
+      return "Not a bug. No note added.";
+    }
+    if (confidence === null) {
+      countReview(ctx, "dropped");
+      return "Pass confidence from 0 to 1.";
+    }
+    if (!keepReviewNote(true, confidence)) {
+      countReview(ctx, "dropped");
+      return "Dropped. Confidence is below 0.8, so this stays off the diff.";
+    }
     const edit = [...ctx.edits].reverse().find((row) => row.path === path && row.status === "pending");
     if (!edit) return `No pending edit for ${path}. Review staged diffs only.`;
-    edit.notes = [...(edit.notes ?? []), { id: `n_${(edit.notes?.length ?? 0) + 1}_${path}`, excerpt, type: kind, text }];
+    edit.notes = [
+      ...(edit.notes ?? []),
+      { id: `n_${(edit.notes?.length ?? 0) + 1}_${path}`, excerpt, type: kind, text, confidence },
+    ];
+    countReview(ctx, "kept");
     return `Note added on ${path}.`;
   }
 

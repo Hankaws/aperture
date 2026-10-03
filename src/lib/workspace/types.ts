@@ -31,6 +31,8 @@ export type DiffNote = {
   excerpt: string;
   type: "eq" | "add" | "del";
   text: string;
+  /** 0 to 1. Set by a review pass. A user's own note has none. */
+  confidence?: number;
 };
 
 export type ProposedEdit = {

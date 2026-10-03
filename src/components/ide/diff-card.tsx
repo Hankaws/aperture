@@ -126,6 +126,11 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
                 >
                   <MessageSquare className="mt-0.5 size-3 shrink-0 text-accent" />
                   <span className="min-w-0 flex-1 font-sans">{note.text}</span>
+                  {typeof note.confidence === "number" && (
+                    <span className="shrink-0 font-mono text-[10px] text-subtle" title="How sure the review was">
+                      {Math.round(note.confidence * 100)}
+                    </span>
+                  )}
                   {pending && (
                     <button
                       type="button"

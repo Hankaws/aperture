@@ -10,6 +10,16 @@ export type GithubImportResult =
 
 const GITHUB_HOSTS = new Set(["api.github.com", "codeload.github.com", "github.com"]);
 
+/** One line, with control characters turned into spaces. */
+function commitMessage(message: string, fallback: string): string {
+  let out = "";
+  for (const ch of message) {
+    const code = ch.codePointAt(0) ?? 0;
+    out += code <= 31 ? " " : ch;
+  }
+  return out.trim().slice(0, 200) || fallback;
+}
+
 async function fetchPinned(url: string, headers: Record<string, string>, hops = 0): Promise<Response> {
   if (hops > 4) throw new Error("Too many redirects from GitHub.");
   const parsed = new URL(url);
@@ -151,7 +161,7 @@ export const publishGithub = createServerFn({ method: "POST" })
     const changes = sanitizeChanges(data.changes);
     if (!changes) return { ok: false, error: "Too many or too large to send. Commit fewer files." };
     if (changes.length === 0) return { ok: false, error: "Nothing changed since you opened the repo." };
-    const message = data.message.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) || "Update from Aperture";
+    const message = commitMessage(data.message, "Update from Aperture");
     try {
       const parent = await githubJson(
         `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/commits/${data.baseSha}`,
@@ -283,7 +293,7 @@ export const mergeGithub = createServerFn({ method: "POST" })
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
     if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
-    const message = data.message.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) || "Merge from Aperture";
+    const message = commitMessage(data.message, "Merge from Aperture");
     try {
       if (data.pull && data.pull > 0) {
         const merged = await githubJson(

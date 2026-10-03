@@ -174,6 +174,55 @@ export function standingForPrompt(rules: StandingRule[]): string {
   return rules.map((rule) => `- ${rule.line}`).join("\n");
 }
 
+const MAX_REFUSALS = 8;
+
+/** One line the next run must read: what was proposed, and that the user did not keep it. */
+export function refusalLine(path: string, description: string): string {
+  const where = path.replace(/\s+/g, " ").trim().slice(0, 180);
+  const what = description.replace(/\s+/g, " ").trim().slice(0, 160);
+  if (!where || what.length < 4) return "";
+  return `Do not repeat this. The user did not keep ${where}: ${what}.`;
+}
+
+export function rememberRefusal(lines: string[], line: string): string[] {
+  const clean = line.replace(/\s+/g, " ").trim().slice(0, 240);
+  if (clean.length < 12) return lines;
+  const needle = clean.toLowerCase().slice(0, 48);
+  if (lines.some((row) => row.toLowerCase().includes(needle))) return lines;
+  return [...lines, clean].slice(-MAX_REFUSALS);
+}
+
+export function refusalsForPrompt(lines: string[]): string {
+  return lines
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 12)
+    .slice(-MAX_REFUSALS)
+    .map((line) => `- ${line}`)
+    .join("\n");
+}
+
+export type Spot = {
+  file: string | null;
+  line: number | null;
+  check: string | null;
+  element: string | null;
+};
+
+/** Where the user is right now, so the next suggestion starts there. */
+export function formatSpot(spot: Spot | null | undefined): string {
+  if (!spot) return "";
+  const lines: string[] = [];
+  const file = spot.file?.replace(/\s+/g, " ").trim().slice(0, 180);
+  if (file) lines.push(`- file: ${file}`);
+  if (spot.line && spot.line > 0) lines.push(`- line: ${Math.floor(spot.line)}`);
+  const check = spot.check?.replace(/\s+/g, " ").trim().slice(0, 180);
+  if (check) lines.push(`- last check: ${check}`);
+  const element = spot.element?.replace(/\s+/g, " ").trim().slice(0, 180);
+  if (element) lines.push(`- last element: ${element}`);
+  if (lines.length === 0) return "";
+  return `Start from where the user is, not from the whole repo:\n${lines.join("\n")}`;
+}
+
 export function readStanding(): StandingRule[] {
   if (typeof window === "undefined") return [];
   try {

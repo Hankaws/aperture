@@ -41,6 +41,8 @@ export type ProposedEdit = {
   description: string;
   status: "pending" | "applied" | "rejected";
   notes?: DiffNote[];
+  /** A review pass has already read this diff. Keep is allowed after that. */
+  reviewed?: boolean;
   /** Set when this edit belongs to one composer's copy of the project. */
   copyId?: string;
 };

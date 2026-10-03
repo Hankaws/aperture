@@ -247,6 +247,46 @@ export function verifyForPending(
 /** An automatic fix goes out only right after the run, never for an old change reopened later. */
 export const AUTO_FIX_WINDOW_MS = 10 * 60_000;
 
+/** The preview and the browser tests have both finished, so the look is real. */
+export function checksReady(render: RenderResult, browser: BrowserTests): boolean {
+  if (render?.state === "pending") return false;
+  if (browser?.state === "running") return false;
+  return true;
+}
+
+/** Red rows only. A warning is a failure that was already there, not this change. */
+export function lookFailures(rows: CheckRow[]): string[] {
+  return rows.filter((row) => row.status === "fail").map((row) => `${row.label}: ${row.detail}`);
+}
+
+/**
+ * One look before Keep. A fresh Composer change whose preview is blank or
+ * whose checks are red goes back to the agent once. A replay cannot fix it,
+ * and a second look would loop.
+ */
+export function shouldLookAgain(
+  message: { role: string; createdAt: number; modelSource?: string; autoFixed?: boolean } | null,
+  rows: CheckRow[],
+  now: number,
+  opts: { ready: boolean; replay: boolean },
+): boolean {
+  if (!opts.ready || opts.replay) return false;
+  if (!message || message.role !== "assistant" || message.autoFixed || !message.modelSource) return false;
+  if (now - message.createdAt > AUTO_FIX_WINDOW_MS) return false;
+  return lookFailures(rows).length > 0;
+}
+
+/** What the agent is told. The person sees a shorter line in the chat. */
+export function lookPrompt(rows: CheckRow[]): string {
+  const lines = lookFailures(rows).map((line) => `- ${line}`);
+  return [
+    "Looked at the staged change before asking to keep it. These checks are red:",
+    ...lines,
+    "",
+    "Fix this now with propose_edit. Change only what the failure requires — do not restart the plan or widen the scope. If a failure is unrelated to your edits, say so plainly instead of editing.",
+  ].join("\n");
+}
+
 /**
  * Whether a failing browser run should go back to the agent, once: a Composer
  * change (not an external agent's), freshly made, whose tests fail in a way

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatDiffNotes, notesOn } from "./diff-notes.ts";
+import { formatDiffNotes, notesOn, reviewInstruction } from "./diff-notes.ts";
 import type { ProposedEdit } from "./types.ts";
 
 const edit = (notes: ProposedEdit["notes"], status: ProposedEdit["status"] = "pending"): ProposedEdit => ({
@@ -32,4 +32,12 @@ test("formatDiffNotes names the file and the line", () => {
 test("notesOn counts pending only", () => {
   assert.equal(notesOn([edit([{ id: "n", excerpt: "x", type: "del", text: "y" }])]), 1);
   assert.equal(notesOn([edit([{ id: "n", excerpt: "x", type: "del", text: "y" }], "applied")]), 0);
+});
+
+test("reviewInstruction asks for bugs only", () => {
+  const text = reviewInstruction(["src/list.ts"]);
+  assert.match(text, /real bug/);
+  assert.match(text, /No style notes/);
+  assert.match(text, /src\/list.ts/);
+  assert.match(text, /already dismissed/);
 });

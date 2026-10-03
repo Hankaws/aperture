@@ -20,6 +20,20 @@ export function withoutUnchanged(edits: ProposedEdit[], earlier: ChatMessage[]):
   return edits.filter((e) => !pending.some((p) => p.id === e.id && p.path === e.path && p.newText === e.newText));
 }
 
+/** The review pass is done, whether or not it left a note. */
+export function markReviewed(messages: ChatMessage[], ids: string[]): Array<{ id: string; edits: ProposedEdit[] }> {
+  const want = new Set(ids);
+  const out: Array<{ id: string; edits: ProposedEdit[] }> = [];
+  for (const message of messages) {
+    if (!message.edits?.some((edit) => want.has(edit.id) && !edit.reviewed)) continue;
+    out.push({
+      id: message.id,
+      edits: message.edits.map((edit) => (want.has(edit.id) ? { ...edit, reviewed: true } : edit)),
+    });
+  }
+  return out;
+}
+
 export function pendingEditFor(messages: ChatMessage[], path: string | null): ProposedEdit | null {
   if (!path) return null;
   let found: ProposedEdit | null = null;

@@ -12,6 +12,7 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
   const rejectEdit = useWorkspace((s) => s.rejectEdit);
   const openFile = useWorkspace((s) => s.openFile);
   const patchMessage = useWorkspace((s) => s.patchMessage);
+  const dismissNote = useWorkspace((s) => s.dismissNote);
   const [open, setOpen] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const pending = edit.status === "pending";
@@ -130,7 +131,7 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
                       type="button"
                       aria-label="Remove note"
                       className="text-subtle hover:text-fg"
-                      onClick={() => patchNotes(notes.filter((n) => n.id !== note.id))}
+                      onClick={() => dismissNote(edit.id, note.id)}
                     >
                       <X className="size-3" />
                     </button>

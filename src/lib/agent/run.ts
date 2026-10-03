@@ -9,8 +9,8 @@ import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
 import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 import { parseMentions } from "@/lib/workspace/mentions";
-import { attachNotesToPending, listPendingEdits, withoutUnchanged } from "@/lib/workspace/edits";
-import { LESSONS_PATH, formatObservations, lessonEditForFailure, readStanding } from "@/lib/workspace/lessons";
+import { attachNotesToPending, listPendingEdits, markReviewed, withoutUnchanged } from "@/lib/workspace/edits";
+import { LESSONS_PATH, formatObservations, lessonEditForFailure, readStanding, refusalLine, rememberRefusal } from "@/lib/workspace/lessons";
 import { pendingForRun } from "@/lib/workspace/copies";
 import { autoContextPaths } from "./auto-context";
 import { compactHistory, priorMessages } from "./compact";
@@ -19,6 +19,20 @@ import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { compareRuns } from "@/lib/runner/compare";
+import type { Spot } from "@/lib/workspace/lessons";
+
+function spotFrom(
+  latest: { activePath: string | null; selection: { path: string; fromLine: number } | null },
+  ui: { lastCheck: { label: string; detail: string } | null; lastElement: string | null },
+): Spot {
+  const check = ui.lastCheck ? `${ui.lastCheck.label}: ${ui.lastCheck.detail}` : null;
+  return {
+    file: latest.selection?.path ?? latest.activePath,
+    line: latest.selection?.fromLine ?? null,
+    check: check ? check.replace(/\s+/g, " ").trim().slice(0, 180) : null,
+    element: ui.lastElement,
+  };
+}
 
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
@@ -102,6 +116,16 @@ export function agentPayload(
   const state = useWorkspace.getState();
   state.syncStackMemory();
   const latest = useWorkspace.getState();
+  const handEdited = listPendingEdits(latest.messages).filter((edit) => {
+    if (edit.path === LESSONS_PATH) return false;
+    const now = latest.files[edit.path];
+    return now !== undefined && now !== edit.oldText && now !== edit.newText;
+  });
+  let refusals = latest.refusals;
+  for (const edit of handEdited) {
+    refusals = rememberRefusal(refusals, refusalLine(edit.path, edit.description));
+  }
+  if (refusals !== latest.refusals) useWorkspace.setState({ refusals });
   const { history, compacted } = compactHistory(priorMessages(latest.messages, instruction));
   const captures = formatDesignCaptures(useIdeUi.getState().captures, latest.files);
   const observations =
@@ -152,6 +176,8 @@ export function agentPayload(
     compacted: compacted || undefined,
     browserRuns: extra?.browserRuns,
     standing: readStanding().map((rule) => rule.line),
+    refusals,
+    spot: spotFrom(latest, useIdeUi.getState()),
   };
 }
 
@@ -354,8 +380,15 @@ export async function submitAgent(
           edits = tagCopy(event.edits);
           plan = event.plan ?? plan;
           const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
-          if (reviewOnly && edits.length) {
-            for (const patch of attachNotesToPending(ws.messages, edits)) {
+          const reviewing = opts?.role === "review" || reviewOnly;
+          if (reviewing) {
+            if (edits.length) {
+              for (const patch of attachNotesToPending(ws.messages, edits)) {
+                ws.patchMessage(patch.id, { edits: patch.edits });
+              }
+            }
+            const ids = (opts?.pendingEdits ?? edits).map((edit) => edit.id);
+            for (const patch of markReviewed(useWorkspace.getState().messages, ids)) {
               ws.patchMessage(patch.id, { edits: patch.edits });
             }
             edits = [];

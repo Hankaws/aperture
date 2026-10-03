@@ -12,6 +12,12 @@ import {
 
 const CREW_KEY = "aperture-crew";
 
+function elementLabel(capture: DesignCapture): string {
+  const id = capture.elementId ? `#${capture.elementId}` : "";
+  const text = capture.text.replace(/\s+/g, " ").trim().slice(0, 60);
+  return `${capture.tag}${id} ${capture.selector}${text ? ` "${text}"` : ""}`.replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
 function readCrew(): string[] {
   if (typeof window === "undefined") return ["hosted"];
   try {
@@ -74,6 +80,10 @@ type IdeUiState = {
   composerUnread: boolean;
   /** What the staged checks say, so Composer can suggest Apply or Open. */
   checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null;
+  /** The last failing check the user opened. */
+  lastCheck: { label: string; detail: string } | null;
+  /** The last page element the user clicked in Design Mode. */
+  lastElement: string | null;
   reveal: { path: string; line: number } | null;
   findTick: number;
   steerQueue: string[];
@@ -104,6 +114,7 @@ type IdeUiState = {
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
   setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null) => void;
+  setLastCheck: (check: { label: string; detail: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
@@ -138,6 +149,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   density: "compact",
   composerUnread: false,
   checkHint: null,
+  lastCheck: null,
+  lastElement: null,
   reveal: null,
   findTick: 0,
   steerQueue: [],
@@ -202,6 +215,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   addCapture: (capture) =>
     set((s) => ({
       captures: [...s.captures, capture].slice(-8),
+      lastElement: elementLabel(capture),
     })),
   setPreviewErrors: (errors) =>
     set((s) => {
@@ -239,6 +253,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
       if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path && s.checkHint?.detail === hint?.detail) return s;
       return { checkHint: hint };
     }),
+  setLastCheck: (check) => set({ lastCheck: check }),
   setReveal: (reveal) => set({ reveal }),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),
   enqueueSteer: (text) =>

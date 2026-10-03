@@ -21,3 +21,16 @@ export function formatDiffNotes(edits: ProposedEdit[]): string | null {
 export function notesOn(edits: ProposedEdit[]): number {
   return edits.reduce((n, edit) => n + (edit.status === "pending" ? edit.notes?.length ?? 0 : 0), 0);
 }
+
+/** One pass, comments only. The same wording the crew reviewer and the review button use. */
+export function reviewInstruction(paths: string[]): string {
+  const files = paths.filter(Boolean);
+  return [
+    "Review the staged diffs. Call note_diff only for a real bug, a regression, or a missing edge. No style notes.",
+    "If nothing is wrong, say so and call nothing. Do not propose_edit. Do not rewrite files.",
+    "Do not repeat a note the user already dismissed.",
+    files.length > 0 ? `Files: ${files.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}

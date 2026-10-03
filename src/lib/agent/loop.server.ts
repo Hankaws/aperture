@@ -7,7 +7,7 @@ import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
-import { LESSONS_PATH, lessonsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
+import { LESSONS_PATH, formatSpot, lessonsForPrompt, refusalsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
@@ -45,7 +45,7 @@ function systemPrompt(
     : "You are Aperture, an AI coding agent inside a web IDE.";
   const composerLine =
     role === "review"
-      ? "Review mode: inspect staged diffs. Call note_diff for each real issue. Do not call propose_edit. Do not rewrite files."
+      ? "Review mode: call note_diff only for a real bug, a regression, or a missing edge. No style notes. If nothing is wrong, say so and call nothing. Do not call propose_edit."
       : phase === "plan"
         ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
         : phase === "build"
@@ -342,10 +342,14 @@ export async function runAgentLoopStreaming(
   const sysBase = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
   const lessons = lessonsForPrompt(fileMap[LESSONS_PATH] ?? "").slice(0, 2000);
   const standing = standingForPrompt((input.standing ?? []).map((line, i) => ({ id: String(i), line }))).slice(0, 2000);
+  const refused = refusalsForPrompt(input.refusals ?? []).slice(0, 2000);
+  const here = formatSpot(input.spot);
   const sys = [
     sysBase,
     standing ? `Rules for every project. Follow them:\n${standing}` : "",
     lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
+    refused ? `The user already refused these. Do not propose them again:\n${refused}` : "",
+    here,
   ]
     .filter(Boolean)
     .join("\n\n");

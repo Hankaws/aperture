@@ -185,6 +185,8 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
         : undefined,
     browserRuns: parseBrowserRuns(input.browserRuns),
     standing: parseStanding(input.standing),
+    refusals: parseStanding(input.refusals),
+    spot: parseSpot(input.spot),
   };
 }
 
@@ -200,6 +202,17 @@ function parseStanding(raw: unknown): string[] | undefined {
     if (lines.length >= 8) break;
   }
   return lines.length ? lines : undefined;
+}
+
+function parseSpot(raw: unknown): AgentInput["spot"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const rec = raw as Record<string, unknown>;
+  const file = typeof rec.file === "string" ? rec.file.replace(/\s+/g, " ").trim().slice(0, 180) : "";
+  const line = typeof rec.line === "number" && Number.isFinite(rec.line) ? Math.max(0, Math.floor(rec.line)) : 0;
+  const check = typeof rec.check === "string" ? rec.check.replace(/\s+/g, " ").trim().slice(0, 180) : "";
+  const element = typeof rec.element === "string" ? rec.element.replace(/\s+/g, " ").trim().slice(0, 180) : "";
+  if (!file && !line && !check && !element) return undefined;
+  return { file: file || null, line: line || null, check: check || null, element: element || null };
 }
 
 function parseBrowserRuns(raw: unknown): AgentInput["browserRuns"] {

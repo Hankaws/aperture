@@ -2,13 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, LoaderCircle, Minus, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
+import { submitAgent } from "@/lib/agent/run";
+import { useWorkspace } from "@/lib/workspace/store";
 import { runTestsInBrowser } from "@/lib/runner/browser";
 import { planBrowserRun } from "@/lib/runner/plan";
 import { compareRuns } from "@/lib/runner/compare";
 import {
   changeChecks,
+  checksReady,
   checkStripState,
+  lookPrompt,
+  pendingSource,
   renderEntry,
+  shouldLookAgain,
   type BrowserTests,
   type CheckRow,
   type RenderResult,
@@ -216,6 +222,23 @@ export function CheckResults({
   }, [checkState, failed, failedPath, failedDetail]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const hasOutput = output.trim().length > 0;
+  const ready = checksReady(result, browser);
+  useEffect(() => {
+    if (!ready) return;
+    const state = useWorkspace.getState();
+    if (state.agentRunning) return;
+    const message = pendingSource(state.messages);
+    if (!shouldLookAgain(message, rows, Date.now(), { ready, replay: useIdeUi.getState().aiReplay })) return;
+    state.patchMessage(message!.id, { autoFixed: true });
+    void submitAgent("The checks are red. Fixing them before you keep this.", "composer", message!.modelSource, {
+      phase: "skip",
+      automatic: true,
+      apiInstruction: lookPrompt(rows),
+      pendingEdits: edits,
+      copyId: message!.copyId,
+      messageExtra: { autoFixed: true },
+    });
+  }, [ready, rows, edits]);
   return (
     <div className="border-t border-border px-2.5 py-1.5">
       <ul aria-label="Check results" className="flex flex-wrap items-center gap-1">
@@ -228,7 +251,10 @@ export function CheckResults({
               row.id === "tests" && hasOutput
                 ? () => setShowOutput((v) => !v)
                 : row.status === "fail" && row.path
-                  ? () => onOpen(row.path!, row.detail)
+                  ? () => {
+                      useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
+                      onOpen(row.path!, row.detail);
+                    }
                   : undefined
             }
           />
@@ -242,7 +268,14 @@ export function CheckResults({
             problem.path && "cursor-pointer",
           )}
           title={problem.detail}
-          onClick={problem.path ? () => onOpen(problem.path!, problem.detail) : undefined}
+          onClick={
+            problem.path
+              ? () => {
+                  useIdeUi.getState().setLastCheck({ label: problem.label, detail: problem.detail });
+                  onOpen(problem.path!, problem.detail);
+                }
+              : undefined
+          }
         >
           {problem.detail}
         </p>

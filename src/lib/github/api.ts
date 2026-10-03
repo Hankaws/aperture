@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { safeRelPath } from "@/lib/security/redact";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
 import { cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
+import type { GithubReviewComment } from "./review";
 
 export type GithubImportResult =
   | (ImportResult & { ok: true; source: GithubSource | null })
@@ -281,6 +283,59 @@ export const clearGithubAccount = createServerFn({ method: "POST" })
       where user_id = ${context.userId}
     `;
     return { connected: false, login: null, last4: null };
+  });
+
+export const postGithubReview = createServerFn({ method: "POST" })
+  .validator(
+    (input: { owner: string; repo: string; pull: number; sha: string; body: string; comments: GithubReviewComment[] }) =>
+      input,
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
+    const token = await useToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
+    const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
+    if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
+    const pull = Math.floor(data.pull);
+    if (!Number.isFinite(pull) || pull < 1) return { ok: false, error: "That pull request is not valid." };
+    if (!/^[0-9a-f]{7,40}$/i.test(data.sha)) return { ok: false, error: "That commit is not valid." };
+    let body = "";
+    for (const ch of data.body) {
+      const code = ch.codePointAt(0) ?? 0;
+      body += code <= 31 && ch !== "\n" ? " " : ch;
+    }
+    body = body.trim().slice(0, 6000);
+    if (body.length < 8) return { ok: false, error: "The review is empty." };
+    const comments = (Array.isArray(data.comments) ? data.comments : []).slice(0, 20).flatMap((row) => {
+      const path = safeRelPath(row?.path ?? "");
+      const line = Math.floor(row?.line ?? 0);
+      const text = typeof row?.body === "string" ? row.body.replace(/\s+/g, " ").trim().slice(0, 400) : "";
+      if (!path || line < 1 || text.length < 4) return [];
+      return [{ path, line, side: "RIGHT" as const, body: text }];
+    });
+    const url = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/pulls/${pull}/reviews`;
+    try {
+      const posted = await githubJson(url, token, {
+        method: "POST",
+        body: JSON.stringify({ commit_id: data.sha, event: "COMMENT", body, ...(comments.length ? { comments } : {}) }),
+      });
+      if (posted.status === 422 && comments.length > 0) {
+        const plain = await githubJson(url, token, {
+          method: "POST",
+          body: JSON.stringify({ commit_id: data.sha, event: "COMMENT", body }),
+        });
+        if (plain.status === 200 || plain.status === 201) {
+          return { ok: true, url: `https://github.com/${parsed.owner}/${parsed.repo}/pull/${pull}` };
+        }
+        return { ok: false, error: "GitHub would not take the review comments." };
+      }
+      if (posted.status !== 200 && posted.status !== 201) {
+        return { ok: false, error: `GitHub returned ${posted.status}.` };
+      }
+      return { ok: true, url: `https://github.com/${parsed.owner}/${parsed.repo}/pull/${pull}` };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
+    }
   });
 
 export const mergeGithub = createServerFn({ method: "POST" })

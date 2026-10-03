@@ -48,6 +48,7 @@ export function ReviewStrip() {
   }, [messages, rows]);
   const noteCount = notesOn(rows);
   const openIds = openCopyIds(messages.flatMap((m) => m.edits ?? []));
+  const looking = useIdeUi((s) => s.checkHint?.state) === "running";
   const shownCopy = activeCopyOf(openIds, activeCopyId);
   if (running || rows.length === 0) return null;
 
@@ -120,8 +121,8 @@ export function ReviewStrip() {
         <Button
           size="sm"
           className="h-7 px-2.5"
-          disabled={noteCount > 0}
-          title={noteCount > 0 ? "Send or dismiss notes first" : undefined}
+          disabled={noteCount > 0 || looking}
+          title={looking ? "Looking at the preview first" : noteCount > 0 ? "Send or dismiss notes first" : undefined}
           onClick={() => applyAllPending()}
         >
           <Check className="size-3.5" />
@@ -168,7 +169,7 @@ export function ReviewStrip() {
                   Dismiss
                 </Button>
               ) : (
-                <Button size="sm" className="h-7 px-2" onClick={() => applyEdit(edit)}>
+                <Button size="sm" className="h-7 px-2" disabled={looking} title={looking ? "Looking at the preview first" : undefined} onClick={() => applyEdit(edit)}>
                   Apply
                 </Button>
               )}

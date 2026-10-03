@@ -24,6 +24,8 @@ export function nextAction(input: {
   checks?: "running" | "clear" | "failed";
   /** How many composer copies still have unapplied edits. */
   copies?: number;
+  /** Every staged edit has already had its review pass. */
+  reviewed?: boolean;
 }): NextAction {
   if (input.running) {
     return { kind: "wait", title: "Composer is working", detail: "Steer in the box if you want to add a follow-up.", cta: "Wait" };
@@ -56,6 +58,16 @@ export function nextAction(input: {
       cta: "Send back",
       altKind: "apply",
       altCta: "Apply anyway",
+    };
+  }
+  if (input.pending > 0 && input.checks === "clear" && !input.reviewed) {
+    return {
+      kind: "reviewer",
+      title: "Review the diff before you keep it",
+      detail: "One pass. A comment only where something is wrong. Dismiss it and it will not come back.",
+      cta: "Review",
+      altKind: "apply",
+      altCta: (input.copies ?? 0) > 1 ? "Keep anyway" : "Apply anyway",
     };
   }
   if (input.pending > 0 && input.checks === "clear") {

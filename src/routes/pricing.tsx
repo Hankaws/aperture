@@ -30,8 +30,8 @@ function PricingPage() {
           <h2 className="text-lg font-medium tracking-tight">What the plan actually limits</h2>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
             <li>Composer, Chat, and Inline on Hobby, Pro, and Team.</li>
-            <li>One send = one hosted turn — the whole tool loop, not each grep.</li>
-            <li>Hosted Grok turns each month — Hobby 50, Pro 500, Team 2,000.</li>
+            <li>One send is one call on the key you attached. This app does not spend a shared Grok key.</li>
+            <li>You pick your Grok, GPT, Claude, Gemini, or DeepSeek key. No silent Auto.</li>
             <li>Session cap on by default (8 hosted turns or about $1 on your keys). Raise it in Settings.</li>
             <li>You pick Hosted Grok, or your Grok, GPT, Claude, Gemini, or DeepSeek. No silent Auto.</li>
             <li>Tab ghost-text on Pro uses a fast model (250 hosted / day), not grok-4.5 per keystroke. Your own key is uncapped.</li>

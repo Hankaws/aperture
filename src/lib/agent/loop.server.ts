@@ -13,6 +13,7 @@ import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
 import { compactLoopMessages } from "./compact";
 import { stagedEditSettled } from "./cost";
+import { inTurnCheckPrompt } from "@/lib/workspace/checks";
 import { reviewContext, withReviewLine } from "@/lib/workspace/diff-notes";
 import { applyStackMemory, formatStackContext } from "./stack";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
@@ -179,6 +180,7 @@ function buildContextMessage(
     input.selection
       ? `Selection in ${input.selection.path} L${input.selection.fromLine}-L${input.selection.toLine}:\n${input.selection.text}`
       : "",
+    input.userMove ?? "",
   ];
   if (mentioned.includes("repo-map")) {
     parts.push("Attached @repo-map: the symbol map above is the map of this repo.");
@@ -373,7 +375,7 @@ export async function runAgentLoopStreaming(
         .filter(Boolean)
         .join("\n\n");
   const userCtx = reviewing
-    ? reviewContext(ctx.edits)
+    ? [reviewContext(ctx.edits), input.userMove ?? ""].filter(Boolean).join("\n\n")
     : [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
   let messages: ChatMessage[] = [
     { role: "system", content: sys, cache: true },
@@ -392,6 +394,7 @@ export async function runAgentLoopStreaming(
   /** Staged edits as of the last verify run, to tell a real fix from a shrug. */
   let lastVerifiedEdits = "";
   let verify: VerifyReport | undefined;
+  let checkedInTurn = false;
   const maxSteps = reviewing ? 1 : phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
@@ -588,8 +591,18 @@ export async function runAgentLoopStreaming(
         );
       }
       if (phase !== "plan" && stagedEditSettled(editResults)) {
+        const staged = mergeEdits(ctx.edits);
+        if (!checkedInTurn) {
+          const prompt = inTurnCheckPrompt(ctx.files, staged);
+          if (prompt) {
+            checkedInTurn = true;
+            emit({ type: "status", text: "A check is red. Fixing it in this turn…" });
+            messages.push({ role: "user", content: prompt });
+            continue;
+          }
+        }
         return succeed(
-          { text: completion.content.trim() || "Staged.", traces, edits: mergeEdits(ctx.edits), plan: ctx.plan },
+          { text: completion.content.trim() || "Staged.", traces, edits: staged, plan: ctx.plan },
           step + 1,
         );
       }

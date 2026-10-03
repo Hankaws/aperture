@@ -88,16 +88,15 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
     };
   }
   const provider: ProviderId = src === "hosted" ? "grok" : src;
-  const hosted = src === "hosted";
-  const cents = estimateCents(src);
+  const cents = TURN_COST_CENTS[provider];
 
   if (!account) {
     return {
       source: src,
-      hosted,
+      hosted: false,
       provider,
       cents,
-      label: hosted ? "This run = 1 hosted turn" : `on your ${providerShort(provider)} key, ~${formatUsd(cents)}`,
+      label: `on your ${providerShort(provider)} key, ~${formatUsd(cents)}`,
       sub: "Sign in to send",
       blocked: true,
       blockReason: null,
@@ -107,44 +106,25 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
   const session = account.session;
   let blocked = false;
   let blockReason: string | null = null;
+  const key = account.keys[provider];
 
-  if (hosted) {
-    if (account.remaining <= 0) {
-      blocked = true;
-      blockReason = `Hosted Grok is used (${account.hostedTurns}/${account.hostedTurns} this month). Switch to your own key or upgrade.`;
-    } else if (session.on && session.turns >= session.capTurns) {
-      blocked = true;
-      blockReason = `Session cap reached (${session.capTurns} hosted turns). Raise it in Settings — the runaway hour cannot happen here.`;
-    }
-  } else if (!account.keys[src]?.set) {
+  if (!key?.set) {
     blocked = true;
-    blockReason = `Add a ${providerShort(src)} key in Settings, or switch to Hosted Grok.`;
+    blockReason =
+      src === "hosted"
+        ? "Add your Grok key in Settings. This app does not use a shared key."
+        : `Add a ${providerShort(src)} key in Settings.`;
   } else if (session.on && session.cents + cents > session.capCents) {
     blocked = true;
     blockReason = `Session cap reached (${formatUsd(session.capCents)} on your keys). Raise it in Settings.`;
   }
 
-  if (hosted) {
-    return {
-      source: src,
-      hosted: true,
-      provider: "grok",
-      cents: 0,
-      label: "This run = 1 hosted turn",
-      sub: session.on
-        ? `session ${session.turns}/${session.capTurns} · ${account.remaining} left this month`
-        : `${account.remaining} hosted left this month`,
-      blocked,
-      blockReason,
-    };
-  }
-
-  const name = providerShort(src);
-  const last4 = account.keys[src]?.last4;
+  const name = providerShort(provider);
+  const last4 = key?.last4;
   return {
     source: src,
     hosted: false,
-    provider: src,
+    provider,
     cents,
     label: `on your ${name} key, ~${formatUsd(cents)}`,
     sub: session.on

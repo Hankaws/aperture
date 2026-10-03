@@ -73,15 +73,12 @@ local in-process database (PGlite), so nothing else needs setting up.
     phone and tablet widths.
 - **Your layout.** Every panel resizes and moves. The preview can dock right,
   below or full-screen, and the sidebars can swap sides.
-- **Any model.** Hosted Grok, or your own key for Grok, OpenAI, Anthropic,
-  Gemini or DeepSeek (Settings → Models).
+- **Any model.** Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek
+  (Settings → Models). The app does not spend a shared Grok key.
 
 ## Using a real model
 
-Leave out `APERTURE_MODEL=replay`. Then either:
-
-- set `XAI_API_KEY` in the server's environment for hosted Grok, or
-- sign in and add your own key under **Settings → Models**.
+Leave out `APERTURE_MODEL=replay`. Sign in and add your own key under **Settings → Models**.
 
 ## Configuration
 
@@ -92,7 +89,6 @@ environment settings, never in a committed file.
 | --- | --- |
 | `APERTURE_MODEL=replay` | Recorded runs instead of a model; no key, no cost |
 | `VITE_AUTH_ENABLED=false` | No sign-in. Each browser gets its own anonymous workspace, settings and keys; the plan and usage limits are shared by all anonymous visitors |
-| `XAI_API_KEY` | Server key for hosted Grok |
 | `DATABASE_URL` | Postgres for accounts and saved work. Without it, an in-process PGlite database |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Session signing and the public URL when sign-in is on |
 | `GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET` | "Sign in with Grok". Only apps hosted by Grok App Builder have these; email and password sign-in works without them |

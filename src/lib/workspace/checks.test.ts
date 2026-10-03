@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, changeChecks, checksReady, checkStripState, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -18,6 +18,14 @@ const FILES = {
 function row(rows: CheckRow[], id: CheckRow["id"]): CheckRow {
   return rows.find((r) => r.id === id)!;
 }
+
+test("inTurnCheckPrompt is empty when the staged file parses, and names a red check when it does not", () => {
+  assert.equal(inTurnCheckPrompt(FILES, [edit("src/a.ts", FILES["src/a.ts"])]), null);
+  const prompt = inTurnCheckPrompt(FILES, [edit("src/a.ts", "export const a = ;\n")]);
+  assert.ok(prompt);
+  assert.match(prompt ?? "", /Parses/);
+  assert.match(prompt ?? "", /propose_edit/);
+});
 
 test("a failed parse counts while tests are still running", () => {
   assert.equal(

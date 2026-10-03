@@ -467,23 +467,18 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
   const source: ModelSource = requested && isModelSource(requested) ? requested : account.modelSource;
 
   if (source === "hosted") {
-    // The public demo never spends the operator's Grok key. Recorded runs instead.
+    // The public demo never spends a Grok key. Recorded runs instead.
     if (publicDemo) {
       return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
     }
-    const hosted = process.env.XAI_API_KEY;
-    if (!hosted) {
-      return { ok: false, error: "Hosted Grok is not available. Attach your own key in Settings." };
+    const own = decryptSecret(row.grok_key);
+    if (!own) {
+      return { ok: false, error: "Add your Grok key in Settings. This app does not use a shared key." };
     }
-    if (account.remaining <= 0) {
-      return {
-        ok: false,
-        error: `Hosted Grok quota is used (${account.hostedTurns}/${account.hostedTurns} this month). Switch to your own key or upgrade.`,
-      };
-    }
-    const cap = sessionBlock(account, true, 0);
+    const cents = estimateCents("grok");
+    const cap = sessionBlock(account, false, cents);
     if (cap) return { ok: false, error: cap };
-    return { ok: true, provider: "grok", apiKey: hosted, hosted: true, source: "hosted", cents: 0 };
+    return { ok: true, provider: "grok", apiKey: own, hosted: false, source: "hosted", cents };
   }
 
   if (source === "custom") {
@@ -554,17 +549,11 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
   if (publicDemo) {
     return { ok: false, error: "Tab is off on the public demo. Add your own key in Settings." };
   }
-  const hosted = process.env.XAI_API_KEY;
-  if (!hosted) {
-    return { ok: false, error: "Tab is unavailable." };
+  const own = decryptSecret(row.grok_key);
+  if (!own) {
+    return { ok: false, error: "Add your Grok key in Settings. Tab does not use a shared key." };
   }
-  if (account.tabRemaining <= 0) {
-    return {
-      ok: false,
-      error: "Hosted Tab is used for today. Attach your own key — Tab on your key is uncapped.",
-    };
-  }
-  return { ok: true, provider: "grok", apiKey: hosted, hosted: true, source: "hosted", cents: 0 };
+  return { ok: true, provider: "grok", apiKey: own, hosted: false, source: "hosted", cents: 0 };
 }
 
 function sessionBlock(account: AccountSnapshot, hosted: boolean, cents: number): string | null {

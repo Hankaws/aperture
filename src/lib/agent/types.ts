@@ -45,6 +45,8 @@ export type AgentInput = {
   refusals?: string[];
   /** The open file, the cursor line, and the last check or element they clicked. */
   spot?: Spot;
+  /** Cursor, a hand edit, and a dismissed note. Short. Not the whole history. */
+  userMove?: string;
   /** Set when the tab can run scripts in its browser test runner (see browser-handoff.ts). */
   browserRuns?: BrowserRuns;
 };

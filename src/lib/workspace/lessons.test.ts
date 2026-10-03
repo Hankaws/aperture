@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatObservations, formatSpot, lessonAfterKeep, lessonEditForFailure, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, ruleFromFailure, standingForPrompt, upsertLesson, upsertStanding } from "./lessons.ts";
+import { formatObservations, formatSpot, formatUserMove, lessonAfterKeep, lessonEditForFailure, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, ruleFromFailure, standingForPrompt, upsertLesson, upsertStanding } from "./lessons.ts";
+
+test("formatUserMove names the cursor, a hand edit, and a dismissed note", () => {
+  const text = formatUserMove({
+    path: "src/list.ts",
+    line: 12,
+    lineText: "const n = items.length;",
+    typed: ["src/list.ts"],
+    dismissed: ["Do not repeat this. The user did not keep src/list.ts: review note: off by one."],
+  });
+  assert.match(text, /cursor at src\/list.ts:12/);
+  assert.match(text, /typed over the staged diff in src\/list.ts/);
+  assert.match(text, /dismissed: Do not repeat this/);
+  assert.equal(formatUserMove({}), "");
+});
 
 test("a lesson replaces the earlier one for the same turn and stays readable", () => {
   const first = upsertLesson("", "m1", "down", "Run the tests before you call a fix done.");

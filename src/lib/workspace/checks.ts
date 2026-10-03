@@ -228,6 +228,15 @@ function testsRow(verify: VerifyReport | null, browser: BrowserTests): CheckRow 
   };
 }
 
+/** Parse, imports and types, before the turn ends. Preview still needs the browser. */
+export function inTurnCheckPrompt(files: Record<string, string>, edits: ProposedEdit[]): string | null {
+  const pending = edits.filter((edit) => edit.status === "pending");
+  if (pending.length === 0) return null;
+  const rows = changeChecks({ files, edits: pending, render: null });
+  if (lookFailures(rows).length === 0) return null;
+  return lookPrompt(rows);
+}
+
 /** The latest message that still has pending edits: the change the checks describe. */
 export function pendingSource<M extends { edits?: ProposedEdit[] }>(messages: M[]): M | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

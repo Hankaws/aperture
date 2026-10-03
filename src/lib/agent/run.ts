@@ -10,7 +10,7 @@ import type { AgentPhase } from "./phase";
 import { formatDesignCaptures } from "@/lib/workspace/design-mode";
 import { parseMentions } from "@/lib/workspace/mentions";
 import { attachNotesToPending, listPendingEdits, markReviewed, withoutUnchanged } from "@/lib/workspace/edits";
-import { LESSONS_PATH, formatObservations, lessonEditForFailure, readStanding, refusalLine, rememberRefusal } from "@/lib/workspace/lessons";
+import { LESSONS_PATH, formatObservations, formatUserMove, lessonEditForFailure, readStanding, refusalLine, rememberRefusal } from "@/lib/workspace/lessons";
 import { pendingForRun } from "@/lib/workspace/copies";
 import { autoContextPaths } from "./auto-context";
 import { compactHistory, priorMessages } from "./compact";
@@ -178,6 +178,13 @@ export function agentPayload(
     standing: readStanding().map((rule) => rule.line),
     refusals,
     spot: spotFrom(latest, useIdeUi.getState()),
+    userMove: formatUserMove({
+      path: latest.selection?.path ?? latest.activePath,
+      line: latest.selection?.fromLine ?? null,
+      lineText: latest.selection?.text,
+      typed: handEdited.map((edit) => edit.path),
+      dismissed: refusals.slice(-2),
+    }) || undefined,
   };
 }
 

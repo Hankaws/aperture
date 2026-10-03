@@ -443,16 +443,22 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
   // A replay deployment answers every Composer run from recordings: no key,
   // no quota and no cost, and the UI labels it so nobody mistakes it for a model.
   const { replayEnabled } = await import("@/lib/agent/replay");
+  const { requestIsPublicDemo } = await import("@/lib/agent/public-demo.server");
   if (replayEnabled()) {
     const source: ModelSource = requested && isModelSource(requested) ? requested : "hosted";
     return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
   }
+  const publicDemo = requestIsPublicDemo();
   const { decryptSecret } = await peek();
   const row = await loadAccount(userId);
   const account = await snapshotOf(row);
   const source: ModelSource = requested && isModelSource(requested) ? requested : account.modelSource;
 
   if (source === "hosted") {
+    // The public demo never spends the operator's Grok key. Recorded runs instead.
+    if (publicDemo) {
+      return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
+    }
     const hosted = process.env.XAI_API_KEY;
     if (!hosted) {
       return { ok: false, error: "Hosted Grok is not available. Attach your own key in Settings." };
@@ -501,7 +507,9 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
 
 export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
   const { replayEnabled } = await import("@/lib/agent/replay");
+  const { requestIsPublicDemo } = await import("@/lib/agent/public-demo.server");
   if (replayEnabled()) return { ok: false, error: "Tab needs a real model; replay only plays back Composer tasks." };
+  const publicDemo = requestIsPublicDemo();
   const { decryptSecret } = await peek();
   const row = await loadAccount(userId);
   const account = await snapshotOf(row);
@@ -530,6 +538,9 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
     if (own) {
       return { ok: true, provider: source, apiKey: own, hosted: false, source, cents: 0 };
     }
+  }
+  if (publicDemo) {
+    return { ok: false, error: "Tab is off on the public demo. Add your own key in Settings." };
   }
   const hosted = process.env.XAI_API_KEY;
   if (!hosted) {

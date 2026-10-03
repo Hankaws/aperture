@@ -4,7 +4,8 @@ import type { AgentInput, AgentResult } from "./types";
 
 export const getAiStatus = createServerFn({ method: "POST" }).handler(async () => {
   const { replayEnabled } = await import("./replay");
-  const replay = replayEnabled();
+  const { requestIsPublicDemo } = await import("./public-demo.server");
+  const replay = replayEnabled() || requestIsPublicDemo();
   return { available: replay || Boolean(process.env.XAI_API_KEY), replay };
 });
 

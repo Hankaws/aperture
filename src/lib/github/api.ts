@@ -299,6 +299,7 @@ export const postGithubReview = createServerFn({ method: "POST" })
     const pull = Math.floor(data.pull);
     if (!Number.isFinite(pull) || pull < 1) return { ok: false, error: "That pull request is not valid." };
     if (!/^[0-9a-f]{7,40}$/i.test(data.sha)) return { ok: false, error: "That commit is not valid." };
+    if (typeof data.body !== "string") return { ok: false, error: "The review is empty." };
     let body = "";
     for (const ch of data.body) {
       const code = ch.codePointAt(0) ?? 0;

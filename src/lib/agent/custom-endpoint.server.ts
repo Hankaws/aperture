@@ -1,12 +1,21 @@
 import { lookup } from "node:dns/promises";
-import { isPrivateAddress, normalizeCustomBase } from "./custom-endpoint";
+import { isPrivateAddress, LOCAL_ENDPOINTS_OFF, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
 
-/** Resolves the host and refuses a public name that points at a private address. */
-export async function assertFetchableBase(raw: string): Promise<string> {
+/**
+ * Resolves the host and refuses a public name that points at a private address.
+ * Loopback is refused too once deployed (see `localEndpointsAllowed`).
+ */
+export async function assertFetchableBase(
+  raw: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<string> {
   const base = normalizeCustomBase(raw);
   if (!base) throw new Error("Use http://127.0.0.1 for Ollama or LM Studio, or https for OpenRouter.");
   const host = new URL(base).hostname.toLowerCase();
-  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return base;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    if (!localEndpointsAllowed(env)) throw new Error(LOCAL_ENDPOINTS_OFF);
+    return base;
+  }
   let records: Array<{ address: string }>;
   try {
     records = await lookup(host, { all: true });

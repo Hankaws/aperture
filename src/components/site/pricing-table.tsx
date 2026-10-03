@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { PLANS, type PlanId } from "@/lib/billing/plans";
+import { PLANS, planAvailable, type PlanId } from "@/lib/billing/plans";
 import { setPlan } from "@/lib/billing/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,7 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
         {PLANS.map((plan) => {
           const price = yearly ? plan.yearlyMonthly : plan.monthly;
           const active = currentPlan === plan.id;
+          const comingSoon = !planAvailable(plan);
           return (
             <article
               key={plan.id}
@@ -64,14 +65,21 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
                 plan.featured ? "border-fg/30" : "border-border",
               )}
             >
-              <p className="text-sm font-medium">{plan.name}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{plan.name}</p>
+                {comingSoon && (
+                  <span className="rounded-md border border-border px-2 py-0.5 text-xs text-subtle">Coming soon</span>
+                )}
+              </div>
               <p className="mt-1 text-sm text-muted">{plan.blurb}</p>
               <p className="mt-5 font-medium tracking-tight">
                 <span className="text-4xl">${price}</span>
                 <span className="text-sm text-muted"> / mo</span>
               </p>
-              {yearly && plan.monthly > 0 && (
-                <p className="mt-1 text-xs text-subtle">Billed annually at ${price * 12}</p>
+              {comingSoon ? (
+                <p className="mt-1 text-xs text-subtle">Not available yet. Nothing is charged.</p>
+              ) : (
+                yearly && plan.monthly > 0 && <p className="mt-1 text-xs text-subtle">Billed annually at ${price * 12}</p>
               )}
               {plan.monthly === 0 && <p className="mt-1 text-xs text-subtle">No card required</p>}
               <ul className="mt-5 flex flex-1 flex-col gap-2 text-sm text-muted">
@@ -85,17 +93,17 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
               <Button
                 className="mt-6 h-11 w-full"
                 variant={plan.featured ? "default" : "outline"}
-                disabled={active || busy === plan.id}
+                disabled={active || comingSoon || busy === plan.id}
                 onClick={() => void activate(plan.id)}
               >
-                {active ? "Current plan" : busy === plan.id ? "Activating…" : plan.cta}
+                {active ? "Current plan" : comingSoon ? "Coming soon" : busy === plan.id ? "Activating…" : plan.cta}
               </Button>
             </article>
           );
         })}
       </div>
       <p className="mt-6 text-center text-xs text-subtle">
-        Preview billing is instant on the account — no card is charged here.{" "}
+        Paid plans are not available yet: there is no checkout, and no card is charged.{" "}
         <Link
           to="/settings"
           search={{ tab: "models" }}

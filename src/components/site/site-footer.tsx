@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { ApertureMark } from "@/components/ide/logo";
+import { showPricing } from "@/lib/billing/pricing-visible";
 
 export function SiteFooter() {
   const { user, isPending } = useHydratedUserState();
@@ -15,9 +16,11 @@ export function SiteFooter() {
           <Link to="/" className="hover:text-fg">
             Product
           </Link>
-          <Link to="/pricing" className="hover:text-fg">
-            Pricing
-          </Link>
+          {showPricing && (
+            <Link to="/pricing" className="hover:text-fg">
+              Pricing
+            </Link>
+          )}
           <Link to="/settings" search={{ tab: "models" }} className="hover:text-fg">
             Models
           </Link>

@@ -10,6 +10,7 @@ import { McpServersCard } from "@/components/site/mcp-servers";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useAccount } from "@/lib/billing/use-account";
 import { planById } from "@/lib/billing/plans";
+import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "plan" | "models" | "limits" | "agents";
@@ -84,9 +85,11 @@ function SettingsPage() {
                   <p className="mt-1 text-2xl font-medium tracking-tight">{plan.name}</p>
                   <p className="mt-1 text-sm text-muted">{plan.blurb}</p>
                 </div>
-                <Link to="/pricing" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-                  Change plan
-                </Link>
+                {showPricing && (
+                  <Link to="/pricing" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                    See plans
+                  </Link>
+                )}
               </div>
               <div className="mt-6">
                 <div className="flex items-center justify-between text-sm">
@@ -116,10 +119,12 @@ function SettingsPage() {
               </div>
             </div>
             <GithubAccountCard />
-            <div>
-              <h2 className="mb-4 text-lg font-medium tracking-tight">Switch plan</h2>
-              <PricingTable currentPlan={account.plan} />
-            </div>
+            {showPricing && (
+              <div>
+                <h2 className="mb-4 text-lg font-medium tracking-tight">Plans</h2>
+                <PricingTable currentPlan={account.plan} />
+              </div>
+            )}
           </section>
         )}
 

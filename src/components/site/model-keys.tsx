@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { saveProviderKey, saveCustomEndpoint, setModelSource, type AccountSnapshot } from "@/lib/billing/api";
 import { CUSTOM_PRESETS } from "@/lib/agent/custom-endpoint";
 import { PROVIDERS, planById, type ProviderId } from "@/lib/billing/plans";
+import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 
 export function ModelKeys({
@@ -108,11 +109,11 @@ export function ModelKeys({
         )
       )}
 
-      {account.plan === "hobby" && (
+      {account.plan === "hobby" && showPricing && (
         <p className="text-sm text-muted">
           Need GPT, Claude, Gemini, and DeepSeek together?{" "}
           <Link to="/pricing" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-auto px-1")}>
-            Upgrade to Pro
+            Pro (coming soon)
           </Link>
         </p>
       )}

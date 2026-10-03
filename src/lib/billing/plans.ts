@@ -125,3 +125,20 @@ export function isModelSource(value: string): value is ModelSource {
 export function providerShort(id: ProviderId): string {
   return PROVIDERS.find((p) => p.id === id)?.short ?? id;
 }
+
+/**
+ * Whether a plan can be chosen today. There is no checkout yet, so only the
+ * free plan can; the paid plans show as coming soon.
+ */
+export function planAvailable(plan: Pick<Plan, "monthly">): boolean {
+  return plan.monthly === 0;
+}
+
+/**
+ * Whether plans and prices are shown at all. With sign-in off (the public
+ * demo) every visitor shares one plan, so a plan picker there would change it
+ * for everyone. It shows none.
+ */
+export function pricingVisible(authEnabled: boolean): boolean {
+  return authEnabled;
+}

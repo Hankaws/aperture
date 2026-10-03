@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ApertureMark } from "@/components/ide/logo";
+import { showPricing } from "@/lib/billing/pricing-visible";
 import { AuthSlot } from "./auth-slot";
 
 export function SiteNav() {
@@ -20,9 +21,11 @@ export function SiteNav() {
           <a href="/#why" className="hidden hover:text-fg sm:inline">
             Why
           </a>
-          <Link to="/pricing" className="hover:text-fg">
-            Pricing
-          </Link>
+          {showPricing && (
+            <Link to="/pricing" className="hover:text-fg">
+              Pricing
+            </Link>
+          )}
           <Link to="/app" className="hidden hover:text-fg sm:inline">
             Editor
           </Link>

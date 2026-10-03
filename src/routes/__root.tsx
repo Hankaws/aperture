@@ -5,17 +5,28 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Aperture";
+const TITLE = "Aperture: an AI code editor that checks its own work";
+const DESCRIPTION =
+  "Every staged change is checked before you apply it: it parses, its imports resolve, the preview renders, and the tests pass. The tests run free in your browser tab.";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: APP_NAME },
-      {
-        name: "description",
-        content: "Aperture is an AI code editor that indexes a whole repo, searches it semantically, and proposes diffs you can apply.",
-      },
+      { title: TITLE },
+      { name: "description", content: DESCRIPTION },
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: APP_NAME },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: DESCRIPTION },
+      { property: "og:image", content: "/og.jpg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: TITLE },
+      { name: "twitter:description", content: DESCRIPTION },
+      { name: "twitter:image", content: "/og.jpg" },
       { name: "theme-color", content: "#09090b" },
     ],
     links: [

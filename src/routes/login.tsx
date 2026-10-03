@@ -141,9 +141,9 @@ function Login() {
           </form>
 
           <p className="mt-4 text-center text-xs text-subtle">
-            New accounts start on Hobby. Upgrade anytime on{" "}
+            New accounts start on Hobby, which is free. Paid plans are{" "}
             <Link to="/pricing" className="text-muted hover:text-fg">
-              pricing
+              coming soon
             </Link>
             .
           </p>

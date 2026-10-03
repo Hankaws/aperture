@@ -6,92 +6,93 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { PricingTable } from "@/components/site/pricing-table";
 import { buttonVariants } from "@/components/ui/button";
 import { PROVIDERS } from "@/lib/billing/plans";
+import { showPricing } from "@/lib/billing/pricing-visible";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { cn } from "@/lib/utils";
 import { ProductDemo } from "./demo";
 import { Reveal } from "./reveal";
 import { usePrefersReducedMotion } from "./use-reduced-motion";
 import { SnippetShowcase } from "./snippets";
-import { BUILTIN_ACP, acpAgentNames } from "@/lib/acp/kinds";
 
-const LINE1 = ["See", "the", "whole", "repo."];
-const LINE2 = ["Change", "the", "right", "files."];
+const LINE1 = ["Every", "change,", "checked"];
+const LINE2 = ["before", "you", "apply", "it."];
 
 const HOW = [
   {
     n: "01",
     title: "Open a project",
-    body: "Drop a folder, a zip, or a public GitHub link. Aperture indexes it in the browser. node_modules stays out.",
+    body: "Drop a folder, a zip, or a public GitHub link, or start on the built-in demo project. node_modules stays out.",
   },
   {
     n: "02",
     title: "Ask Composer",
-    body: "Write it like you’d tell a teammate. The footer shows the cost first. Composer posts a plan before any edit.",
+    body: "Write it like you’d tell a teammate. Composer reads the code, posts a plan, and waits for you to click Build it.",
   },
   {
     n: "03",
-    title: "Apply the diffs",
-    body: "Green and red, per file. Apply one, apply all, or reject. Undo this run restores the files from before that send.",
+    title: "Check, then apply",
+    body: "Edits arrive as staged diffs, each checked: it parses, imports resolve, the preview renders, the tests pass. Keep or skip file by file.",
   },
 ];
 
 const PILLARS = [
   {
+    id: "checks",
+    title: "Four checks on every staged change",
+    body: "Parses, imports resolve, preview renders, tests pass. Each is computed from the staged change itself. A check that could not run says why. It never shows as a pass.",
+    visual: "checks",
+  },
+  {
+    id: "tests",
+    title: "Tests run free, in your tab",
+    body: "npm run test runs in a sandboxed Worker with no network access: node:test, Vitest and Jest, in about a second. A failure that was already there is reported as such, not blamed on the edit.",
+    visual: "tests",
+  },
+  {
     id: "plan",
     title: "A plan before the first edit",
-    body: "Composer writes a short checklist, then the diffs. You always see what it intends before anything is staged.",
+    body: "Composer posts a short plan and waits for Build it. Nothing touches your files until you apply.",
     visual: "plan",
   },
   {
-    id: "cost",
-    title: "Cost before you send",
-    body: "The next run is labeled in the footer: “This run = 1 hosted turn” or “on your Claude key, ~$0.12”. Cursor hides that meter.",
-    visual: "cost",
-  },
-  {
     id: "model",
-    title: "You pick the model. No Auto.",
-    body: "Hosted Grok, or your Grok, GPT, Claude, Gemini, or DeepSeek. If a key is missing we say so. We never silently switch pools.",
+    title: "You pick the model",
+    body: "Hosted Grok, or your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek. If a key is missing, Aperture says so.",
     visual: "model",
-  },
-  {
-    id: "agents",
-    title: "Agents share the same diffs",
-    body: `${acpAgentNames("and")} stream into this panel. Same plan. Same Apply. Pro, not Ultra-gated.`,
-    visual: "agents",
   },
 ] as const;
 
 const FAQ = [
   {
     q: "What is Aperture, in one sentence?",
-    a: "An AI code editor: you open a project, ask Composer in English, review the diffs, and apply what you want.",
+    a: "An open-source AI code editor that checks its own work: Composer plans a change and stages it as a diff, and every staged change is checked before you apply it.",
+  },
+  {
+    q: "What gets checked?",
+    a: "Four things, computed from the staged change: the changed files parse, every import in them resolves, the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
+  },
+  {
+    q: "Do the tests cost anything?",
+    a: "No. npm run test runs in a sandboxed Worker in your browser tab, with no network access, in about a second. It covers node:test, Vitest and Jest. Projects that need a real Node can run in Vercel Sandbox instead.",
+  },
+  {
+    q: "Can I try it without an API key?",
+    a: "Yes. Run it locally with APERTURE_MODEL=replay. Replay plays back recorded runs on the built-in demo project, harbor-api, and costs nothing. The commands are in the README.",
   },
   {
     q: "Do I have to use your model?",
-    a: "No. You pick Hosted Grok, your Grok, your GPT, Claude, Gemini, or DeepSeek. There is no Auto and no silent fallback. Hobby allows one key; Pro and Team allow all five. Your own API usage is billed by that provider, not by us.",
-  },
-  {
-    q: "What does a hosted turn cost?",
-    a: "One Composer send is one hosted turn — the whole tool loop, not each grep. You see the cost before you send. Session cap is on by default: 8 hosted turns or about $1 on your keys, then we stop.",
-  },
-  {
-    q: "Are agents only on a high plan?",
-    a: `No. Composer, Chat, and Inline are the product on Hobby. Pro adds Tab ghost-text, one background job, and ACP sessions for ${acpAgentNames("and")} in the same diff UI. Team gets three background jobs.`,
+    a: "No. Pick Hosted Grok, or your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek under Settings → Models. Your own API usage is billed by that provider, not by us.",
   },
   {
     q: "How do I take the code with me?",
     a: "Download a zip from the Open menu, the command palette, or ⌘S / Ctrl+S. Secrets like .env never enter the zip. Apply is not final — Undo this run restores the files from before that Composer send.",
   },
   {
-    q: "Where does my code go?",
-    a: "Folder and zip stay in the browser. GitHub import fetches a public zipball once, then the workspace lives locally. When Composer runs, it sends only the snippets the agent reads — not a zip of the repo. Keys are encrypted at rest.",
-  },
-  {
-    q: "Will you charge a card here?",
-    a: "Plans activate on the account so you can feel the limits. No card is charged in this preview.",
+    q: "Is there a paid plan?",
+    a: "Not yet. Paid plans are coming soon. Nothing is charged today.",
   },
 ];
+
 
 function HeroCtas() {
   const { user, isPending } = useHydratedUserState();
@@ -165,12 +166,12 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
       </div>
     );
   }
-  if (id === "cost") {
+  if (id === "tests") {
     return (
       <div className="rounded-2xl border border-border bg-surface p-5">
-        <p className="text-xs tracking-[0.14em] text-subtle uppercase">Before send</p>
-        <p className="mt-4 text-2xl font-medium tracking-tight">This run = 1 hosted turn</p>
-        <p className="mt-2 text-sm text-muted">or on your Claude key, ~$0.12. Session cap is on — 8 turns or about $1, then we stop.</p>
+        <p className="text-xs tracking-[0.14em] text-subtle uppercase">npm run test · in this tab</p>
+        <p className="mt-4 text-2xl font-medium tracking-tight">Tests pass ✓</p>
+        <p className="mt-2 text-sm text-muted">Ran in a sandboxed Worker with no network access. No server, no cost.</p>
       </div>
     );
   }
@@ -196,16 +197,15 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
   }
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">
-      <p className="text-xs tracking-[0.14em] text-subtle uppercase">Same diff UI</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {BUILTIN_ACP.map(({ name }) => (
-          <span key={name} className="rounded-md border border-border bg-bg px-2.5 py-1 text-sm text-fg">
-            {name}
-          </span>
+      <p className="text-xs tracking-[0.14em] text-subtle uppercase">Checks</p>
+      <ul className="mt-4 space-y-3 text-sm">
+        {["Parses", "Imports resolve", "Preview renders", "Tests"].map((label) => (
+          <li key={label} className="flex items-center gap-3">
+            <Check className="size-4 text-ok" strokeWidth={2.4} />
+            <span className="text-fg">{label}</span>
+          </li>
         ))}
-      </div>
-      <p className="mt-4 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs text-ok">+ return tasks.slice(start, start + pageSize);</p>
-      <p className="mt-2 text-right text-xs text-ok">Apply</p>
+      </ul>
     </div>
   );
 }
@@ -270,11 +270,11 @@ export function Landing() {
         <section className="landing-spot relative overflow-hidden">
           <div className="mx-auto max-w-6xl px-4 pt-12 pb-16 sm:px-6 sm:pt-20 sm:pb-24">
             <p className="landing-in text-xs font-medium tracking-[0.18em] text-subtle uppercase" style={{ animationDelay: "40ms" }}>
-              The AI code editor
+              The AI code editor that checks its own work
             </p>
             <h1
               className="mt-5 max-w-4xl text-4xl font-medium tracking-tight sm:text-6xl sm:leading-[1.05]"
-              aria-label="See the whole repo. Change the right files."
+              aria-label="Every change, checked before you apply it."
             >
               <span className="block">
                 <HeroWords words={LINE1} start={80} />
@@ -284,12 +284,13 @@ export function Landing() {
               </span>
             </h1>
             <p className="landing-in mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted sm:text-lg" style={{ animationDelay: "720ms" }}>
-              Open a project. Ask Composer in English. It plans, then shows diffs. You apply what you want. The cost of
-              that send is on screen before you hit enter.
+              Composer plans a change and stages it as a diff. Before you apply it, Aperture checks that it parses,
+              its imports resolve, the preview renders, and the tests pass. The tests run in your browser tab, free, in
+              about a second.
             </p>
             <div className="landing-in" style={{ animationDelay: "880ms" }}>
               <HeroCtas />
-              <p className="mt-3 text-sm text-subtle">Hobby · 50 hosted turns · agents included · session cap on · no card</p>
+              <p className="mt-3 text-sm text-subtle">Open source · MIT · try it with no API key in replay mode</p>
             </div>
             <div className="landing-in mt-12" style={{ animationDelay: "1040ms" }}>
               <ProductDemo />
@@ -345,11 +346,11 @@ export function Landing() {
             <Reveal>
               <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">Why Aperture</p>
               <h2 className="mt-3 max-w-2xl text-3xl font-medium tracking-tight text-balance sm:text-4xl">
-                Built so you can see the work — and the bill.
+                Checked before you apply. Not after.
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-muted">
-                Composer, Chat, and Inline are the product on every plan. The rest is honesty: a visible meter, a
-                model you chose, a cap that actually stops.
+                AI edits are easy to make look right. Aperture finds out whether they parse, resolve, render and pass
+                before anything touches your files.
               </p>
             </Reveal>
             <div className="mt-12">
@@ -364,24 +365,24 @@ export function Landing() {
           <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
             <Reveal>
               <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">The workspace</p>
-              <h2 className="mt-3 text-3xl font-medium tracking-tight sm:text-4xl">Your repo. Your keys. Your apply.</h2>
+              <h2 className="mt-3 text-3xl font-medium tracking-tight sm:text-4xl">Your project. Your keys. Your apply.</h2>
             </Reveal>
             <div className="mt-12 grid gap-6 sm:grid-cols-3">
               {[
                 {
                   icon: Layers,
-                  title: "Indexed in the browser",
-                  body: "Functions and classes are chunked locally. Composer searches the whole project, not just the open tab.",
+                  title: "Code search for the agent",
+                  body: "Composer searches the project’s code before it plans, not just the open tab.",
                 },
                 {
                   icon: Sparkles,
-                  title: "Diffs you approve",
-                  body: "Every edit is a search-replace you can read. Reject is one click. Undo this run restores the previous files.",
+                  title: "Design mode",
+                  body: "Click an element in the preview to edit its CSS rule or the page’s theme tokens. No model needed.",
                 },
                 {
                   icon: ShieldCheck,
-                  title: "Caps, not invoices",
-                  body: "Session cap is on by default. One send is one hosted turn, including every grep in the loop. Tab uses a fast model.",
+                  title: "Sandboxed tests",
+                  body: "The test sandbox blocks all network access, so code the agent just wrote cannot reach the app or anything else.",
                 },
               ].map((item, i) => (
                 <Reveal key={item.title} delay={i * 90}>
@@ -418,8 +419,8 @@ export function Landing() {
                     <p className="mt-1 text-sm text-subtle">{provider.hint}</p>
                     <p className="mt-4 text-sm leading-relaxed text-muted">
                       {provider.id === "grok"
-                        ? "Hosted on every plan, or bring your own xAI key."
-                        : "Bring your own key. Counts toward the plan’s key slots."}
+                        ? "Hosted Grok, or bring your own xAI key."
+                        : "Bring your own key under Settings → Models."}
                     </p>
                   </article>
                 </Reveal>
@@ -437,20 +438,23 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="border-t border-border">
-          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-            <Reveal>
-              <h2 className="text-center text-3xl font-medium tracking-tight sm:text-4xl">Simple plans. Honest limits.</h2>
-              <p className="mx-auto mt-3 max-w-lg text-center text-pretty text-muted">
-                Hosted Grok is metered. One send is one turn. Session cap is on. Your keys are unlimited agent runs — we
-                never markup their tokens.
-              </p>
-            </Reveal>
-            <div className="mt-12">
-              <PricingTable />
+        {showPricing && (
+          <section className="border-t border-border">
+            <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+              <Reveal>
+                <p className="text-center text-xs font-medium tracking-[0.18em] text-subtle uppercase">Coming soon</p>
+                <h2 className="mt-3 text-center text-3xl font-medium tracking-tight sm:text-4xl">Plans</h2>
+                <p className="mx-auto mt-3 max-w-lg text-center text-pretty text-muted">
+                  Hobby is free today. Pro and Team are not available yet: there is no checkout, and nothing is
+                  charged.
+                </p>
+              </Reveal>
+              <div className="mt-12">
+                <PricingTable />
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="border-t border-border">
           <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
@@ -480,17 +484,20 @@ export function Landing() {
                 Ready when you are.
               </h2>
               <p className="mt-3 max-w-lg text-pretty text-muted">
-                Create an account, pick Hobby, and open the editor. Add keys later if you already pay OpenAI, Anthropic,
-                or xAI.
+                Open the editor and fix a bug in the demo project. Add your own keys later if you already pay OpenAI,
+                Anthropic, or xAI.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "lg" }))}>
                   Start free
                   <ArrowRight className="size-4" />
                 </Link>
-                <Link to="/pricing" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
-                  Compare plans
-                </Link>
+                <a
+                  href="https://github.com/Hankaws/aperture"
+                  className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
+                >
+                  View on GitHub
+                </a>
               </div>
             </Reveal>
           </div>

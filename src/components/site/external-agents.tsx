@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { deleteAgent, listAgents, saveAgent, type AgentConnection } from "@/lib/acp/api";
 import { ACP_KINDS, BUILTIN_ACP, acpAgentNames, type AcpKind } from "@/lib/acp/kinds";
 import type { AccountSnapshot } from "@/lib/billing/api";
+import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 
 export function ExternalAgents({ account }: { account: AccountSnapshot }) {
@@ -29,11 +30,13 @@ export function ExternalAgents({ account }: { account: AccountSnapshot }) {
         <h2 className="text-xl font-medium tracking-tight">External agents</h2>
         <p className="mt-2 max-w-xl text-sm text-pretty text-muted">
           Pro runs {acpAgentNames("and")} as ACP sessions in Composer — plan, traces, and the same staged diffs.
-          Hobby still has Composer, Chat, and Inline.
+          Pro is coming soon. Hobby has Composer, Chat, and Inline.
         </p>
-        <Link to="/pricing" className={cn(buttonVariants(), "mt-4")}>
-          See Pro
-        </Link>
+        {showPricing && (
+          <Link to="/pricing" className={cn(buttonVariants(), "mt-4")}>
+            See plans
+          </Link>
+        )}
       </div>
     );
   }

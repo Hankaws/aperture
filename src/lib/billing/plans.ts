@@ -135,6 +135,18 @@ export function planAvailable(plan: Pick<Plan, "monthly">): boolean {
 }
 
 /**
+ * Why a plan change must be refused, or null when it may go ahead. The server
+ * asks this, so a request made without the UI cannot pick a paid plan either.
+ * With sign-in off every visitor shares one plan, and a paid plan there would
+ * raise the demo's spending cap for everyone.
+ */
+export function planChangeRefusal(plan: Pick<Plan, "name" | "monthly">, signInOff: boolean): string | null {
+  if (planAvailable(plan)) return null;
+  if (signInOff) return `${plan.name} can't be chosen while sign-in is off.`;
+  return `${plan.name} is not available yet: there is no checkout.`;
+}
+
+/**
  * Whether plans and prices are shown at all. With sign-in off (the public
  * demo) every visitor shares one plan, so a plan picker there would change it
  * for everyone. It shows none.

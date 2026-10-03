@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { spendOwnerId } from "@/lib/auth/visitor";
+import { isVisitorUserId, spendOwnerId } from "@/lib/auth/visitor";
 import {
   DEFAULT_SESSION_CENTS,
   DEFAULT_SESSION_TURNS,
@@ -12,7 +12,16 @@ import {
   quoteRuns,
   type SessionSnapshot,
 } from "./cost";
-import { isModelSource, isProvider, planById, providerShort, type ModelSource, type PlanId, type ProviderId } from "./plans";
+import {
+  isModelSource,
+  isProvider,
+  planById,
+  planChangeRefusal,
+  providerShort,
+  type ModelSource,
+  type PlanId,
+  type ProviderId,
+} from "./plans";
 import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
 
 export type KeyStatus = { set: boolean; last4: string | null };
@@ -318,6 +327,9 @@ export const setPlan = createServerFn({ method: "POST" })
     if (plan !== "hobby" && plan !== "pro" && plan !== "team") {
       throw new Error("Unknown plan");
     }
+    const signInOff = process.env.VITE_AUTH_ENABLED?.trim() === "false" || isVisitorUserId(context.userId);
+    const refusal = planChangeRefusal(planById(plan), signInOff);
+    if (refusal) throw new Error(refusal);
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const payer = spendOwnerId(context.userId);

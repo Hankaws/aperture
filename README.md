@@ -12,7 +12,7 @@ tests run in your browser tab, free, in about a second.
 Needs Node 22.6 or newer.
 
 ```sh
-git clone https://github.com/Hankaws/aperturesais.git aperture
+git clone https://github.com/Hankaws/aperture.git
 cd aperture
 npm ci
 APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev

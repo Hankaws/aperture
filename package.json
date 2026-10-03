@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Hankaws/aperturesais.git"
+    "url": "https://github.com/Hankaws/aperture.git"
   },
   "private": true,
   "sideEffects": false,

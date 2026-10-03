@@ -7,6 +7,8 @@ tests run in your browser tab, free, in about a second.
 
 ![Aperture: a staged fix with its check results and Composer's plan](docs/screenshot.png)
 
+**Demo:** [aperturesais.grok.me](https://aperturesais.grok.me). It plays recorded runs. It does not call Grok, so it does not spend anyone's API quota. A key you add in Settings is yours alone.
+
 ## Try it in a minute, no API key needed
 
 Needs Node 22.6 or newer.

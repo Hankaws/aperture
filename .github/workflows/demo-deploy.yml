@@ -6,8 +6,9 @@ name: Demo deploy
 # `.vercel/output` as-is instead of building the commit. `vercel build` clears
 # that folder and rebuilds it from source, so the demo always matches `main`.
 #
-# Needs a `VERCEL_TOKEN` repository secret. Without it the job skips with a
-# notice rather than failing.
+# Needs three repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID` and
+# `VERCEL_PROJECT_ID`. Without them the job skips with a notice rather than
+# failing. Do not put those values in this file.
 
 on:
   push:
@@ -33,8 +34,8 @@ jobs:
       - name: Check for token
         id: token
         run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::notice::VERCEL_TOKEN is not set; skipping the demo deploy."
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel deploy secrets are not set; skipping the demo deploy."
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"

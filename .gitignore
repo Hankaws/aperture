@@ -3,6 +3,13 @@ node_modules/
 .github_repo
 .env
 .env.*
+*.local
+
+# Local databases. Keys and accounts live here when sign-in is on.
+data/
+.pglite/
+*.sqlite
+*.sqlite3
 
 # Build output. The demo deploy builds from source (.github/workflows/demo-deploy.yml).
 .vercel/

@@ -223,6 +223,33 @@ export function formatSpot(spot: Spot | null | undefined): string {
   return `Start from where the user is, not from the whole repo:\n${lines.join("\n")}`;
 }
 
+/** The last thing the user did, so a follow-up does not start from the old diff. */
+export function formatUserMove(move: {
+  path?: string | null;
+  line?: number | null;
+  lineText?: string | null;
+  typed?: string[];
+  dismissed?: string[];
+}): string {
+  const lines: string[] = [];
+  const path = move.path?.replace(/\s+/g, " ").trim().slice(0, 180);
+  const line = move.line && move.line > 0 ? Math.floor(move.line) : 0;
+  const text = move.lineText?.replace(/\s+/g, " ").trim().slice(0, 120);
+  if (path && line) lines.push(text ? `- cursor at ${path}:${line} — ${text}` : `- cursor at ${path}:${line}`);
+  for (const file of (move.typed ?? []).slice(0, 4)) {
+    const clean = file.replace(/\s+/g, " ").trim().slice(0, 180);
+    if (!clean) continue;
+    lines.push(`- typed over the staged diff in ${clean}. The file content is theirs; do not restore the staged text.`);
+  }
+  for (const note of (move.dismissed ?? []).slice(-2)) {
+    const clean = note.replace(/\s+/g, " ").trim().slice(0, 180);
+    if (clean.length < 8) continue;
+    lines.push(`- dismissed: ${clean}`);
+  }
+  if (lines.length === 0) return "";
+  return `What the user just did:\n${lines.join("\n")}`;
+}
+
 export function readStanding(): StandingRule[] {
   if (typeof window === "undefined") return [];
   try {

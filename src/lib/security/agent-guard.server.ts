@@ -187,6 +187,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     standing: parseStanding(input.standing),
     refusals: parseStanding(input.refusals),
     spot: parseSpot(input.spot),
+    userMove: parseUserMove(input.userMove),
   };
 }
 
@@ -202,6 +203,12 @@ function parseStanding(raw: unknown): string[] | undefined {
     if (lines.length >= 8) break;
   }
   return lines.length ? lines : undefined;
+}
+
+function parseUserMove(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const text = raw.trim().slice(0, 2000);
+  return text.startsWith("What the user just did:") ? text : undefined;
 }
 
 function parseSpot(raw: unknown): AgentInput["spot"] {

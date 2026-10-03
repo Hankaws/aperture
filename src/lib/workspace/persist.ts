@@ -23,7 +23,15 @@ function validNote(value: unknown): DiffNote | null {
   const note = value as DiffNote;
   if (typeof note.id !== "string" || typeof note.excerpt !== "string" || typeof note.text !== "string") return null;
   if (!NOTE_TYPE.has(note.type)) return null;
-  return { id: note.id, excerpt: note.excerpt, type: note.type, text: note.text };
+  const confidence =
+    typeof note.confidence === "number" && note.confidence >= 0 && note.confidence <= 1 ? note.confidence : undefined;
+  return {
+    id: note.id,
+    excerpt: note.excerpt,
+    type: note.type,
+    text: note.text,
+    ...(confidence !== undefined ? { confidence } : {}),
+  };
 }
 
 function validEdit(value: unknown): ProposedEdit | null {
@@ -44,6 +52,7 @@ function validEdit(value: unknown): ProposedEdit | null {
     description: edit.description,
     status: edit.status,
     ...(notes && notes.length > 0 ? { notes } : {}),
+    ...(edit.reviewed === true ? { reviewed: true } : {}),
     ...(typeof edit.copyId === "string" ? { copyId: edit.copyId } : {}),
   };
 }

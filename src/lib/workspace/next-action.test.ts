@@ -58,19 +58,24 @@ test("nextAction sends notes instead of applying", () => {
   assert.equal(next.kind, "notes");
 });
 
-test("nextAction applies once the checks are clear", () => {
-  const next = nextAction({
+test("nextAction reviews a clear diff once, then applies", () => {
+  const base = {
     running: false,
     awaiting: false,
     pending: 1,
     workerCount: 0,
-    crewModels: 2,
-    keyReady: 2,
+    crewModels: 1,
+    keyReady: 1,
     messages: 4,
-    checks: "clear",
-  });
-  assert.equal(next.kind, "apply");
-  assert.equal(next.cta, "Apply");
+    checks: "clear" as const,
+  };
+  const before = nextAction(base);
+  assert.equal(before.kind, "reviewer");
+  assert.equal(before.cta, "Review");
+  assert.equal(before.altKind, "apply");
+  const after = nextAction({ ...base, reviewed: true });
+  assert.equal(after.kind, "apply");
+  assert.equal(after.cta, "Apply");
 });
 
 test("nextAction offers to send a failed check back, or apply and remember it", () => {

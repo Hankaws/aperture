@@ -12,6 +12,7 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
   const rejectEdit = useWorkspace((s) => s.rejectEdit);
   const openFile = useWorkspace((s) => s.openFile);
   const patchMessage = useWorkspace((s) => s.patchMessage);
+  const dismissNote = useWorkspace((s) => s.dismissNote);
   const [open, setOpen] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const pending = edit.status === "pending";
@@ -125,12 +126,17 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
                 >
                   <MessageSquare className="mt-0.5 size-3 shrink-0 text-accent" />
                   <span className="min-w-0 flex-1 font-sans">{note.text}</span>
+                  {typeof note.confidence === "number" && (
+                    <span className="shrink-0 font-mono text-[10px] text-subtle" title="How sure the review was">
+                      {Math.round(note.confidence * 100)}
+                    </span>
+                  )}
                   {pending && (
                     <button
                       type="button"
                       aria-label="Remove note"
                       className="text-subtle hover:text-fg"
-                      onClick={() => patchNotes(notes.filter((n) => n.id !== note.id))}
+                      onClick={() => dismissNote(edit.id, note.id)}
                     >
                       <X className="size-3" />
                     </button>

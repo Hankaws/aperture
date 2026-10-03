@@ -21,7 +21,7 @@ import { quoteRun, quoteRuns, replayQuote } from "@/lib/billing/cost";
 import type { AccountSnapshot } from "@/lib/billing/api";
 import { billedWorkers } from "@/lib/agent/fanout";
 import { availableSeats, modelSeats, proposeReviewer, proposeWorkers, selectedSeats, type WorkerSpec } from "@/lib/agent/crew";
-import { formatDiffNotes, notesOn } from "@/lib/workspace/diff-notes";
+import { formatDiffNotes, notesOn, reviewInstruction } from "@/lib/workspace/diff-notes";
 import { useAccount } from "@/lib/billing/use-account";
 import { startJob } from "@/lib/jobs/api";
 import { useJobs } from "@/lib/jobs/use-jobs";
@@ -878,6 +878,7 @@ function PlanChrome({
     reviewerLabel: modelSeats(crew).find((s) => s.source && s.source !== source)?.label,
     checks: pendingCount > 0 ? (checkHint?.state ?? "running") : undefined,
     copies: copyCount,
+    reviewed: pendingCount > 0 && pendingEdits.every((edit) => edit.reviewed),
   });
 
   function actOnHint() {
@@ -907,6 +908,7 @@ function PlanChrome({
         phase: "skip",
         workers,
         role: "review",
+        apiInstruction: reviewInstruction(pending.map((edit) => edit.path)),
         pendingEdits: pending,
         copyId: useWorkspace.getState().activeCopyId ?? undefined,
       });

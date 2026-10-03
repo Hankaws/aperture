@@ -7,11 +7,13 @@ import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
-import { LESSONS_PATH, lessonsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
+import { LESSONS_PATH, formatSpot, lessonsForPrompt, refusalsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
 import { compactLoopMessages } from "./compact";
+import { stagedEditSettled } from "./cost";
+import { reviewContext, withReviewLine } from "@/lib/workspace/diff-notes";
 import { applyStackMemory, formatStackContext } from "./stack";
 import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
@@ -45,7 +47,7 @@ function systemPrompt(
     : "You are Aperture, an AI coding agent inside a web IDE.";
   const composerLine =
     role === "review"
-      ? "Review mode: inspect staged diffs. Call note_diff for each real issue. Do not call propose_edit. Do not rewrite files."
+      ? "Review mode: call note_diff with bug and confidence. A note is kept only when bug is true and confidence is at least 0.8. No style notes. If nothing is wrong, say so and call nothing. Do not call propose_edit."
       : phase === "plan"
         ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
         : phase === "build"
@@ -223,6 +225,7 @@ export async function runAgentLoopStreaming(
   signal?: AbortSignal,
 ): Promise<AgentResult> {
   const flavor = flavorOf(input);
+  const reviewing = input.role === "review";
   // The agent works on the files as they will be once staged edits apply: a
   // follow-up (a test fix, answered notes) that edited the applied text
   // instead would silently drop the change it follows up on.
@@ -247,11 +250,13 @@ export async function runAgentLoopStreaming(
           ? nearestUiFiles(fileMap, input.instruction, input.activePath ?? null, 3)
           : [],
       });
-  const files = capFiles(
-    Object.entries(fileMap).map(([path, content]) => ({ path, content })),
-    [...mentioned, ...auto],
-  );
-  const chunks = indexFiles(files);
+  const files = reviewing
+    ? {}
+    : capFiles(
+        Object.entries(fileMap).map(([path, content]) => ({ path, content })),
+        [...mentioned, ...auto],
+      );
+  const chunks = reviewing ? [] : indexFiles(files);
   const phase = resolveAgentPhase(input.mode, input.phase);
   const requirePlan = (input.mode === "composer" || Boolean(flavor)) && phase !== "skip";
   const approved = input.approvedPlan?.length ? input.approvedPlan : [];
@@ -262,6 +267,7 @@ export async function runAgentLoopStreaming(
   /** run_script calls made before any edit. Two of those end the turn instead of spending it. */
   let scriptsWithoutEdits = 0;
   const editsKeyOf = (edits: ProposedEdit[]) => JSON.stringify(mergeEdits(edits).map((e) => [e.path, e.newText]));
+  const reviewTally = { kept: 0, dropped: 0 };
   const ctx: ToolContext = {
     files,
     chunks,
@@ -271,6 +277,7 @@ export async function runAgentLoopStreaming(
     phase,
     mode: input.mode,
     role: input.role,
+    reviewTally,
     // Only a request with a known owner may run code: the allowance is per
     // account, and an unattributed run cannot be counted or capped.
     runScript: cfg.userId
@@ -304,6 +311,7 @@ export async function runAgentLoopStreaming(
   };
   const mcpPending: McpCall[] = [];
   let mcpNote = "";
+  if (!reviewing) {
   try {
     const { invokeMcp, mcpToolsFor } = await import("@/lib/mcp/account.server");
     const mcp = await mcpToolsFor(cfg.userId, fileMap);
@@ -328,6 +336,7 @@ export async function runAgentLoopStreaming(
   } catch {
     // MCP is optional. A missing table or a server that does not answer must not stop the turn.
   }
+  }
   const traces: ToolTrace[] = [];
   const rules = findRules(fileMap)?.text ?? null;
 
@@ -339,33 +348,51 @@ export async function runAgentLoopStreaming(
     emit({ type: "status", text: `ACP session/new · ${flavor.name}` });
   }
 
-  const sysBase = systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role);
-  const lessons = lessonsForPrompt(fileMap[LESSONS_PATH] ?? "").slice(0, 2000);
-  const standing = standingForPrompt((input.standing ?? []).map((line, i) => ({ id: String(i), line }))).slice(0, 2000);
-  const sys = [
-    sysBase,
-    standing ? `Rules for every project. Follow them:\n${standing}` : "",
-    lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  const userCtx = [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
+  const lessons = reviewing ? "" : lessonsForPrompt(fileMap[LESSONS_PATH] ?? "").slice(0, 2000);
+  const standing = reviewing
+    ? ""
+    : standingForPrompt((input.standing ?? []).map((line, i) => ({ id: String(i), line }))).slice(0, 2000);
+  const refused = refusalsForPrompt(input.refusals ?? []).slice(0, 2000);
+  const here = formatSpot(input.spot);
+  const sys = reviewing
+    ? [
+        "You are Aperture, reviewing a staged diff. The diff is the only context.",
+        "Call note_diff only for a real bug. Each call needs bug and confidence from 0 to 1. A note is kept only when bug is true and confidence is at least 0.8.",
+        "If nothing is wrong, say so and call nothing.",
+        refused ? `The user already refused these. Do not note them again:\n${refused}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    : [
+        systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role),
+        standing ? `Rules for every project. Follow them:\n${standing}` : "",
+        lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
+        refused ? `The user already refused these. Do not propose them again:\n${refused}` : "",
+        here,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+  const userCtx = reviewing
+    ? reviewContext(ctx.edits)
+    : [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
   let messages: ChatMessage[] = [
-    { role: "system", content: sys },
-    { role: "user", content: userCtx },
+    { role: "system", content: sys, cache: true },
+    { role: "user", content: userCtx, cache: true },
   ];
 
-  for (const turn of input.history) {
-    messages.push({ role: turn.role, content: turn.content });
+  if (!reviewing) {
+    for (const turn of input.history) {
+      messages.push({ role: turn.role, content: turn.content });
+    }
   }
-  messages.push({ role: "user", content: input.instruction });
+  messages.push({ role: "user", content: input.instruction, cache: true });
 
   let planNudged = false;
   let verifyRuns = 0;
   /** Staged edits as of the last verify run, to tell a real fix from a shrug. */
   let lastVerifiedEdits = "";
   let verify: VerifyReport | undefined;
-  const maxSteps = phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
+  const maxSteps = reviewing ? 1 : phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
   const succeed = (
@@ -408,13 +435,15 @@ export async function runAgentLoopStreaming(
       emit({
         type: "status",
         text:
-          (step === 0
-            ? phase === "plan" && input.mode === "composer"
-              ? "Planning…"
-              : phase === "build"
-                ? "Building…"
-                : "Reading the index…"
-            : "Continuing…") +
+          (reviewing
+            ? "Reviewing…"
+            : step === 0
+              ? phase === "plan" && input.mode === "composer"
+                ? "Planning…"
+                : phase === "build"
+                  ? "Building…"
+                  : "Reading the index…"
+              : "Continuing…") +
           (step === 0 && input.compacted ? ` · thread memory (${input.compacted})` : ""),
       });
       messages = compactLoopMessages(messages);
@@ -430,6 +459,17 @@ export async function runAgentLoopStreaming(
       const callNames = calls.map((c) => c.function.name);
 
       if (calls.length === 0) {
+        if (reviewing) {
+          return succeed(
+            {
+              text: withReviewLine(completion.content ?? "", reviewTally.kept, reviewTally.dropped),
+              traces,
+              edits: mergeEdits(ctx.edits),
+              plan: ctx.plan,
+            },
+            step + 1,
+          );
+        }
         if (phase === "plan" && requirePlan && !hasPlan && !planNudged) {
           planNudged = true;
           messages.push({ role: "assistant", content: completion.content ?? "" });
@@ -494,6 +534,7 @@ export async function runAgentLoopStreaming(
       });
 
       const parsed = calls.map(parseCall);
+      const editResults: string[] = [];
       for (const batch of partitionCalls(parsed)) {
         if (signal?.aborted) return { ok: false, error: "Stopped." };
         const parallel = batch.length > 1 && batch.every((c) => isReadTool(c.name));
@@ -526,12 +567,31 @@ export async function runAgentLoopStreaming(
           emit({ type: "trace", trace });
           if (outcome.call.name === "set_plan") emit({ type: "plan", entries: ctx.plan });
           if (outcome.call.name === "propose_edit" || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
+          if (outcome.call.name === "propose_edit") editResults.push(outcome.result);
           messages.push({
             role: "tool",
             tool_call_id: outcome.call.id,
             content: outcome.result,
           });
         }
+      }
+
+      if (reviewing) {
+        return succeed(
+          {
+            text: withReviewLine(completion.content ?? "", reviewTally.kept, reviewTally.dropped),
+            traces,
+            edits: mergeEdits(ctx.edits),
+            plan: ctx.plan,
+          },
+          step + 1,
+        );
+      }
+      if (phase !== "plan" && stagedEditSettled(editResults)) {
+        return succeed(
+          { text: completion.content.trim() || "Staged.", traces, edits: mergeEdits(ctx.edits), plan: ctx.plan },
+          step + 1,
+        );
       }
 
       if (ctx.edits.length > 0) scriptsWithoutEdits = 0;

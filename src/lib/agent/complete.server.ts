@@ -1,4 +1,5 @@
 import { AGENT_TOOLS, type AgentToolDef } from "./tools";
+import { cachedText } from "./cost";
 import type { ProviderId } from "@/lib/billing/plans";
 import { REPLAY_INLINE_ERROR, replayCompletion, streamPieces } from "./replay";
 
@@ -11,6 +12,8 @@ export type ChatMessage = {
     type: "function";
     function: { name: string; arguments: string };
   }>;
+  /** Stable prefix. The provider bills these bytes once across the steps of a turn. */
+  cache?: boolean;
 };
 
 export type Completion = {
@@ -316,16 +319,23 @@ async function streamAnthropic(
 }
 
 function toAnthropic(messages: ChatMessage[]) {
-  const system = messages.filter((m) => m.role === "system").map((m) => m.content ?? "").join("\n");
+  const systemText = messages.filter((m) => m.role === "system").map((m) => m.content ?? "").join("\n");
+  const cacheSystem = messages.some((m) => m.role === "system" && m.cache);
+  const system = cacheSystem ? cachedText(systemText) : systemText;
+  let lastCache = -1;
+  messages.forEach((message, index) => {
+    if (message.role !== "system" && message.cache) lastCache = index;
+  });
   const converted: Array<Record<string, unknown>> = [];
-  for (const m of messages) {
-    if (m.role === "system") continue;
+  messages.forEach((m, index) => {
+    if (m.role === "system") return;
+    const cache = index === lastCache;
     if (m.role === "tool") {
       converted.push({
         role: "user",
         content: [{ type: "tool_result", tool_use_id: m.tool_call_id, content: m.content ?? "" }],
       });
-      continue;
+      return;
     }
     if (m.role === "assistant" && m.tool_calls?.length) {
       converted.push({
@@ -340,10 +350,10 @@ function toAnthropic(messages: ChatMessage[]) {
           })),
         ],
       });
-      continue;
+      return;
     }
-    converted.push({ role: m.role, content: m.content ?? "" });
-  }
+    converted.push({ role: m.role, content: cache ? cachedText(m.content ?? "") : (m.content ?? "") });
+  });
   return { system, converted };
 }
 

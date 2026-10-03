@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatObservations, lessonAfterKeep, lessonEditForFailure, lessonsForPrompt, removeLesson, ruleFromFailure, standingForPrompt, upsertLesson, upsertStanding } from "./lessons.ts";
+import { formatObservations, formatSpot, lessonAfterKeep, lessonEditForFailure, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, ruleFromFailure, standingForPrompt, upsertLesson, upsertStanding } from "./lessons.ts";
 
 test("a lesson replaces the earlier one for the same turn and stays readable", () => {
   const first = upsertLesson("", "m1", "down", "Run the tests before you call a fix done.");
@@ -83,4 +83,18 @@ test("a failure becomes a rule, and a rule for every project stays out of the re
   assert.equal(standingForPrompt(rules), "- Do not invent a palette.");
   assert.equal(upsertStanding(rules, "m2", "Do not invent a palette.").length, 1);
   assert.equal(upsertStanding(rules, "m1", "no").length, 1);
+});
+
+test("a skipped diff is remembered once, and the next run is told where the user is", () => {
+  const line = refusalLine("src/list.ts", "Fix the off-by-one in listTasks");
+  assert.match(line, /did not keep src\/list.ts: Fix the off-by-one/);
+  const once = rememberRefusal([], line);
+  assert.equal(rememberRefusal(once, line).length, 1);
+  assert.equal(refusalLine("src/list.ts", "no"), "");
+  const spot = formatSpot({ file: "src/list.ts", line: 12, check: "Tests: expected 2", element: "button.primary" });
+  assert.match(spot, /file: src\/list.ts/);
+  assert.match(spot, /line: 12/);
+  assert.match(spot, /last check: Tests: expected 2/);
+  assert.match(spot, /last element: button.primary/);
+  assert.equal(formatSpot({ file: null, line: null, check: null, element: null }), "");
 });

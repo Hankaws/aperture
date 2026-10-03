@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, changeChecks, checkStripState, renderEntry, shouldAutoFix, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, changeChecks, checksReady, checkStripState, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -199,4 +199,24 @@ test("shouldAutoFix: one fix, for a fresh Composer change that broke the tests",
   assert.equal(shouldAutoFix(message, { state: "running", script: "test" }, now), false);
   assert.equal(shouldAutoFix({ ...message, role: "user" }, failing, now), false);
   assert.equal(shouldAutoFix(null, failing, now), false);
+});
+
+test("shouldLookAgain: one look, after the preview has finished, and not on a replay", () => {
+  const now = 1_000_000;
+  const message = { role: "assistant", createdAt: now - 1000, modelSource: "hosted" };
+  const red: CheckRow[] = [
+    { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." },
+  ];
+  const clear: CheckRow[] = [
+    { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." },
+  ];
+  assert.equal(checksReady({ state: "pending" }, null), false);
+  assert.equal(checksReady({ state: "done", errors: [], blank: true }, { state: "running", script: "test" }), false);
+  assert.equal(checksReady({ state: "done", errors: [], blank: true }, null), true);
+  assert.equal(shouldLookAgain(message, red, now, { ready: true, replay: false }), true);
+  assert.equal(shouldLookAgain(message, red, now, { ready: false, replay: false }), false, "still rendering");
+  assert.equal(shouldLookAgain(message, red, now, { ready: true, replay: true }), false, "a replay cannot fix it");
+  assert.equal(shouldLookAgain({ ...message, autoFixed: true }, red, now, { ready: true, replay: false }), false, "only once");
+  assert.equal(shouldLookAgain(message, clear, now, { ready: true, replay: false }), false);
+  assert.match(lookPrompt(red), /The staged page renders blank/);
 });

@@ -1,4 +1,5 @@
 import type { PlanEntry, ProposedEdit, ToolTrace } from "../workspace/types.ts";
+import { reviewInstruction } from "../workspace/diff-notes.ts";
 import type { WorkerRole, WorkerSpec } from "./crew.ts";
 
 export const MAX_FANOUT = 3;
@@ -119,7 +120,7 @@ export function scopedWorkerInput<
       phase: "skip",
       role: "review",
       approvedPlan: undefined,
-      instruction: `Review the staged diffs. Call note_diff for each real issue (bug, regression, missing edge). Do not propose_edit. Do not rewrite files.\nFiles: ${worker.files.join(", ")}`,
+      instruction: reviewInstruction(worker.files),
     };
   }
   return scopedBuildInput(base, worker);

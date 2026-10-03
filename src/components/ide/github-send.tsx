@@ -4,8 +4,10 @@ import { Github } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { publishGithub, mergeGithub } from "@/lib/github/api";
+import { publishGithub, mergeGithub, postGithubReview } from "@/lib/github/api";
+import { githubReview } from "@/lib/github/review";
 import { changesSince, readGithubToken, stampFiles } from "@/lib/github/roundtrip";
+import { listPendingEdits } from "@/lib/workspace/edits";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useWorkspace } from "@/lib/workspace/store";
 import { cn } from "@/lib/utils";
@@ -15,12 +17,14 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
   const github = useWorkspace((s) => s.github);
   const files = useWorkspace((s) => s.files);
   const commits = useWorkspace((s) => s.commits);
+  const messages = useWorkspace((s) => s.messages);
   const revertCommit = useWorkspace((s) => s.revertCommit);
   const { user, isPending } = useCurrentUserState();
   const [message, setMessage] = useState(commits.at(-1)?.message || "Update from Aperture");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"commit" | "pr" | "merge" | null>(null);
+  const [busy, setBusy] = useState<"commit" | "pr" | "merge" | "review" | null>(null);
   const changes = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
+  const review = useMemo(() => githubReview(listPendingEdits(messages)), [messages]);
   const base = github?.defaultBranch || "main";
   const canMerge = Boolean(github && (github.pull || github.branch !== base));
 
@@ -52,7 +56,44 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
         stamps: stampFiles(useWorkspace.getState().files),
       });
       toast.success(mode === "pr" ? "Pull request opened" : `Pushed to ${github.branch}`);
+      const pull = result.pull ?? github.pull;
+      if (mode === "pr" && pull && review) {
+        const posted = await postGithubReview({
+          data: { owner: github.owner, repo: github.repo, pull, sha: result.sha, body: review.body, comments: review.comments },
+        });
+        if (!posted.ok) setError(posted.error);
+        else toast.success(`Review posted on #${pull}`);
+      }
       if (result.url) window.open(result.url, "_blank", "noopener,noreferrer");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reach GitHub.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendReview() {
+    if (!github?.pull || !review) return;
+    setError(null);
+    setBusy("review");
+    try {
+      const posted = await postGithubReview({
+        data: {
+          owner: github.owner,
+          repo: github.repo,
+          pull: github.pull,
+          sha: github.sha,
+          body: review.body,
+          comments: review.comments,
+        },
+      });
+      if (!posted.ok) {
+        setError(posted.error);
+        return;
+      }
+      toast.success(`Review posted on #${github.pull}`);
+      if (posted.url) window.open(posted.url, "_blank", "noopener,noreferrer");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach GitHub.");
@@ -164,6 +205,11 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
               <Button size="sm" type="button" disabled={busy !== null || changes.length === 0} onClick={() => void send("pr")}>
                 {busy === "pr" ? "Opening…" : "Open PR"}
               </Button>
+              {github.pull && review && (
+                <Button size="sm" variant="outline" type="button" disabled={busy !== null} onClick={() => void sendReview()}>
+                  {busy === "review" ? "Sending…" : `Review on #${github.pull}`}
+                </Button>
+              )}
               {canMerge && (
                 <Button
                   size="sm"

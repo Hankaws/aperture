@@ -5,7 +5,7 @@ import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
 import { commitMessage, editsAfterRevert } from "./commits";
-import { LESSONS_PATH, lessonAfterKeep, lessonsForPrompt, removeLesson, upsertLesson } from "./lessons";
+import { LESSONS_PATH, lessonAfterKeep, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, upsertLesson } from "./lessons";
 import { useIdeUi } from "@/lib/ui-store";
 import { validCheckpoints, validFiles, validMessages } from "./persist";
 import { copyLabel, keepSet, type RunCopy } from "./copies";
@@ -58,6 +58,8 @@ type WorkspaceState = {
   /** Set when this project was opened from GitHub, so changes can go back. */
   github: GithubOrigin | null;
   selection: Selection;
+  /** Skipped diffs and hand-edits. The next run has to read these before it suggests again. */
+  refusals: string[];
   hydrate: () => void;
   loadDemo: () => void;
   loadProject: (name: string, files: Record<string, string>, source?: GithubSource | null) => void;
@@ -80,6 +82,7 @@ type WorkspaceState = {
   rejectAllPending: () => void;
   dropHunkAt: (editId: string, line: number) => void;
   clearPendingNotes: (editId?: string) => void;
+  dismissNote: (editId: string, noteId: string) => void;
   undoCheckpoint: (id: string) => Checkpoint | null;
   /** Snapshots files before a direct edit (Design Mode), so Undo can put them back. */
   checkpointFiles: (paths: string[], label: string) => string;
@@ -114,7 +117,13 @@ type PersistShape = {
   revision?: number | null;
   syncedHash?: string | null;
   github?: GithubOrigin | null;
+  refusals?: string[];
 };
+
+function validRefusals(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.reduce<string[]>((lines, row) => (typeof row === "string" ? rememberRefusal(lines, row) : lines), []);
+}
 
 function persist(state: WorkspaceState) {
   if (typeof window === "undefined") return;
@@ -141,6 +150,7 @@ function persist(state: WorkspaceState) {
         commits: state.commits.slice(-20),
         copies: state.copies.slice(-6),
         activeCopyId: state.activeCopyId,
+        refusals: state.refusals.slice(-8),
       }),
     );
   } catch {
@@ -320,6 +330,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set({ commits: [...get().commits, commit].slice(-20) });
   }
 
+  function noteRefusal(path: string, description: string) {
+    if (path === LESSONS_PATH) return;
+    const line = refusalLine(path, description);
+    if (!line) return;
+    const next = rememberRefusal(get().refusals, line);
+    if (next === get().refusals) return;
+    set({ refusals: next });
+  }
+
   function applyOne(edit: ProposedEdit) {
     let files = { ...get().files, [edit.path]: edit.newText };
     const rules = findRules(files);
@@ -412,6 +431,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     agentRunning: false,
     runningMode: null,
     selection: null,
+    refusals: [],
     revision: null,
     syncedHash: null,
     syncState: "idle",
@@ -469,6 +489,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
               agentRunning: false,
               runningMode: null,
               github: validGithub(parsed.github) ? parsed.github! : null,
+              refusals: validRefusals(parsed.refusals),
             });
             return;
           }
@@ -499,6 +520,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         copies: [],
         activeCopyId: null,
         selection: null,
+        refusals: [],
         agentRunning: false,
         runningMode: null,
         github: null,
@@ -536,6 +558,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         copies: [],
         activeCopyId: null,
         selection: null,
+        refusals: [],
         agentRunning: false,
         runningMode: null,
         github: source ? { ...source, stamps: stampFiles(nextFiles) } : null,
@@ -752,6 +775,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     rejectEdit: (editId) => {
       const live = get().messages.flatMap((m) => m.edits ?? []).find((row) => row.id === editId);
       if (live && live.status !== "pending") return;
+      if (live) noteRefusal(live.path, live.description);
       set({
         messages: get().messages.map((m) => ({
           ...m,
@@ -821,6 +845,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         get().messages.flatMap((m) => m.edits ?? []),
         get().activeCopyId,
       );
+      for (const edit of apply) noteRefusal(edit.path, edit.description);
       const ids = new Set(apply.map((edit) => edit.id));
       set({
         messages: get().messages.map((m) => ({
@@ -850,6 +875,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         get().rejectEdit(editId);
         return;
       }
+      noteRefusal(edit.path, `a hunk of ${edit.description}`);
       const dropped = new Set(hunkLines(edit.oldText, hunk).map((text) => text.slice(0, 80)));
       const notes = (edit.notes ?? []).filter((note) => !dropped.has(note.excerpt));
       set({
@@ -864,7 +890,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     clearPendingNotes: (editId) => {
       for (const message of get().messages) {
         for (const edit of message.edits ?? []) {
-          if (edit.status === "pending" && (!editId || edit.id === editId)) previewForce.add(edit.id);
+          if (edit.status !== "pending" || (editId && edit.id !== editId)) continue;
+          previewForce.add(edit.id);
+          for (const note of edit.notes ?? []) noteRefusal(edit.path, `review note: ${note.text}`);
         }
       }
       set({
@@ -872,6 +900,23 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
           ...m,
           edits: m.edits?.map((e) =>
             e.status === "pending" && (!editId || e.id === editId) ? { ...e, notes: [] } : e,
+          ),
+        })),
+      });
+      schedulePersist();
+    },
+
+    dismissNote: (editId, noteId) => {
+      const edit = get()
+        .messages.flatMap((m) => m.edits ?? [])
+        .find((row) => row.id === editId);
+      const note = edit?.notes?.find((row) => row.id === noteId);
+      if (edit && note) noteRefusal(edit.path, `review note: ${note.text}`);
+      set({
+        messages: get().messages.map((m) => ({
+          ...m,
+          edits: m.edits?.map((e) =>
+            e.id === editId ? { ...e, notes: (e.notes ?? []).filter((row) => row.id !== noteId) } : e,
           ),
         })),
       });

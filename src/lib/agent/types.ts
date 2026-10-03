@@ -3,6 +3,7 @@ import type { AgentMode, AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace
 import type { AgentPhase } from "./phase";
 import type { WorkerRole, WorkerSpec } from "./crew";
 import type { BrowserRuns } from "./browser-handoff";
+import type { Spot } from "@/lib/workspace/lessons";
 
 export type AgentFile = {
   path: string;
@@ -40,6 +41,10 @@ export type AgentInput = {
   compacted?: number;
   /** Rules that follow this account into every project. Not files in the repo. */
   standing?: string[];
+  /** Diffs the user skipped or rewrote. The next run must not propose them again. */
+  refusals?: string[];
+  /** The open file, the cursor line, and the last check or element they clicked. */
+  spot?: Spot;
   /** Set when the tab can run scripts in its browser test runner (see browser-handoff.ts). */
   browserRuns?: BrowserRuns;
 };

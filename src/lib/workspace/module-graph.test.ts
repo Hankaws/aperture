@@ -107,7 +107,7 @@ test("a hallucinated file path is reported", () => {
   const files = { "src/x.ts": 'import { a } from "./nowhere";', "src/a.ts": "export const a = 1;" };
   const issues = importIssues("src/x.ts", files);
   assert.equal(issues.length, 1);
-  assert.match(issues[0]!, /"\.\/nowhere", which does not exist/);
+  assert.match(issues[0]!, /"\.\/nowhere" at line \d+, which does not exist/);
 });
 
 test("a named import the target does not export is reported", () => {
@@ -125,7 +125,7 @@ test("a package that is not in package.json is reported", () => {
     "package.json": '{"dependencies":{"react":"^19.0.0"}}',
     "src/x.ts": 'import { z } from "zod";',
   };
-  assert.match(importIssues("src/x.ts", files)[0]!, /"zod", which is not in package.json/);
+  assert.match(importIssues("src/x.ts", files)[0]!, /"zod" at line \d+, which is not in package.json/);
 });
 
 test("valid imports produce nothing", () => {

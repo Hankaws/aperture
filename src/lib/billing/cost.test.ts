@@ -7,7 +7,7 @@ const hosted: QuoteAccount = {
   hostedTurns: 50,
   modelSource: "hosted",
   keys: {
-    grok: { set: false, last4: null },
+    grok: { set: true, last4: "1234" },
     openai: { set: false, last4: null },
     anthropic: { set: false, last4: null },
     gemini: { set: false, last4: null },
@@ -16,28 +16,38 @@ const hosted: QuoteAccount = {
   session: { on: true, capTurns: 8, capCents: 100, turns: 1, cents: 0 },
 };
 
-test("quoteRun is one hosted turn", () => {
+test("quoteRun uses the signed-in user's Grok key", () => {
   const q = quoteRun(hosted, "hosted");
-  assert.equal(q.label, "This run = 1 hosted turn");
+  assert.equal(q.hosted, false);
+  assert.equal(q.label, "on your Grok key, ~$0.08");
   assert.equal(q.blocked, false);
 });
 
-test("quoteRuns scales hosted turns and session room", () => {
+test("quoteRun blocks Hosted Grok when the user has no Grok key", () => {
+  const q = quoteRun(
+    { ...hosted, keys: { ...hosted.keys, grok: { set: false, last4: null } } },
+    "hosted",
+  );
+  assert.equal(q.blocked, true);
+  assert.match(q.blockReason ?? "", /your Grok key/);
+});
+
+test("quoteRuns bills the user's Grok key, not a shared turn pool", () => {
   const two = quoteRuns(hosted, "hosted", 2);
-  assert.equal(two.label, "This build = 2 hosted turns");
+  assert.equal(two.label, "on your Grok key, ~$0.16");
   assert.equal(two.blocked, false);
 
   const tight: QuoteAccount = {
     ...hosted,
-    remaining: 1,
+    session: { ...hosted.session, cents: 90 },
   };
   const blocked = quoteRuns(tight, "hosted", 2);
   assert.equal(blocked.blocked, true);
-  assert.match(blocked.blockReason ?? "", /Need 2 hosted turns/);
+  assert.match(blocked.blockReason ?? "", /session cap/);
 });
 
-test("signed-out quoteRuns still names the turns", () => {
+test("signed-out quoteRuns still names the user's key", () => {
   const q = quoteRuns(null, "hosted", 2);
-  assert.equal(q.label, "This build = 2 hosted turns");
+  assert.equal(q.label, "on your Grok key, ~$0.16");
   assert.equal(q.blocked, true);
 });

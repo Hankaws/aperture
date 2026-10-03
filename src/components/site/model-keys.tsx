@@ -29,7 +29,7 @@ export function ModelKeys({
           <h2 className="text-xl font-medium tracking-tight">API keys</h2>
           <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
             Attach the keys you already pay for. {plan.name} allows {plan.byokSlots}{" "}
-            {plan.byokSlots === 1 ? "provider" : "providers"}. Hosted Grok and a custom endpoint do not use a slot. Keys
+            {plan.byokSlots === 1 ? "provider" : "providers"}. A custom endpoint does not use a slot. Keys
             are encrypted at rest and never sent back to the browser — only the last four characters.
           </p>
         </div>
@@ -41,8 +41,8 @@ export function ModelKeys({
       <div className="rounded-2xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Hosted Grok</p>
-            <p className="mt-1 text-sm text-subtle">Included on the plan. One send = one turn.</p>
+            <p className="text-sm font-medium">Your Grok key</p>
+            <p className="mt-1 text-sm text-subtle">Uses the Grok key on this account. xAI bills you. One send = one call.</p>
           </div>
           {account.modelSource === "hosted" ? (
             <span className="rounded-full border border-ok/30 bg-ok/10 px-2 py-0.5 text-xs text-ok">Selected</span>
@@ -58,7 +58,7 @@ export function ModelKeys({
                 }
               }}
             >
-              Use hosted Grok
+              Use your Grok key
             </Button>
           )}
         </div>

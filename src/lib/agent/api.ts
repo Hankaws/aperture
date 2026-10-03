@@ -6,7 +6,7 @@ export const getAiStatus = createServerFn({ method: "POST" }).handler(async () =
   const { replayEnabled } = await import("./replay");
   const { requestIsPublicDemo } = await import("./public-demo.server");
   const replay = replayEnabled() || requestIsPublicDemo();
-  return { available: replay || Boolean(process.env.XAI_API_KEY), replay };
+  return { available: true, replay };
 });
 
 export const runAgent = createServerFn({ method: "POST" })

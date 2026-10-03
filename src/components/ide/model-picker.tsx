@@ -55,7 +55,7 @@ export function ModelPicker({
           void pickModel(value as ModelSource);
         }}
       >
-        <option value="hosted">Hosted Grok</option>
+        <option value="hosted">Your Grok key</option>
         {PROVIDERS.map((provider) => (
           <option key={provider.id} value={provider.id} disabled={!account.keys[provider.id]?.set}>
             {account.keys[provider.id]?.set

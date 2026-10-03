@@ -58,9 +58,8 @@ export function SessionLimits({
       <div>
         <h2 className="text-xl font-medium tracking-tight">Session cap</h2>
         <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-          On by default. Hosted Grok stops after {account.session.capTurns} sends this session. Your own keys stop
-          around {formatUsd(account.session.capCents)}. Monthly quota still applies. The runaway hour cannot happen
-          here.
+          On by default. Sends stop around {formatUsd(account.session.capCents)} on the key you attached.
+          The runaway hour cannot happen here.
         </p>
       </div>
 

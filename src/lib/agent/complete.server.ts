@@ -2,6 +2,7 @@ import { AGENT_TOOLS, type AgentToolDef } from "./tools";
 import { cachedText } from "./cost";
 import type { ProviderId } from "@/lib/billing/plans";
 import { REPLAY_INLINE_ERROR, replayCompletion, streamPieces } from "./replay";
+import { iterateSseData, readOpenAiStream } from "./openai-stream";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -147,52 +148,7 @@ export async function completeStreaming(
     body.tool_choice = "auto";
   }
   const res = await postChat(cfg, body, signal);
-  const acc: Completion = { content: "", tool_calls: [] };
-  const calls: NonNullable<ChatMessage["tool_calls"]> = [];
-  let streamedText = false;
-  for await (const payload of iterateSseData(res)) {
-    let json: {
-      choices?: Array<{
-        delta?: {
-          content?: string | null;
-          tool_calls?: Array<{
-            index: number;
-            id?: string;
-            function?: { name?: string; arguments?: string };
-          }>;
-        };
-      }>;
-    };
-    try {
-      json = JSON.parse(payload) as typeof json;
-    } catch {
-      continue;
-    }
-    const delta = json.choices?.[0]?.delta;
-    if (!delta) continue;
-    if (delta.content) {
-      acc.content += delta.content;
-      onText(delta.content);
-      streamedText = true;
-    }
-    if (delta.tool_calls) {
-      for (const part of delta.tool_calls) {
-        const index = part.index ?? 0;
-        if (!calls[index]) {
-          calls[index] = { id: part.id ?? `call_${index}`, type: "function", function: { name: "", arguments: "" } };
-        }
-        const slot = calls[index]!;
-        if (part.id) slot.id = part.id;
-        if (part.function?.name) slot.function.name += part.function.name;
-        if (part.function?.arguments) slot.function.arguments += part.function.arguments;
-      }
-    }
-  }
-  const tool_calls = calls.filter(Boolean);
-  if (tool_calls.length > 0) acc.tool_calls = tool_calls;
-  else delete acc.tool_calls;
-  void streamedText;
-  return acc;
+  return readOpenAiStream(res, onText);
 }
 
 async function completeAnthropic(
@@ -355,28 +311,3 @@ function toAnthropic(messages: ChatMessage[]) {
   return { system, converted };
 }
 
-async function* iterateSseData(res: Response): AsyncGenerator<string> {
-  const reader = res.body?.getReader();
-  if (!reader) return;
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      yield data;
-    }
-  }
-  const tail = buffer.trim();
-  if (tail.startsWith("data:")) {
-    const data = tail.slice(5).trim();
-    if (data && data !== "[DONE]") yield data;
-  }
-}

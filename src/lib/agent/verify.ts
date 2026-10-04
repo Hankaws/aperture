@@ -45,20 +45,28 @@ export function symbolsFromEdit(edit: ProposedEdit): string[] {
   return [...names].filter((n) => n.length > 1 && n.length < 48).slice(0, 8);
 }
 
+/** Prose: a name in a README or notes file is not a reference that code still depends on. */
+const DOC_FILE = /\.(md|mdx|markdown|txt|rst|adoc)$/i;
+
 function filesMentioning(files: Record<string, string>, symbol: string, skip: Set<string>): string[] {
   // Whole identifier, exact case: `listTask` is not a mention of `listTasks`,
   // and `Start` or "restart" in prose is not a mention of `start`.
   const needle = new RegExp(`(?<![\\w$])${symbol.replace(/[$]/g, "\\$&")}(?![\\w$])`);
   const out: string[] = [];
   for (const [path, content] of Object.entries(files)) {
-    if (skip.has(path)) continue;
+    if (skip.has(path) || DOC_FILE.test(path)) continue;
     if (needle.test(content)) out.push(path);
     if (out.length >= 3) break;
   }
   return out;
 }
 
-/** Three-line recap: what changed, what still references it, what the plan left open. */
+/**
+ * Recap: what changed, what code still references it, what the plan left open.
+ * The last line only appears once some step has moved off "pending": a plan
+ * nobody updated says nothing about what is left, and listing all of it would
+ * claim the work just done was not.
+ */
 export function verifyRecap(edits: ProposedEdit[], files: Record<string, string>, plan: PlanEntry[] = []): string {
   if (edits.length === 0) return "";
   const paths = [...new Set(edits.map((e) => e.path))];
@@ -78,8 +86,9 @@ export function verifyRecap(edits: ProposedEdit[], files: Record<string, string>
     ? `Didn't: ${leftover.slice(0, 2).join("; ")}`
     : "Didn't: no other files mention the changed names.";
 
+  const tracked = plan.some((e) => e.status !== "pending");
   const open = plan.filter((e) => e.status !== "completed").map((e) => e.content);
-  const line3 = open.length ? `Left: ${open.slice(0, 2).join("; ")}` : "Left: nothing on the plan.";
+  const line3 = !tracked ? "" : open.length ? `Left: ${open.slice(0, 2).join("; ")}` : "Left: nothing on the plan.";
   const preview = previewIssues(files, edits);
   const line4 = preview.length
     ? `Preview: ${preview

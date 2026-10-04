@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
-import { isPrivateAddress } from "@/lib/agent/custom-endpoint";
+import { isMetadataAddress, isPrivateAddress } from "@/lib/agent/custom-endpoint";
+import { pinnedFetch } from "@/lib/security/pinned-fetch.server";
 import { cleanMcpUrl, mcpResultText, parseMcpPayload, toolsFromList, type McpToolInfo } from "./config";
 
 export type StoredMcpServer = { id: string; name: string; url: string; token: string | null };
@@ -23,21 +24,34 @@ export async function assertMcpUrl(raw: string): Promise<string> {
   return url;
 }
 
+const publicAddress = (address: string) => !isPrivateAddress(address) && !isMetadataAddress(address);
+
 async function rpc(server: StoredMcpServer, method: string, params: unknown): Promise<unknown> {
-  const res = await fetch(server.url, {
-    method: "POST",
-    redirect: "manual",
-    signal: AbortSignal.timeout(8000),
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+  // Connect only to the public addresses the name resolves to now: the URL was
+  // checked when it was saved, and a name can resolve differently since.
+  const { response: res, close } = await pinnedFetch(
+    server.url,
+    {
+      method: "POST",
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  });
-  if (res.status >= 300 && res.status < 400) throw new Error("The MCP server redirected. That is not allowed.");
-  if (!res.ok) throw new Error(`The MCP server returned ${res.status}.`);
-  const parsed = parseMcpPayload(await res.text());
+    publicAddress,
+  );
+  let text: string;
+  try {
+    if (res.status >= 300 && res.status < 400) throw new Error("The MCP server redirected. That is not allowed.");
+    if (!res.ok) throw new Error(`The MCP server returned ${res.status}.`);
+    text = await res.text();
+  } finally {
+    await close();
+  }
+  const parsed = parseMcpPayload(text);
   if (!parsed) throw new Error("The MCP server did not return JSON.");
   if (parsed.error) throw new Error(parsed.error);
   return parsed.result;

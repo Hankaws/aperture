@@ -52,7 +52,7 @@ function systemPrompt(
       : phase === "plan"
         ? "Plan mode: inspect the repo with search and read. Call set_plan with 3–7 short steps. Then write a brief approach (files, method, risks, out of scope). Do not edit. Stop and wait — the user clicks Build it."
         : phase === "build"
-          ? "Build mode: the user approved the plan. Execute it. Update set_plan statuses as you complete steps. Call propose_edit for each change. Do not expand scope. Do not restart the plan."
+          ? "Build mode: the user approved the plan. Execute it. Call propose_edit for each change, and in the same response call set_plan with the statuses those edits complete: a cleanly staged edit ends the turn. Do not expand scope. Do not restart the plan."
           : "Composer mode: call set_plan with 3–7 short steps before any propose_edit. Keep the plan visible. Update statuses as you complete steps, then edit.";
   const base = [
     preamble,

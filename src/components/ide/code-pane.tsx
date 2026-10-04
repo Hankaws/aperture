@@ -19,6 +19,8 @@ import { pendingForRun } from "@/lib/workspace/copies";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
 import { workspaceComplete } from "@/lib/editor/workspace-complete";
+import { toast } from "sonner";
+import { applyHeldBecause } from "@/lib/workspace/checks";
 import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark, shownMarks } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
@@ -444,7 +446,14 @@ export function CodePane() {
     view.dispatch({
       effects: diffConf.reconfigure(
         pendingDiff(pendingEdit, {
-          apply: (edit) => applyRef.current(edit),
+          apply: (edit) => {
+            const held = applyHeldBecause(useIdeUi.getState().checkHint?.state, useWorkspace.getState().agentRunning);
+            if (held) {
+              toast(held);
+              return;
+            }
+            applyRef.current(edit);
+          },
           reject: (id) => rejectRef.current(id),
           keep: () => jumpReview(1),
           drop: (line) => {

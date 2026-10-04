@@ -256,6 +256,16 @@ to anything else. Locally:
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
 
+## The benchmark must stay true
+
+`src/lib/bench/` runs the cases in `cases.ts` through the editor's own
+`changeChecks`, with the real compiler and the browser's test runner run in
+Node, and `/benchmark` shows `results.json`. `bench.test.ts` recomputes the
+results and fails when they differ: a change to any check that changes what is
+caught means running `npm run bench` and committing the new `results.json`, so
+the page never claims more than the checks do. Add a case when a check learns
+something new, and keep the cases it misses: they are part of the claim.
+
 ## Types is real tsc, in a worker
 
 `tsc-core.ts` runs the compiler on an in-memory project (tested in Node with

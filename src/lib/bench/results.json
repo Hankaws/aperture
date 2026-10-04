@@ -1,0 +1,644 @@
+{
+  "summary": {
+    "caught": 18,
+    "bad": 22,
+    "caughtCatchable": 18,
+    "catchable": 18,
+    "falseAlarms": 0,
+    "good": 8,
+    "lightCaught": 12,
+    "byMistake": [
+      {
+        "mistake": "syntax",
+        "label": "Code that does not parse",
+        "caught": 3,
+        "total": 3
+      },
+      {
+        "mistake": "import",
+        "label": "An import that does not resolve",
+        "caught": 3,
+        "total": 3
+      },
+      {
+        "mistake": "types",
+        "label": "A type error",
+        "caught": 7,
+        "total": 7
+      },
+      {
+        "mistake": "behaviour",
+        "label": "Wrong behaviour a test covers",
+        "caught": 5,
+        "total": 5
+      },
+      {
+        "mistake": "untested",
+        "label": "Wrong behaviour no test covers",
+        "caught": 0,
+        "total": 4
+      }
+    ],
+    "byCheck": [
+      {
+        "check": "parse",
+        "caught": 3
+      },
+      {
+        "check": "imports",
+        "caught": 3
+      },
+      {
+        "check": "types",
+        "caught": 10
+      },
+      {
+        "check": "tests",
+        "caught": 9
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "syntax-missing-brace",
+      "title": "Drops the closing brace of getTask",
+      "kind": "bad",
+      "mistake": "syntax",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "parse",
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "parse",
+        "tests"
+      ],
+      "detail": "src/store.ts: parse error at line 66",
+      "checks": {
+        "parse": "fail",
+        "imports": "skip",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "syntax-unclosed-string",
+      "title": "Leaves a string unterminated in the validator",
+      "kind": "bad",
+      "mistake": "syntax",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "parse",
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "parse",
+        "tests"
+      ],
+      "detail": "src/lib/validate.ts: parse error at line 15",
+      "checks": {
+        "parse": "fail",
+        "imports": "skip",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "syntax-unclosed-jsx",
+      "title": "Opens a JSX tag it never closes",
+      "kind": "bad",
+      "mistake": "syntax",
+      "fixture": "string-kit",
+      "caughtBy": [
+        "parse"
+      ],
+      "lightCaughtBy": [
+        "parse"
+      ],
+      "detail": "src/badge.tsx: parse error at line 8",
+      "checks": {
+        "parse": "fail",
+        "imports": "skip",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "import-typo-path",
+      "title": "Imports the task routes from ./routes/task.ts, which does not exist",
+      "kind": "bad",
+      "mistake": "import",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "imports",
+        "types",
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "imports",
+        "tests"
+      ],
+      "detail": "src/router.ts: imports \"./routes/task.ts\" at line 3, which does not exist in the project",
+      "checks": {
+        "parse": "pass",
+        "imports": "fail",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "import-missing-export",
+      "title": "Imports deleteTask from the store, which does not export it",
+      "kind": "bad",
+      "mistake": "import",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "imports",
+        "types"
+      ],
+      "lightCaughtBy": [
+        "imports"
+      ],
+      "detail": "src/routes/tasks.ts: imports { deleteTask } from \"../store.ts\" at line 2, which does not export it",
+      "checks": {
+        "parse": "pass",
+        "imports": "fail",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "import-typo-tsx",
+      "title": "Imports the slug helper from ./slugs",
+      "kind": "bad",
+      "mistake": "import",
+      "fixture": "string-kit",
+      "caughtBy": [
+        "imports",
+        "types"
+      ],
+      "lightCaughtBy": [
+        "imports"
+      ],
+      "detail": "src/badge.tsx: imports \"./slugs.ts\" at line 2, which does not exist in the project",
+      "checks": {
+        "parse": "pass",
+        "imports": "fail",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "types-wrong-return",
+      "title": "Returns the page's length from listTasks instead of the page",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/store.ts: TS2322 at line 31: Type 'number' is not assignable to type 'Task[]'.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "types-wrong-argument",
+      "title": "Creates a task from the title's length",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/routes/tasks.ts: TS2345 at line 24: Argument of type 'number' is not assignable to parameter of type 'string'.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "types-bad-literal",
+      "title": "Gives new tasks the status \"closed\", which TaskStatus does not have",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/store.ts: TS2322 at line 48: Type '\"closed\"' is not assignable to type 'TaskStatus'.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "types-property-typo",
+      "title": "Writes task.titel in patchTask",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/store.ts: TS2551 at line 62: Property 'titel' does not exist on type 'Task'. Did you mean 'title'?",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "types-possibly-null",
+      "title": "Reads the title of a task that may not exist",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/routes/health.ts: TS2531 at line 11: Object is possibly 'null'.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "types-broken-caller",
+      "title": "Adds a required parameter to getTask without updating its callers",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "types",
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "types",
+        "tests"
+      ],
+      "detail": "src/store.ts: TS2554 at line 60: Expected 2 arguments, but got 1. (+2 more)",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "types-jsx-prop",
+      "title": "Passes the badge's label to slugify as a number",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "string-kit",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/badge.tsx: TS2345 at line 6: Argument of type 'number' is not assignable to parameter of type 'string'.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "behaviour-not-stored",
+      "title": "Creates a task without storing it",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: store starts page 0 at the first task: AssertionError: expected [ \"tsk_101\", \"tsk_102\" ] to deeply equal [ \"tsk_100\", \"tsk_101\" ]",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "behaviour-rejects-all",
+      "title": "Makes requireTitle reject every title",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: store starts page 0 at the first task: AssertionError: expected [ \"tsk_101\", \"tsk_102\" ] to deeply equal [ \"tsk_100\", \"tsk_101\" ]",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "behaviour-wrong-route",
+      "title": "Sends /tasks requests to the health handler",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "harbor-api",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: store starts page 0 at the first task: AssertionError: expected [ \"tsk_101\", \"tsk_102\" ] to deeply equal [ \"tsk_100\", \"tsk_101\" ]",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "behaviour-slug-case",
+      "title": "Stops slugify lower-casing its input",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "string-kit",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: slugify joins lower-case words with dashes: AssertionError: Expected values to be strictly equal:",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "behaviour-truncate-off-by-one",
+      "title": "Cuts truncated text one character short",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "string-kit",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: truncate keeps short text and cuts long text with an ellipsis: AssertionError: Expected values to be strictly equal:",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "untested-count",
+      "title": "Makes countTasks one short",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "untested-patch-time",
+      "title": "Stops patchTask updating updatedAt",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "untested-status",
+      "title": "Drops \"doing\" from the statuses PATCH accepts",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "untested-badge-length",
+      "title": "Truncates badges at 4 characters",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "string-kit",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-fix-paging",
+      "title": "Fixes the off-by-one in listTasks",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "good-fix-404",
+      "title": "Returns 404 for a task that does not exist",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "good-fix-title-length",
+      "title": "Rejects titles longer than 80 characters",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "good-new-function",
+      "title": "Adds and exports deleteTask",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "good-node-builtin",
+      "title": "Generates task ids with node:crypto",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "skip"
+      }
+    },
+    {
+      "id": "good-new-test",
+      "title": "Adds a test for countTasks",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "harbor-api",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "warn"
+      }
+    },
+    {
+      "id": "good-badge-prop",
+      "title": "Adds an optional tone prop to the badge",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "string-kit",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-new-helper",
+      "title": "Adds a tested initials helper",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "string-kit",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    }
+  ]
+}

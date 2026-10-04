@@ -5,9 +5,10 @@
  *
  * Browser only: this module starts a Worker.
  */
-import { collectImports, resolveSpecifier } from "./module-graph";
 import { isTsPath, tscIssue, type TscResult } from "./tsc-core";
 import type { TscReply, TscRequest, TscWarm } from "./tsc.worker";
+
+export { pathsToCheck } from "./tsc-paths";
 
 export type TscOutcome =
   | { state: "done"; after: Record<string, string[]>; before: Record<string, string[]>; checked: number; ms: number }
@@ -15,8 +16,6 @@ export type TscOutcome =
 
 /** The first run downloads and starts the compiler; later runs reuse it. */
 const TIMEOUT_MS = 45_000;
-/** A change to a widely used file still checks only this many of the files that import it. */
-const MAX_IMPORTERS = 40;
 
 let worker: Worker | null = null;
 let nextId = 0;
@@ -58,23 +57,6 @@ export function warmTypecheck(files: Record<string, string>): void {
   } catch {
     warmed = false;
   }
-}
-
-/** The changed TypeScript files and the files that import them: what a change can break. */
-export function pathsToCheck(after: Record<string, string>, changed: string[]): string[] {
-  const targets = new Set(changed.filter((path) => isTsPath(path) && after[path] !== undefined));
-  const importers: string[] = [];
-  for (const [path, text] of Object.entries(after)) {
-    if (targets.has(path) || !isTsPath(path) || importers.length >= MAX_IMPORTERS) continue;
-    const imports = collectImports(path, text);
-    if (imports.some((ref) => {
-      const hit = resolveSpecifier(path, ref.spec, after);
-      return hit.kind === "file" && targets.has(hit.path);
-    })) {
-      importers.push(path);
-    }
-  }
-  return [...targets, ...importers];
 }
 
 function issues(result: TscResult): Record<string, string[]> {

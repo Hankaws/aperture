@@ -65,6 +65,10 @@ local in-process database (PGlite), so nothing else needs setting up.
   - **Tests**: the project's tests pass.
 
   A check that could not run says why. It never shows as a pass.
+
+  **How well they work** is measured on the `/benchmark` page: 30 staged
+  edits, 22 with a mistake and 8 correct, put through these checks. Every case
+  is listed there, misses included, and `npm run bench` reproduces it.
 - **Tests in the browser.** `npm run test` runs in a sandboxed Worker in your
   tab. This covers `node`, `node --test` and `tsx` scripts, with `node:test`
   and `node:assert`. It also covers Vitest and Jest: `describe`, `it`,

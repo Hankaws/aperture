@@ -5,7 +5,9 @@ stages it as a diff. Every staged change is then checked before you apply it:
 it parses, its imports resolve, a light type check passes, the page renders,
 and the tests pass. The tests run in your browser tab, free, in about a second.
 
-![Aperture demo, 20 seconds: Composer reads the code and posts a plan, Build it stages a fix as a diff, the checks run on it (parses, imports, types, preview, tests), a test that was already failing is marked as such rather than blamed on the edit, and the change is applied](docs/demo.gif)
+![Aperture demo, 25 seconds. It opens on "Every change, checked before you apply it." and then walks through four steps in the editor. 01 Plan: Composer reads your code and posts a plan, and nothing is written yet. 02 Check: five checks run on the staged edit (parses, imports, types, preview, tests). 03 Tests: a test that was already failing before the edit is marked as such, not blamed on it. 04 Apply: nothing touches your files until you apply it.](docs/demo.gif)
+
+**[▶ Watch the 30-second demo on YouTube](https://www.youtube.com/watch?v=4nLOAsB6W8A)**
 
 **Demo:** [aperturesais.grok.me](https://aperturesais.grok.me). It plays recorded runs. It does not call Grok, so it does not spend anyone's API quota. A key you add in Settings is yours alone.
 

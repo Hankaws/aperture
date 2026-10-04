@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import type { AgentInput } from "@/lib/agent/types";
 import { builtinById, isBuiltinAgentId } from "@/lib/acp/kinds";
 import { planById } from "@/lib/billing/plans";
 import type { JobRecord } from "./types";
+import { agentInput, idInput } from "@/lib/security/inputs";
 
 function asIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -80,7 +80,7 @@ export const listJobs = createServerFn({ method: "POST" })
   .handler(async ({ context }): Promise<JobRecord[]> => loadJobs(context.userId));
 
 export const startJob = createServerFn({ method: "POST" })
-  .validator((input: AgentInput & { agentId?: string | null }) => input)
+  .validator(agentInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<JobRecord> => {
     const plan = await planOf(context.userId);
@@ -142,7 +142,7 @@ export const startJob = createServerFn({ method: "POST" })
   });
 
 export const cancelJob = createServerFn({ method: "POST" })
-  .validator((id: string) => id)
+  .validator(idInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }): Promise<JobRecord[]> => {
     const { abortJob } = await import("./runner.server");

@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
+import { THEME_BOOT_SCRIPT } from "@/lib/appearance";
 
 const APP_NAME = "Aperture";
 const TITLE = "Aperture: an AI code editor that checks its own work";
@@ -60,8 +61,7 @@ export const Route = createRootRoute({
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              'try{var t=localStorage.getItem("aperture-theme");if(t)document.documentElement.setAttribute("data-theme",t);var d=localStorage.getItem("aperture-density");if(d)document.documentElement.setAttribute("data-density",d);}catch(e){}',
+            __html: THEME_BOOT_SCRIPT,
           }}
         />
       </head>

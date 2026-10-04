@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { importGithubRepo, listGithubRepos, saveGithubToken, clearGithubAccount, githubStatus, type GithubRepoSummary } from "@/lib/github/api";
-import { readGithubToken, writeGithubToken, clearGithubToken, type GithubSource } from "@/lib/github/roundtrip";
+import { readGithubToken, clearGithubToken, type GithubSource } from "@/lib/github/roundtrip";
 import { abortAgent } from "@/lib/agent/run";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { filesFromDataTransfer, importLocalFiles } from "@/lib/workspace/from-local";
@@ -168,10 +168,15 @@ function GithubDialog({
     void (async () => {
       let status = await githubStatus();
       if (!status.connected) {
+        // A token an older version kept in this browser moves to the account,
+        // encrypted, and leaves the browser.
         const local = readGithubToken();
         if (local) {
           const saved = await saveGithubToken({ data: { token: local } });
-          if (saved.ok) status = saved;
+          if (saved.ok) {
+            status = saved;
+            clearGithubToken();
+          }
         }
       }
       if (cancel) return;
@@ -286,7 +291,6 @@ function GithubDialog({
                         setError(saved.error);
                         return;
                       }
-                      writeGithubToken(token);
                       setToken("");
                       setLogin(saved.login);
                       setError(null);

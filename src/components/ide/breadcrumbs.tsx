@@ -14,7 +14,7 @@ export function Breadcrumbs() {
   }
 
   return (
-    <nav aria-label="Breadcrumb" className="flex h-6 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2.5 text-[11px]">
+    <nav aria-label="Breadcrumb" className="flex h-6 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2.5 text-[11px] pointer-coarse:h-11">
       {parts.map((part, i) => {
         const acc = parts.slice(0, i + 1).join("/");
         const last = i === parts.length - 1;
@@ -23,7 +23,7 @@ export function Breadcrumbs() {
             {i > 0 && <span className="text-subtle">/</span>}
             <button
               type="button"
-              className={last ? "truncate font-medium text-fg" : "truncate text-muted hover:text-fg"}
+              className={last ? "truncate font-medium text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11" : "truncate text-muted hover:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11"}
               title={`Copy ${acc}`}
               onClick={() => copy(acc)}
             >

@@ -23,6 +23,7 @@ import {
   type ProviderId,
 } from "./plans";
 import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
+import { customEndpointInput, modelSourceInput, planInput, providerInput, providerKeyInput, sessionCapInput } from "@/lib/security/inputs";
 
 export type KeyStatus = { set: boolean; last4: string | null };
 
@@ -321,7 +322,7 @@ export const getAccount = createServerFn({ method: "POST" })
   });
 
 export const setPlan = createServerFn({ method: "POST" })
-  .validator((plan: PlanId) => plan)
+  .validator(planInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: plan }): Promise<AccountSnapshot> => {
     if (plan !== "hobby" && plan !== "pro" && plan !== "team") {
@@ -343,7 +344,7 @@ export const setPlan = createServerFn({ method: "POST" })
   });
 
 export const saveProviderKey = createServerFn({ method: "POST" })
-  .validator((input: { provider: ProviderId; key: string }) => input)
+  .validator(providerKeyInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<AccountSnapshot> => {
     if (!isProvider(data.provider)) throw new Error("Unknown provider");
@@ -365,7 +366,7 @@ export const saveProviderKey = createServerFn({ method: "POST" })
   });
 
 export const setModelSource = createServerFn({ method: "POST" })
-  .validator((source: ModelSource) => source)
+  .validator(modelSourceInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: source }): Promise<AccountSnapshot> => {
     if (!isModelSource(source)) throw new Error("Unknown model");
@@ -373,7 +374,7 @@ export const setModelSource = createServerFn({ method: "POST" })
   });
 
 export const saveCustomEndpoint = createServerFn({ method: "POST" })
-  .validator((input: { base: string; model: string; key?: string; clearKey?: boolean }) => input)
+  .validator(customEndpointInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<AccountSnapshot> => {
     const { assertFetchableBase } = await import("@/lib/agent/custom-endpoint.server");
@@ -397,7 +398,7 @@ export const saveCustomEndpoint = createServerFn({ method: "POST" })
   });
 
 export const setPreferredProvider = createServerFn({ method: "POST" })
-  .validator((provider: ProviderId) => provider)
+  .validator(providerInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: provider }): Promise<AccountSnapshot> => {
     if (!isProvider(provider)) throw new Error("Unknown provider");
@@ -405,7 +406,7 @@ export const setPreferredProvider = createServerFn({ method: "POST" })
   });
 
 export const setSessionCap = createServerFn({ method: "POST" })
-  .validator((input: { on: boolean; turns: number; cents: number }) => input)
+  .validator(sessionCapInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<AccountSnapshot> => {
     const turns = Math.min(MAX_SESSION_TURNS, Math.max(MIN_SESSION_TURNS, Math.trunc(data.turns) || DEFAULT_SESSION_TURNS));

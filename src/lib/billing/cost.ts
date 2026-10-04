@@ -1,4 +1,5 @@
 import { providerShort, type ModelSource, type ProviderId } from "./plans.ts";
+import { readLocalModel } from "../agent/local-model.ts";
 
 /** Honest typical Composer-send estimates (whole tool loop, not per grep). */
 export const TURN_COST_CENTS: Record<ProviderId, number> = {
@@ -45,8 +46,12 @@ export type RunQuote = {
   blockReason: string | null;
 };
 
-/** What a run costs on a replay deployment: nothing, and never blocked by hosted quota. */
+/**
+ * What a run costs on a replay deployment: nothing, and never blocked by hosted quota.
+ * A model on this computer is not replayed: the tab calls it, so its own quote stands.
+ */
 export function replayQuote(base: RunQuote): RunQuote {
+  if (base.source === "local") return base;
   return {
     ...base,
     hosted: false,
@@ -63,12 +68,26 @@ export function formatUsd(cents: number): string {
 }
 
 export function estimateCents(source: ModelSource): number {
-  if (source === "hosted" || source === "custom") return 0;
+  if (source === "hosted" || source === "custom" || source === "local") return 0;
   return TURN_COST_CENTS[source];
 }
 
 export function quoteRun(account: QuoteAccount | null, source?: ModelSource): RunQuote {
   const src = source ?? account?.modelSource ?? "hosted";
+  if (src === "local") {
+    // Set in this browser, run from this browser: free, and ready once it has an address and a model.
+    const local = readLocalModel();
+    return {
+      source: "local",
+      hosted: false,
+      provider: "grok",
+      cents: 0,
+      label: local ? `This computer · ${local.model}` : "This computer",
+      sub: local ? "runs on your machine, free" : "Set it up in Settings",
+      blocked: !account || !local,
+      blockReason: !account ? null : local ? null : "Set up a model on this computer in Settings → Models.",
+    };
+  }
   if (src === "custom") {
     const ready = Boolean(account?.custom?.base && account.custom.model);
     const model = account?.custom?.model;
@@ -149,6 +168,8 @@ export function quoteRuns(
     ? `This build = ${count} hosted turns`
     : one.source === "custom"
       ? `Custom endpoint · ${count} calls`
+      : one.source === "local"
+        ? `This computer · ${count} calls`
       : `on your ${providerShort(one.provider)} key, ~${formatUsd(cents)}`;
 
   if (!account) {

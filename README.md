@@ -99,6 +99,16 @@ local in-process database (PGlite), so nothing else needs setting up.
   below or full-screen, and the sidebars can swap sides.
 - **Any model.** Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek
   (Settings → Models). The app does not spend a shared Grok key.
+- **A model on your own computer, even on the hosted site.** Settings →
+  Models → **This computer** points Composer at Ollama or LM Studio on
+  `localhost`. The agent loop then runs in your browser tab and calls the
+  model directly, so a turn never passes through Aperture's server and costs
+  nothing. Ollama has to allow the page first:
+  `OLLAMA_ORIGINS=https://your-aperture-address ollama serve` (on a Mac with
+  the Ollama app, `launchctl setenv OLLAMA_ORIGINS "…"`, then restart it). Pick
+  a model that can call tools, such as `qwen2.5-coder` or `llama3.1`. A crew
+  and the sandbox's script runs stay on the server, so a local turn builds
+  alone and checks with the browser test runner.
 
 ## Using a real model
 

@@ -2,6 +2,7 @@ import { setModelSource, type AccountSnapshot } from "@/lib/billing/api";
 import { PROVIDERS, type ModelSource } from "@/lib/billing/plans";
 import type { AgentConnection } from "@/lib/acp/api";
 import { BUILTIN_ACP } from "@/lib/acp/kinds";
+import { readLocalModel } from "@/lib/agent/local-model";
 import { cn } from "@/lib/utils";
 
 export type RunTarget =
@@ -21,6 +22,9 @@ export function ModelPicker({
   onAccount: (next: AccountSnapshot) => void;
   agents: AgentConnection[];
 }) {
+  // Kept in this browser, so read here rather than from the account.
+  const local = readLocalModel();
+
   async function pickModel(source: ModelSource) {
     onTarget({ kind: "model", source });
     try {
@@ -65,6 +69,9 @@ export function ModelPicker({
         ))}
         <option value="custom" disabled={!account.custom?.base || !account.custom.model}>
           {account.custom?.model ? `Custom · ${account.custom.model}` : "Custom (set endpoint)"}
+        </option>
+        <option value="local" disabled={!local}>
+          {local ? `This computer · ${local.model}` : "This computer (set up)"}
         </option>
         <optgroup label={account.acp ? "ACP · same diff UI" : "ACP (Pro)"}>
           {BUILTIN_ACP.map((agent) => (

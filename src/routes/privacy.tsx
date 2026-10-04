@@ -11,6 +11,11 @@ const SEES = [
   ["Your Gemini key", "Google", "aistudio.google.com"],
   ["Your DeepSeek key", "DeepSeek", "api.deepseek.com"],
   ["A custom endpoint", "The host you typed", "Ollama, LM Studio, OpenRouter, or another OpenAI-compatible URL"],
+  [
+    "A model on this computer",
+    "Only your machine",
+    "Your browser tab calls Ollama or LM Studio on localhost. The turn does not pass through Aperture's server.",
+  ],
   ["Replay, including the public demo", "Nobody", "A recorded answer. No provider is called."],
 ] as const;
 

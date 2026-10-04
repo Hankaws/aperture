@@ -227,6 +227,7 @@ export function CodePane() {
   const { account } = useAccount();
   const reveal = useIdeUi((s) => s.reveal);
   const findTick = useIdeUi((s) => s.findTick);
+  const tscFindings = useIdeUi((s) => s.tscFindings);
   const tabOn = Boolean(account?.tab) && !pendingEdit;
   chunksRef.current = chunks;
   writeFileRef.current = writeFile;
@@ -238,8 +239,13 @@ export function CodePane() {
     if (!activePath) return [];
     const staged = pendingEdit?.path === activePath ? pendingEdit.newText : value;
     const staging = pendingEdit?.path === activePath;
-    return collectMarks(activePath, staged, { ...files, [activePath]: staged }, staging ? files : undefined);
-  }, [activePath, pendingEdit, value, files]);
+    // While a change is staged, real tsc has the last word on its types once it has run.
+    const types =
+      staging && tscFindings?.after[activePath]
+        ? { after: tscFindings.after[activePath], before: tscFindings.before[activePath] ?? [] }
+        : undefined;
+    return collectMarks(activePath, staged, { ...files, [activePath]: staged }, staging ? files : undefined, types);
+  }, [activePath, pendingEdit, value, files, tscFindings]);
 
   useEffect(() => {
     if (!parentRef.current || viewRef.current) return;

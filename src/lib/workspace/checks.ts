@@ -11,6 +11,10 @@ import { importIssues } from "./module-graph.ts";
 import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./preview-check.ts";
 import { isScriptPath } from "./syntax-check.ts";
 import { isTypePath, typeIssues } from "./type-check.ts";
+import type { TscOutcome } from "./tsc";
+
+/** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
+export type TscCheck = null | { state: "running" } | TscOutcome;
 
 export type CheckId = "parse" | "imports" | "types" | "preview" | "tests";
 /** `warn`: failing, but failing the same way before this change. */
@@ -109,6 +113,28 @@ function judgedRow(
   return { id, label, status: "warn", detail: `Already there before this change: ${first.detail}`, path: first.path };
 }
 
+/**
+ * The Types row from real `tsc`. Like the other checks, an error the applied
+ * files already had is amber, not blamed on the change.
+ */
+function tscRow(tsc: Extract<TscCheck, { state: "done" }>, typed: string[]): CheckRow {
+  const paths = [...new Set([...typed, ...Object.keys(tsc.after)])];
+  const rows: FileIssues[] = paths
+    .map((path) => {
+      const issues = tsc.after[path] ?? [];
+      return { path, issues, fresh: newIssues(issues, tsc.before[path] ?? []) };
+    })
+    .filter((row) => row.issues.length > 0);
+  const judged = judgedRow("types", "Types", rows);
+  if (judged) return judged;
+  return {
+    id: "types",
+    label: "Types",
+    status: "pass",
+    detail: `tsc found no errors in ${plural(paths.length, "file")} this change touches (${tsc.checked} in the project, ${(tsc.ms / 1000).toFixed(1)}s).`,
+  };
+}
+
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -169,6 +195,8 @@ export function changeChecks(input: {
   verify?: VerifyReport | null;
   /** The same tests, run in the browser. Used when the agent's run did not happen. */
   browser?: BrowserTests;
+  /** Real `tsc` in the browser. Without it, or when it cannot run, the light check answers. */
+  tsc?: TscCheck;
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
@@ -213,19 +241,27 @@ export function changeChecks(input: {
     "Types",
     judged(typed, (path, set) => typeIssues(path, set[path] ?? "", set), snapshot, files),
   );
+  const tsc = input.tsc ?? null;
+  const light: CheckRow = mistyped
+    ? mistyped
+    : {
+        id: "types",
+        label: "Types",
+        status: "pass",
+        detail: `Nothing this light check can prove in ${plural(typed.length, "file")}. Not tsc.`,
+      };
   const types: CheckRow =
     !checkable.some(isTypePath)
       ? { id: "types", label: "Types", status: "skip", detail: "No TypeScript in this change." }
       : typed.length === 0
         ? { id: "types", label: "Types", status: "skip", detail: "Checked once the TypeScript parses." }
-        : mistyped
-          ? mistyped
-          : {
-              id: "types",
-              label: "Types",
-              status: "pass",
-              detail: `Nothing this light check can prove in ${plural(typed.length, "file")}. Not tsc.`,
-            };
+        : tsc?.state === "running"
+          ? { id: "types", label: "Types", status: "running", detail: "Type-checking with tsc…" }
+          : tsc?.state === "done"
+            ? tscRow(tsc, typed)
+            : tsc?.state === "unavailable"
+              ? { ...light, detail: `${light.detail} (tsc did not run: ${tsc.reason})` }
+              : light;
 
   const preview: CheckRow =
     render === null
@@ -329,9 +365,10 @@ export function verifyForPending(
 export const AUTO_FIX_WINDOW_MS = 10 * 60_000;
 
 /** The preview and the browser tests have both finished, so the look is real. */
-export function checksReady(render: RenderResult, browser: BrowserTests): boolean {
+export function checksReady(render: RenderResult, browser: BrowserTests, tsc: TscCheck = null): boolean {
   if (render?.state === "pending") return false;
   if (browser?.state === "running") return false;
+  if (tsc?.state === "running") return false;
   return true;
 }
 

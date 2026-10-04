@@ -295,3 +295,40 @@ test("the Apply shortcut follows the Apply buttons: not while a check is red or 
   assert.match(applyHeldBecause(null, false) ?? "", /Waiting for the checks/);
   assert.match(applyHeldBecause("clear", true) ?? "", /Wait until this turn finishes/);
 });
+
+test("Types from real tsc: running, new errors red, old ones amber, clean is a pass, and the light check when it cannot run", () => {
+  const files = { "src/a.ts": "export const a: number = 1;\n" };
+  const edits = [edit("src/a.ts", 'export const a: number = 1;\nexport const b: number = "x";\n', files["src/a.ts"])];
+  const base = { files, edits, render: null };
+
+  const running = row(changeChecks({ ...base, tsc: { state: "running" } }), "types");
+  assert.equal(running.status, "running");
+  assert.equal(checksReady(null, null, { state: "running" }), false);
+
+  const fresh = "TS2322 at line 2: Type 'string' is not assignable to type 'number'.";
+  const failed = row(changeChecks({ ...base, tsc: { state: "done", after: { "src/a.ts": [fresh] }, before: { "src/a.ts": [] }, checked: 4, ms: 1200 } }), "types");
+  assert.equal(failed.status, "fail");
+  assert.equal(failed.path, "src/a.ts");
+  assert.match(failed.detail, /TS2322 at line 2/);
+
+  // The same error at another line before the change: already there, not this change's.
+  const old = "TS2322 at line 1: Type 'string' is not assignable to type 'number'.";
+  const warned = row(changeChecks({ ...base, tsc: { state: "done", after: { "src/a.ts": [fresh] }, before: { "src/a.ts": [old] }, checked: 4, ms: 1200 } }), "types");
+  assert.equal(warned.status, "warn");
+
+  // A caller broken in another file is this change's too.
+  const caller = row(
+    changeChecks({ ...base, tsc: { state: "done", after: { "src/a.ts": [], "src/use.ts": ["TS2554 at line 3: Expected 2 arguments, but got 1."] }, before: { "src/use.ts": [] }, checked: 4, ms: 1200 } }),
+    "types",
+  );
+  assert.equal(caller.status, "fail");
+  assert.equal(caller.path, "src/use.ts");
+
+  const clean = row(changeChecks({ ...base, edits: [edit("src/a.ts", "export const a: number = 2;\n", files["src/a.ts"])], tsc: { state: "done", after: { "src/a.ts": [] }, before: { "src/a.ts": [] }, checked: 4, ms: 1200 } }), "types");
+  assert.equal(clean.status, "pass");
+  assert.match(clean.detail, /^tsc found no errors in 1 file this change touches \(4 in the project, 1\.2s\)\.$/);
+
+  const fallback = row(changeChecks({ ...base, tsc: { state: "unavailable", reason: "Project too large." } }), "types");
+  assert.equal(fallback.status, "fail", "the light check still catches a literal of the wrong type");
+  assert.match(fallback.detail, /tsc did not run: Project too large\./);
+});

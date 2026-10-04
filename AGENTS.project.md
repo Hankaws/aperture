@@ -256,6 +256,20 @@ to anything else. Locally:
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
 
+## Types is real tsc, in a worker
+
+`tsc-core.ts` runs the compiler on an in-memory project (tested in Node with
+the real `typescript` package); `tsc.worker.ts` runs it off the main thread,
+loading each standard-library file as its own chunk (`worker.format: "es"` in
+`vite.config.ts` makes that possible: an IIFE worker inlines all 99 of them).
+`tsc.ts` is the client: it checks the changed files and their direct importers,
+before and after the change, and `checks.ts` turns that into the Types row
+(new errors red, old ones amber). Packages, Node and test-runner globals, and
+implicit `any` are not reported: the editor has no `node_modules`, so they
+would fail every project. The compiler is warmed when a Composer turn starts
+(`warmTypecheck` in `run.ts`). The light check (`type-check.ts`) still runs in
+the agent's own turn on the server and stands in when tsc cannot run.
+
 ## The agent loop runs in two places
 
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from

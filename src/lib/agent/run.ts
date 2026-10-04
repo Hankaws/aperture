@@ -272,6 +272,13 @@ export async function submitAgent(
     ...opts?.messageExtra,
   });
   state.setAgentRunning(true, mode);
+  // A Composer turn usually ends in a staged change, checked with real tsc. Start the
+  // compiler now so its download overlaps this turn instead of following it.
+  if (mode === "composer") {
+    void import("@/lib/workspace/tsc")
+      .then((tsc) => tsc.warmTypecheck(useWorkspace.getState().files))
+      .catch(() => undefined);
+  }
 
   const apiInstruction =
     opts?.apiInstruction ??

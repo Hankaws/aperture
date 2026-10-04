@@ -12,7 +12,7 @@ import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/men
 import { autoContextPaths, formatAutoContext } from "./auto-context";
 import { formatUiGraph, isUiTask, nearestUiFiles } from "./ui-graph";
 import { compactLoopMessages } from "./compact";
-import { stagedEditSettled } from "./cost";
+import { editTurnStop } from "./cost";
 import { inTurnCheckPrompt } from "@/lib/workspace/checks";
 import { reviewContext, withReviewLine } from "@/lib/workspace/diff-notes";
 import { applyStackMemory, formatStackContext } from "./stack";
@@ -63,7 +63,7 @@ function systemPrompt(
     "Cite paths as path:line when answering questions.",
     role === "review"
       ? "When you find an issue, call note_diff. Do not dump entire files into chat unless asked."
-      : "When the user wants a change, call propose_edit. Do not dump entire files into chat unless asked.",
+      : "When the user wants a change, call propose_edit with confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not dump entire files into chat unless asked.",
     "The user may attach files with @path, @codebase (indexed search), or @repo-map. Treat those as the primary context.",
     "mcp_call uses MCP servers from Settings → Agents. Read-only tools return now. Anything that changes state waits for the user to confirm.",
     "Never repeat API keys, tokens, passwords, private keys, or secret-looking strings. If one appears, write [redacted].",
@@ -590,21 +590,32 @@ export async function runAgentLoopStreaming(
           step + 1,
         );
       }
-      if (phase !== "plan" && stagedEditSettled(editResults)) {
-        const staged = mergeEdits(ctx.edits);
-        if (!checkedInTurn) {
-          const prompt = inTurnCheckPrompt(ctx.files, staged);
-          if (prompt) {
-            checkedInTurn = true;
-            emit({ type: "status", text: "A check is red. Fixing it in this turn…" });
-            messages.push({ role: "user", content: prompt });
-            continue;
+      if (phase !== "plan") {
+        const stop = editTurnStop(editResults);
+        if (stop === "stop" || stop === "settle") {
+          const staged = mergeEdits(ctx.edits);
+          if (stop === "settle" && !checkedInTurn) {
+            const prompt = inTurnCheckPrompt(ctx.files, staged);
+            if (prompt) {
+              checkedInTurn = true;
+              emit({ type: "status", text: "A check is red. Fixing it in this turn…" });
+              messages.push({ role: "user", content: prompt });
+              continue;
+            }
           }
+          return succeed(
+            {
+              text:
+                stop === "stop"
+                  ? "Not staged. Confidence was below 0.8."
+                  : completion.content.trim() || "Staged.",
+              traces,
+              edits: staged,
+              plan: ctx.plan,
+            },
+            step + 1,
+          );
         }
-        return succeed(
-          { text: completion.content.trim() || "Staged.", traces, edits: staged, plan: ctx.plan },
-          step + 1,
-        );
       }
 
       if (ctx.edits.length > 0) scriptsWithoutEdits = 0;

@@ -48,7 +48,8 @@ export function ReviewStrip() {
   }, [messages, rows]);
   const noteCount = notesOn(rows);
   const openIds = openCopyIds(messages.flatMap((m) => m.edits ?? []));
-  const looking = useIdeUi((s) => s.checkHint?.state) === "running";
+  const checkState = useIdeUi((s) => s.checkHint?.state);
+  const checksOpen = checkState === "clear";
   const shownCopy = activeCopyOf(openIds, activeCopyId);
   if (running || rows.length === 0) return null;
 
@@ -121,8 +122,16 @@ export function ReviewStrip() {
         <Button
           size="sm"
           className="h-7 px-2.5"
-          disabled={noteCount > 0 || looking}
-          title={looking ? "Looking at the preview first" : noteCount > 0 ? "Send or dismiss notes first" : undefined}
+          disabled={!checksOpen || noteCount > 0}
+          title={
+            !checkState || checkState === "running"
+              ? "Waiting for the checks"
+              : checkState === "failed"
+                ? "A check is red"
+                : noteCount > 0
+                  ? "Send or dismiss notes first"
+                  : undefined
+          }
           onClick={() => applyAllPending()}
         >
           <Check className="size-3.5" />
@@ -169,7 +178,7 @@ export function ReviewStrip() {
                   Dismiss
                 </Button>
               ) : (
-                <Button size="sm" className="h-7 px-2" disabled={looking} title={looking ? "Looking at the preview first" : undefined} onClick={() => applyEdit(edit)}>
+                <Button size="sm" className="h-7 px-2" disabled={!checksOpen} title={checksOpen ? undefined : "Waiting for the checks"} onClick={() => applyEdit(edit)}>
                   Apply
                 </Button>
               )}

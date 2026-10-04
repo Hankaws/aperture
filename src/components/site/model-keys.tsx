@@ -245,8 +245,7 @@ function ProviderPanel({
         )}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-subtle">
-        Encrypted at rest. Composer uses the model you pick — never Auto, never a silent fallback. There is no shared
-        key.
+        Encrypted at rest. Composer uses the model you pick — never Auto, never a silent fallback.
       </p>
     </div>
   );

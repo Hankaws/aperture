@@ -1,7 +1,7 @@
 import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
-import { keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
+import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
@@ -99,7 +99,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "propose_edit",
       description:
-        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
+        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
       parameters: {
         type: "object",
         properties: {
@@ -107,8 +107,9 @@ export const AGENT_TOOLS = [
           search: { type: "string", description: "Exact existing text to replace. Empty = whole file." },
           replace: { type: "string", description: "Replacement text" },
           description: { type: "string", description: "One-line summary of the change" },
+          confidence: { type: "number", description: "0 to 1. How sure this edit is right. Below 0.8 it is dropped." },
         },
-        required: ["path", "replace"],
+        required: ["path", "replace", "confidence"],
       },
     },
   },
@@ -318,6 +319,9 @@ export async function executeTool(
     }
     if (ctx.requirePlan && ctx.plan.length === 0 && ctx.phase !== "skip") {
       return "Edits are locked until you call set_plan with 3–7 steps.";
+    }
+    if (!keepEdit(parseConfidence(args.confidence))) {
+      return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
     }
     const path = safeRelPath(String(args.path ?? "")) ?? "";
     const search = String(args.search ?? "");

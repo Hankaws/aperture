@@ -8,3 +8,12 @@ export function stagedEditSettled(results: string[]): boolean {
   const staged = results.filter((text) => text.startsWith("Edit staged"));
   return staged.length > 0 && staged.every((text) => !text.includes(" failed:"));
 }
+
+/** A guess stops the turn. A sure, clean edit settles. A red check may be repaired once. */
+export function editTurnStop(results: string[]): "stop" | "settle" | "continue" {
+  const dropped = results.some((text) => text.startsWith("Edit dropped"));
+  const staged = results.filter((text) => text.startsWith("Edit staged"));
+  if (dropped && staged.length === 0) return "stop";
+  if (stagedEditSettled(results)) return "settle";
+  return "continue";
+}

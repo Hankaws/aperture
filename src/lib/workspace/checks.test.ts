@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -37,6 +37,10 @@ test("a failed parse counts while tests are still running", () => {
   );
   assert.equal(checkStripState([{ status: "running" }]), "running");
   assert.equal(checkStripState([{ status: "pass" }]), "clear");
+  assert.equal(canApply("clear"), true);
+  assert.equal(canApply("failed"), false);
+  assert.equal(canApply("running"), false);
+  assert.equal(canApply(null), false);
 });
 
 test("five rows, always in the same order", () => {

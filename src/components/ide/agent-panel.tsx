@@ -925,7 +925,7 @@ function PlanChrome({
       useIdeUi.getState().setMobilePane("editor");
       void submitAgent("Fix the failing checks", "composer", source, {
         phase: "skip",
-        apiInstruction: `The editor checks failed:\n${detail}\n\nFix this now with propose_edit. Change only what the failure requires — do not restart the plan or widen the scope. If a failure is unrelated to your edits, say so plainly instead of editing.`,
+        apiInstruction: `${detail}\nFix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.`,
         pendingEdits,
         copyId: useWorkspace.getState().activeCopyId ?? undefined,
       });

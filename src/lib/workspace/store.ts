@@ -13,6 +13,7 @@ import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import { previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
+import { canApply } from "./checks";
 import { keepSecrets, withoutSecrets, workspaceHash, type SyncState } from "./sync";
 import { applyStackMemory } from "@/lib/agent/stack";
 import { findRules } from "./rules";
@@ -741,6 +742,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       set({ agentRunning: running, runningMode: running ? (mode ?? get().runningMode) : null }),
 
     applyEdit: (edit) => {
+      if (!canApply(useIdeUi.getState().checkHint?.state)) return;
       const live = get().messages.flatMap((m) => m.edits ?? []).find((row) => row.id === edit.id);
       if (live && live.status !== "pending") return;
       if (edit.notes?.length) return;
@@ -799,6 +801,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     applyAllPending: () => {
+      if (!canApply(useIdeUi.getState().checkHint?.state)) return;
       const flat = get().messages.flatMap((m) => m.edits ?? []);
       const { apply: pending, rejectIds } = keepSet(flat, get().activeCopyId);
       if (pending.length === 0) return;

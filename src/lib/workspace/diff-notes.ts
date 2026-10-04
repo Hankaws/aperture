@@ -38,6 +38,11 @@ export function keepReviewNote(bug: boolean, confidence: number | null): boolean
   return bug === true && confidence !== null && confidence >= REVIEW_CONFIDENCE;
 }
 
+/** An edit is staged only when the model is at least this sure. A guess is dropped. */
+export function keepEdit(confidence: number | null): boolean {
+  return confidence !== null && confidence >= REVIEW_CONFIDENCE;
+}
+
 export function reviewInstruction(paths: string[]): string {
   const files = paths.filter(Boolean);
   return [

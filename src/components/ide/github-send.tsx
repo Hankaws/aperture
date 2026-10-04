@@ -185,7 +185,10 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           className="shrink-0 text-muted hover:text-fg"
-                          onClick={() => revertCommit(commit.id)}
+                          onClick={() => {
+                            const reverted = revertCommit(commit.id);
+                            if (!reverted.ok) setError(reverted.error);
+                          }}
                         >
                           Revert
                         </button>

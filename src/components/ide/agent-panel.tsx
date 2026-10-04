@@ -1271,7 +1271,8 @@ function CommitLine({ messageId }: { messageId: string }) {
           variant="ghost"
           onClick={() => {
             const reverted = useWorkspace.getState().revertCommit(commit.id);
-            if (reverted) toast.success(`Reverted “${reverted.message}”`);
+            if (reverted.ok) toast.success(`Reverted “${reverted.commit.message}”`);
+            else toast.error(reverted.error);
           }}
         >
           <Undo2 className="size-3.5" />

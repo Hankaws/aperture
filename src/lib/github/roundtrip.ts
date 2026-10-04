@@ -66,6 +66,11 @@ export function cleanGithubToken(raw: string): string | null {
   return token;
 }
 
+/**
+ * Older versions kept the token in localStorage, where any script on the page
+ * could read it. It is now only read once, moved to the account (encrypted),
+ * and removed. Nothing writes it here any more.
+ */
 const TOKEN_KEY = "aperture-github-token";
 
 export function readGithubToken(): string | null {
@@ -76,13 +81,6 @@ export function readGithubToken(): string | null {
   } catch {
     return null;
   }
-}
-
-export function writeGithubToken(raw: string): string | null {
-  const token = cleanGithubToken(raw);
-  if (!token || typeof window === "undefined") return null;
-  window.localStorage.setItem(TOKEN_KEY, token);
-  return token;
 }
 
 export function clearGithubToken(): void {

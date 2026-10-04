@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clearGithubAccount, githubStatus, saveGithubToken, type GithubAccount } from "@/lib/github/api";
-import { clearGithubToken, writeGithubToken } from "@/lib/github/roundtrip";
+import { clearGithubToken } from "@/lib/github/roundtrip";
 
 /** GitHub on the signed-in account. The token stays on the server. */
 export function GithubAccountCard() {
@@ -31,7 +31,7 @@ export function GithubAccountCard() {
         setError(next.error);
         return;
       }
-      writeGithubToken(token);
+      // The account holds it, encrypted. Nothing is kept in this browser.
       setToken("");
       setAccount(next);
       toast.success(`GitHub connected as ${next.login}`);

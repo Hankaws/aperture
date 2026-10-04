@@ -70,3 +70,13 @@ test("a line with an error and a warning shows as an error, error first", () => 
   assert.deepEqual(marksOnLine(marks, 3), { severity: "error", messages: ["new", "old"] });
   assert.equal(marksOnLine(marks, 4), null);
 });
+
+test("while a change is staged, tsc's findings replace the light check's in the margin", () => {
+  const applied = { "src/a.ts": "export const a = 1;\n" };
+  const staged = "export const a = 1;\nexport const b = a.toFixed(1, 2);\n";
+  const marks = collectMarks("src/a.ts", staged, { "src/a.ts": staged }, applied, {
+    after: ["TS2554 at line 2: Expected 0-1 arguments, but got 2."],
+    before: [],
+  });
+  assert.deepEqual(marks, [{ line: 2, message: "TS2554 at line 2: Expected 0-1 arguments, but got 2.", severity: "error" }]);
+});

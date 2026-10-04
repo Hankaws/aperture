@@ -49,15 +49,18 @@ local in-process database (PGlite), so nothing else needs setting up.
   staged change itself:
   - **Parses**: the changed code, markup and JSON files parse.
   - **Imports resolve**: every import in the changed scripts resolves.
-  - **Types**: a lightweight check on the changed TypeScript files. It is not
-    `tsc`. It flags only errors it can prove from the file's own text: a
-    literal that does not match its annotation (`string`, `number`,
-    `boolean`, `null`, `undefined`, or an array of those), a returned literal
-    of the wrong type, a call to a function declared in the same file with the
-    wrong number of arguments, and a name or JSX component that is not
-    declared or imported in the file and is not a known global. Anything it
-    cannot judge is left alone, so a pass means these checks found nothing,
-    not that the TypeScript compiler ran.
+  - **Types**: the real TypeScript compiler, run in a worker in your tab on
+    the staged change. It checks the changed files and the files that import
+    them, against the whole project and its `tsconfig.json`, so a change that
+    breaks a caller in another file is caught. An error the files already had
+    is shown amber, not blamed on the change. The editor has no
+    `node_modules`, so packages are typed `any` (their types are not there to
+    check against), and so are Node's and a test runner's globals; implicit
+    `any` is not reported for the same reason. The compiler (about 1.3 MB
+    compressed) loads the first time a Composer turn starts in a TypeScript
+    project and is reused after that. If it cannot run (a project over 600
+    TypeScript files, say), a lighter check that reads each file on its own
+    stands in, and the row says so.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
 

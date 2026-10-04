@@ -20,7 +20,9 @@ import {
   type RenderResult,
 } from "@/lib/workspace/checks";
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
-import { mergeEdits } from "@/lib/workspace/preview-check";
+import { issuesForText, mergeEdits } from "@/lib/workspace/preview-check";
+import { isTsPath } from "@/lib/workspace/tsc-core";
+import type { TscCheck } from "@/lib/workspace/checks";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
 
@@ -151,6 +153,54 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
   return { tests: { state: "running", script: "test" } as BrowserTests, output: "" };
 }
 
+/**
+ * Real `tsc` on the staged change, when it touches TypeScript that parses.
+ * The compiler loads on first use, in a worker, and is reused after that.
+ */
+function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): TscCheck {
+  const tsPaths = useMemo(
+    () => [...new Set(edits.filter((e) => isTsPath(e.path) && e.newText !== "").map((e) => e.path))],
+    [edits],
+  );
+  const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
+  const parses = tsPaths.every((path) => issuesForText(path, merged[path] ?? "").length === 0);
+  const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
+  const key = `${versionOf(files)}:${editsKey}`;
+  const wanted = tsPaths.length > 0 && parses;
+  const [settled, setSettled] = useState<{ key: string; outcome: TscCheck } | null>(null);
+
+  useEffect(() => {
+    if (!wanted) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const { pathsToCheck, typecheckChange } = await import("@/lib/workspace/tsc");
+        const outcome = await typecheckChange(merged, files, pathsToCheck(merged, tsPaths), controller.signal);
+        setSettled({ key, outcome });
+        useIdeUi.getState().setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before } : null);
+      } catch {
+        // Superseded by a newer change, or unmounted.
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+    // `key` covers files and edits; merged and files are read at that version.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, wanted]);
+
+  // Findings describe this change only: gone when it is, or when it no longer has TypeScript to check.
+  useEffect(() => {
+    if (!wanted) useIdeUi.getState().setTscFindings(null);
+  }, [wanted]);
+  useEffect(() => () => useIdeUi.getState().setTscFindings(null), []);
+
+  if (!wanted) return null;
+  if (settled?.key === key) return settled.outcome;
+  return { state: "running" };
+}
+
 const ICON = { pass: Check, fail: X, warn: TriangleAlert, skip: Minus, running: LoaderCircle } as const;
 const SPOKEN = { pass: "passed", fail: "failed", warn: "failing before this change", skip: "not run", running: "running" } as const;
 
@@ -203,10 +253,11 @@ export function CheckResults({
 }) {
   const { result, frame } = useRenderCheck(files, edits);
   const { tests: browser, output } = useBrowserTests(files, edits, verify);
+  const tsc = useTypeCheck(files, edits);
   const [showOutput, setShowOutput] = useState(false);
   const rows = useMemo(
-    () => changeChecks({ files, edits, render: result, verify, browser }),
-    [files, edits, result, verify, browser],
+    () => changeChecks({ files, edits, render: result, verify, browser, tsc }),
+    [files, edits, result, verify, browser, tsc],
   );
   const failed = rows.find((r) => r.status === "fail");
   const checkState = checkStripState(rows);
@@ -222,7 +273,7 @@ export function CheckResults({
   }, [checkState, failed, failedPath, failedDetail]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const hasOutput = output.trim().length > 0;
-  const ready = checksReady(result, browser);
+  const ready = checksReady(result, browser, tsc);
   useEffect(() => {
     if (!ready) return;
     const state = useWorkspace.getState();

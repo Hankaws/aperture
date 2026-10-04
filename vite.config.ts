@@ -157,6 +157,9 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // ES-module workers can split: the TypeScript worker (tsc.worker.ts) loads each
+  // standard-library file it needs as its own chunk instead of all of them inline.
+  worker: { format: "es" as const },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.

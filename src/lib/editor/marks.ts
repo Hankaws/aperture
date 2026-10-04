@@ -25,15 +25,21 @@ export function lineOfIssue(text: string): number | null {
   return Number.isInteger(line) && line >= 1 ? line : null;
 }
 
-/** Parse failures, or else import and type failures. Same order the check strip uses. */
-function issuesIn(path: string, text: string, files: Record<string, string>): { parse: boolean; messages: string[] } {
+/**
+ * Parse failures, or else import and type failures. Same order the check
+ * strip uses. `types`, when given, is what real tsc found, in place of the light check.
+ */
+function issuesIn(
+  path: string,
+  text: string,
+  files: Record<string, string>,
+  types?: string[],
+): { parse: boolean; messages: string[] } {
   const parse = issuesForText(path, text);
   if (parse.length > 0) return { parse: true, messages: parse };
   if (!isScriptPath(path)) return { parse: false, messages: [] };
-  return {
-    parse: false,
-    messages: [...importIssues(path, files), ...(isTypePath(path) ? typeIssues(path, text, files) : [])],
-  };
+  const typed = types ?? (isTypePath(path) ? typeIssues(path, text, files) : []);
+  return { parse: false, messages: [...importIssues(path, files), ...typed] };
 }
 
 /**
@@ -47,9 +53,11 @@ export function collectMarks(
   text: string,
   files: Record<string, string>,
   applied?: Record<string, string>,
+  tsc?: { after: string[]; before: string[] },
 ): LineMark[] {
-  const { parse, messages } = issuesIn(path, text, files);
-  const before = !parse && applied?.[path] !== undefined ? issuesIn(path, applied[path], applied).messages : null;
+  const { parse, messages } = issuesIn(path, text, files, tsc?.after);
+  const before =
+    !parse && applied?.[path] !== undefined ? issuesIn(path, applied[path], applied, tsc?.before).messages : null;
   const fresh = new Map<string, number>();
   for (const message of before ? newIssues(messages, before) : messages) fresh.set(message, (fresh.get(message) ?? 0) + 1);
   const marks: LineMark[] = [];

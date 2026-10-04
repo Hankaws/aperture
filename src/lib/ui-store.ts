@@ -63,6 +63,8 @@ type IdeUiState = {
   githubOpen: boolean;
   inlineOpen: boolean;
   historyOpen: boolean;
+  /** Real `tsc` on the staged change, per file: with the change, and as the files are now. For the margin. */
+  tscFindings: { after: Record<string, string[]>; before: Record<string, string[]> } | null;
   /** The agent board: every run in this workspace, by stage. */
   boardOpen: boolean;
   /** Background jobs as the Composer panel last loaded them, so the board can show them too. */
@@ -105,6 +107,7 @@ type IdeUiState = {
   setInlineOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
   setBoardOpen: (open: boolean) => void;
+  setTscFindings: (findings: { after: Record<string, string[]>; before: Record<string, string[]> } | null) => void;
   setBoardJobs: (jobs: JobRecord[]) => void;
   setDebug: (on: boolean) => void;
   setDesignOpen: (open: boolean) => void;
@@ -145,6 +148,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   inlineOpen: false,
   historyOpen: false,
   boardOpen: false,
+  tscFindings: null,
   boardJobs: [],
   debug: false,
   designOpen: false,
@@ -178,6 +182,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setInlineOpen: (open) => set({ inlineOpen: open }),
   setHistoryOpen: (open) => set({ historyOpen: open }),
   setBoardOpen: (open) => set({ boardOpen: open }),
+  setTscFindings: (tscFindings) => set({ tscFindings }),
   setBoardJobs: (jobs) => set({ boardJobs: jobs }),
   setRunPreviewScripts: (on) => {
     // Off by default and remembered per browser: turning it on is a deliberate

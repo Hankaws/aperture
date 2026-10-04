@@ -102,6 +102,15 @@ try {
       await waitForText(page, /Already failing before this change/, 30_000),
       "Tests runs in the browser and marks the other known bugs as already failing",
     );
+    // Types is real tsc, run in a worker on the staged change.
+    const types = page.locator('[data-check="types"]');
+    await page
+      .waitForFunction(() => document.querySelector('[data-check="types"]')?.getAttribute("data-status") !== "running", null, {
+        timeout: 90_000,
+      })
+      .catch(() => {});
+    const typesLabel = (await types.getAttribute("aria-label")) ?? "";
+    check(/Types: passed\. tsc found no errors in \d+ files? this change touches/.test(typesLabel), `Types runs real tsc on the change (${typesLabel.slice(0, 90)})`);
     await page.getByRole("button", { name: /^(Apply all|Apply anyway)$/ }).first().click();
     const revert = page.getByRole("button", { name: "Revert" }).first();
     await revert.waitFor({ timeout: 15_000 });

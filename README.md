@@ -2,8 +2,8 @@
 
 An AI code editor that checks its own work. Composer plans a change and
 stages it as a diff. Every staged change is then checked before you apply it:
-it parses, its imports resolve, the page renders, and the tests pass. The
-tests run in your browser tab, free, in about a second.
+it parses, its imports resolve, a light type check passes, the page renders,
+and the tests pass. The tests run in your browser tab, free, in about a second.
 
 ![Aperture: a staged fix with its check results and Composer's plan](docs/screenshot.png)
 
@@ -36,10 +36,19 @@ local in-process database (PGlite), so nothing else needs setting up.
 - **Plan, then build.** Composer reads the code, posts a plan, and waits for
   **Build it**. Edits arrive as staged diffs you keep or skip file by file.
   Nothing touches your files until you apply.
-- **Check results on every change.** Four checks, each computed from the
+- **Check results on every change.** Five checks, each computed from the
   staged change itself:
-  - **Parses**: the changed files parse.
-  - **Imports resolve**: every import in the changed files resolves.
+  - **Parses**: the changed code, markup and JSON files parse.
+  - **Imports resolve**: every import in the changed scripts resolves.
+  - **Types**: a lightweight check on the changed TypeScript files. It is not
+    `tsc`. It flags only errors it can prove from the file's own text: a
+    literal that does not match its annotation (`string`, `number`,
+    `boolean`, `null`, `undefined`, or an array of those), a returned literal
+    of the wrong type, a call to a function declared in the same file with the
+    wrong number of arguments, and a name or JSX component that is not
+    declared or imported in the file and is not a known global. Anything it
+    cannot judge is left alone, so a pass means these checks found nothing,
+    not that the TypeScript compiler ran.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
 

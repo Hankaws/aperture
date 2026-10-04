@@ -31,15 +31,15 @@ const HOW = [
   {
     n: "03",
     title: "Check, then apply",
-    body: "Edits arrive as staged diffs, each checked: it parses, imports resolve, the preview renders, the tests pass. Keep or skip file by file.",
+    body: "Edits arrive as staged diffs, each checked: it parses, imports resolve, a light type check passes, the preview renders, the tests pass. Keep or skip file by file.",
   },
 ];
 
 const PILLARS = [
   {
     id: "checks",
-    title: "Four checks on every staged change",
-    body: "Parses, imports resolve, preview renders, tests pass. Each is computed from the staged change itself. A check that could not run says why. It never shows as a pass.",
+    title: "Five checks on every staged change",
+    body: "Parses, imports resolve, types, preview renders, tests pass. Each is computed from the staged change itself. A check that could not run says why. It never shows as a pass.",
     visual: "checks",
   },
   {
@@ -69,7 +69,7 @@ const FAQ = [
   },
   {
     q: "What gets checked?",
-    a: "Four things, computed from the staged change: the changed files parse, every import in them resolves, the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
+    a: "Five things, computed from the staged change: the changed files parse, every import in them resolves, a light type check finds no errors it can prove (it is not tsc), the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
   },
   {
     q: "Do the tests cost anything?",
@@ -199,7 +199,7 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
     <div className="rounded-2xl border border-border bg-surface p-5">
       <p className="text-xs tracking-[0.14em] text-subtle uppercase">Checks</p>
       <ul className="mt-4 space-y-3 text-sm">
-        {["Parses", "Imports resolve", "Preview renders", "Tests"].map((label) => (
+        {["Parses", "Imports resolve", "Types", "Preview renders", "Tests"].map((label) => (
           <li key={label} className="flex items-center gap-3">
             <Check className="size-4 text-ok" strokeWidth={2.4} />
             <span className="text-fg">{label}</span>
@@ -285,8 +285,8 @@ export function Landing() {
             </h1>
             <p className="landing-in mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted sm:text-lg" style={{ animationDelay: "720ms" }}>
               Composer plans a change and stages it as a diff. Before you apply it, Aperture checks that it parses,
-              its imports resolve, the preview renders, and the tests pass. The tests run in your browser tab, free, in
-              about a second.
+              its imports resolve, a light type check passes, the preview renders, and the tests pass. The tests run in
+              your browser tab, free, in about a second.
             </p>
             <div className="landing-in" style={{ animationDelay: "880ms" }}>
               <HeroCtas />

@@ -7,7 +7,7 @@ import appCss from "../styles.css?url";
 const APP_NAME = "Aperture";
 const TITLE = "Aperture: an AI code editor that checks its own work";
 const DESCRIPTION =
-  "Every staged change is checked before you apply it: it parses, its imports resolve, the preview renders, and the tests pass. The tests run free in your browser tab.";
+  "Every staged change is checked before you apply it: it parses, its imports resolve, a light type check passes, the preview renders, and the tests pass. The tests run free in your browser tab.";
 
 export const Route = createRootRoute({
   head: () => ({

@@ -64,6 +64,7 @@ export function HelpDialog() {
   const rows = [
     [`${mod}P`, "Go to file"],
     [`${mod}I`, "Focus Composer"],
+    [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}Enter`, "Apply the change in this file"],
     ["F8", "Next review hunk · Shift previous · Alt next file"],

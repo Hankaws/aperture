@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { DesignCapture } from "@/lib/workspace/design-mode";
+import type { JobRecord } from "@/lib/jobs/types";
 import { applyAppearance, readDensity, readTheme, type Density, type EditorTheme } from "@/lib/appearance";
 import {
   DEFAULT_LAYOUT_PREFS,
@@ -62,6 +63,10 @@ type IdeUiState = {
   githubOpen: boolean;
   inlineOpen: boolean;
   historyOpen: boolean;
+  /** The agent board: every run in this workspace, by stage. */
+  boardOpen: boolean;
+  /** Background jobs as the Composer panel last loaded them, so the board can show them too. */
+  boardJobs: JobRecord[];
   debug: boolean;
   designOpen: boolean;
   codePeek: boolean;
@@ -99,6 +104,8 @@ type IdeUiState = {
   setGithubOpen: (open: boolean) => void;
   setInlineOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
+  setBoardOpen: (open: boolean) => void;
+  setBoardJobs: (jobs: JobRecord[]) => void;
   setDebug: (on: boolean) => void;
   setDesignOpen: (open: boolean) => void;
   setCodePeek: (open: boolean) => void;
@@ -137,6 +144,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   githubOpen: false,
   inlineOpen: false,
   historyOpen: false,
+  boardOpen: false,
+  boardJobs: [],
   debug: false,
   designOpen: false,
   codePeek: false,
@@ -168,6 +177,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setGithubOpen: (open) => set({ githubOpen: open }),
   setInlineOpen: (open) => set({ inlineOpen: open }),
   setHistoryOpen: (open) => set({ historyOpen: open }),
+  setBoardOpen: (open) => set({ boardOpen: open }),
+  setBoardJobs: (jobs) => set({ boardJobs: jobs }),
   setRunPreviewScripts: (on) => {
     // Off by default and remembered per browser: turning it on is a deliberate
     // act, so it should not silently reset, nor silently follow a shared link.

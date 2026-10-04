@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowLeftRight, Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -132,6 +132,16 @@ export function CommandPalette() {
             >
               <Search className="size-3.5 text-subtle" />
               Find in file
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                useIdeUi.getState().setBoardOpen(true);
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <LayoutGrid className="size-3.5 text-subtle" />
+              Agent board
             </Command.Item>
             <Command.Item
               onSelect={() => {

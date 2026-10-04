@@ -122,6 +122,8 @@ export type ChatMessage = {
   mcpCalls?: McpCall[];
   /** The composer copy this turn is working in, when a second run is open. */
   copyId?: string;
+  /** The run this turn belongs to: the request and every turn that answers it (see board.ts). */
+  runId?: string;
   /** Set when this turn was saved as a lesson for the next run. */
   lesson?: "up" | "down";
 };

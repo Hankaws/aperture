@@ -12,6 +12,7 @@ import { parseMentions } from "@/lib/workspace/mentions";
 import { attachNotesToPending, listPendingEdits, markReviewed, withoutUnchanged } from "@/lib/workspace/edits";
 import { LESSONS_PATH, formatObservations, formatUserMove, lessonEditForFailure, readStanding, refusalLine, rememberRefusal } from "@/lib/workspace/lessons";
 import { pendingForRun } from "@/lib/workspace/copies";
+import { runIdFor } from "@/lib/workspace/board";
 import { autoContextPaths } from "./auto-context";
 import { compactHistory, priorMessages } from "./compact";
 import { isUiTask, nearestUiFiles } from "./ui-graph";
@@ -228,6 +229,13 @@ export async function submitAgent(
   const stamp = Date.now();
   const userId = `u_${stamp}`;
   const asstId = `a_${stamp}`;
+  const runId = runIdFor(useWorkspace.getState().messages, {
+    id: userId,
+    build: opts?.phase === "build",
+    followUp,
+    automatic: opts?.automatic,
+    copyId,
+  });
   const agentLabel = opts?.agentLabel?.trim() || "Aperture";
   const phase = opts?.phase;
   const planning = mode === "composer" && phase !== "skip" && phase !== "build";
@@ -237,6 +245,7 @@ export async function submitAgent(
     role: "user",
     content: trimmed,
     createdAt: stamp,
+    runId,
     ...(copyId ? { copyId } : {}),
     ...(opts?.automatic ? { automatic: true } : {}),
   });
@@ -257,6 +266,7 @@ export async function submitAgent(
               : "Working…",
     agentLabel,
     createdAt: stamp + 1,
+    runId,
     ...(mode === "composer" && !opts?.agentId && source ? { modelSource: source } : {}),
     ...(copyId ? { copyId } : {}),
     ...opts?.messageExtra,

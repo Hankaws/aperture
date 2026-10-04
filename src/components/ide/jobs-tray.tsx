@@ -7,6 +7,7 @@ import { cancelJob } from "@/lib/jobs/api";
 import type { JobRecord } from "@/lib/jobs/types";
 import { parseUnifiedDiff } from "@/lib/acp/patch";
 import { useWorkspace } from "@/lib/workspace/store";
+import { openJobInComposer } from "@/lib/jobs/open-job";
 import { cn } from "@/lib/utils";
 import { acpAgentNames } from "@/lib/acp/kinds";
 
@@ -29,19 +30,7 @@ export function JobsTray({
   const visible = pending.slice(0, 4);
 
   function importJob(job: JobRecord) {
-    const edits = (job.edits ?? []).map((edit, i) => ({
-      ...edit,
-      id: `${job.id}_${i}_${edit.path}`,
-      status: "pending" as const,
-    }));
-    useWorkspace.getState().addMessage({
-      id: `a_${job.id}`,
-      role: "assistant",
-      content: job.text?.trim() || "Background job finished.",
-      edits,
-      agentLabel: job.agentName ?? "Aperture",
-      createdAt: Date.now(),
-    });
+    openJobInComposer(job);
     toast.success("Opened in Composer");
   }
 
@@ -52,8 +41,10 @@ export function JobsTray({
       toast.error(result.error);
       return;
     }
+    const id = `a_patch_${Date.now()}`;
     useWorkspace.getState().addMessage({
-      id: `a_patch_${Date.now()}`,
+      id,
+      runId: id,
       role: "assistant",
       content: "Imported a patch into the same diff UI.",
       edits: result,

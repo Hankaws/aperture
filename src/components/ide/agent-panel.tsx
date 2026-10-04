@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore, memo, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApertureMark } from "./logo";
 import { PlanCard } from "./plan-card";
@@ -100,6 +100,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
   const jobsOn = Boolean(account && (account.backgroundJobs > 0 || account.acp));
   const { jobs, setJobs, refresh: refreshJobs, liveCount } = useJobs(jobsOn);
+  useEffect(() => useIdeUi.getState().setBoardJobs(jobs), [jobs]);
 
   useEffect(() => {
     setMounted(true);
@@ -472,6 +473,16 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             onClick={openRules}
           >
             <ScrollText className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7"
+            title="Agent board"
+            aria-label="Agent board"
+            onClick={() => useIdeUi.getState().setBoardOpen(true)}
+          >
+            <LayoutGrid className="size-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -1038,22 +1049,23 @@ function MessageList({
       ) : (
         <div className="space-y-3">
           {messages.map((message) => (
-            <MessageBlock
-              key={message.id}
-              message={message}
-              running={running}
-              quoteLabel={
-                message.awaitingBuild && !replay
-                  ? quoteRuns(
-                      account ?? null,
-                      source,
-                      billedWorkers(message.plan, fileList, (n) => !quoteRuns(account ?? null, source, n).blocked),
-                    ).label
-                  : quoteLabel
-              }
-              onBuild={buildById}
-              onSendNotes={notesById}
-            />
+            <div key={message.id} data-message-id={message.id}>
+              <MessageBlock
+                message={message}
+                running={running}
+                quoteLabel={
+                  message.awaitingBuild && !replay
+                    ? quoteRuns(
+                        account ?? null,
+                        source,
+                        billedWorkers(message.plan, fileList, (n) => !quoteRuns(account ?? null, source, n).blocked),
+                      ).label
+                    : quoteLabel
+                }
+                onBuild={buildById}
+                onSendNotes={notesById}
+              />
+            </div>
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -82,6 +82,61 @@ test("a type error fails Types", () => {
   assert.equal(types.status, "fail");
   assert.equal(types.path, "src/a.ts");
   assert.match(types.detail, /line 1/);
+});
+
+test("an issue the file already had is amber, does not block Apply, and is not sent back", () => {
+  // The checker cannot see this name's declaration, which is the case for real
+  // projects too: an edit elsewhere in the file must not be blocked by it.
+  const before = "export const a = ghost + 1;\n";
+  const files = { ...FILES, "src/a.ts": before };
+  const rows = changeChecks({
+    files,
+    edits: [edit("src/a.ts", "// A comment above.\nexport const a = ghost + 2;\n", before)],
+    render: null,
+  });
+  const types = row(rows, "types");
+  assert.equal(types.status, "warn");
+  assert.match(types.detail, /^Already there before this change: src\/a\.ts: .*cannot find name ghost/);
+  assert.equal(checkStripState(rows.filter((r) => r.id !== "tests" && r.id !== "preview")), "clear");
+  assert.equal(inTurnCheckPrompt(files, [edit("src/a.ts", "// A comment above.\nexport const a = ghost + 2;\n", before)]), null);
+});
+
+test("a second use of a name the file already lacked is still new", () => {
+  const before = "export const a = ghost + 1;\n";
+  const rows = changeChecks({
+    files: { ...FILES, "src/a.ts": before },
+    edits: [edit("src/a.ts", "export const a = ghost + 1;\nexport const c = ghost;\n", before)],
+    render: null,
+  });
+  assert.equal(row(rows, "types").status, "fail");
+});
+
+test("an unresolved import the file already had is amber; a new one is red", () => {
+  const before = 'import { x } from "./gone";\nexport const a = x;\n';
+  const files = { ...FILES, "src/a.ts": before };
+  const kept = changeChecks({
+    files,
+    edits: [edit("src/a.ts", 'import { x } from "./gone";\nexport const a = x + 1;\n', before)],
+    render: null,
+  });
+  assert.equal(row(kept, "imports").status, "warn");
+  const added = changeChecks({
+    files,
+    edits: [edit("src/a.ts", 'import { x } from "./gone";\nimport { y } from "./also-gone";\nexport const a = x + y;\n', before)],
+    render: null,
+  });
+  assert.equal(row(added, "imports").status, "fail");
+  assert.match(row(added, "imports").detail, /also-gone/);
+});
+
+test("newIssues compares without line numbers, and counts repeats", () => {
+  const before = ["type error at line 3: cannot find name ghost"];
+  assert.deepEqual(newIssues(["type error at line 9: cannot find name ghost"], before), []);
+  assert.deepEqual(
+    newIssues(["type error at line 9: cannot find name ghost", "type error at line 12: cannot find name ghost"], before),
+    ["type error at line 12: cannot find name ghost"],
+  );
+  assert.deepEqual(newIssues(['imports "./x" at line 4, which does not exist in the project'], ['imports "./x" at line 1, which does not exist in the project']), []);
 });
 
 test("an import of a file that does not exist fails Imports resolve", () => {

@@ -42,6 +42,22 @@ export function changesSince(stamps: Record<string, string>, files: Record<strin
   return changes;
 }
 
+/**
+ * The mode to write a changed file with: the mode it had at the commit it came
+ * from, so an executable script stays executable and a symlink stays a link.
+ * A new file, or one GitHub's tree listing did not include, is a plain file.
+ */
+export function blobModes(entries: unknown): Map<string, string> {
+  const modes = new Map<string, string>();
+  if (!Array.isArray(entries)) return modes;
+  for (const entry of entries) {
+    const rec = entry as { path?: unknown; mode?: unknown; type?: unknown };
+    if (rec.type !== "blob" || typeof rec.path !== "string") continue;
+    if (rec.mode === "100755" || rec.mode === "120000") modes.set(rec.path, rec.mode);
+  }
+  return modes;
+}
+
 /** Accepts classic and fine-grained tokens. Rejects anything that is not a token. */
 export function cleanGithubToken(raw: string): string | null {
   const token = raw.trim();

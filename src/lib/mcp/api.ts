@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { mcpAddInput, mcpConfirmInput, mcpRemoveInput } from "@/lib/security/inputs";
 
 export const mcpStatus = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -9,7 +10,7 @@ export const mcpStatus = createServerFn({ method: "POST" })
   });
 
 export const saveMcpServer = createServerFn({ method: "POST" })
-  .validator((input: { name: string; url: string; token?: string }) => input)
+  .validator(mcpAddInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const { addMcpServer } = await import("./account.server");
@@ -17,7 +18,7 @@ export const saveMcpServer = createServerFn({ method: "POST" })
   });
 
 export const removeMcpServer = createServerFn({ method: "POST" })
-  .validator((input: { id: string }) => input)
+  .validator(mcpRemoveInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const { deleteMcpServer } = await import("./account.server");
@@ -25,7 +26,7 @@ export const removeMcpServer = createServerFn({ method: "POST" })
   });
 
 export const confirmMcpCall = createServerFn({ method: "POST" })
-  .validator((input: { server: string; tool: string; args: string }) => input)
+  .validator(mcpConfirmInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const { runConfirmedMcp } = await import("./account.server");

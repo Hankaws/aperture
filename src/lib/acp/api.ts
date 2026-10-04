@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { acpAgentNames, isAcpKind, type AcpKind } from "./kinds";
+import { acpAddInput, idInput } from "@/lib/security/inputs";
 
 export type AgentConnection = {
   id: string;
@@ -52,7 +53,7 @@ export const listAgents = createServerFn({ method: "POST" })
   });
 
 export const saveAgent = createServerFn({ method: "POST" })
-  .validator((input: { name: string; kind: AcpKind; endpoint: string; token: string }) => input)
+  .validator(acpAddInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<AgentConnection[]> => {
     const { getSql } = await import("@/lib/db");
@@ -108,7 +109,7 @@ export const saveAgent = createServerFn({ method: "POST" })
   });
 
 export const deleteAgent = createServerFn({ method: "POST" })
-  .validator((id: string) => id)
+  .validator(idInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }): Promise<AgentConnection[]> => {
     const { getSql } = await import("@/lib/db");

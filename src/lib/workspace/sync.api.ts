@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { checkSyncLimits, withoutSecrets, type RemoteSnapshot, type WorkspaceFiles } from "./sync";
+import { workspaceSaveInput } from "@/lib/security/inputs";
 
 export type LoadResult = { ok: true; workspace: RemoteSnapshot | null } | { ok: false; error: string };
 
@@ -38,7 +39,7 @@ export const loadWorkspace = createServerFn({ method: "GET" })
  */
 export const saveWorkspace = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { name: string; files: WorkspaceFiles; baseRevision: number | null }) => input)
+  .validator(workspaceSaveInput)
   .handler(async ({ data, context }): Promise<SaveResult> => {
     const name = data.name.trim().slice(0, 120) || "workspace";
     if (!data.files || typeof data.files !== "object" || Array.isArray(data.files)) {

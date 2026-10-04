@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import type { AgentInput, AgentResult } from "./types";
+import type { AgentResult } from "./types";
+import { agentInput } from "@/lib/security/inputs";
 
 export const getAiStatus = createServerFn({ method: "POST" }).handler(async () => {
   const { replayEnabled } = await import("./replay");
@@ -10,7 +11,7 @@ export const getAiStatus = createServerFn({ method: "POST" }).handler(async () =
 });
 
 export const runAgent = createServerFn({ method: "POST" })
-  .validator((input: AgentInput) => input)
+  .validator(agentInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<AgentResult> => {
     const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");

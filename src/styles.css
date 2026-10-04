@@ -6,7 +6,7 @@
   --color-elevated: #18181b;
   --color-fg: #f4f4f5;
   --color-muted: #a1a1aa;
-  --color-subtle: #71717a;
+  --color-subtle: #83838c;
   --color-primary: #e4e4e7;
   --color-primary-fg: #09090b;
   --color-border: #27272a;
@@ -64,7 +64,7 @@ html[data-theme="claude"] {
   --color-elevated: #2a2622;
   --color-fg: #f4efe8;
   --color-muted: #b8aea2;
-  --color-subtle: #8a8076;
+  --color-subtle: #998f84;
   --color-primary: #f4efe8;
   --color-primary-fg: #161412;
   --color-border: #3a342e;
@@ -84,6 +84,126 @@ html[data-theme="claude"] {
   --color-scrollbar-hover: #5a524a;
 }
 
+/* Light. The editor follows through --ed-* and --syn-* (src/lib/editor/theme.ts);
+   every text colour here clears 4.5:1 on the surfaces it sits on. */
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-elevated: #f4f4f5;
+  --color-fg: #18181b;
+  --color-muted: #52525b;
+  --color-subtle: #6b6b75;
+  --color-primary: #18181b;
+  --color-primary-fg: #ffffff;
+  --color-border: #e4e4e7;
+  --color-accent: #2563eb;
+  --color-danger: #b91c1c;
+  --color-ok: #047857;
+  --color-warn: #b45309;
+  --color-editor: #ffffff;
+  --color-tab-hover: #f4f4f5;
+  --color-tab-modified: #3f3f46;
+  --color-selection-inactive: #dbe7f5;
+  --color-word-read: #e8f0fb;
+  --color-word-write: #cfe2fb;
+  --color-ghost: #8c959f;
+  --color-inlay-bg: #f3f4f6;
+  --color-inlay-fg: #6e7781;
+  --color-sticky: #fafafa;
+  --color-list-hover: #f4f4f5;
+  --color-list-selected: #e4e4e7;
+  --color-list-selected-inactive: #f4f4f5;
+  --color-list-focus: #dbeafe;
+  --color-list-drop: #dbeafe;
+  --color-palette-focus: #dbeafe;
+  --color-scrollbar: #d4d4d8;
+  --color-scrollbar-hover: #a1a1aa;
+  --color-selection: #bfdbfe;
+  --color-tab-preview: #52525b;
+  --color-minimap-slider: rgba(0, 0, 0, 0.08);
+  --color-minimap-slider-hover: rgba(0, 0, 0, 0.14);
+  --color-diff-add: rgba(4, 120, 87, 0.12);
+  --color-diff-del: rgba(185, 28, 28, 0.10);
+  --color-peek-border: #2563eb;
+  --shadow-border: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --shadow-border-hover: 0 0 0 1px rgba(0, 0, 0, 0.14);
+  --shadow-float: 0 16px 40px -24px rgb(0 0 0 / 0.25);
+  --ed-page: #fafafa;
+  --ed-bg: #ffffff;
+  --ed-surface: #fafafa;
+  --ed-elevated: #f4f4f5;
+  --ed-fg: #1f2328;
+  --ed-fg-bright: #000000;
+  --ed-muted: #57606a;
+  --ed-subtle: #6b6b75;
+  --ed-gutter-fg: #6e7781;
+  --ed-border: #d0d7de;
+  --ed-accent: #0969da;
+  --ed-ok: #1a7f37;
+  --ed-danger: #cf222e;
+  --ed-warn: #9a6700;
+  --ed-caret: #1f2328;
+  --ed-active-line: #f6f8fa;
+  --ed-active-line-gutter: #1f2328;
+  --ed-selection: #b6d5fb;
+  --ed-selection-inactive: #dbe7f5;
+  --ed-word-read: #e8f0fb;
+  --ed-word-write: #cfe2fb;
+  --ed-match-border: #0969da;
+  --ed-tab-hover: #f4f4f5;
+  --ed-tab-modified: #3f3f46;
+  --ed-tab-preview: #57606a;
+  --ed-ghost: #8c959f;
+  --ed-inlay-bg: #f3f4f6;
+  --ed-inlay-fg: #6e7781;
+  --ed-sticky-bg: #fafafa;
+  --ed-sticky-hover: #f4f4f5;
+  --ed-list-hover: #f4f4f5;
+  --ed-list-selected: #e4e4e7;
+  --ed-list-selected-inactive: #f4f4f5;
+  --ed-list-focus: #ddf4ff;
+  --ed-list-drop: #ddf4ff;
+  --ed-palette-focus: #ddf4ff;
+  --ed-quick-input-bg: #ffffff;
+  --ed-peek-bg: #f6f8fa;
+  --ed-peek-border: #0969da;
+  --ed-toast-bg: #ffffff;
+  --ed-toast-border: #d0d7de;
+  --ed-minimap-slider: rgba(0, 0, 0, 0.08);
+  --ed-minimap-slider-hover: rgba(0, 0, 0, 0.14);
+  --ed-scrollbar: #d0d7de;
+  --ed-scrollbar-hover: #afb8c1;
+  --ed-diff-add-bg: rgba(26, 127, 55, 0.12);
+  --ed-diff-del-bg: rgba(207, 34, 46, 0.10);
+  --ed-diff-add-gutter: #1a7f37;
+  --ed-diff-del-gutter: #cf222e;
+  --ed-merge-current: #d1f0da;
+  --ed-merge-incoming: #ddf4ff;
+  --ed-merge-conflict: #cf222e;
+  --ed-squiggle-error: #cf222e;
+  --ed-squiggle-warn: #9a6700;
+  --ed-squiggle-info: #0969da;
+  --syn-bg: #ffffff;
+  --syn-fg: #1f2328;
+  --syn-caret: #1f2328;
+  --syn-gutter: #ffffff;
+  --syn-gutter-fg: #6e7781;
+  --syn-active-line: #f6f8fa;
+  --syn-selection: #b6d5fb;
+  --syn-match: #cfe2fb;
+  --syn-keyword: #0550ae;
+  --syn-string: #116329;
+  --syn-fn: #8250df;
+  --syn-type: #953800;
+  --syn-comment: #656d76;
+  --syn-number: #0a6b72;
+  --syn-property: #36404a;
+  --syn-operator: #57606a;
+  --syn-tag: #0550ae;
+  --syn-invalid: #cf222e;
+}
+
 @layer base {
   html,
   body,
@@ -92,6 +212,8 @@ html[data-theme="claude"] {
   }
 
   html {
+    /* Native controls and scrollbars match; the light theme sets its own. */
+    color-scheme: dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -133,6 +255,17 @@ html[data-theme="claude"] {
   ::selection {
     background: color-mix(in oklab, var(--color-accent) 35%, transparent);
     color: var(--color-fg);
+  }
+
+  /* A finger needs about 44px. On touch screens a small text control grows
+     its hit area with padding, and a matching negative margin keeps the
+     layout where it was. Padding, unlike a pseudo-element, survives the
+     overflow clipping that truncated labels use. */
+  @media (pointer: coarse) {
+    .tap {
+      padding: 12px 6px;
+      margin: -12px -6px;
+    }
   }
 
   :focus-visible {
@@ -414,6 +547,18 @@ html[data-theme="claude"] {
     .ide-status {
       height: 1.5rem;
       padding-inline: 0.625rem;
+    }
+  }
+
+  /* Touch: the bar is a 44px row and its controls fill it, since a hit area
+     reaching past it would overlap the phone's bottom navigation. */
+  @media (pointer: coarse) {
+    .ide-status {
+      height: 2.75rem;
+    }
+    /* Line height, not min-height: it centres a truncated label too. */
+    .ide-status :is(button, a) {
+      line-height: 2.75rem;
     }
   }
 

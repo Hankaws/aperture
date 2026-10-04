@@ -1,4 +1,4 @@
-import { EDITOR, SYNTAX } from "./theme";
+import { ED, SYN } from "./theme";
 
 export function paintMinimap(
   host: HTMLElement,
@@ -19,7 +19,7 @@ export function paintMinimap(
     const comment = t.startsWith("//") || t.startsWith("#") || t.startsWith("*");
     const width = Math.min(w - 8, Math.max(6, t.length * 1.15));
     bars.push(
-      `<i style="top:${(i * lineH).toFixed(2)}px;width:${width.toFixed(1)}px;height:${Math.max(1, lineH - 0.4).toFixed(2)}px;opacity:${comment ? 0.4 : 0.28};background:${comment ? SYNTAX.comment : EDITOR.fg}"></i>`,
+      `<i style="top:${(i * lineH).toFixed(2)}px;width:${width.toFixed(1)}px;height:${Math.max(1, lineH - 0.4).toFixed(2)}px;opacity:${comment ? 0.4 : 0.28};background:${comment ? SYN.comment : ED.fg}"></i>`,
     );
   }
   const ratio = scrollHeight > 0 ? clientHeight / scrollHeight : 1;

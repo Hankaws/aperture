@@ -4,7 +4,14 @@ import { safeRelPath } from "@/lib/security/redact";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
 import { blobModes, cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
-import type { GithubReviewComment } from "./review";
+import {
+  githubImportInput,
+  githubListInput,
+  githubMergeInput,
+  githubPublishInput,
+  githubReviewInput,
+  githubSaveTokenInput,
+} from "@/lib/security/inputs";
 
 export type GithubImportResult =
   | (ImportResult & { ok: true; source: GithubSource | null })
@@ -63,7 +70,7 @@ async function readCapped(res: Response, cap: number): Promise<ArrayBuffer> {
 }
 
 export const importGithubRepo = createServerFn({ method: "POST" })
-  .validator((input: { url: string; token?: string }) => input)
+  .validator(githubImportInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubImportResult> => {
     const parsed = parseGithubUrl(data.url);
@@ -111,7 +118,7 @@ export const importGithubRepo = createServerFn({ method: "POST" })
 export type GithubRepoSummary = { fullName: string; private: boolean; branch: string };
 
 export const listGithubRepos = createServerFn({ method: "POST" })
-  .validator((input: { token?: string }) => input)
+  .validator(githubListInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<{ ok: true; repos: GithubRepoSummary[] } | { ok: false; error: string }> => {
     const token = await useToken(context.userId, data.token);
@@ -138,18 +145,7 @@ export type GithubPublishResult =
   | { ok: false; error: string };
 
 export const publishGithub = createServerFn({ method: "POST" })
-  .validator(
-    (input: {
-      token?: string;
-      owner: string;
-      repo: string;
-      branch: string;
-      baseSha: string;
-      mode: "commit" | "pr";
-      message: string;
-      changes: GithubChange[];
-    }) => input,
-  )
+  .validator(githubPublishInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubPublishResult> => {
     const token = await useToken(context.userId, data.token);
@@ -255,7 +251,7 @@ export const githubStatus = createServerFn({ method: "POST" })
   .handler(async ({ context }): Promise<GithubAccount> => accountGithub(context.userId));
 
 export const saveGithubToken = createServerFn({ method: "POST" })
-  .validator((input: { token: string }) => input)
+  .validator(githubSaveTokenInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }): Promise<GithubAccount & { ok: true } | { ok: false; error: string }> => {
     const token = cleanGithubToken(data.token);
@@ -292,17 +288,7 @@ export const clearGithubAccount = createServerFn({ method: "POST" })
   });
 
 export const postGithubReview = createServerFn({ method: "POST" })
-  .validator(
-    (input: {
-      token?: string;
-      owner: string;
-      repo: string;
-      pull: number;
-      sha: string;
-      body: string;
-      comments: GithubReviewComment[];
-    }) => input,
-  )
+  .validator(githubReviewInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
     const token = await useToken(context.userId, data.token);
@@ -353,10 +339,7 @@ export const postGithubReview = createServerFn({ method: "POST" })
   });
 
 export const mergeGithub = createServerFn({ method: "POST" })
-  .validator(
-    (input: { token?: string; owner: string; repo: string; base: string; head: string; pull?: number; message: string }) =>
-      input,
-  )
+  .validator(githubMergeInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubPublishResult> => {
     const token = await useToken(context.userId, data.token);

@@ -93,7 +93,13 @@ function MobileAccount() {
 
   return (
     <div ref={rootRef} className="relative">
-      <button type="button" aria-label="Account" aria-expanded={open} className="rounded-full" onClick={() => setOpen((v) => !v)}>
+      <button
+      type="button"
+      aria-label="Account"
+      aria-expanded={open}
+      className="rounded-full pointer-coarse:grid pointer-coarse:size-11 pointer-coarse:place-items-center"
+      onClick={() => setOpen((v) => !v)}
+    >
         {user.profileImageUrl ? (
           <img src={user.profileImageUrl} alt="" className="size-8 rounded-full object-cover" />
         ) : (
@@ -187,7 +193,7 @@ function TitleBar() {
   return (
     <div className="ide-title">
       <div className="flex min-w-0 items-center gap-2">
-        <Link to="/" className="grid size-6 shrink-0 place-items-center text-fg" aria-label="Aperture home">
+        <Link to="/" className="grid size-6 shrink-0 place-items-center text-fg pointer-coarse:size-11" aria-label="Aperture home">
           <ApertureMark className="size-3.5" />
         </Link>
         <span className="hidden min-w-0 truncate text-[12px] font-medium text-muted md:block">{name}</span>

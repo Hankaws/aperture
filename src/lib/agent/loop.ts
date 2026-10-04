@@ -8,6 +8,7 @@ import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
+import { RuleLoader } from "@/lib/workspace/scoped-rules";
 import { LESSONS_PATH, formatSpot, lessonsForPrompt, refusalsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
@@ -17,7 +18,7 @@ import { editTurnStop } from "./cost";
 import { inTurnCheckPrompt } from "@/lib/workspace/checks";
 import { reviewContext, withReviewLine } from "@/lib/workspace/diff-notes";
 import { applyStackMemory, formatStackContext } from "./stack";
-import { sanitizeFileMap, redactSecrets } from "@/lib/security/redact";
+import { sanitizeFileMap, redactSecrets, safeRelPath } from "@/lib/security/redact";
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
@@ -390,6 +391,20 @@ export async function runLoop(
     : standingForPrompt((input.standing ?? []).map((line, i) => ({ id: String(i), line }))).slice(0, 2000);
   const refused = refusalsForPrompt(input.refusals ?? []).slice(0, 2000);
   const here = formatSpot(input.spot);
+  // Rules for some files only (.aperture/rules): those for the files this turn starts on now,
+  // the rest when the agent reads or edits a file they are for.
+  const ruleLoader = new RuleLoader(fileMap);
+  const scoped = reviewing
+    ? ""
+    : ruleLoader.initial(
+        [
+          input.activePath ?? "",
+          input.selection?.path ?? "",
+          ...mentioned,
+          ...(input.focusPaths ?? []),
+          ...(input.pendingEdits ?? []).filter((edit) => edit.status === "pending").map((edit) => edit.path),
+        ].filter(Boolean),
+      );
   const sys = reviewing
     ? [
         "You are Aperture, reviewing a staged diff. The diff is the only context.",
@@ -401,6 +416,7 @@ export async function runLoop(
         .join("\n\n")
     : [
         systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role),
+        scoped,
         standing ? `Rules for every project. Follow them:\n${standing}` : "",
         lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
         refused ? `The user already refused these. Do not propose them again:\n${refused}` : "",
@@ -459,6 +475,7 @@ export async function runLoop(
       ...(verify ? { verify } : {}),
       ...(browserRun ? { browserRun } : {}),
       ...(mcpPending.length > 0 ? { mcpCalls: mcpPending } : {}),
+      ...(ruleLoader.loaded.length > 0 ? { rules: [...ruleLoader.loaded] } : {}),
     };
     emit({ type: "done", ...body, text: verifiedText, ...extra });
     return { ok: true, ...body, text: verifiedText, ...extra };
@@ -576,7 +593,12 @@ export async function runLoop(
 
         const runOne = async (call: (typeof parsed)[number]) => {
           const started = Date.now();
-          const result = await executeTool(call.name, call.args, ctx);
+          let result = await executeTool(call.name, call.args, ctx);
+          if (!reviewing && (call.name === "read_file" || call.name === "propose_edit")) {
+            const path = safeRelPath(String(call.args.path ?? "")) ?? "";
+            const reached = call.name === "read_file" ? !result.startsWith("File not found") : result.startsWith("Edit staged");
+            if (path && reached) result += ruleLoader.forPath(path, call.name === "read_file" ? "read" : "edit");
+          }
           return { call, result, ms: Date.now() - started };
         };
         // Reads fan out; anything that mutates or bills stays strictly ordered.

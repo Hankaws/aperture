@@ -13,6 +13,7 @@ import { InlineEdit } from "./inline-edit";
 import { HelpDialog, NewFileDialog } from "./overlays";
 import { HistoryDialog } from "./history-dialog";
 import { AgentBoard } from "./agent-board";
+import { runSaveHooks } from "./save-hooks";
 import { OpenProjectHost } from "./open-project";
 import { PreviewToggle } from "./tab-bar";
 import { LayoutMenu, PanelToggles } from "./layout-controls";
@@ -392,6 +393,7 @@ export function IdeShell() {
       } else if (key === "s") {
         e.preventDefault();
         toast.success("Saved", { id: "workspace-saved" });
+        void runSaveHooks(useWorkspace.getState().activePath);
       }
     }
     window.addEventListener("keydown", onKey);

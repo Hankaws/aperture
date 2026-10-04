@@ -64,6 +64,8 @@ export type AgentResult =
       /** The script the tab should run in the browser now, then report back as the next turn. */
       browserRun?: { script: string };
       mcpCalls?: McpCall[];
+      /** Rules from .aperture/rules this turn was given, by path. */
+      rules?: string[];
     }
   | {
       ok: false;

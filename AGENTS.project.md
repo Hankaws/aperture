@@ -320,6 +320,30 @@ while checks run and the tab is visible. "Fix with Composer" is refused while
 a change is staged or local edits are unpushed, so the fix starts from what CI
 ran. Nothing in this loop runs without a click.
 
+## Hooks and rules for some files
+
+`hooks.ts` parses `.aperture/hooks.json`; `hook-runner.ts` runs a hook with
+the browser test runner (`runTestsInBrowser(files, { script })`), so a hook has
+the runner's limits and is "not run", never a pass, when it needs a real Node.
+
+- **Stage hooks** are rows in `changeChecks` (`hookRow`, id `hook:<id>`).
+  They are judged like the tests: a failure the applied files already have is
+  amber. `useStageHooks` in `check-results.tsx` reads the hooks from the
+  *applied* `hooks.json`, never the staged one, so a change cannot disable
+  its own judge.
+- **Save hooks** run on Ctrl/Cmd+S (`runSaveHooks` in `hooks-badge.tsx`) and
+  show in the status bar.
+- **Scoped rules.** `.aperture/rules/*.md` (`scoped-rules.ts`) reach the agent
+  through `RuleLoader` in `loop.ts`. Rules for the files the turn starts on
+  (the active file, the selection, `@` mentions, focus paths and pending
+  edits) go into the system prompt. A rule for a file the agent reaches later
+  is appended to that `read_file` or `propose_edit` result, once. The paths
+  given go back on the message as `rules`.
+
+Each rule is cut at `RULE_LIMIT.chars`. Past the total budget, a whole rule is
+left out, so a later rule is never cut off halfway. The project-wide rules file (`findRules`: `.aperture.md`,
+`AGENTS.md`…) is unchanged and still goes into every turn.
+
 ## Tests are globbed
 
 `npm test` takes `'scripts/**/*.test.mjs' 'src/**/*.test.ts'`. Do not reintroduce

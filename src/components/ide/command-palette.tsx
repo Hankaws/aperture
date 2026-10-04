@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowLeftRight, Bug, Clock, Download, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Bug, Clock, Download, FileCheck, ListChecks, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { abortAgent } from "@/lib/agent/run";
+import { RULES_DIR, RULE_TEMPLATE } from "@/lib/workspace/scoped-rules";
+import { openHooksFile, runSaveHooks } from "./save-hooks";
 import { parseGoto, resolveGotoPath } from "@/lib/editor/goto";
 import { fuzzyMatch } from "@/lib/utils";
 import type { EditorTheme } from "@/lib/appearance";
@@ -242,6 +244,39 @@ export function CommandPalette() {
             >
               <Undo2 className="size-3.5 text-subtle" />
               {checkpoints.length > 0 ? `Undo last run · ${checkpoints[checkpoints.length - 1]!.label}` : "Undo last Composer run"}
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                void runSaveHooks(useWorkspace.getState().activePath, { manual: true });
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <ListChecks className="size-3.5 text-subtle" />
+              Run save hooks
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                openHooksFile();
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <ListChecks className="size-3.5 text-subtle" />
+              Edit hooks
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                const ws = useWorkspace.getState();
+                let path = `${RULES_DIR}tests.md`;
+                for (let n = 2; ws.files[path] !== undefined; n += 1) path = `${RULES_DIR}rule-${n}.md`;
+                ws.createFile(path, RULE_TEMPLATE);
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <FileCheck className="size-3.5 text-subtle" />
+              Add a rule for some files
             </Command.Item>
             <Command.Item
               onSelect={() => {

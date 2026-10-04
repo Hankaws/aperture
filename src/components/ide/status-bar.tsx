@@ -10,6 +10,7 @@ import { resolveAgentTask } from "@/lib/workspace/agent-task";
 import { cn } from "@/lib/utils";
 import { GithubSendDialog } from "./github-send";
 import { PrChecksBadge } from "./pr-checks";
+import { HooksBadge } from "./hooks-badge";
 
 export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const activePath = useWorkspace((s) => s.activePath);
@@ -99,6 +100,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
       </div>
       <div className="flex items-center gap-3">
         <SyncBadge />
+        <HooksBadge />
         <PrChecksBadge />
         {github && (
           <button type="button" className="max-w-36 truncate hover:text-fg" onClick={() => setSendOpen(true)}>

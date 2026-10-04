@@ -111,11 +111,26 @@ try {
       .catch(() => {});
     const typesLabel = (await types.getAttribute("aria-label")) ?? "";
     check(/Types: passed\. tsc found no errors in \d+ files? this change touches/.test(typesLabel), `Types runs real tsc on the change (${typesLabel.slice(0, 90)})`);
+    // The demo's stage hook (.aperture/hooks.json) is one more check, and its rule for src/store.ts was followed.
+    await page
+      .waitForFunction(() => document.querySelector('[data-check="hook:0:check:store"]')?.getAttribute("data-status") !== "running", null, {
+        timeout: 30_000,
+      })
+      .catch(() => {});
+    const hookStatus = await page.locator('[data-check="hook:0:check:store"]').getAttribute("data-status").catch(() => null);
+    check(hookStatus === "pass", `the stage hook runs as a check on the change (${hookStatus})`);
+    check(
+      (await page.getByRole("button", { name: "store.md" }).count()) > 0 && /Followed rule/.test(await bodyText(page)),
+      "the rule for src/store.ts is given to the agent and listed on the message",
+    );
     await page.getByRole("button", { name: /^(Apply all|Apply anyway)$/ }).first().click();
     const revert = page.getByRole("button", { name: "Revert" }).first();
     await revert.waitFor({ timeout: 15_000 });
     await revert.click();
     check(await waitForText(page, /Reverted “/, 10_000), "Apply, then Revert, puts the change back");
+    // Save hooks: Ctrl+S on src/store.ts runs the demo's hook, and the status bar says how it went.
+    await page.keyboard.press("Control+s");
+    check(await waitForText(page, /hooks passed/, 20_000), "Ctrl+S runs the save hook and the status bar shows it passed");
     check(errors.length === 0, `editor console is clean${errors.length ? `: ${errors[0]}` : ""}`);
     await page.close();
   }

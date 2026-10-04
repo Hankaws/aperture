@@ -10,6 +10,51 @@ export const DEMO_FILES: Record<string, string> = {
 - Do not add dependencies unless the user asks.
 `,
 
+  ".aperture/hooks.json": `{
+  "hooks": [
+    {
+      "name": "Store contract",
+      "run": "check:store",
+      "files": ["src/**"],
+      "on": ["save", "stage"]
+    }
+  ]
+}
+`,
+
+  ".aperture/rules/store.md": `---
+files: src/store.ts
+description: The task store
+---
+- The store is the only module that changes tasks. Routes call it; they never edit a task themselves.
+- No HTTP here: no status codes, no HttpError. Return null for a task that does not exist and let the route answer 404.
+`,
+
+  ".aperture/rules/tests.md": `---
+files: tests/**
+description: How the tests are written
+---
+- Vitest, imported from "vitest". One behaviour per it(), named for what it checks.
+- Test through the store and the routes, never their internals.
+`,
+
+  "scripts/check-store.ts": `// The store's contract, run on save and on every staged change (.aperture/hooks.json).
+import { countTasks, listTasks } from "../src/store.ts";
+
+const total = countTasks();
+const pageSize = 2;
+const seen = new Set<string>();
+for (let page = 0; page * pageSize < total; page++) {
+  const items = listTasks(page, pageSize);
+  if (items.length > pageSize) throw new Error(\`listTasks(\${page}, \${pageSize}) returned \${items.length} tasks\`);
+  for (const task of items) {
+    if (seen.has(task.id)) throw new Error(\`listTasks returned \${task.id} on two pages\`);
+    seen.add(task.id);
+  }
+}
+console.log(\`Store contract holds: \${seen.size} of \${total} tasks paged.\`);
+`,
+
   "README.md": `# harbor-api
 
 Tiny in-memory task API used as the default Aperture workspace.
@@ -41,7 +86,8 @@ Ask Composer to fix any of them, or press the inline edit shortcut on a selectio
   "type": "module",
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:store": "node --experimental-strip-types scripts/check-store.ts"
   },
   "devDependencies": {
     "vitest": "^3.2.0"

@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { GithubSendDialog } from "./github-send";
 import { PrChecksBadge } from "./pr-checks";
 import { HooksBadge } from "./hooks-badge";
+import { useVisibleBackgroundRuns } from "@/lib/agent/use-background-runs";
+import { boardStage, isLive } from "@/lib/agent/background";
 
 export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const activePath = useWorkspace((s) => s.activePath);
@@ -33,6 +35,9 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const fileCount = files.length;
   const github = useWorkspace((s) => s.github);
   const [sendOpen, setSendOpen] = useState(false);
+  const background = useVisibleBackgroundRuns();
+  const backgroundLive = background.filter(isLive).length;
+  const backgroundReady = background.filter((run) => boardStage(run) === "review").length;
   const task = resolveAgentTask({
     running: agentRunning,
     indexing,
@@ -81,6 +86,16 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
             {staged} {staged === 1 ? "diff" : "diffs"}
           </button>
         )}
+        {(backgroundLive > 0 || backgroundReady > 0) && (
+          <button
+            type="button"
+            className={cn("shrink-0 hover:text-fg", backgroundLive > 0 ? "shimmer-text" : "text-ok")}
+            onClick={() => useIdeUi.getState().setBoardOpen(true)}
+            title="Background runs: open the agent board"
+          >
+            {backgroundLive > 0 ? `${backgroundLive} in background` : `${backgroundReady} ready to review`}
+          </button>
+        )}
         {captures > 0 && (
           <button
             type="button"
@@ -109,7 +124,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         )}
         {line != null && <span className="hidden tabular-nums md:inline">Line {line}</span>}
         {lang && <span className="hidden md:inline">{lang}</span>}
-        <span className="hidden shrink-0 text-subtle md:inline" title="Agents wait for Build it and Apply. Nothing runs unattended.">
+        <span className="hidden shrink-0 text-subtle md:inline" title="Composer waits for Build it, and a background run for you to open it. Nothing is applied until you Apply.">
           Manual
         </span>
         <Link

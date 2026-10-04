@@ -154,7 +154,47 @@ try {
     await page.close();
   }
 
-  // 4. A phone: the editor fits the screen.
+  // 4. A background run: it works on its own copy while you edit, is checked, waits on the board, and opens onto your newer file.
+  {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = watch(page);
+    await page.goto(`${base}/app`, { waitUntil: "networkidle" });
+    await page.locator("textarea").last().fill("Fix the off-by-one in listTasks");
+    await page.locator("textarea").last().press("Control+Shift+Enter");
+    const tray = page.locator('[aria-label="Background runs"]');
+    check(await tray.getByText(/working in the background/).isVisible().catch(() => false), "a background run starts without taking over Composer");
+    await page.locator(".cm-content").first().click();
+    await page.keyboard.press("Control+Home");
+    await page.keyboard.type("// a hand edit while the run works\n");
+    const ready = await page
+      .waitForFunction(() => /ready to review/.test(document.querySelector('[aria-label="Background runs"]')?.textContent ?? ""), null, {
+        timeout: 90_000,
+      })
+      .then(
+        () => true,
+        () => false,
+      );
+    check(ready && /Checks clear/.test(await tray.innerText()), "the run is checked in the background and waits for review");
+    await page.keyboard.press("Control+j");
+    check(
+      (await page.locator('section[aria-label="Review"] [data-background-run]').count()) === 1,
+      "the agent board shows the background run in Review",
+    );
+    await page.locator('section[aria-label="Review"] [data-background-run]').getByRole("button", { name: "Open" }).click();
+    check(
+      await waitForText(page, /Carried onto your newer src\/store\.ts/, 10_000),
+      "opening carries the change onto the file you edited meanwhile",
+    );
+    const staged = await page.locator(".cm-content").first().innerText();
+    check(
+      /a hand edit while the run works/.test(staged) && /tasks\.slice\(start, start \+ pageSize\)/.test(staged),
+      "the staged file keeps both your edit and the run's fix",
+    );
+    check(errors.length === 0, `background run console is clean${errors.length ? `: ${errors[0]}` : ""}`);
+    await page.close();
+  }
+
+  // 5. A phone: the editor fits the screen.
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const errors = watch(page);

@@ -14,6 +14,8 @@ import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
 import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
+import { startBackgroundRun } from "@/lib/agent/background-runner";
+import { BackgroundTray } from "./background-runs";
 import { clearStanding, readStanding, saveStanding, subscribeStanding } from "@/lib/workspace/lessons";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -25,7 +27,7 @@ import { formatDiffNotes, notesOn, reviewInstruction } from "@/lib/workspace/dif
 import { useAccount } from "@/lib/billing/use-account";
 import { startJob } from "@/lib/jobs/api";
 import { useJobs } from "@/lib/jobs/use-jobs";
-import { basename, cn } from "@/lib/utils";
+import { basename, cn, modSymbol } from "@/lib/utils";
 import { DEMO_WORKSPACE_NAME } from "@/lib/workspace/demo-repo";
 import {
   activeMention,
@@ -236,6 +238,13 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
   async function queueBackground(text: string) {
     if (!account) return;
+    // Composer's own model runs in this tab, for every plan; an external agent runs on the server.
+    if (target.kind === "model") {
+      const why = startBackgroundRun(text, source);
+      if (why) toast.error(why);
+      else toast.success("Running in the background", { description: "It shows on the agent board (Ctrl/Cmd+J) when it is ready." });
+      return;
+    }
     if (account.backgroundJobs <= 0) {
       toast.error("Background jobs are on Pro. Composer in the panel still runs on Hobby.");
       return;
@@ -267,6 +276,24 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     const captures = useIdeUi.getState().captures;
     const trimmed = text.trim() || (captures.length > 0 ? "Revise the captured element. Keep the rest of the page." : "");
     if (!trimmed || !user) return;
+    // A background run does not wait for the turn on screen: that is the point of it.
+    if (background) {
+      if (blocked || acpBlocked) return;
+      const parsed = parseSlash(trimmed);
+      const ws = useWorkspace.getState();
+      const slashRun = parsed
+        ? expandSlash(parsed.name, parsed.rest, {
+            activePath: ws.activePath,
+            selection: ws.selection,
+            pending: listPendingEdits(ws.messages),
+          })
+        : null;
+      setDraft("");
+      setDismissMention(false);
+      await queueBackground(slashRun?.instruction ?? trimmed);
+      useIdeUi.getState().clearCaptures();
+      return;
+    }
     if (agentRunning) {
       useIdeUi.getState().enqueueSteer(trimmed);
       setDraft("");
@@ -277,7 +304,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       toast.error("ACP sessions are on Pro.");
       return;
     }
-    if ((blocked || acpBlocked) && !background) return;
+    if (blocked || acpBlocked) return;
     setDraft("");
     setDismissMention(false);
     const parsed = parseSlash(trimmed);
@@ -289,11 +316,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           pending: listPendingEdits(ws.messages),
         })
       : null;
-    if (background) {
-      await queueBackground(slashRun?.instruction ?? trimmed);
-      useIdeUi.getState().clearCaptures();
-      return;
-    }
     const resolved =
       slashRun
         ? { phase: slashRun.phase, approvedPlan: undefined }
@@ -399,6 +421,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         setDismissMention(true);
         return;
       }
+    }
+    if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (!sendBlocked) void send(draft, true);
+      return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -565,6 +592,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       <div className="border-t border-border px-2.5 py-1.5">
         <AssistChips />
       </div>
+
+      <BackgroundTray />
 
       {account && jobsOn && (
         <JobsTray
@@ -761,12 +790,13 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   />
                 )}
                 <div className="ml-auto flex items-center gap-1">
-                  {account && account.backgroundJobs > 0 && (
+                  {account && (target.kind === "model" || account.backgroundJobs > 0) && (
                     <Button
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label="Send in background"
+                      aria-label="Run in the background"
+                      title={`Run in the background (${modSymbol()}+Shift+Enter): it works on its own copy while you keep going`}
                       disabled={sendBlocked}
                       onClick={() => void send(draft, true)}
                     >

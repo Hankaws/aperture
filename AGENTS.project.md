@@ -308,6 +308,26 @@ message joins whatever run came before it.
 The board (`agent-board.tsx`, Ctrl/Cmd+J) stores nothing: it reads the chat
 and the jobs the Composer panel loaded (`ui-store.boardJobs`).
 
+## Background runs
+
+`background.ts` holds the state and the rules (pure, tested);
+`background-runner.ts` runs them in the tab. A run is a fresh Composer turn
+(`agentPayload(..., { files: snapshot, fresh: true, phase: "skip" })`)
+streamed through `openAgentStream`, the same path `submitAgent` uses, so every
+model source works. It never touches the thread, `agentRunning` or the open
+files.
+
+- `checkInBackground` runs the strip's checks without the strip. The page
+  render needs the editor, so the Preview row says it renders when opened.
+- A red result gets the one automatic fix (not under replay).
+- `openBackgroundRun` rebases the edits onto the current files with
+  `mergeThree` (`merge3.ts`), forks a copy when another change is pending,
+  and adds the user and assistant messages with their own `runId`.
+- Runs are saved in `localStorage` (`aperture-background-runs`) per workspace
+  name; one that was working when the page closed is restored as stopped.
+
+The server jobs in `src/lib/jobs` remain for external agents (ACP) only.
+
 ## Pull request checks
 
 `githubChecks` reads a commit's check runs and commit statuses; for at most

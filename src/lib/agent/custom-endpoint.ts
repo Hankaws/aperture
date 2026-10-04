@@ -31,16 +31,50 @@ export const CUSTOM_PRESETS: readonly CustomPreset[] = [
   },
 ];
 
+/** IPv4 embedded in an IPv4-mapped IPv6 address, including the hex form `::ffff:a9fe:a9fe`. */
+function mappedV4(host: string): string | null {
+  const name = host.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0] ?? "";
+  if (!name.startsWith("::ffff:")) return null;
+  const rest = name.slice("::ffff:".length);
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(rest)) return rest;
+  const parts = rest.split(":");
+  if (parts.length !== 2) return null;
+  const hi = Number.parseInt(parts[0]!, 16);
+  const lo = Number.parseInt(parts[1]!, 16);
+  if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi < 0 || lo < 0 || hi > 0xffff || lo > 0xffff) return null;
+  return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+}
+
+function ipv4Parts(host: string): number[] | null {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!v4) return null;
+  const n = v4.slice(1).map(Number);
+  if (n.some((p) => p > 255)) return null;
+  return n;
+}
+
+/** Cloud metadata and link-local. Never a place an agent or a model may call. */
+export function isMetadataAddress(host: string): boolean {
+  const name = host.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0] ?? "";
+  if (name === "metadata.google.internal" || name === "metadata.goog" || name.endsWith(".internal")) return true;
+  if (name.startsWith("fe80:")) return true;
+  const mapped = mappedV4(name);
+  if (mapped) return isMetadataAddress(mapped);
+  const n = ipv4Parts(name);
+  return Boolean(n && n[0] === 169 && n[1] === 254);
+}
+
 /** True for addresses a server must not call on a user's behalf. */
 export function isPrivateAddress(host: string): boolean {
-  const name = host.toLowerCase().replace(/^\[|\]$/g, "");
+  const name = host.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0] ?? "";
   if (name === "localhost" || name.endsWith(".localhost") || name.endsWith(".local") || name.endsWith(".internal")) {
     return true;
   }
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(name);
-  if (v4) {
-    const n = v4.slice(1).map(Number);
-    if (n.some((p) => p > 255)) return true;
+  const mapped = mappedV4(name);
+  if (mapped) return isPrivateAddress(mapped);
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) && !ipv4Parts(name)) return true;
+  const n = ipv4Parts(name);
+  if (n) {
     const [a, b] = n;
     if (a === 0 || a === 10 || a === 127) return true;
     if (a === 169 && b === 254) return true;
@@ -50,10 +84,9 @@ export function isPrivateAddress(host: string): boolean {
     return false;
   }
   if (name.includes(":")) {
-    const v6 = name.split("%")[0] ?? name;
-    if (v6 === "::" || v6 === "::1") return true;
-    if (v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80")) return true;
-    if (v6.startsWith("::ffff:")) return isPrivateAddress(v6.slice(7));
+    if (name === "::" || name === "::1") return true;
+    if (name.startsWith("fc") || name.startsWith("fd") || name.startsWith("fe80")) return true;
+    return false;
   }
   return false;
 }

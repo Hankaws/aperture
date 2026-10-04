@@ -80,7 +80,7 @@ export function ExternalAgents({ account }: { account: AccountSnapshot }) {
         <p className="text-sm font-medium">Remote ACP bridge</p>
         <p className="mt-1 text-xs text-subtle">
           JSON-RPC: initialize → session/new → session/prompt. session/update plan and diff blocks land here. Falls
-          back to POST aperture.acp.v1 {"{ text, edits }"}. No hosted turn.
+          back to POST aperture.acp.v1 {"{ text, edits }"}.
         </p>
         <form
           className="mt-4 grid gap-3"

@@ -3,15 +3,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { resetSession, setSessionCap, type AccountSnapshot } from "@/lib/billing/api";
-import {
-  DEFAULT_SESSION_CENTS,
-  DEFAULT_SESSION_TURNS,
-  MAX_SESSION_CENTS,
-  MAX_SESSION_TURNS,
-  MIN_SESSION_CENTS,
-  MIN_SESSION_TURNS,
-  formatUsd,
-} from "@/lib/billing/cost";
+import { DEFAULT_SESSION_CENTS, MAX_SESSION_CENTS, MIN_SESSION_CENTS, formatUsd } from "@/lib/billing/cost";
 
 export function SessionLimits({
   account,
@@ -21,14 +13,14 @@ export function SessionLimits({
   onAccount: (next: AccountSnapshot) => void;
 }) {
   const [on, setOn] = useState(account.session.on);
-  const [turns, setTurns] = useState(String(account.session.capTurns));
   const [dollars, setDollars] = useState((account.session.capCents / 100).toFixed(2));
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     try {
-      const nextTurns = Math.min(MAX_SESSION_TURNS, Math.max(MIN_SESSION_TURNS, Number(turns) || DEFAULT_SESSION_TURNS));
+      // Kept as saved. The turn cap only counts hosted turns, and every send now uses the account's own key.
+      const nextTurns = account.session.capTurns;
       const cents = Math.round(Number(dollars) * 100);
       const nextCents = Math.min(MAX_SESSION_CENTS, Math.max(MIN_SESSION_CENTS, Number.isFinite(cents) ? cents : DEFAULT_SESSION_CENTS));
       const next = await setSessionCap({ data: { on, turns: nextTurns, cents: nextCents } });
@@ -78,17 +70,6 @@ export function SessionLimits({
         </label>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-muted">Hosted turns</span>
-            <Input
-              type="number"
-              min={MIN_SESSION_TURNS}
-              max={MAX_SESSION_TURNS}
-              value={turns}
-              onChange={(e) => setTurns(e.target.value)}
-              className="mt-1"
-            />
-          </label>
-          <label className="block text-sm">
             <span className="text-muted">BYOK dollars</span>
             <Input
               type="number"
@@ -102,7 +83,7 @@ export function SessionLimits({
           </label>
         </div>
         <p className="mt-3 text-xs text-subtle">
-          This session: {account.session.turns} hosted turns, {formatUsd(account.session.cents)} on your keys. One
+          This session: {account.session.turns} turns, {formatUsd(account.session.cents)} on your keys. One
           Composer send is one turn — greps inside the loop are free.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -115,7 +96,7 @@ export function SessionLimits({
         </div>
         {!on && (
           <p className="mt-3 text-xs text-warn">
-            Cap is off. Hosted Grok still stops at the monthly plan limit. Your provider will bill every BYOK send.
+            Cap is off. Your provider will bill every send on your key.
           </p>
         )}
       </div>
@@ -123,20 +104,9 @@ export function SessionLimits({
       <div className="rounded-2xl border border-border bg-surface p-5">
         <h3 className="text-sm font-medium">Tab ghost-text</h3>
         {account.tab ? (
-          <>
-            <p className="mt-2 text-sm text-muted">
-              Fast model only — never grok-4.5 per keystroke. Hosted Tab is {account.tabUsed} / {account.tabCap} today.
-              Attach your own key and Tab is uncapped on that provider.
-            </p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-elevated">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{
-                  width: `${account.tabCap > 0 ? Math.min(100, (account.tabUsed / account.tabCap) * 100) : 0}%`,
-                }}
-              />
-            </div>
-          </>
+          <p className="mt-2 text-sm text-muted">
+            Fast model only — never grok-4.5 per keystroke. Tab uses your own key and is uncapped on that provider.
+          </p>
         ) : (
           <p className="mt-2 text-sm text-muted">Tab is on Pro. Composer, Chat, and Inline still run on Hobby.</p>
         )}

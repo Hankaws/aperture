@@ -245,8 +245,8 @@ function ProviderPanel({
         )}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-subtle">
-        Encrypted at rest. Composer uses the model you pick — never Auto, never a silent fallback. Switch to Hosted Grok
-        from the Composer menu if you want the included turns.
+        Encrypted at rest. Composer uses the model you pick — never Auto, never a silent fallback. There is no shared
+        key.
       </p>
     </div>
   );
@@ -298,7 +298,7 @@ function CustomPanel({
           <p className="mt-1 max-w-xl text-sm text-pretty text-subtle">
             Any OpenAI-compatible <span className="font-mono">/v1</span> base. Ollama and LM Studio are reached from this
             server, so they have to be on the same machine. OpenRouter and other hosts need https. A custom endpoint
-            does not use a key slot and does not spend hosted turns.
+            does not use a key slot.
           </p>
         </div>
         {selected && saved?.base ? (

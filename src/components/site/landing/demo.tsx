@@ -137,9 +137,9 @@ export function ProductDemo() {
             {phase === 1 && !typed.done ? <span className="caret-blink" /> : null}
           </p>
           {showCost ? (
-            <p className="demo-line is-on mt-1 text-xs text-subtle">This run = 1 hosted turn</p>
+            <p className="demo-line is-on mt-1 text-xs text-subtle">This run = 1 call on your key</p>
           ) : (
-            <p className="mt-1 text-xs text-subtle/0">This run = 1 hosted turn</p>
+            <p className="mt-1 text-xs text-subtle/0">This run = 1 call on your key</p>
           )}
           <div className="mt-3 rounded-lg border border-border bg-bg px-2.5 py-2">
             <p className="text-[0.65rem] tracking-[0.14em] text-subtle uppercase">Plan</p>

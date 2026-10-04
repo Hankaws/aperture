@@ -62,7 +62,7 @@ export function useAccount() {
 }
 
 export function modelCaption(account: AccountSnapshot | null): string {
-  if (!account) return "Hosted Grok";
+  if (!account) return "Your Grok key";
   if (account.modelSource === "hosted") {
     const last4 = account.keys.grok?.last4;
     return last4 ? `Your Grok ···${last4}` : "Your Grok key";

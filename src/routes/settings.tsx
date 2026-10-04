@@ -48,7 +48,6 @@ function SettingsPage() {
   }
 
   const plan = account ? planById(account.plan) : planById("hobby");
-  const usedPct = account && account.hostedTurns > 0 ? Math.min(100, (account.hostedUsed / account.hostedTurns) * 100) : 0;
 
   return (
     <div className="min-h-dvh bg-bg text-fg">
@@ -57,7 +56,7 @@ function SettingsPage() {
         <p className="text-xs font-medium tracking-[0.16em] text-subtle uppercase">Account</p>
         <h1 className="mt-2 text-3xl font-medium tracking-tight">Settings</h1>
         <p className="mt-2 text-sm text-muted">
-          Plan limits hosted Grok. You pick the model — there is no Auto. Session cap is on by default.
+          Every send uses your own key or endpoint. You pick the model — there is no Auto. Session cap is on by default.
         </p>
 
         <div className="mt-8 flex rounded-lg border border-border p-1">
@@ -93,21 +92,10 @@ function SettingsPage() {
                 )}
               </div>
               <div className="mt-6">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted">Hosted Grok this month</span>
-                  <span className="tabular-nums">
-                    {account.hostedUsed} / {account.hostedTurns}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-elevated">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${usedPct}%` }} />
-                </div>
-                <p className="mt-2 text-xs text-subtle">
-                  One send = one hosted turn, including the whole tool loop. Your own keys never count against this.{" "}
+                <p className="text-xs text-subtle">
+                  There is no shared key. One send is one call on the key you picked, including the whole tool loop.{" "}
                   {account.keyCount} of {account.byokSlots} key slots used.
-                  {account.tab
-                    ? ` Tab today: ${account.tabUsed} / ${account.tabCap} hosted completions (your key is uncapped).`
-                    : " Tab ghost-text is on Pro."}
+                  {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is on Pro."}
                 </p>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">

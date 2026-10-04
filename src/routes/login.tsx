@@ -71,7 +71,14 @@ function Login() {
         <div className="w-full rounded-2xl border border-border bg-surface p-6">
           <ApertureMark className="size-7" />
           <h1 className="mt-4 text-xl font-medium tracking-tight">Sign in to Aperture</h1>
-          <p className="mt-1 text-sm text-muted">One account for the editor, plans, and API keys.</p>
+          <p className="mt-1 text-sm text-muted">One account for the editor and your API keys.</p>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            Before you open a repo or add a key, read{" "}
+            <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+              what code leaves the browser, where keys are stored, and what each model can see
+            </Link>
+            .
+          </p>
 
           {authEnabled ? (
             <div className="mt-6 flex flex-col gap-2">

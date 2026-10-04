@@ -27,7 +27,7 @@ export const PLANS: Plan[] = [
   {
     id: "hobby",
     name: "Hobby",
-    blurb: "The editor and agents, with a small hosted allowance.",
+    blurb: "The editor and agents, on your own key.",
     monthly: 0,
     yearlyMonthly: 0,
     hostedTurns: 50,
@@ -41,8 +41,7 @@ export const PLANS: Plan[] = [
     features: [
       "Composer, Chat, and Inline — not gated",
       "Plan before the first diff",
-      "50 hosted Grok turns / month",
-      "One send = one hosted turn",
+      "One send = one call on your key",
       "One bring-your-own key",
       "Session cap on by default",
       "Download a zip of the project",
@@ -51,7 +50,7 @@ export const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    blurb: "Daily hosted Grok, unlimited agents on your keys.",
+    blurb: "More keys, Tab, and unlimited agents on your keys.",
     monthly: 20,
     yearlyMonthly: 16,
     hostedTurns: 500,
@@ -64,10 +63,9 @@ export const PLANS: Plan[] = [
     featured: true,
     cta: "Activate Pro",
     features: [
-      "500 hosted Grok turns / month",
       "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
-      "Tab ghost-text — fast model, 250 hosted / day",
+      "Tab ghost-text — fast model, on your key",
       "One background job",
       `ACP: ${acpAgentNames()} in the same diffs`,
     ],
@@ -87,9 +85,8 @@ export const PLANS: Plan[] = [
     acp: true,
     cta: "Activate Team",
     features: [
-      "2,000 hosted Grok turns / month",
       "Everything in Pro",
-      "Tab ghost-text — 600 hosted / day",
+      "Tab ghost-text on your key",
       "Three concurrent background jobs",
       "Usage dashboard and session caps",
     ],

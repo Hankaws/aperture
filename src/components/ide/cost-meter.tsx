@@ -15,7 +15,7 @@ export function CostMeter({
   if (acpLabel && acpRemote) {
     return (
       <p className="min-w-0 truncate text-[11px] text-subtle">
-        ACP session on {acpLabel} · same diff UI · no hosted turn
+        ACP session on {acpLabel} · same diff UI
       </p>
     );
   }

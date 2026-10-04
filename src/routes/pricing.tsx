@@ -32,9 +32,10 @@ function PricingPage() {
             <li>Composer, Chat, and Inline on Hobby, Pro, and Team.</li>
             <li>One send is one call on the key you attached. This app does not spend a shared Grok key.</li>
             <li>You pick your Grok, GPT, Claude, Gemini, or DeepSeek key. No silent Auto.</li>
-            <li>Session cap on by default (8 hosted turns or about $1 on your keys). Raise it in Settings.</li>
-            <li>You pick Hosted Grok, or your Grok, GPT, Claude, Gemini, or DeepSeek. No silent Auto.</li>
-            <li>Tab ghost-text on Pro uses a fast model (250 hosted / day), not grok-4.5 per keystroke. Your own key is uncapped.</li>
+            <li>Or a custom OpenAI-compatible endpoint, such as Ollama, LM Studio, or OpenRouter.</li>
+            <li>Session cap on by default (about $1 on your keys). Raise it in Settings.</li>
+            <li>Tab ghost-text on Pro uses a fast model on your key, not grok-4.5 per keystroke.</li>
+            <li>The public demo plays recorded runs. It calls no model and uses no key.</li>
             <li>Your provider bill is theirs. We do not markup tokens on a key you attached.</li>
           </ul>
           <Link

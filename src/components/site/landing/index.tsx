@@ -57,7 +57,7 @@ const PILLARS = [
   {
     id: "model",
     title: "You pick the model",
-    body: "Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek. If the key is missing, Aperture says so. It does not fall back to a shared key.",
+    body: "Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, or a custom OpenAI-compatible endpoint. If the key is missing, Aperture says so. It does not fall back to a shared key. The public demo plays recorded runs instead.",
     visual: "model",
   },
 ] as const;
@@ -81,7 +81,7 @@ const FAQ = [
   },
   {
     q: "Do I have to use your model?",
-    a: "No. Add your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek under Settings → Models. That provider bills you. Aperture does not use a shared key. What that provider sees is on the data-handling page.",
+    a: "There is no model of ours. Add your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, or a custom OpenAI-compatible endpoint, under Settings → Models. That provider bills you. Aperture does not use a shared key. The public demo plays recorded runs and calls no model. What a provider sees is on the data-handling page.",
   },
   {
     q: "How do I take the code with me?",
@@ -180,7 +180,7 @@ function PillarVisual({ id }: { id: (typeof PILLARS)[number]["visual"] }) {
       <div className="rounded-2xl border border-border bg-surface p-5">
         <p className="text-xs tracking-[0.14em] text-subtle uppercase">Composer menu</p>
         <div className="mt-4 space-y-2">
-          {["Hosted Grok", "Your GPT", "Your Claude", "Your Gemini", "Your DeepSeek"].map((label, i) => (
+          {["Your Grok", "Your GPT", "Your Claude", "Your Gemini", "Your DeepSeek", "Custom endpoint"].map((label, i) => (
             <div
               key={label}
               className={cn(

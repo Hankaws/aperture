@@ -78,7 +78,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
       provider: "grok",
       cents: 0,
       label: model ? `Custom · ${model}` : "Custom endpoint",
-      sub: ready ? "you pay the host · no hosted turn" : "Set the endpoint in Settings",
+      sub: ready ? "you pay the host" : "Set the endpoint in Settings",
       blocked: !account || !ready,
       blockReason: !account
         ? null

@@ -33,7 +33,7 @@ export type SeatAccount = {
 
 export function availableSeats(account: SeatAccount | null | undefined): CrewSeat[] {
   const seats: CrewSeat[] = [
-    { id: "hosted", kind: "model", label: "Grok", source: "hosted", ready: true, hint: "Hosted" },
+    { id: "hosted", kind: "model", label: "Grok", source: "hosted", ready: true, hint: "Your Grok key" },
   ];
   for (const provider of PROVIDERS) {
     if (provider.id === "grok") continue;

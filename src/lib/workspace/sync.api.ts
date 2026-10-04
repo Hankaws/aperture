@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { checkSyncLimits, type RemoteSnapshot, type WorkspaceFiles } from "./sync";
+import { checkSyncLimits, withoutSecrets, type RemoteSnapshot, type WorkspaceFiles } from "./sync";
 
 export type LoadResult = { ok: true; workspace: RemoteSnapshot | null } | { ok: false; error: string };
 
@@ -13,7 +13,7 @@ export type SaveResult =
 type Row = { name: string; files: WorkspaceFiles; revision: string | number };
 
 function toSnapshot(row: Row): RemoteSnapshot {
-  return { name: row.name, files: row.files, revision: Number(row.revision) };
+  return { name: row.name, files: withoutSecrets(row.files), revision: Number(row.revision) };
 }
 
 export const loadWorkspace = createServerFn({ method: "GET" })
@@ -46,10 +46,11 @@ export const saveWorkspace = createServerFn({ method: "POST" })
     }
     const overLimit = checkSyncLimits(data.files);
     if (overLimit) return overLimit;
+    const files = withoutSecrets(data.files);
 
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    const payload = JSON.stringify(data.files);
+    const payload = JSON.stringify(files);
 
     if (data.baseRevision === null) {
       // First write from this account. Insert only if nothing is there; a row

@@ -110,8 +110,9 @@ const SECTIONS: Array<{ title: string; body: ReactNode }> = [
     title: "10. Stopping",
     body: (
       <>
-        You can stop by signing out and not coming back. We can suspend the hosted site, or an account that breaks
-        these terms. Your own copy of the MIT source is not affected.
+        You can stop by signing out. You can delete the account from Settings. That removes the saved project, the
+        keys, the GitHub token, the account, and the copy in that browser. We can suspend the hosted site, or an
+        account that breaks these terms. Your own copy of the MIT source is not affected.
       </>
     ),
   },

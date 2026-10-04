@@ -245,7 +245,12 @@ surfaces they sit on; check a new one before adding it.
 
 `scripts/e2e-demo.mjs` runs the replay demo in Chromium against a production
 build (CI job "end to end (replay demo)"): landing size and console, plan →
-Build it → recap → checks → Apply → Revert, and the phone layout. Locally:
+editing the plan → Build it → recap → checks → Apply → Revert, a type error's
+margin dot and F7, and the phone layout.
+
+F8 belongs to review hunks (ide-shell's window handler); F7 to check
+problems inside the editor (`src/lib/editor/marks.ts`). Don't bind either key
+to anything else. Locally:
 `VITE_AUTH_ENABLED=false npm run build`, then `APERTURE_MODEL=replay
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.

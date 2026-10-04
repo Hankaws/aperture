@@ -74,6 +74,20 @@ try {
     const build = page.getByRole("button", { name: /Build it/ }).first();
     await build.waitFor({ timeout: 60_000 });
     check(true, "Composer posts a plan and offers Build it");
+    // The plan can be edited before Build it.
+    const steps = page.locator('ol[aria-label="Plan steps"] li');
+    const before = await steps.count();
+    await page.getByRole("button", { name: /^Edit step 1:/ }).click();
+    await page.getByRole("textbox", { name: "Step 1" }).fill("Read src/store.ts first");
+    await page.getByRole("textbox", { name: "Step 1" }).press("Enter");
+    await page.getByRole("button", { name: "Add a step" }).click();
+    await page.getByRole("textbox", { name: "New step" }).fill("Say what changed");
+    await page.getByRole("textbox", { name: "New step" }).press("Enter");
+    const edited = await steps.allInnerTexts();
+    check(
+      edited.length === before + 1 && /Read src\/store\.ts first/.test(edited[0] ?? "") && /Say what changed/.test(edited.at(-1) ?? ""),
+      "the plan can be reworded and added to before Build it",
+    );
     await build.click();
     check(await waitForText(page, /\nChanged: src\/store\.ts/, 60_000), "Build it stages the fix and recaps it");
     const recap = await bodyText(page);
@@ -92,7 +106,26 @@ try {
     await page.close();
   }
 
-  // 3. A phone: the editor fits the screen.
+  // 3. A check failure gets a dot in the margin, and F7 goes to it.
+  {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = watch(page);
+    await page.goto(`${base}/app`, { waitUntil: "networkidle" });
+    await page.locator(".cm-content").first().click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type("\nconst broken: string = 1;\n");
+    await page.locator(".cm-aperture-check-dot").first().waitFor({ timeout: 10_000 }).catch(() => {});
+    const title = await page.locator(".cm-aperture-check-dot").first().getAttribute("title").catch(() => null);
+    check(/not assignable to string/.test(title ?? ""), "a type error gets a dot in the margin that names it");
+    await page.keyboard.press("Control+Home");
+    await page.keyboard.press("F7");
+    const active = await page.locator(".cm-activeLine").first().innerText().catch(() => "");
+    check(/const broken/.test(active), "F7 jumps to the marked line");
+    check(errors.length === 0, `margin check console is clean${errors.length ? `: ${errors[0]}` : ""}`);
+    await page.close();
+  }
+
+  // 4. A phone: the editor fits the screen.
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const errors = watch(page);

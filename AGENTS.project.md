@@ -121,11 +121,17 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
 
 ## Check results on every staged change
 
-The review strip shows four checks for whatever is staged: **Parses**,
-**Imports resolve**, **Preview renders**, **Tests**. The rows come from
-`changeChecks` in `src/lib/workspace/checks.ts` (pure and tested). A check that
-did not run reads "not run" with the reason and never counts as a pass.
+The review strip shows five checks for whatever is staged: **Parses**,
+**Imports resolve**, **Types**, **Preview renders**, **Tests**. The rows come
+from `changeChecks` in `src/lib/workspace/checks.ts` (pure and tested). A check
+that did not run reads "not run" with the reason and never counts as a pass.
 
+- **Types** is `typeIssues` in `type-check.ts`, run on changed TypeScript files
+  that parse. It is not `tsc`: it reports only errors it can prove from the
+  file's text (a literal against a primitive annotation, a returned literal, an
+  argument count against a function declared in the same file, a name that is
+  not declared, imported or a known global). Do not describe a pass as "the
+  types check" in user-facing copy without saying it is this light check.
 - **Preview renders** renders the *staged* page in a hidden
   `sandbox="allow-scripts"` frame (`renderProbeDocument` in `design-mode.ts`).
   The live preview shows applied files, so its errors say nothing about the

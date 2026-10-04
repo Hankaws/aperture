@@ -93,7 +93,7 @@ function SettingsPage() {
               </div>
               <div className="mt-6">
                 <p className="text-xs text-subtle">
-                  There is no shared key. One send is one call on the key you picked, including the whole tool loop.{" "}
+                  One send is one call on the key you picked, including the whole tool loop.{" "}
                   {account.keyCount} of {account.byokSlots} key slots used.
                   {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is on Pro."}
                 </p>

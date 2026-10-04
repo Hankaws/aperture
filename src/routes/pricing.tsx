@@ -30,7 +30,7 @@ function PricingPage() {
           <h2 className="text-lg font-medium tracking-tight">What the plan actually limits</h2>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
             <li>Composer, Chat, and Inline on Hobby, Pro, and Team.</li>
-            <li>One send is one call on the key you attached. This app does not spend a shared Grok key.</li>
+            <li>One send is one call on the key you attached.</li>
             <li>You pick your Grok, GPT, Claude, Gemini, or DeepSeek key. No silent Auto.</li>
             <li>Or a custom OpenAI-compatible endpoint, such as Ollama, LM Studio, or OpenRouter.</li>
             <li>Session cap on by default (about $1 on your keys). Raise it in Settings.</li>

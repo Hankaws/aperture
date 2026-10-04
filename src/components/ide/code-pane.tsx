@@ -21,6 +21,7 @@ import { ghostText } from "@/lib/editor/ghost-text";
 import { workspaceComplete } from "@/lib/editor/workspace-complete";
 import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
+import { gotoImport } from "@/lib/editor/goto-import";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { EDITOR, SYNTAX } from "@/lib/editor/theme";
 import { clampSession, loadSession, saveSession } from "@/lib/editor/session";
@@ -251,6 +252,11 @@ export function CodePane() {
           workspaceComplete(() => chunksRef.current, () => pathRef.current),
           highlightSelectionMatches({ highlightWordAroundCursor: true }),
           stickyScroll(),
+          gotoImport(
+            () => pathRef.current,
+            () => useWorkspace.getState().files,
+            (path) => useWorkspace.getState().openFile(path),
+          ),
           lineMarkExtension(),
           keymap.of([
             ...closeBracketsKeymap,

@@ -20,6 +20,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const staged = useWorkspace((s) => pendingForRun(listPendingEdits(s.messages), undefined, s.activeCopyId).length);
   const snapshots = useWorkspace((s) => s.checkpoints.length);
   const dirty = useWorkspace((s) => s.dirtyPaths.length);
+  const tabNote = useIdeUi((s) => s.tabNote);
   const debug = useIdeUi((s) => s.debug);
   const designOpen = useIdeUi((s) => s.designOpen);
   const captures = useIdeUi((s) => s.captures.length);
@@ -92,6 +93,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
             History
           </button>
         )}
+        {tabNote && <span className="hidden min-w-0 truncate text-subtle sm:inline">{tabNote}</span>}
         {debug && <span className="text-warn">Debug</span>}
       </div>
       <div className="flex items-center gap-3">

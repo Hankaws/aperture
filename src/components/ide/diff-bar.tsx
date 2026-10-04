@@ -13,6 +13,7 @@ export function DiffBar({ edit }: { edit: ProposedEdit }) {
   const live = current === edit.oldText;
   const stats = diffStats(edit.oldText, edit.newText);
   const checksOpen = useIdeUi((s) => s.checkHint?.state) === "clear";
+  const running = useWorkspace((s) => s.agentRunning);
   const mod = modSymbol();
 
   return (
@@ -37,8 +38,8 @@ export function DiffBar({ edit }: { edit: ProposedEdit }) {
         size="sm"
         className="h-7 px-2.5"
         onClick={() => applyEdit(edit)}
-        disabled={!checksOpen}
-        title={checksOpen ? `${mod}+Enter` : "Waiting for the checks"}
+        disabled={running || !checksOpen}
+        title={running ? "Wait until this turn finishes" : checksOpen ? `${mod}+Enter` : "Waiting for the checks"}
       >
         <Check className="size-3.5" />
         Apply

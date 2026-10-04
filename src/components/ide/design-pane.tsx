@@ -9,7 +9,6 @@ import {
   PanelRight,
   Palette,
   Pin,
-  Plus,
   Send,
   SlidersHorizontal,
   Smartphone,
@@ -31,11 +30,7 @@ import {
   htmlFiles,
   isDesignPayload,
   pickHtmlEntry,
-  PREVIEW_CSS_PATH,
-  PREVIEW_HTML_PATH,
   previewMarkupKey,
-  STARTER_PREVIEW_CSS,
-  STARTER_PREVIEW_HTML,
   type DesignCapture,
 } from "@/lib/workspace/design-mode";
 
@@ -159,7 +154,6 @@ function TabButton({
 export function DesignPane() {
   const files = useWorkspace((s) => s.files);
   const activePath = useWorkspace((s) => s.activePath);
-  const createFile = useWorkspace((s) => s.createFile);
   const captures = useIdeUi((s) => s.captures);
   const addCapture = useIdeUi((s) => s.addCapture);
   const updateCapture = useIdeUi((s) => s.updateCapture);
@@ -275,12 +269,6 @@ export function DesignPane() {
     return () => window.removeEventListener("message", onMsg);
   }, [addCapture, entry, notesRef]);
 
-  function seedPreview() {
-    if (files[PREVIEW_CSS_PATH] === undefined) createFile(PREVIEW_CSS_PATH, STARTER_PREVIEW_CSS);
-    if (files[PREVIEW_HTML_PATH] === undefined) createFile(PREVIEW_HTML_PATH, STARTER_PREVIEW_HTML);
-    setEntry(PREVIEW_HTML_PATH);
-  }
-
   function saveNote() {
     if (!editingId) return;
     updateCapture(editingId, { note: draft.trim() });
@@ -377,13 +365,8 @@ export function DesignPane() {
             <MousePointer2 className="mx-auto size-6 text-accent" />
             <p className="mt-3 text-sm font-medium text-fg">Design Mode</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              Click any element on a page to restyle it, retheme the whole page from its design
-              tokens, or pin notes for Composer.
+              This project has no HTML page to preview. Add one, then click an element to restyle it or pin a note for Composer.
             </p>
-            <Button size="sm" className="mt-4" onClick={seedPreview}>
-              <Plus className="size-3.5" />
-              Create preview.html
-            </Button>
           </div>
         </div>
       </div>

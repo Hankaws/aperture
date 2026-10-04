@@ -157,7 +157,7 @@ export function changeChecks(input: {
               id: "types",
               label: "Types",
               status: "pass",
-              detail: `No type errors in ${plural(typed.length, "file")}.`,
+              detail: `Nothing this light check can prove in ${plural(typed.length, "file")}. Not tsc.`,
             };
 
   const preview: CheckRow =

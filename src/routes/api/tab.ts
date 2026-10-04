@@ -26,7 +26,7 @@ export const Route = createFileRoute("/api/tab")({
 
         const { rateLimit } = await import("@/lib/security/agent-guard.server");
         if (!rateLimit(`tab:${userId}`, 20, 60_000)) {
-          return Response.json({ text: "" }, { status: 200 });
+          return Response.json({ text: "", reason: "Tab is waiting. Twenty suggestions a minute." });
         }
 
         const raw = await request.text();
@@ -58,10 +58,12 @@ export const Route = createFileRoute("/api/tab")({
         const { resolveTabModel, recordTabUse } = await import("@/lib/billing/api");
         const resolved = await resolveTabModel(userId);
         if (!resolved.ok) {
-          return Response.json({ error: resolved.error, text: "" }, { status: 200 });
+          return Response.json({ text: "", reason: resolved.error });
         }
         // Replay has nothing recorded for ghost text (resolveTabModel already refuses it).
-        if (resolved.provider === "replay") return Response.json({ text: "" });
+        if (resolved.provider === "replay") {
+          return Response.json({ text: "", reason: "Tab is off on this deployment." });
+        }
 
         try {
           const text = await completeTab(
@@ -73,7 +75,7 @@ export const Route = createFileRoute("/api/tab")({
           if (text) await recordTabUse(userId, resolved.hosted);
           return Response.json({ text });
         } catch {
-          return Response.json({ text: "" });
+          return Response.json({ text: "", reason: "Tab did not answer." });
         }
       },
     },

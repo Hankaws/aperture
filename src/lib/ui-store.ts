@@ -80,6 +80,8 @@ type IdeUiState = {
   composerUnread: boolean;
   /** What the staged checks say, so Composer can suggest Apply or Open. */
   checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null;
+  /** Why ghost text is not showing. Empty when a suggestion arrived or none was asked for. */
+  tabNote: string | null;
   /** The last failing check the user opened. */
   lastCheck: { label: string; detail: string } | null;
   /** The last page element the user clicked in Design Mode. */
@@ -114,6 +116,7 @@ type IdeUiState = {
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
   setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null) => void;
+  setTabNote: (note: string | null) => void;
   setLastCheck: (check: { label: string; detail: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
   requestFind: () => void;
@@ -149,6 +152,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   density: "compact",
   composerUnread: false,
   checkHint: null,
+  tabNote: null,
   lastCheck: null,
   lastElement: null,
   reveal: null,
@@ -253,6 +257,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
       if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path && s.checkHint?.detail === hint?.detail) return s;
       return { checkHint: hint };
     }),
+  setTabNote: (note) =>
+    set((s) => (s.tabNote === note ? s : { tabNote: note })),
   setLastCheck: (check) => set({ lastCheck: check }),
   setReveal: (reveal) => set({ reveal }),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),

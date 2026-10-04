@@ -12,6 +12,7 @@ import { useAccount } from "@/lib/billing/use-account";
 import { planById } from "@/lib/billing/plans";
 import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
+import { DeleteAccount } from "@/components/site/delete-account";
 
 type SettingsTab = "plan" | "models" | "limits" | "agents";
 
@@ -155,6 +156,7 @@ function SettingsPage() {
             </Button>
           </div>
         )}
+        {user && <DeleteAccount />}
       </main>
       <SiteFooter />
     </div>

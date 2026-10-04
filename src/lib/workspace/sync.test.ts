@@ -4,6 +4,7 @@ import { applyStackMemory } from "../agent/stack.ts";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo.ts";
 import {
   checkSyncLimits,
+  withoutSecrets,
   decideSync,
   hasUnsavedEdits,
   isDisposable,
@@ -128,6 +129,16 @@ test("a device with its own edits never loses them to a copy that moved on", () 
 test("equal revisions with local edits is an ordinary save", () => {
   const dirty = local({ files: files({ "mine.ts": "local" }), syncedHash: "stale" });
   assert.equal(decideSync(dirty, remote({ revision: 1 })).kind, "push");
+});
+
+test("secret files are left out of the saved copy", () => {
+  const saved = withoutSecrets({
+    "src/app.ts": "export const n = 1;\n",
+    ".env": "API_KEY=secret",
+    "keys/id_rsa": "private",
+    ".env.example": "API_KEY=\n",
+  });
+  assert.deepEqual(Object.keys(saved).sort(), [".env.example", "src/app.ts"]);
 });
 
 test("limits reject a workspace too big to save", () => {

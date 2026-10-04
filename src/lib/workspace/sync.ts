@@ -11,6 +11,8 @@
  * tested without a database or a browser.
  */
 
+import { isSecretPath } from "../security/redact.ts";
+
 export type WorkspaceFiles = Record<string, string>;
 
 /** What the status bar reports about the saved copy. */
@@ -142,4 +144,22 @@ export function checkSyncLimits(files: WorkspaceFiles): SyncLimitError | null {
     return { ok: false, error: "Project is too large to save. Remove some files and try again." };
   }
   return null;
+}
+
+/** Secret files stay on this device. They are not part of the saved copy. */
+export function withoutSecrets(files: WorkspaceFiles): WorkspaceFiles {
+  const out: WorkspaceFiles = {};
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretPath(path)) continue;
+    out[path] = content;
+  }
+  return out;
+}
+
+export function keepSecrets(files: WorkspaceFiles): WorkspaceFiles {
+  const out: WorkspaceFiles = {};
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretPath(path)) out[path] = content;
+  }
+  return out;
 }

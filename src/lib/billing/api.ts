@@ -456,21 +456,16 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
   // no quota and no cost, and the UI labels it so nobody mistakes it for a model.
   const { replayEnabled } = await import("@/lib/agent/replay");
   const { requestIsPublicDemo } = await import("@/lib/agent/public-demo.server");
-  if (replayEnabled()) {
+  if (replayEnabled() || requestIsPublicDemo()) {
     const source: ModelSource = requested && isModelSource(requested) ? requested : "hosted";
     return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
   }
-  const publicDemo = requestIsPublicDemo();
   const { decryptSecret } = await peek();
   const row = await loadAccount(userId);
   const account = await snapshotOf(row);
   const source: ModelSource = requested && isModelSource(requested) ? requested : account.modelSource;
 
   if (source === "hosted") {
-    // The public demo never spends a Grok key. Recorded runs instead.
-    if (publicDemo) {
-      return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
-    }
     const own = decryptSecret(row.grok_key);
     if (!own) {
       return { ok: false, error: "Add your Grok key in Settings. This app does not use a shared key." };
@@ -515,8 +510,9 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
 export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
   const { replayEnabled } = await import("@/lib/agent/replay");
   const { requestIsPublicDemo } = await import("@/lib/agent/public-demo.server");
-  if (replayEnabled()) return { ok: false, error: "Tab needs a real model; replay only plays back Composer tasks." };
-  const publicDemo = requestIsPublicDemo();
+  if (replayEnabled() || requestIsPublicDemo()) {
+    return { ok: false, error: "Tab is off on this deployment. Replay does not call a provider." };
+  }
   const { decryptSecret } = await peek();
   const row = await loadAccount(userId);
   const account = await snapshotOf(row);
@@ -545,9 +541,6 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
     if (own) {
       return { ok: true, provider: source, apiKey: own, hosted: false, source, cents: 0 };
     }
-  }
-  if (publicDemo) {
-    return { ok: false, error: "Tab is off on the public demo. Add your own key in Settings." };
   }
   const own = decryptSecret(row.grok_key);
   if (!own) {

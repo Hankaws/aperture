@@ -13,7 +13,7 @@ import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import { previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
-import { workspaceHash, type SyncState } from "./sync";
+import { keepSecrets, withoutSecrets, workspaceHash, type SyncState } from "./sync";
 import { applyStackMemory } from "@/lib/agent/stack";
 import { findRules } from "./rules";
 import type { AgentMode, ChatMessage, Checkpoint, IndexedChunk, LocalCommit, ProposedEdit } from "./types";
@@ -172,7 +172,20 @@ function schedulePersist(delay = 180) {
   }, delay);
 }
 
-/** Write the local copy now. Used when the tab is closing, so the last reply is not lost to the debounce. */
+/** Drop the copy in this browser so a deleted account cannot save it again. */
+export function discardLocalProject() {
+  if (typeof window === "undefined") return;
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("aperture-standing");
+  } catch {
+    // storage unavailable: the server copy is already gone
+  }
+}
 export function flushWorkspacePersist() {
   if (typeof window === "undefined") return;
   if (persistTimer) {
@@ -970,7 +983,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
 
     adoptRemote: (name, files, revision) => {
-      const seeded = seedFiles(files, name);
+      const seeded = seedFiles({ ...withoutSecrets(files), ...keepSecrets(get().files) }, name);
       const tabs = Object.keys(seeded).slice(0, 1);
       set({
         name,
@@ -983,7 +996,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         dirtyPaths: [],
         chunks: buildIndex(seeded),
         revision,
-        syncedHash: workspaceHash(name, seeded),
+        syncedHash: workspaceHash(name, withoutSecrets(seeded)),
         syncState: "saved",
         github: null,
       });

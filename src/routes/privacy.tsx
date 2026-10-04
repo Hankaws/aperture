@@ -28,28 +28,40 @@ function PrivacyPage() {
         </nav>
         <h1 className="mt-3 text-3xl font-medium tracking-tight">What leaves the browser</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
-          The editor, the checks, and the test sandbox stay in your tab. A model sees your code only when you send,
-          and only the provider whose key you attached. Read this before you open a real repo or paste a key.
+          Two copies can leave this browser. The project, after you sign in. And a snapshot, when you send. Checks
+          and the test sandbox stay in the tab.
         </p>
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">What stays in the tab</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
-          <li>Files you drop, unzip, or open from GitHub live in this browser. The file tree, diffs, and Apply stay here.</li>
+          <li>Signed out, the project stays in this browser. It is not uploaded.</li>
           <li>Parse, import, and type checks, and the page preview, run in the tab. They do not call a model.</li>
           <li>
             <span className="text-fg">npm run test</span> in the built-in runner is a Worker with no network access. That
             code cannot reach Aperture or anything else.
           </li>
           <li>Design mode stays in the tab until you send the capture to Composer.</li>
+          <li>
+            <span className="text-fg">.env</span>, private keys, and credential files stay on this device. They are not
+            saved and they are not sent.
+          </li>
         </ul>
+
+        <h2 className="mt-10 text-lg font-medium tracking-tight">What is saved when you sign in</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          The rest of the project is saved on the account as you edit. It does not expire. Delete the account in
+          Settings to remove it, with your keys and your GitHub token. That also removes the copy in this browser, so
+          the next sign-in does not save it again. If a secret file was saved earlier, the next save removes it and
+          does not load it back.
+        </p>
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">What a send includes</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Composer, Chat, Inline, and Tab upload a snapshot for that turn. Nothing is uploaded while you are only
-          editing. The snapshot is your instruction, recent chat, the file tree, a symbol map, the open file, the
-          selection, a short note of the cursor line and anything you just typed or dismissed, files you attach with
-          @, and files the agent reads with its tools. The server uses that snapshot to run the tools, then forwards
-          the prompt to the provider you picked. It is not saved on your account as a copy of the repo.
+          Composer, Chat, Inline, and Tab upload a snapshot for that turn. That snapshot is your instruction, recent
+          chat, the file tree, a symbol map, the open file, the selection, a short note of the cursor line and
+          anything you just typed or dismissed, files you attach with @, and files the agent reads with its tools.
+          The server uses that snapshot to run the tools, then forwards the prompt to the provider you picked. The saved
+          project is the other copy.
         </p>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           Secret-looking files are dropped before the send: <span className="text-fg">.env</span> (not{" "}
@@ -104,9 +116,10 @@ function PrivacyPage() {
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">The public demo</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          aperturesais.grok.me runs in replay. Sends play back recorded answers and do not call xAI, OpenAI, Anthropic,
-          Google, or DeepSeek. A repo you open there still stays in the tab until a send, and a send still does not
-          leave for a provider.
+          On aperturesais.grok.me, and wherever the server is started with{" "}
+          <span className="text-fg">APERTURE_MODEL=replay</span>, a send is a recording. It does not call a provider,
+          even if you added your own key. The key is still saved on the account. On any other host, the key you pick
+          is the one that is called.
         </p>
 
         <p className="mt-10 text-sm text-muted">

@@ -8,7 +8,7 @@
  */
 import { toast } from "sonner";
 import { loadWorkspace, saveWorkspace } from "./sync.api";
-import { checkSyncLimits, decideSync, workspaceHash } from "./sync";
+import { checkSyncLimits, decideSync, withoutSecrets, workspaceHash } from "./sync";
 import { DEMO_SYNC_HASH, useWorkspace } from "./store";
 
 /** Long enough that a burst of keystrokes is one write, short enough to feel saved. */
@@ -16,7 +16,7 @@ const SAVE_DEBOUNCE_MS = 2_500;
 
 function snapshot() {
   const s = useWorkspace.getState();
-  return { name: s.name, files: s.files, revision: s.revision, syncedHash: s.syncedHash };
+  return { name: s.name, files: withoutSecrets(s.files), revision: s.revision, syncedHash: s.syncedHash };
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,7 +68,14 @@ function scheduleSave() {
   saveTimer = setTimeout(() => void pushNow(), SAVE_DEBOUNCE_MS);
 }
 
-/** Take the saved copy, discarding local edits. Only ever called from a conflict prompt. */
+/** Stop a save that is waiting. Called before the account is deleted. */
+export function haltWorkspaceSync(): void {
+  halted = true;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+}
 export async function adoptSavedCopy(): Promise<void> {
   const result = await loadWorkspace();
   if (!result.ok || !result.workspace) return;

@@ -292,7 +292,7 @@ export function Landing() {
               <HeroCtas />
               <p className="mt-3 text-sm text-subtle">
                 Open source · MIT ·{" "}
-                <Link to="/privacy" className="text-muted underline-offset-2 hover:text-fg hover:underline">
+                <Link to="/privacy" className="tap text-muted underline-offset-2 hover:text-fg hover:underline">
                   what leaves the browser
                 </Link>
               </p>

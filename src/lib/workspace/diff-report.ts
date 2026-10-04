@@ -85,7 +85,7 @@ export function htmlDiffReport(opts: { title: string; workspace: string; files: 
     .ln { padding: 0 16px; white-space: pre-wrap; }
     .add { background: rgba(110, 231, 183, 0.12); color: #b7f5d8; }
     .del { background: rgba(248, 113, 113, 0.12); color: #fecaca; }
-    .eq { color: #71717a; }
+    .eq { color: #83838c; }
   </style>
 </head>
 <body>

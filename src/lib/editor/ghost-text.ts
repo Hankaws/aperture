@@ -1,7 +1,7 @@
 import { Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type ViewUpdate } from "@codemirror/view";
 import { requestTabCompletion } from "@/lib/agent/tab";
-import { EDITOR } from "@/lib/editor/theme";
+import { ED } from "@/lib/editor/theme";
 import { useIdeUi } from "@/lib/ui-store";
 import { takeGhostWord } from "./ghost-word";
 class GhostWidget extends WidgetType {
@@ -40,7 +40,7 @@ function ghostDecorations(view: EditorView, text: string | null) {
 
 const ghostTheme = EditorView.theme({
   ".cm-aperture-ghost": {
-    color: EDITOR.ghost,
+    color: ED.ghost,
     fontStyle: "italic",
     pointerEvents: "none",
     opacity: "0.85",

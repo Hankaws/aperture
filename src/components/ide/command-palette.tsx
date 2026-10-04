@@ -10,6 +10,14 @@ import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { abortAgent } from "@/lib/agent/run";
 import { parseGoto, resolveGotoPath } from "@/lib/editor/goto";
 import { fuzzyMatch } from "@/lib/utils";
+import type { EditorTheme } from "@/lib/appearance";
+
+const THEME_CHOICES: Array<{ id: EditorTheme; label: string }> = [
+  { id: "cursor", label: "Dark (cool)" },
+  { id: "claude", label: "Dark (warm)" },
+  { id: "light", label: "Light" },
+  { id: "system", label: "Match system" },
+];
 
 export function CommandPalette() {
   const open = useIdeUi((s) => s.commandOpen);
@@ -136,16 +144,21 @@ export function CommandPalette() {
               <Eye className="size-3.5 text-subtle" />
               {designOpen ? "Close Preview" : "Preview"}
             </Command.Item>
-            <Command.Item
-              onSelect={() => {
-                useIdeUi.getState().setTheme(theme === "claude" ? "cursor" : "claude");
-                close();
-              }}
-              className="cmdk-item flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
-            >
-              <Palette className="size-3.5 text-subtle" />
-              {theme === "claude" ? "Theme: Cool" : "Theme: Warm"}
-            </Command.Item>
+            {THEME_CHOICES.map((choice) => (
+              <Command.Item
+                key={choice.id}
+                value={`Theme: ${choice.label}`}
+                onSelect={() => {
+                  useIdeUi.getState().setTheme(choice.id);
+                  close();
+                }}
+                className="cmdk-item flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+              >
+                <Palette className="size-3.5 text-subtle" />
+                Theme: {choice.label}
+                {theme === choice.id && <span className="ml-auto text-xs text-subtle">Current</span>}
+              </Command.Item>
+            ))}
             <Command.Item
               onSelect={() => {
                 useIdeUi.getState().setDensity(density === "compact" ? "comfortable" : "compact");

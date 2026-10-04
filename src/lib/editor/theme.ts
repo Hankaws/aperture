@@ -8,7 +8,7 @@ export const EDITOR = {
   fg: "#e8e9ed",
   fgBright: "#f4f4f5",
   muted: "#a1a1aa",
-  subtle: "#71717a",
+  subtle: "#83838c",
   gutterFg: "#8b8e98",
   border: "#27272a",
   accent: "#93c5fd",
@@ -97,3 +97,23 @@ export const SYNTAX = {
   tag: "#6cb2ff",
   invalid: EDITOR.danger,
 } as const;
+
+const kebab = (key: string) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
+
+type Colors<T> = { [K in keyof T as T[K] extends string ? K : never]: string };
+
+function themed<T extends Record<string, unknown>>(prefix: string, colors: T): Colors<T> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(colors)) {
+    if (typeof value === "string") out[key] = `var(--${prefix}-${kebab(key)}, ${value})`;
+  }
+  return out as Colors<T>;
+}
+
+/**
+ * The editor's colours as CSS variables that fall back to the dark values
+ * above: a theme that sets `--ed-*` and `--syn-*` (the light one does)
+ * recolours the editor, and every other theme renders exactly as before.
+ */
+export const ED = themed("ed", EDITOR);
+export const SYN = themed("syn", SYNTAX);

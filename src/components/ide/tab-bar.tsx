@@ -42,7 +42,7 @@ export function PreviewToggle({ className }: { className?: string }) {
         aria-pressed={open}
         aria-label={open ? "Close preview" : "Open preview"}
         className={cn(
-          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium md:h-7 md:px-2.5 md:text-[12px]",
+          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium pointer-coarse:h-10 md:h-7 md:px-2.5 md:text-[12px]",
           open ? "bg-accent text-bg" : "border border-border bg-elevated text-fg hover:bg-list-hover",
           className,
         )}
@@ -122,7 +122,7 @@ export function TabBar() {
                 {active && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
                 <button
                   type="button"
-                  className="flex max-w-52 items-center gap-1.5 truncate py-1.5 text-[13px]"
+                  className="flex max-w-52 items-center gap-1.5 truncate py-1.5 text-[13px] pointer-coarse:py-3"
                   title={preview ? "Preview tab — double-click to keep" : isPinned ? "Pinned" : basename(path)}
                   onClick={() => setActive(path)}
                 >
@@ -149,7 +149,7 @@ export function TabBar() {
                   aria-label={dirty ? `Unsaved · Close ${basename(path)}` : `Close ${basename(path)}`}
                   className={cn(
                     "relative items-center justify-center rounded-md hover:bg-elevated",
-                    active || dirty ? "flex size-6 opacity-100" : "hidden size-6 group-hover:flex",
+                    active || dirty ? "flex size-6 opacity-100 pointer-coarse:size-9" : "hidden size-6 group-hover:flex",
                   )}
                   onClick={() => closeTab(path)}
                 >

@@ -1333,7 +1333,13 @@ const MessageBlock = memo(function MessageBlock({
   return (
     <div>
       <p className="text-xs font-medium text-subtle">{message.agentLabel || "Composer"}</p>
-      {plan.length > 0 && <PlanCard entries={plan} awaitingBuild={waiting} />}
+      {plan.length > 0 && (
+        <PlanCard
+          entries={plan}
+          awaitingBuild={waiting}
+          onChange={running ? undefined : (next) => useWorkspace.getState().patchMessage(message.id, { plan: next })}
+        />
+      )}
       {traces.length > 0 && (
         <ul className="mt-2 space-y-1">
           {traces.map((trace) => (

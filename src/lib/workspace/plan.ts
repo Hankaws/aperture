@@ -62,3 +62,37 @@ export function mergePlan(prev: PlanEntry[] | undefined, next: PlanEntry[]): Pla
     };
   });
 }
+
+/** The most steps a plan can have, and the longest a step can be: what `normalizePlan` keeps. */
+export const PLAN_LIMIT = { steps: 12, chars: 160 } as const;
+
+/**
+ * Edits a person makes to a plan before Build it. Each returns a new list, or
+ * the same one when the edit would leave nothing to build or break a limit.
+ */
+export const planEdits = {
+  rename(plan: PlanEntry[], id: string, content: string): PlanEntry[] {
+    const text = content.trim().slice(0, PLAN_LIMIT.chars);
+    if (!text) return planEdits.remove(plan, id);
+    return plan.map((entry) => (entry.id === id ? { ...entry, content: text } : entry));
+  },
+  remove(plan: PlanEntry[], id: string): PlanEntry[] {
+    return plan.length <= 1 ? plan : plan.filter((entry) => entry.id !== id);
+  },
+  move(plan: PlanEntry[], id: string, by: -1 | 1): PlanEntry[] {
+    const from = plan.findIndex((entry) => entry.id === id);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= plan.length) return plan;
+    const next = [...plan];
+    [next[from], next[to]] = [next[to]!, next[from]!];
+    return next;
+  },
+  add(plan: PlanEntry[], content: string): PlanEntry[] {
+    const text = content.trim().slice(0, PLAN_LIMIT.chars);
+    if (!text || plan.length >= PLAN_LIMIT.steps) return plan;
+    const taken = new Set(plan.map((entry) => entry.id));
+    let n = plan.length + 1;
+    while (taken.has(`p${n}`)) n += 1;
+    return [...plan, { id: `p${n}`, content: text, status: "pending", priority: "medium" }];
+  },
+};

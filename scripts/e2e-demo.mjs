@@ -93,6 +93,11 @@ try {
     const recap = await bodyText(page);
     check(/Left: nothing on the plan\./.test(recap), "the recap does not list finished steps as left");
     check(!/Didn't: [^\n]*\.md/.test(recap), "the recap does not count docs as code that still references the change");
+    // The agent board shows the run, staged for review.
+    await page.keyboard.press("Control+j");
+    const review = await page.locator('[role="dialog"] section[aria-label="Review"] li').allInnerTexts();
+    check(review.length === 1 && /Fix the off-by-one in listTasks/.test(review[0] ?? ""), "the agent board shows the run in Review");
+    await page.keyboard.press("Escape");
     check(
       await waitForText(page, /Already failing before this change/, 30_000),
       "Tests runs in the browser and marks the other known bugs as already failing",

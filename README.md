@@ -36,8 +36,13 @@ local in-process database (PGlite), so nothing else needs setting up.
 ## What it does
 
 - **Plan, then build.** Composer reads the code, posts a plan, and waits for
-  **Build it**. Edits arrive as staged diffs you keep or skip file by file.
-  Nothing touches your files until you apply.
+  **Build it**. You can reword, reorder, remove or add steps first. Edits
+  arrive as staged diffs you keep or skip file by file. Nothing touches your
+  files until you apply.
+- **An agent board.** Every run (its plan, Build it, the test runs and
+  automatic fix that answer it) is one card: working, needs you, review or
+  done, with background jobs alongside. Two runs with staged changes can be
+  compared side by side, file by file (Ctrl/Cmd+J).
 - **Check results on every change.** Five checks, each computed from the
   staged change itself:
   - **Parses**: the changed code, markup and JSON files parse.
@@ -82,6 +87,12 @@ local in-process database (PGlite), so nothing else needs setting up.
     rules that style the element and the page's tokens.
   - Every edit session is one undo step, and the preview can be shown at
     phone and tablet widths.
+- **Pull requests driven to green.** After **Open PR**, the status bar shows
+  the pull request's CI. When a check fails, the dialog lists where GitHub
+  pinned it and the end of the job's log. **Fix with Composer** sends all of
+  that to Composer; you review and apply the fix as usual, then push it to
+  the same pull request and the checks are watched again. Each step is a
+  click.
 - **Your layout.** Every panel resizes and moves. The preview can dock right,
   below or full-screen, and the sidebars can swap sides.
 - **Any model.** Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek

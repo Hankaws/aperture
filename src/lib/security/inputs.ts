@@ -86,6 +86,12 @@ export const githubReviewInput = z.object({
   body: text(65536),
   comments: objects<GithubReviewComment>(),
 });
+export const githubChecksInput = z.object({
+  token: githubToken,
+  owner: repoName,
+  repo: repoName,
+  sha: text(64),
+});
 export const githubMergeInput = z.object({
   token: githubToken,
   owner: repoName,

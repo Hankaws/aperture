@@ -245,7 +245,8 @@ surfaces they sit on; check a new one before adding it.
 
 `scripts/e2e-demo.mjs` runs the replay demo in Chromium against a production
 build (CI job "end to end (replay demo)"): landing size and console, plan →
-editing the plan → Build it → recap → checks → Apply → Revert, a type error's
+editing the plan → Build it → recap → the agent board → checks → Apply →
+Revert, a type error's
 margin dot and F7, and the phone layout.
 
 F8 belongs to review hunks (ide-shell's window handler); F7 to check
@@ -254,6 +255,32 @@ to anything else. Locally:
 `VITE_AUTH_ENABLED=false npm run build`, then `APERTURE_MODEL=replay
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
+
+## Runs and the agent board
+
+A run is a request and every turn that answers it. `submitAgent` stamps each
+turn's `runId` with `runIdFor` (`src/lib/workspace/board.ts`): Build it joins
+the plan's run; the editor's own turns (`automatic`) and turns kept to a copy
+join the run they answer; other follow-ups (Iterate, Fix this) join the latest
+run only while it still has a staged change; anything else starts a run.
+Chats saved before runs had ids are grouped by `groupRuns`. A new place that
+adds chat messages must set `runId` too (see `openJobInComposer`), or the
+message joins whatever run came before it.
+
+The board (`agent-board.tsx`, Ctrl/Cmd+J) stores nothing: it reads the chat
+and the jobs the Composer panel loaded (`ui-store.boardJobs`).
+
+## Pull request checks
+
+`githubChecks` reads a commit's check runs and commit statuses; for at most
+three failed checks it adds failure annotations and the end of the Actions
+job log (`ci.ts` parses and trims, with tests built from real GitHub
+responses). The job log is fetched from the redirect GitHub gives, only on
+`*.actions.githubusercontent.com` or `*.blob.core.windows.net`, without the
+token. The status bar badge (`pr-checks.tsx`) polls every 30 seconds only
+while checks run and the tab is visible. "Fix with Composer" is refused while
+a change is staged or local edits are unpushed, so the fix starts from what CI
+ran. Nothing in this loop runs without a click.
 
 ## Tests are globbed
 

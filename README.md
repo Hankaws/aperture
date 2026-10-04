@@ -5,7 +5,7 @@ stages it as a diff. Every staged change is then checked before you apply it:
 it parses, its imports resolve, a light type check passes, the page renders,
 and the tests pass. The tests run in your browser tab, free, in about a second.
 
-![Aperture: a staged fix with its check results and Composer's plan](docs/screenshot.png)
+![Aperture demo, 20 seconds: Composer reads the code and posts a plan, Build it stages a fix as a diff, the checks run on it (parses, imports, types, preview, tests), a test that was already failing is marked as such rather than blamed on the edit, and the change is applied](docs/demo.gif)
 
 **Demo:** [aperturesais.grok.me](https://aperturesais.grok.me). It plays recorded runs. It does not call Grok, so it does not spend anyone's API quota. A key you add in Settings is yours alone.
 

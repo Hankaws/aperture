@@ -21,6 +21,9 @@ export function SiteNav() {
           <a href="/#why" className="hidden hover:text-fg sm:inline">
             Why
           </a>
+          <Link to="/privacy" className="hover:text-fg">
+            Data
+          </Link>
           {showPricing && (
             <Link to="/pricing" className="hover:text-fg">
               Pricing

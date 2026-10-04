@@ -30,7 +30,10 @@ export function ModelKeys({
           <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
             Attach the keys you already pay for. {plan.name} allows {plan.byokSlots}{" "}
             {plan.byokSlots === 1 ? "provider" : "providers"}. A custom endpoint does not use a slot. Keys
-            are encrypted at rest and never sent back to the browser — only the last four characters.
+            are encrypted at rest and never sent back to the browser — only the last four characters.{" "}
+            <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+              What that key’s provider can see.
+            </Link>
           </p>
         </div>
         <p className="text-sm tabular-nums text-subtle">

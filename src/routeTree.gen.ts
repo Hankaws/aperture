@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
 import { Route as ApiSandboxCheckRouteImport } from './routes/api/sandbox-check'
 import { Route as ApiTabRouteImport } from './routes/api/tab'
@@ -39,9 +41,19 @@ const PricingRoute = PricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAgentRoute = ApiAgentRouteImport.update({
@@ -70,7 +82,9 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
@@ -81,7 +95,9 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
@@ -93,7 +109,9 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
@@ -106,7 +124,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/pricing'
+    | '/privacy'
     | '/settings'
+    | '/terms'
     | '/api/agent'
     | '/api/sandbox-check'
     | '/api/tab'
@@ -117,7 +137,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/pricing'
+    | '/privacy'
     | '/settings'
+    | '/terms'
     | '/api/agent'
     | '/api/sandbox-check'
     | '/api/tab'
@@ -128,7 +150,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/pricing'
+    | '/privacy'
     | '/settings'
+    | '/terms'
     | '/api/agent'
     | '/api/sandbox-check'
     | '/api/tab'
@@ -140,7 +164,9 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
+  PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
+  TermsRoute: typeof TermsRoute
   ApiAgentRoute: typeof ApiAgentRoute
   ApiSandboxCheckRoute: typeof ApiSandboxCheckRoute
   ApiTabRoute: typeof ApiTabRoute
@@ -177,11 +203,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agent': {
@@ -220,7 +260,9 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
+  PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,
+  TermsRoute: TermsRoute,
   ApiAgentRoute: ApiAgentRoute,
   ApiSandboxCheckRoute: ApiSandboxCheckRoute,
   ApiTabRoute: ApiTabRoute,

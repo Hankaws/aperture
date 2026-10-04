@@ -21,6 +21,9 @@ export function SiteFooter() {
               Pricing
             </Link>
           )}
+          <Link to="/privacy" className="hover:text-fg">
+            Data
+          </Link>
           <Link to="/settings" search={{ tab: "models" }} className="hover:text-fg">
             Models
           </Link>

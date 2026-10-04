@@ -57,7 +57,7 @@ const PILLARS = [
   {
     id: "model",
     title: "You pick the model",
-    body: "Hosted Grok, or your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek. If a key is missing, Aperture says so.",
+    body: "Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek. If the key is missing, Aperture says so. It does not fall back to a shared key.",
     visual: "model",
   },
 ] as const;
@@ -81,7 +81,7 @@ const FAQ = [
   },
   {
     q: "Do I have to use your model?",
-    a: "No. Pick Hosted Grok, or your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek under Settings → Models. Your own API usage is billed by that provider, not by us.",
+    a: "No. Add your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek under Settings → Models. That provider bills you. Aperture does not use a shared key. What that provider sees is on the data-handling page.",
   },
   {
     q: "How do I take the code with me?",
@@ -290,7 +290,12 @@ export function Landing() {
             </p>
             <div className="landing-in" style={{ animationDelay: "880ms" }}>
               <HeroCtas />
-              <p className="mt-3 text-sm text-subtle">Open source · MIT · try it with no API key in replay mode</p>
+              <p className="mt-3 text-sm text-subtle">
+                Open source · MIT ·{" "}
+                <Link to="/privacy" className="text-muted underline-offset-2 hover:text-fg hover:underline">
+                  what leaves the browser
+                </Link>
+              </p>
             </div>
             <div className="landing-in mt-12" style={{ animationDelay: "1040ms" }}>
               <ProductDemo />
@@ -405,8 +410,11 @@ export function Landing() {
                 <div>
                   <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">Your models. Your keys.</h2>
                   <p className="mt-3 max-w-xl text-pretty text-muted">
-                    Composer uses the model in the menu. If that key is missing, we tell you. Hosted Grok is a choice,
-                    not a fallback.
+                    Composer uses the model in the menu. If that key is missing, we tell you. There is no shared key
+                    and no silent fallback.{" "}
+                    <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+                      What a model can see.
+                    </Link>
                   </p>
                 </div>
               </div>
@@ -419,8 +427,8 @@ export function Landing() {
                     <p className="mt-1 text-sm text-subtle">{provider.hint}</p>
                     <p className="mt-4 text-sm leading-relaxed text-muted">
                       {provider.id === "grok"
-                        ? "Hosted Grok, or bring your own xAI key."
-                        : "Bring your own key under Settings → Models."}
+                        ? "Your xAI key. xAI sees the prompt for that send."
+                        : "Your key. That provider sees the prompt for that send."}
                     </p>
                   </article>
                 </Reveal>

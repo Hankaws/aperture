@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { quoteRun, quoteRuns, type QuoteAccount } from "./cost.ts";
+import { quoteRun, quoteRuns, replayQuote, type QuoteAccount } from "./cost.ts";
 
 const hosted: QuoteAccount = {
   remaining: 40,
@@ -50,4 +50,31 @@ test("signed-out quoteRuns still names the user's key", () => {
   const q = quoteRuns(null, "hosted", 2);
   assert.equal(q.label, "on your Grok key, ~$0.16");
   assert.equal(q.blocked, true);
+});
+
+test("a model on this computer is free, and blocked only until it is set up in this browser", () => {
+  const store = new Map<string, string>();
+  const realStorage = (globalThis as { localStorage?: unknown }).localStorage;
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+  };
+  try {
+    const before = quoteRun({ ...hosted, modelSource: "local" });
+    assert.equal(before.blocked, true);
+    assert.match(before.blockReason ?? "", /Settings → Models/);
+
+    store.set("aperture-local-model", JSON.stringify({ base: "http://127.0.0.1:11434/v1", model: "qwen2.5-coder:7b" }));
+    const ready = quoteRun({ ...hosted, modelSource: "local" });
+    assert.equal(ready.blocked, false);
+    assert.equal(ready.cents, 0);
+    assert.equal(ready.label, "This computer · qwen2.5-coder:7b");
+    // A replay deployment replays hosted models, not the one on this machine.
+    assert.equal(replayQuote(ready).label, "This computer · qwen2.5-coder:7b");
+    assert.equal(replayQuote(quoteRun(hosted, "hosted")).label, "Replay model");
+    assert.equal(quoteRuns({ ...hosted, modelSource: "local" }, "local", 3).label, "This computer · 3 calls");
+  } finally {
+    (globalThis as { localStorage?: unknown }).localStorage = realStorage;
+  }
 });

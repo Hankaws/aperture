@@ -294,7 +294,10 @@ export async function submitAgent(
 
   if (mode === "inline") {
     try {
-      const result = (await runAgent({ data: input })) as AgentResult;
+      const result =
+        source === "local"
+          ? await (await import("./local-run")).runLocalResult(input, () => undefined)
+          : ((await runAgent({ data: input })) as AgentResult);
       if (!result.ok) {
         useWorkspace.getState().patchMessage(asstId, { content: result.error, status: undefined });
         return;
@@ -322,19 +325,23 @@ export async function submitAgent(
   let handoff = null as { script: string; plan: PlanEntry[] } | null;
 
   try {
+    // A model on the person's own machine: the loop runs in this tab and calls it directly.
     const token = getBearerToken();
-    const res = await fetch("/api/agent", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: "include",
-      body: JSON.stringify(input),
-      signal: abort.signal,
-    });
+    const res =
+      source === "local"
+        ? null
+        : await fetch("/api/agent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: "include",
+          body: JSON.stringify(input),
+          signal: abort.signal,
+        });
 
-    if (res.status === 401) {
+    if (res && res.status === 401) {
       useWorkspace.getState().patchMessage(asstId, {
         content: "Sign in to run Composer. Plans and API keys live on the account.",
         status: undefined,
@@ -342,8 +349,8 @@ export async function submitAgent(
       return;
     }
 
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!res.ok || !contentType.includes("text/event-stream")) {
+    const contentType = res?.headers.get("content-type") ?? "";
+    if (res && (!res.ok || !contentType.includes("text/event-stream"))) {
       let message = `Composer failed (${res.status})`;
       try {
         const body = (await res.json()) as { error?: string };
@@ -361,89 +368,91 @@ export async function submitAgent(
     let plan: PlanEntry[] = [];
     const tagCopy = (next: ProposedEdit[]) => (copyId ? next.map((edit) => (edit.copyId ? edit : { ...edit, copyId })) : next);
 
-    await readSse(
-      res,
-      (event) => {
-        const ws = useWorkspace.getState();
-        if (event.type === "status") {
-          ws.patchMessage(asstId, { status: event.text, traces, edits, plan });
-          return;
-        }
-        if (event.type === "text") {
-          text += event.delta;
-          ws.patchMessage(asstId, { content: text, traces, edits, plan, status: undefined });
-          return;
-        }
-        if (event.type === "plan") {
-          plan = event.entries;
-          ws.patchMessage(asstId, { content: text, traces, edits, plan, status: undefined });
-          return;
-        }
-        if (event.type === "trace") {
-          traces = [...traces, event.trace];
-          ws.patchMessage(asstId, { content: text, traces, edits, plan, status: `${event.trace.name}…` });
-          return;
-        }
-        if (event.type === "edits") {
-          edits = tagCopy(event.edits);
-          ws.patchMessage(asstId, { content: text, traces, edits, plan });
-          const last = edits[edits.length - 1];
-          if (last?.path) ws.openFile(last.path);
-          return;
-        }
-        if (event.type === "done") {
-          text = event.text;
-          traces = event.traces;
-          edits = tagCopy(event.edits);
-          plan = event.plan ?? plan;
-          const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
-          const reviewing = opts?.role === "review" || reviewOnly;
-          if (reviewing) {
-            if (edits.length) {
-              for (const patch of attachNotesToPending(ws.messages, edits)) {
-                ws.patchMessage(patch.id, { edits: patch.edits });
-              }
-            }
-            const ids = (opts?.pendingEdits ?? edits).map((edit) => edit.id);
-            for (const patch of markReviewed(useWorkspace.getState().messages, ids)) {
+    const onEvent = (event: AgentStreamEvent) => {
+      const ws = useWorkspace.getState();
+      if (event.type === "status") {
+        ws.patchMessage(asstId, { status: event.text, traces, edits, plan });
+        return;
+      }
+      if (event.type === "text") {
+        text += event.delta;
+        ws.patchMessage(asstId, { content: text, traces, edits, plan, status: undefined });
+        return;
+      }
+      if (event.type === "plan") {
+        plan = event.entries;
+        ws.patchMessage(asstId, { content: text, traces, edits, plan, status: undefined });
+        return;
+      }
+      if (event.type === "trace") {
+        traces = [...traces, event.trace];
+        ws.patchMessage(asstId, { content: text, traces, edits, plan, status: `${event.trace.name}…` });
+        return;
+      }
+      if (event.type === "edits") {
+        edits = tagCopy(event.edits);
+        ws.patchMessage(asstId, { content: text, traces, edits, plan });
+        const last = edits[edits.length - 1];
+        if (last?.path) ws.openFile(last.path);
+        return;
+      }
+      if (event.type === "done") {
+        text = event.text;
+        traces = event.traces;
+        edits = tagCopy(event.edits);
+        plan = event.plan ?? plan;
+        const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
+        const reviewing = opts?.role === "review" || reviewOnly;
+        if (reviewing) {
+          if (edits.length) {
+            for (const patch of attachNotesToPending(ws.messages, edits)) {
               ws.patchMessage(patch.id, { edits: patch.edits });
             }
-            edits = [];
           }
-          // A follow-up turn (a browser run's result, a test fix) is sent the staged edits and
-          // returns them; one it left as they were is already on an earlier reply.
-          edits = withoutUnchanged(edits, ws.messages.filter((m) => m.id !== asstId));
-          // A browser run's report turn is sent the plan it reports on; showing it again says nothing new.
-          if (opts?.browserRuns?.used && JSON.stringify(plan) === JSON.stringify(opts.approvedPlan ?? [])) plan = [];
-          if (mode === "composer" && !opts?.automatic && !reviewOnly && event.verify?.status === "failed" && !edits.some((edit) => edit.path === LESSONS_PATH)) {
-            const grown = lessonEditForFailure(ws.files[LESSONS_PATH] ?? "", event.verify.detail, `lesson_${asstId}`);
-            if (grown) edits = [...edits, ...(copyId ? [{ ...grown, status: "pending" as const, copyId }] : [{ ...grown, status: "pending" as const }])];
+          const ids = (opts?.pendingEdits ?? edits).map((edit) => edit.id);
+          for (const patch of markReviewed(useWorkspace.getState().messages, ids)) {
+            ws.patchMessage(patch.id, { edits: patch.edits });
           }
-          ws.patchMessage(asstId, {
-            content: text,
-            traces,
-            edits,
-            plan,
-            status: undefined,
-            awaitingBuild: Boolean(event.awaitingBuild),
-            debug: event.debug,
-            verify: edits.length ? event.verify : undefined,
-            ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
-          });
-          const firstPending = edits.find((e) => e.status === "pending");
-          if (firstPending?.path) ws.openFile(firstPending.path);
-          if (event.browserRun && browserRuns) handoff = { script: event.browserRun.script, plan };
-          return;
+          edits = [];
         }
-        if (event.type === "error") {
-          const current = ws.messages.find((m) => m.id === asstId)?.content ?? text;
-          const why = event.error || "Agent failed";
-          const content = current.trim() && current.trim() !== why ? `${current}\n\n${why}` : why;
-          ws.patchMessage(asstId, { content, traces, edits, plan, status: undefined });
+        // A follow-up turn (a browser run's result, a test fix) is sent the staged edits and
+        // returns them; one it left as they were is already on an earlier reply.
+        edits = withoutUnchanged(edits, ws.messages.filter((m) => m.id !== asstId));
+        // A browser run's report turn is sent the plan it reports on; showing it again says nothing new.
+        if (opts?.browserRuns?.used && JSON.stringify(plan) === JSON.stringify(opts.approvedPlan ?? [])) plan = [];
+        if (mode === "composer" && !opts?.automatic && !reviewOnly && event.verify?.status === "failed" && !edits.some((edit) => edit.path === LESSONS_PATH)) {
+          const grown = lessonEditForFailure(ws.files[LESSONS_PATH] ?? "", event.verify.detail, `lesson_${asstId}`);
+          if (grown) edits = [...edits, ...(copyId ? [{ ...grown, status: "pending" as const, copyId }] : [{ ...grown, status: "pending" as const }])];
         }
-      },
-      abort.signal,
-    );
+        ws.patchMessage(asstId, {
+          content: text,
+          traces,
+          edits,
+          plan,
+          status: undefined,
+          awaitingBuild: Boolean(event.awaitingBuild),
+          debug: event.debug,
+          verify: edits.length ? event.verify : undefined,
+          ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
+        });
+        const firstPending = edits.find((e) => e.status === "pending");
+        if (firstPending?.path) ws.openFile(firstPending.path);
+        if (event.browserRun && browserRuns) handoff = { script: event.browserRun.script, plan };
+        return;
+      }
+      if (event.type === "error") {
+        const current = ws.messages.find((m) => m.id === asstId)?.content ?? text;
+        const why = event.error || "Agent failed";
+        const content = current.trim() && current.trim() !== why ? `${current}\n\n${why}` : why;
+        ws.patchMessage(asstId, { content, traces, edits, plan, status: undefined });
+      }
+    };
+    if (res) {
+      await readSse(res, onEvent, abort.signal);
+    } else {
+      const { runLocalTurn } = await import("./local-run");
+      await runLocalTurn(input, onEvent, abort.signal);
+    }
 
     const latest = useWorkspace.getState().messages.find((m) => m.id === asstId);
     if (latest && !latest.content && traces.length === 0 && (latest.plan?.length ?? 0) === 0) {

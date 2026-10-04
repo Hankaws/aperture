@@ -1,10 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { saveProviderKey, saveCustomEndpoint, setModelSource, type AccountSnapshot } from "@/lib/billing/api";
 import { CUSTOM_PRESETS } from "@/lib/agent/custom-endpoint";
+import {
+  LOCAL_DEFAULT_BASE,
+  cleanLocalModel,
+  listLocalModels,
+  localFailure,
+  normalizeLocalBase,
+  readLocalModel,
+  saveLocalModel,
+} from "@/lib/agent/local-model";
 import { PROVIDERS, planById, type ProviderId } from "@/lib/billing/plans";
 import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
@@ -16,8 +25,8 @@ export function ModelKeys({
   account: AccountSnapshot;
   onAccount: (next: AccountSnapshot) => void;
 }) {
-  const [tab, setTab] = useState<ProviderId | "custom">(
-    account.modelSource === "custom" ? "custom" : account.preferredProvider,
+  const [tab, setTab] = useState<ProviderId | "custom" | "local">(
+    account.modelSource === "custom" || account.modelSource === "local" ? account.modelSource : account.preferredProvider,
   );
   const plan = planById(account.plan);
   const slotsLeft = Math.max(0, account.byokSlots - account.keyCount);
@@ -91,9 +100,21 @@ export function ModelKeys({
         >
           Custom
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("local")}
+          className={cn(
+            "h-11 min-w-[5.5rem] flex-1 rounded-md px-2 text-sm",
+            tab === "local" ? "bg-elevated text-fg" : "text-muted hover:text-fg",
+          )}
+        >
+          This computer
+        </button>
       </div>
 
-      {tab === "custom" ? (
+      {tab === "local" ? (
+        <LocalPanel account={account} onAccount={onAccount} />
+      ) : tab === "custom" ? (
         <CustomPanel account={account} onAccount={onAccount} />
       ) : (
         PROVIDERS.map((provider) =>
@@ -378,6 +399,187 @@ function CustomPanel({
         Saving selects it in Composer. http is only allowed for 127.0.0.1, localhost, and ::1. The key, if you set one,
         is encrypted and is not sent back here.
       </p>
+    </div>
+  );
+}
+
+const LOCAL_PRESETS = [
+  { label: "Ollama", base: LOCAL_DEFAULT_BASE },
+  { label: "LM Studio", base: "http://127.0.0.1:1234/v1" },
+] as const;
+
+/**
+ * A model on this computer, run from this browser tab: the address and model
+ * stay in this browser, and a turn goes from the page straight to the model,
+ * not through Aperture's server. So it works on the hosted site too.
+ */
+function LocalPanel({
+  account,
+  onAccount,
+}: {
+  account: AccountSnapshot;
+  onAccount: (next: AccountSnapshot) => void;
+}) {
+  const [saved, setSaved] = useState(() => readLocalModel());
+  const [base, setBase] = useState(saved?.base ?? LOCAL_DEFAULT_BASE);
+  const [model, setModel] = useState(saved?.model ?? "");
+  const [models, setModels] = useState<string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"connect" | "save" | null>(null);
+  // Known only in the browser; the page renders on the server first.
+  const [origin, setOrigin] = useState("https://your-aperture-address");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const selected = account.modelSource === "local" && saved !== null;
+  const cleanBase = normalizeLocalBase(base);
+
+  async function connect() {
+    if (!cleanBase) return;
+    setBusy("connect");
+    setError(null);
+    try {
+      const found = await listLocalModels(cleanBase);
+      setModels(found);
+      if (found.length > 0 && !found.includes(model)) setModel(found[0]!);
+      if (found.length === 0) setError("Connected, but the server lists no models. Pull one first, for example: ollama pull qwen2.5-coder:7b");
+    } catch (failure) {
+      setModels(null);
+      setError(localFailure(cleanBase, origin, failure));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveAndUse() {
+    const name = cleanLocalModel(model);
+    if (!cleanBase || !name) return;
+    setBusy("save");
+    try {
+      const next = { base: cleanBase, model: name };
+      saveLocalModel(next);
+      setSaved(next);
+      onAccount(await setModelSource({ data: "local" }));
+      toast.success(`Composer uses ${name} on this computer`);
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not switch");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">A model on this computer</p>
+          <p className="mt-1 max-w-xl text-sm text-pretty text-subtle">
+            Ollama or LM Studio, called from this browser tab. A turn goes from this page straight to your machine, not
+            through Aperture&apos;s server, so it works on the hosted site and costs nothing. The address is kept in this
+            browser only.
+          </p>
+        </div>
+        {selected ? (
+          <span className="rounded-full border border-ok/30 bg-ok/10 px-2 py-0.5 text-xs text-ok">Selected</span>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {LOCAL_PRESETS.map((preset) => (
+          <Button
+            key={preset.label}
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setBase(preset.base);
+              setModels(null);
+              setError(null);
+            }}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+
+      <form
+        className="mt-4 space-y-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveAndUse();
+        }}
+      >
+        <label className="block text-xs text-subtle">
+          Address
+          <div className="mt-1 flex gap-2">
+            <Input
+              value={base}
+              onChange={(event) => {
+                setBase(event.target.value);
+                setModels(null);
+                setError(null);
+              }}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={LOCAL_DEFAULT_BASE}
+              className="font-mono"
+              aria-invalid={!cleanBase}
+            />
+            <Button type="button" variant="outline" disabled={!cleanBase || busy !== null} onClick={() => void connect()}>
+              {busy === "connect" ? "Connecting…" : "Connect"}
+            </Button>
+          </div>
+        </label>
+        {!cleanBase && (
+          <p className="text-xs text-danger">Use an address on this computer: localhost, 127.0.0.1 or ::1.</p>
+        )}
+        <label className="block text-xs text-subtle">
+          Model
+          {models && models.length > 0 ? (
+            <select
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg"
+            >
+              {models.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder="qwen2.5-coder:7b"
+              className="mt-1 font-mono"
+            />
+          )}
+        </label>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button type="submit" disabled={busy !== null || !cleanBase || !cleanLocalModel(model)} className="sm:w-40">
+            {busy === "save" ? "Saving…" : selected ? "Save" : "Save and use"}
+          </Button>
+          {selected ? <span className="text-xs text-subtle">Composer is using this model.</span> : null}
+        </div>
+      </form>
+
+      <div className="mt-4 space-y-1.5 text-xs leading-relaxed text-subtle">
+        <p className="text-muted">Let this page reach your model:</p>
+        <p>
+          Ollama in a terminal: <code className="font-mono text-fg">OLLAMA_ORIGINS={origin} ollama serve</code>
+        </p>
+        <p>
+          Ollama app on a Mac: <code className="font-mono text-fg">launchctl setenv OLLAMA_ORIGINS &quot;{origin}&quot;</code>, then
+          quit and reopen Ollama.
+        </p>
+        <p>LM Studio: turn on CORS in the Developer tab&apos;s server settings.</p>
+        <p>
+          If the browser asks to let this site reach devices on your network, allow it. Pick a model that can call tools,
+          such as qwen2.5-coder or llama3.1: Composer reads and edits files through tools.
+        </p>
+      </div>
     </div>
   );
 }

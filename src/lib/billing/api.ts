@@ -298,10 +298,10 @@ async function applyModelSource(userId: string, source: ModelSource): Promise<Ac
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   await loadSettings(userId);
-  if (source === "custom") {
+  if (source === "custom" || source === "local") {
     await sql`
       update user_settings
-      set model_source = 'custom', updated_at = now()
+      set model_source = ${source}, updated_at = now()
       where user_id = ${userId}
     `;
     return snapshotOf(await loadAccount(userId));
@@ -439,6 +439,9 @@ export const resetSession = createServerFn({ method: "POST" })
     return snapshotOf(await loadAccount(context.userId));
   });
 
+export const LOCAL_RUNS_IN_BROWSER =
+  "Your local model runs from your browser tab, so it cannot take this run. Pick another model for it.";
+
 export type ResolvedModel =
   | {
       ok: true;
@@ -475,6 +478,12 @@ export async function resolveModel(userId: string, requested?: ModelSource | nul
     const cap = sessionBlock(account, false, cents);
     if (cap) return { ok: false, error: cap };
     return { ok: true, provider: "grok", apiKey: own, hosted: false, source: "hosted", cents };
+  }
+
+  if (source === "local") {
+    // The browser runs these turns itself. A request that reaches the server with it
+    // (a background job, a crew worker) has no way to call the person's machine.
+    return { ok: false, error: LOCAL_RUNS_IN_BROWSER };
   }
 
   if (source === "custom") {
@@ -537,7 +546,7 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
       };
     }
   }
-  if (source !== "hosted" && source !== "custom") {
+  if (source !== "hosted" && source !== "custom" && source !== "local") {
     const own = decryptSecret(row[PROVIDER_COLS[source]]);
     if (own) {
       return { ok: true, provider: source, apiKey: own, hosted: false, source, cents: 0 };

@@ -256,6 +256,20 @@ to anything else. Locally:
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
 
+## The agent loop runs in two places
+
+`src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from
+where it runs comes in a `LoopHost` (model calls, a sandbox script runner, MCP
+tools). `loop.server.ts` passes the server's; `local-run.ts` passes a model
+client for Ollama or LM Studio on `localhost` (`local-model.ts`) and nothing
+else, and runs the loop in the browser tab when the model source is `local`.
+Keep `loop.ts` free of `*.server` imports, `process`, and Node built-ins, or the
+browser build breaks or ships server code. The local model's address lives in
+the browser's storage (`aperture-local-model`); the server refuses the `local`
+source (`LOCAL_RUNS_IN_BROWSER`) for anything it would have to run itself.
+`local-model.ts` only accepts loopback addresses, so the page cannot be used
+to probe the network.
+
 ## Runs and the agent board
 
 A run is a request and every turn that answers it. `submitAgent` stamps each

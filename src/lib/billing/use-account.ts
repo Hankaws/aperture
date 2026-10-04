@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { readLocalModel } from "@/lib/agent/local-model";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getAccount, type AccountSnapshot } from "./api";
 import { providerShort } from "./plans";
@@ -66,6 +67,10 @@ export function modelCaption(account: AccountSnapshot | null): string {
   if (account.modelSource === "hosted") {
     const last4 = account.keys.grok?.last4;
     return last4 ? `Your Grok ···${last4}` : "Your Grok key";
+  }
+  if (account.modelSource === "local") {
+    const local = readLocalModel();
+    return local ? `This computer · ${local.model}` : "This computer (set up)";
   }
   if (account.modelSource === "custom") {
     const model = account.custom?.model ?? "endpoint";

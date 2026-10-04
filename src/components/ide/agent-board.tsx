@@ -17,6 +17,9 @@ import {
 } from "@/lib/workspace/board";
 import { activeCopyOf, openCopyIds } from "@/lib/workspace/copies";
 import { useWorkspace } from "@/lib/workspace/store";
+import { boardStage } from "@/lib/agent/background";
+import { BackgroundCard } from "./background-runs";
+import { useVisibleBackgroundRuns } from "@/lib/agent/use-background-runs";
 
 function ago(ts: number): string {
   const sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -301,6 +304,7 @@ export function AgentBoard() {
   const running = useWorkspace((s) => s.agentRunning);
   const activeCopyId = useWorkspace((s) => s.activeCopyId);
   const [pair, setPair] = useState<[string, string] | null>(null);
+  const background = useVisibleBackgroundRuns();
 
   const runs = useMemo(() => {
     const liveId = running
@@ -321,7 +325,7 @@ export function AgentBoard() {
     staged.length === 1 || (run.copyId ?? null) === shownCopy ? checkState : null;
   const shownJobs = jobs.filter((job) => !(job.status === "done" && jobOpened(job, messages)));
   const comparing = pair !== null && staged.length >= 2;
-  const total = runs.length + shownJobs.length;
+  const total = runs.length + shownJobs.length + background.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
@@ -391,7 +395,8 @@ export function AgentBoard() {
             {STAGES.map((stage) => {
               const here = runs.filter((run) => run.stage === stage.id);
               const herejobs = shownJobs.filter((job) => jobStage(job) === stage.id);
-              const count = here.length + herejobs.length;
+              const herebg = background.filter((run) => boardStage(run) === stage.id);
+              const count = here.length + herejobs.length + herebg.length;
               return (
                 <section
                   key={stage.id}
@@ -408,6 +413,9 @@ export function AgentBoard() {
                     <ul className="aperture-scroll min-h-0 space-y-2 md:overflow-y-auto">
                       {here.map((run) => (
                         <RunCard key={run.id} run={run} checks={checksFor(run)} />
+                      ))}
+                      {herebg.map((run) => (
+                        <BackgroundCard key={run.id} run={run} />
                       ))}
                       {herejobs.map((job) => (
                         <JobCard key={job.id} job={job} />

@@ -45,6 +45,21 @@ local in-process database (PGlite), so nothing else needs setting up.
   automatic fix that answer it) is one card: working, needs you, review or
   done, with background jobs alongside. Two runs with staged changes can be
   compared side by side, file by file (Ctrl/Cmd+J).
+- **Background runs.** Send a task with the clock button (or
+  Ctrl/Cmd+Shift+Enter) and keep working; up to three run at once, beside
+  whatever Composer is doing on screen. Each works on a copy of your files
+  as they were when it started, in this tab, with any model, including the
+  replay demo and a model on your own computer. When the agent finishes, the
+  change goes through the same checks as any other: parse, imports, tsc,
+  the tests and your stage hooks. A red check goes back to the agent once.
+  Then the run waits on the agent board under Review.
+  - **Open** brings it into Composer as its own run, staged and unapplied.
+    If you changed the same file meanwhile, your edits and the run's are
+    merged.
+  - If you changed the very same lines, the run waits under Needs you with
+    **Run again**, which starts the task over on your current files.
+  - A run that was working when the tab closed says so after the reload; it
+    does not resume. External agents (ACP) still run as server jobs on Pro.
 - **Check results on every change.** Five checks, each computed from the
   staged change itself:
   - **Parses**: the changed code, markup and JSON files parse.

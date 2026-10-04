@@ -98,6 +98,50 @@ async function readSse(res: Response, onEvent: (event: AgentStreamEvent) => void
   }
 }
 
+/**
+ * Opens a Composer turn: the server's stream, or, for a model on the person's
+ * own machine, the loop in this tab. Says why when the turn cannot start.
+ */
+export async function openAgentStream(
+  input: ReturnType<typeof agentPayload>,
+  source: ModelSource | null | undefined,
+  signal: AbortSignal,
+): Promise<{ ok: true; run: (onEvent: (event: AgentStreamEvent) => void) => Promise<void> } | { ok: false; error: string }> {
+  if (source === "local") {
+    return {
+      ok: true,
+      run: async (onEvent) => {
+        const { runLocalTurn } = await import("./local-run");
+        await runLocalTurn(input, onEvent, signal);
+      },
+    };
+  }
+  const token = getBearerToken();
+  const res = await fetch("/api/agent", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(input),
+    signal,
+  });
+  if (res.status === 401) return { ok: false, error: "Sign in to run Composer. Plans and API keys live on the account." };
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!res.ok || !contentType.includes("text/event-stream")) {
+    let message = `Composer failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // keep status
+    }
+    return { ok: false, error: message };
+  }
+  return { ok: true, run: (onEvent) => readSse(res, onEvent, signal) };
+}
+
 export function agentPayload(
   instruction: string,
   mode: AgentMode,
@@ -112,6 +156,10 @@ export function agentPayload(
     browserRuns?: BrowserRuns;
     /** Limit the run to one composer's copy. Omit to follow the copy on screen. */
     copyId?: string;
+    /** The files the turn works on, instead of the applied files (a background run's snapshot). */
+    files?: Record<string, string>;
+    /** A task of its own: none of the thread's history goes with it. */
+    fresh?: boolean;
   },
 ) {
   const state = useWorkspace.getState();
@@ -127,7 +175,10 @@ export function agentPayload(
     refusals = rememberRefusal(refusals, refusalLine(edit.path, edit.description));
   }
   if (refusals !== latest.refusals) useWorkspace.setState({ refusals });
-  const { history, compacted } = compactHistory(priorMessages(latest.messages, instruction));
+  const { history, compacted } = extra?.fresh
+    ? { history: [], compacted: 0 }
+    : compactHistory(priorMessages(latest.messages, instruction));
+  const files = extra?.files ?? latest.files;
   const captures = formatDesignCaptures(useIdeUi.getState().captures, latest.files);
   const observations =
     mode === "composer"
@@ -154,7 +205,7 @@ export function agentPayload(
     mode,
     instruction: [captures, observations, instruction].filter(Boolean).join("\n\n"),
     history,
-    files: Object.entries(latest.files).map(([path, content]) => ({ path, content })),
+    files: Object.entries(files).map(([path, content]) => ({ path, content })),
     activePath: latest.activePath,
     selection: latest.selection,
     openTabs: latest.openTabs,
@@ -332,40 +383,9 @@ export async function submitAgent(
   let handoff = null as { script: string; plan: PlanEntry[] } | null;
 
   try {
-    // A model on the person's own machine: the loop runs in this tab and calls it directly.
-    const token = getBearerToken();
-    const res =
-      source === "local"
-        ? null
-        : await fetch("/api/agent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          credentials: "include",
-          body: JSON.stringify(input),
-          signal: abort.signal,
-        });
-
-    if (res && res.status === 401) {
-      useWorkspace.getState().patchMessage(asstId, {
-        content: "Sign in to run Composer. Plans and API keys live on the account.",
-        status: undefined,
-      });
-      return;
-    }
-
-    const contentType = res?.headers.get("content-type") ?? "";
-    if (res && (!res.ok || !contentType.includes("text/event-stream"))) {
-      let message = `Composer failed (${res.status})`;
-      try {
-        const body = (await res.json()) as { error?: string };
-        if (body.error) message = body.error;
-      } catch {
-        // keep status
-      }
-      useWorkspace.getState().patchMessage(asstId, { content: message, status: undefined });
+    const opened = await openAgentStream(input, source, abort.signal);
+    if (!opened.ok) {
+      useWorkspace.getState().patchMessage(asstId, { content: opened.error, status: undefined });
       return;
     }
 
@@ -455,12 +475,7 @@ export async function submitAgent(
         ws.patchMessage(asstId, { content, traces, edits, plan, status: undefined });
       }
     };
-    if (res) {
-      await readSse(res, onEvent, abort.signal);
-    } else {
-      const { runLocalTurn } = await import("./local-run");
-      await runLocalTurn(input, onEvent, abort.signal);
-    }
+    await opened.run(onEvent);
 
     const latest = useWorkspace.getState().messages.find((m) => m.id === asstId);
     if (latest && !latest.content && traces.length === 0 && (latest.plan?.length ?? 0) === 0) {

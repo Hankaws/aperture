@@ -1,71 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import vm from "node:vm";
 import { DEMO_FILES } from "../workspace/demo-repo.ts";
 import { TAPES } from "../agent/replay.ts";
 import { applySearchReplace } from "../agent/apply-edit.ts";
 import { buildBundle, resolveImport } from "./bundle.ts";
 import { globToRegExp, planBrowserRun } from "./plan.ts";
 import { compareRuns } from "./compare.ts";
-
-type Done = {
-  type: "done";
-  passed: boolean;
-  exitCode: number;
-  pass: number;
-  fail: number;
-  firstFailure: string | null;
-  failures: string[];
-  output: string;
-};
-
-/**
- * The context's globals, with timers that throw as a browser's do when called
- * on another object ("Illegal invocation"), which Node's own do not.
- */
-function browserLikeGlobals(host: unknown): Record<string, unknown> {
-  // The Web APIs a Worker has and a bare vm context lacks.
-  const context: Record<string, unknown> = {
-    __host: host,
-    queueMicrotask,
-    performance,
-    URL,
-    URLSearchParams,
-    TextEncoder,
-    TextDecoder,
-    AbortController,
-    structuredClone,
-    atob,
-    btoa,
-  };
-  const strict = <F extends (...args: never[]) => unknown>(f: F) =>
-    function (this: unknown, ...args: Parameters<F>) {
-      // Inside the vm, the global object is the context's proxy: it carries __host.
-      if (this !== undefined && (this as { __host?: unknown } | null)?.__host !== host) throw new TypeError("Illegal invocation");
-      return f(...args);
-    };
-  context.setTimeout = strict(setTimeout);
-  context.clearTimeout = strict(clearTimeout);
-  context.setInterval = strict(setInterval);
-  context.clearInterval = strict(clearInterval);
-  return context;
-}
-
-/** Runs a bundle the way the worker does: its own globals, one report channel. */
-function execute(code: string, timeoutMs = 3000): Promise<Done> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("bundle did not report done")), timeoutMs);
-    const host = {
-      report(message: { type: string }) {
-        if (message.type === "done") {
-          clearTimeout(timer);
-          resolve(message as Done);
-        }
-      },
-    };
-    vm.runInNewContext(code, browserLikeGlobals(host));
-  });
-}
+import { executeBundle as execute, type NodeRunDone as Done } from "./node-exec.ts";
 
 async function run(files: Record<string, string>, script = "test"): Promise<Done> {
   const plan = planBrowserRun(files, script);

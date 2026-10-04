@@ -21,6 +21,9 @@ export function SiteFooter() {
               Pricing
             </Link>
           )}
+          <Link to="/benchmark" className="hover:text-fg">
+            Benchmark
+          </Link>
           <Link to="/privacy" className="hover:text-fg">
             Data
           </Link>

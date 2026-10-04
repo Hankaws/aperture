@@ -113,9 +113,11 @@ export async function completeTab(
 
   if (cfg.provider === "custom") {
     if (!cfg.base || !cfg.model) return "";
-    const { assertFetchableBase } = await import("./custom-endpoint.server");
-    const base = await assertFetchableBase(cfg.base);
-    return openaiTab(base, [cfg.model], cfg.apiKey, prefix, suffix, prompt, signal);
+    const { customEndpointFetch } = await import("./custom-endpoint.server");
+    const base = cfg.base;
+    return openaiTab(base, [cfg.model], cfg.apiKey, prefix, suffix, prompt, signal, (init) =>
+      customEndpointFetch(base, "/chat/completions", init),
+    );
   }
 
   return openaiTab(openaiCompatBase(cfg.provider), tabModels(cfg.provider), cfg.apiKey, prefix, suffix, prompt, signal);
@@ -129,10 +131,12 @@ async function openaiTab(
   suffix: string,
   prompt: string,
   signal?: AbortSignal,
+  /** Sends the request instead of a plain fetch: a custom endpoint pins its checked addresses. */
+  post?: (init: RequestInit) => Promise<{ response: Response; close: () => Promise<void> }>,
 ): Promise<string> {
   let lastError: Error | null = null;
   for (const model of models) {
-    const res = await fetch(`${base}/chat/completions`, {
+    const init: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -147,10 +151,16 @@ async function openaiTab(
       }),
       signal,
       redirect: "manual",
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      return cleanCompletion(data.choices?.[0]?.message?.content ?? "", prefix, suffix);
+    };
+    const sent = post ? await post(init) : { response: await fetch(`${base}/chat/completions`, init), close: async () => {} };
+    const res = sent.response;
+    try {
+      if (res.ok) {
+        const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        return cleanCompletion(data.choices?.[0]?.message?.content ?? "", prefix, suffix);
+      }
+    } finally {
+      await sent.close();
     }
     lastError = new Error("Tab unavailable");
     if (res.status === 401 || res.status === 403) break;

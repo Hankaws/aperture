@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applySearchReplace } from "./apply-edit.ts";
+import { editTurnStop } from "./cost.ts";
 import { DEMO_FILES } from "../workspace/demo-repo.ts";
 import { continuationInstruction, handoffToolText } from "./browser-handoff.ts";
 import {
@@ -27,10 +28,13 @@ function runTurn(
     history?: ReplayMessage[];
     /** What run_script answers: the loop's words for a handoff to the browser, or for no runner. */
     runScript?: "handoff" | "unavailable";
+    /** End the turn once a round stages an edit cleanly, as the agent loop does (`editTurnStop`). */
+    settle?: boolean;
   } = {},
 ) {
   const files = { ...(opts.files ?? DEMO_FILES) };
   let plan = opts.plan ?? [];
+  let statuses: string[] = plan.map(() => "pending");
   const staged: string[] = [];
   const messages: ReplayMessage[] = [
     { role: "system", content: "You are Composer." },
@@ -42,8 +46,11 @@ function runTurn(
   for (let step = 0; step < 10; step++) {
     const completion = replayCompletion(messages, tools);
     const calls = completion.tool_calls ?? [];
-    if (calls.length === 0) return { text: completion.content, plan, staged, files, messages, steps: step + 1 };
+    if (calls.length === 0) {
+      return { text: completion.content, plan, statuses, staged, files, messages, steps: step + 1 };
+    }
     messages.push({ role: "assistant", content: completion.content, tool_calls: calls });
+    const roundResults: string[] = [];
     for (const call of calls) {
       const args = JSON.parse(call.function.arguments) as Record<string, unknown>;
       let result = "";
@@ -51,6 +58,7 @@ function runTurn(
         result = files[String(args.path)] ?? `File not found: ${String(args.path)}`;
       } else if (call.function.name === "set_plan") {
         plan = (args.entries as { content: string }[]).map((e) => e.content);
+        statuses = (args.entries as { status?: string }[]).map((e) => e.status ?? "pending");
         result = `Plan updated (${plan.length} steps).`;
       } else if (call.function.name === "propose_edit") {
         const path = String(args.path);
@@ -75,6 +83,10 @@ function runTurn(
         result = `Unexpected tool ${call.function.name}`;
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: result });
+      roundResults.push(result);
+    }
+    if (opts.settle && editTurnStop(roundResults) === "settle") {
+      return { text: completion.content.trim() || "Staged.", plan, statuses, staged, files, messages, steps: step + 1 };
     }
   }
   throw new Error("replay did not finish within 10 steps");
@@ -126,6 +138,18 @@ test("build phase with an approved plan stages the recorded edit", () => {
       .at(-1);
     const statuses = (JSON.parse(lastPlan!.function.arguments).entries as { status: string }[]).map((e) => e.status);
     assert.ok(statuses.length > 0 && statuses.every((st) => st === "completed"), `${tape.id}: plan ticked off`);
+  }
+});
+
+test("the loop ends the turn once the edit is staged, and the plan is already ticked off", () => {
+  // The real loop settles on a cleanly staged edit, so anything the replay
+  // meant to do after it never happens: the plan has to be marked with it.
+  for (const tape of TAPES) {
+    const approved = runTurn(tape.title, BUILD_TOOLS, { plan: tape.plan, settle: true });
+    assert.deepEqual(approved.staged, tape.edits.map((e) => e.path), tape.id);
+    assert.deepEqual(approved.statuses, tape.plan.map(() => "completed"), `${tape.id}: approved plan`);
+    const unplanned = runTurn(tape.title, BUILD_TOOLS, { settle: true });
+    assert.deepEqual(unplanned.statuses, tape.plan.map(() => "completed"), `${tape.id}: plan posted in build`);
   }
 });
 

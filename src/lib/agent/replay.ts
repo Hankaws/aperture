@@ -220,7 +220,9 @@ function callsAt(round: number, calls: Call[]): ReplayCompletion {
 const firstLine = (text: string) => text.split("\n")[0]!.trim();
 
 function buildSummary(tape: Tape, rounds: Round[]): string {
-  const editResults = rounds.filter((r) => r.names.includes("propose_edit")).at(-1)?.results ?? [];
+  const round = rounds.filter((r) => r.names.includes("propose_edit")).at(-1);
+  // Only the edits' own results: the round also ticks off the plan.
+  const editResults = round ? round.results.filter((_, i) => round.names[i] === "propose_edit") : [];
   const staged = editResults.filter((r) => r.startsWith("Edit staged for"));
   const problems = editResults.filter((r) => !r.startsWith("Edit staged for")).map(firstLine);
   if (staged.length === 0) {
@@ -292,21 +294,21 @@ export function replayCompletion(messages: ReplayMessage[], toolNames: readonly 
   const planAfterLock =
     locked && rounds.slice(rounds.indexOf(lastEdits!) + 1).some((r) => r.names.includes("set_plan"));
 
-  if (editRounds.length === 0) return callsAt(rounds.length, tape.edits.map(editCall));
+  // The loop ends a build turn as soon as a clean edit is staged, so the plan is
+  // ticked off in the same round as the edits, as a model working through it must.
+  if (editRounds.length === 0) return callsAt(rounds.length, [...tape.edits.map(editCall), planDone(tape)]);
   const staged = lastEdits?.results.some((r) => r.startsWith("Edit staged for")) ?? false;
-  const markedDone = rounds.slice(rounds.indexOf(lastEdits!) + 1).some((r) => r.names.includes("set_plan"));
+  const markedDone = rounds.slice(rounds.indexOf(lastEdits!)).some((r) => r.names.includes("set_plan"));
   if (locked && !planAfterLock && editRounds.length < 2) {
     return callsAt(rounds.length, [
       { name: "set_plan", args: { entries: tape.plan.map((content) => ({ content, status: "in_progress" })) } },
     ]);
   }
-  if (locked && planAfterLock && editRounds.length < 2) return callsAt(rounds.length, tape.edits.map(editCall));
-  // Tick the plan off once the edits are staged, as a model working through it would.
-  if (staged && !markedDone) {
-    return callsAt(rounds.length, [
-      { name: "set_plan", args: { entries: tape.plan.map((content) => ({ content, status: "completed" })) } },
-    ]);
+  if (locked && planAfterLock && editRounds.length < 2) {
+    return callsAt(rounds.length, [...tape.edits.map(editCall), planDone(tape)]);
   }
+  // Tick the plan off once the edits are staged, as a model working through it would.
+  if (staged && !markedDone) return callsAt(rounds.length, [planDone(tape)]);
   // Then check the work, as a model would.
   if (staged && toolNames.includes("run_script") && !did("run_script")) {
     return callsAt(rounds.length, [{ name: "run_script", args: { script: "test" } }]);
@@ -339,6 +341,10 @@ function browserRunAnswer(ran: NonNullable<ReturnType<typeof parseContinuation>>
     `The edits are staged, but ${ran.line}${ran.detail ? `: ${ran.detail}` : "."}`,
     "This is a recorded replay, so it can't write a new fix. Review the diff, or switch to a real model.",
   ].join("\n");
+}
+
+function planDone(tape: Tape): Call {
+  return { name: "set_plan", args: { entries: tape.plan.map((content) => ({ content, status: "completed" })) } };
 }
 
 function editCall(edit: Edit): Call {

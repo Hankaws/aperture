@@ -27,12 +27,40 @@ test("verifyRecap is three lines: changed / didn't / left", () => {
     "src/store.ts": "export function listTasks() { return tasks.slice(offset); }",
     "src/index.ts": "import { listTasks } from \"./store.ts\";",
   };
-  const recap = verifyRecap([edit()], files, [{ id: "p1", content: "Add a test", status: "pending" }]);
+  const recap = verifyRecap([edit()], files, [
+    { id: "p1", content: "Fix the slice", status: "completed" },
+    { id: "p2", content: "Add a test", status: "pending" },
+  ]);
   const lines = recap.split("\n");
   assert.equal(lines.length, 3);
   assert.match(lines[0]!, /^Changed: src\/store\.ts/);
   assert.match(lines[1]!, /Didn't:.*listTasks still in src\/index\.ts/);
   assert.match(lines[2]!, /Left: Add a test/);
+});
+
+test("a plan whose steps were never marked says nothing about what is left", () => {
+  const files = { "src/store.ts": edit().newText };
+  const plan = [
+    { id: "p1", content: "Start each page at its first task", status: "pending" as const },
+    { id: "p2", content: "Drop the comment", status: "pending" as const },
+  ];
+  const recap = verifyRecap([edit()], files, plan);
+  assert.doesNotMatch(recap, /Left:/);
+  assert.match(
+    verifyRecap([edit()], files, plan.map((p) => ({ ...p, status: "completed" as const }))),
+    /^Left: nothing on the plan\.$/m,
+  );
+});
+
+test("a name in a README or notes file is not code that still references it", () => {
+  const e = edit();
+  const recap = verifyRecap([e], {
+    "src/store.ts": e.newText,
+    "README.md": "Call listTasks to page through tasks.",
+    ".aperture.md": "listTasks is the paging helper.",
+    "docs/notes.txt": "listTasks",
+  });
+  assert.match(recap, /^Didn't: no other files mention the changed names\.$/m);
 });
 
 test("appendVerify skips when there are no edits", () => {

@@ -1,5 +1,5 @@
 import { lookup } from "node:dns/promises";
-import { Agent } from "undici";
+import { pinnedFetch } from "@/lib/security/pinned-fetch.server";
 import { isMetadataAddress, isPrivateAddress, localEndpointsAllowed } from "@/lib/agent/custom-endpoint";
 import { acpEndpointError } from "./endpoint";
 
@@ -36,32 +36,5 @@ export async function acpFetch(
   const local = localEndpointsAllowed(process.env);
   const problem = acpEndpointError(endpoint, local);
   if (problem) throw new Error(problem);
-  const url = new URL(endpoint.trim());
-  const records = await lookup(url.hostname, { all: true });
-  if (records.length === 0 || records.some((rec) => blockedAddress(rec.address, local))) {
-    throw new Error("That address is not allowed.");
-  }
-  const addresses = records.map((rec) => rec.address);
-  const host = url.hostname;
-  const dispatcher = new Agent({
-    connect: {
-      lookup(hostname, _options, callback) {
-        if (hostname !== host) {
-          callback(new Error("unexpected host"), "");
-          return;
-        }
-        callback(
-          null,
-          addresses.map((address) => ({ address, family: address.includes(":") ? 6 : 4 })),
-        );
-      },
-    },
-  });
-  try {
-    const response = await fetch(url, { ...init, redirect: "manual", dispatcher } as RequestInit);
-    return { response, close: () => dispatcher.close() };
-  } catch (err) {
-    await dispatcher.close();
-    throw err;
-  }
+  return pinnedFetch(endpoint.trim(), init, (address) => !blockedAddress(address, local));
 }

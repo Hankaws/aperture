@@ -21,10 +21,12 @@ APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev
 ```
 
 Open <http://localhost:8080/app> and click **Fix the off-by-one in listTasks**,
-then **Build it**. Watch the plan, the staged diff and the checks. Tests pass
-✓, and clicking the chip shows the run. The other two suggested tasks show a
-test that was already failing before the change, marked amber and not blamed
-on the edit.
+then **Build it**. Watch the plan, the staged diff and the checks. The demo
+project ships with three known bugs and one failing test for each. The fix
+makes its own test pass, and the other two still fail, so the Tests check is
+amber: "already failing before this change", not blamed on the edit. Click the
+chip to see the run. The other two suggested tasks fix the other two bugs the
+same way.
 
 `APERTURE_MODEL=replay` plays back recorded agent runs on the built-in demo
 project (`harbor-api`) instead of calling a model. It exercises the whole

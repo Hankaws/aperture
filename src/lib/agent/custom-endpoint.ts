@@ -53,6 +53,25 @@ function ipv4Parts(host: string): number[] | null {
   return n;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function isLoopbackAddress(address: string): boolean {
+  const name = address.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0] ?? "";
+  const v4 = mappedV4(name) ?? name;
+  return v4 === "::1" || ipv4Parts(v4)?.[0] === 127;
+}
+
+/**
+ * Whether a custom endpoint whose base names `host` may connect to `address`,
+ * once that host is resolved. A loopback base (Ollama, LM Studio) stays on
+ * loopback; any other host has to resolve to public addresses only.
+ */
+export function customAddressAllowed(host: string, address: string): boolean {
+  const name = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (LOOPBACK_HOSTS.has(name)) return isLoopbackAddress(address);
+  return !isPrivateAddress(address) && !isMetadataAddress(address);
+}
+
 /** Cloud metadata and link-local. Never a place an agent or a model may call. */
 export function isMetadataAddress(host: string): boolean {
   const name = host.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0] ?? "";

@@ -37,21 +37,19 @@ function endpointOf(cfg: CompletionCfg): { base: string; model: string } {
 
 async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   const { base, model } = endpointOf(cfg);
-  if (cfg.provider === "custom") {
-    const { assertFetchableBase } = await import("./custom-endpoint.server");
-    await assertFetchableBase(base);
-  }
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-  const res = await fetch(`${base}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ ...body, model }),
-    signal,
-    // A redirect could send the request (and the key) to an address the check above refused.
-    redirect: "manual",
-  });
+  const init: RequestInit = { method: "POST", headers, body: JSON.stringify({ ...body, model }), signal };
+  // A custom endpoint is a URL the user typed: connect only to the addresses it
+  // was checked against. Its body streams on, so the connection closes when it ends.
+  const pinned =
+    cfg.provider === "custom"
+      ? await (await import("./custom-endpoint.server")).customEndpointFetch(base, "/chat/completions", init)
+      : null;
+  // A redirect could send the request (and the key) to an address the check refused.
+  const res = pinned?.response ?? (await fetch(`${base}/chat/completions`, { ...init, redirect: "manual" }));
   if (!res.ok) {
+    await pinned?.close();
     throw new Error(`${cfg.provider === "custom" ? "Endpoint" : cfg.provider} refused the request (${res.status}).`);
   }
   return res;

@@ -114,6 +114,11 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
 - The engine decides from what this turn has already done (tool calls and
   their results), never by counting steps, so loop nudges and verify
   failures don't derail it.
+- A cleanly staged edit ends a build turn (`editTurnStop` in `cost.ts`), so
+  nothing a tape does after its edits ever runs. A tape ticks its plan off in
+  the same round as its edits; otherwise the recap reads the plan as untouched.
+  `replay.test.ts` checks this with `runTurn(…, { settle: true })`, which ends
+  the turn the way the loop does.
 - It never claims tests passed: every result it states comes from a real run
   of the tests.
 - Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
@@ -192,7 +197,8 @@ that did not run reads "not run" with the reason and never counts as a pass.
   - When the agent itself just ran the verify script in the sandbox on the
     same edits, the verify step reuses that run instead of paying for a
     second one.
-  - The replay model calls `run_script("test")` after staging a fix. It
+  - The replay model calls `run_script("test")` after staging a fix when the
+    turn goes on (an edit's own check is red, so it did not settle). It
     answers the report turn from `parseContinuation`, repeating what the run
     said, pass or fail.
   - "Was it already failing" compares the two runs test by test

@@ -4,7 +4,7 @@ import { indexFiles } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
-import { commitMessage, editsAfterRevert } from "./commits";
+import { commitMessage, editsAfterRevert, revertConflicts, stampsAfter } from "./commits";
 import { LESSONS_PATH, lessonAfterKeep, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, upsertLesson } from "./lessons";
 import { useIdeUi } from "@/lib/ui-store";
 import { validCheckpoints, validFiles, validMessages } from "./persist";
@@ -88,7 +88,7 @@ type WorkspaceState = {
   /** Snapshots files before a direct edit (Design Mode), so Undo can put them back. */
   checkpointFiles: (paths: string[], label: string) => string;
   undoLast: () => Checkpoint | null;
-  revertCommit: (id: string) => LocalCommit | null;
+  revertCommit: (id: string) => { ok: true; commit: LocalCommit } | { ok: false; error: string };
   forkCopy: (label: string) => string;
   setActiveCopy: (id: string | null) => void;
   clearChat: () => void;
@@ -340,6 +340,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       messageId,
       ...(editIds.length > 0 ? { editIds } : {}),
       ...(rejectedIds.length > 0 ? { rejectedIds } : {}),
+      after: stampsAfter(get().files, paths),
     };
     set({ commits: [...get().commits, commit].slice(-20) });
   }
@@ -964,7 +965,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     revertCommit: (id) => {
       const list = get().commits;
       const last = list[list.length - 1];
-      if (!last || last.id !== id) return null;
+      if (!last || last.id !== id) return { ok: false, error: "Only the latest commit can be reverted." };
+      const changed = revertConflicts(last, get().files);
+      if (changed.length > 0) {
+        const more = changed.length > 1 ? ` and ${changed.length - 1} more` : "";
+        return {
+          ok: false,
+          error: `${changed[0]}${more} changed after this commit. Reverting would lose those edits. Undo them first, or keep the commit.`,
+        };
+      }
       const files = restoreFiles(get().files, last.before);
       const messages = get().messages.map((m) => ({
         ...m,
@@ -977,7 +986,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         dirtyPaths: [...new Set([...get().dirtyPaths, ...last.paths])],
       });
       schedulePersist();
-      return last;
+      return { ok: true, commit: last };
     },
 
     markSynced: (revision, hash) => {

@@ -157,6 +157,8 @@ export type LocalCommit = {
   editIds?: string[];
   /** The other copy's edits that Keep dropped. Revert puts these back too. */
   rejectedIds?: string[];
+  /** Stamps of what the commit left in each path, so Revert can see later edits. */
+  after?: Record<string, string | null>;
 };
 
 export type AgentMode = "chat" | "composer" | "inline";

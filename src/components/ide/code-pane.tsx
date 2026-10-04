@@ -19,7 +19,9 @@ import { pendingForRun } from "@/lib/workspace/copies";
 import { useAccount } from "@/lib/billing/use-account";
 import { ghostText } from "@/lib/editor/ghost-text";
 import { workspaceComplete } from "@/lib/editor/workspace-complete";
-import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark } from "@/lib/editor/marks";
+import { toast } from "sonner";
+import { applyHeldBecause } from "@/lib/workspace/checks";
+import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark, shownMarks } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
 import { jumpReview } from "@/lib/editor/review-jump";
@@ -99,6 +101,12 @@ const theme = EditorView.theme(
     },
     ".cm-lintRange-error": { textDecoration: `underline wavy ${ED.squiggleError}` },
     ".cm-lintRange-warning": { textDecoration: `underline wavy ${ED.squiggleWarn}` },
+    ".cm-aperture-checkGutter .cm-gutterElement": { width: "10px", display: "flex", alignItems: "center", justifyContent: "center" },
+    ".cm-aperture-check-dot": { display: "block", width: "7px", height: "7px", borderRadius: "50%", cursor: "pointer" },
+    ".cm-aperture-check-error": { background: ED.squiggleError },
+    ".cm-aperture-check-warning": { background: ED.squiggleWarn },
+    ".cm-tooltip.cm-tooltip-hover": { maxWidth: "min(480px, 90vw)" },
+    ".cm-aperture-check-tip": { padding: "4px 8px", fontSize: "12px", lineHeight: 1.5, whiteSpace: "pre-wrap" },
     ".cm-textfield": {
       background: ED.bg,
       border: `1px solid ${ED.border}`,
@@ -174,6 +182,7 @@ const syncAnn = Annotation.define<boolean>();
 export function CodePane() {
   const parentRef = useRef<HTMLDivElement>(null);
   const miniRef = useRef<HTMLDivElement>(null);
+  const paintRef = useRef<(() => void) | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lastValue = useRef("");
   const pathRef = useRef<string | null>(null);
@@ -228,7 +237,8 @@ export function CodePane() {
   const lintMarks = useMemo(() => {
     if (!activePath) return [];
     const staged = pendingEdit?.path === activePath ? pendingEdit.newText : value;
-    return collectMarks(activePath, staged, { ...files, [activePath]: staged });
+    const staging = pendingEdit?.path === activePath;
+    return collectMarks(activePath, staged, { ...files, [activePath]: staged }, staging ? files : undefined);
   }, [activePath, pendingEdit, value, files]);
 
   useEffect(() => {
@@ -239,6 +249,8 @@ export function CodePane() {
       state: EditorState.create({
         doc: value,
         extensions: [
+          // First, so its dots sit left of the line numbers.
+          lineMarkExtension(),
           lineNumbers(),
           highlightActiveLine(),
           highlightActiveLineGutter(),
@@ -257,7 +269,6 @@ export function CodePane() {
             () => useWorkspace.getState().files,
             (path) => useWorkspace.getState().openFile(path),
           ),
-          lineMarkExtension(),
           keymap.of([
             ...closeBracketsKeymap,
             ...defaultKeymap,
@@ -423,6 +434,7 @@ export function CodePane() {
             })
           : [];
     view.dispatch({ effects: lineMarkEffect(shown), annotations: syncAnn.of(true) });
+    paintRef.current?.();
   }, [lintMarks, pendingEdit, activePath, value]);
 
   useEffect(() => {
@@ -434,7 +446,14 @@ export function CodePane() {
     view.dispatch({
       effects: diffConf.reconfigure(
         pendingDiff(pendingEdit, {
-          apply: (edit) => applyRef.current(edit),
+          apply: (edit) => {
+            const held = applyHeldBecause(useIdeUi.getState().checkHint?.state, useWorkspace.getState().agentRunning);
+            if (held) {
+              toast(held);
+              return;
+            }
+            applyRef.current(edit);
+          },
           reject: (id) => rejectRef.current(id),
           keep: () => jumpReview(1),
           drop: (line) => {
@@ -472,8 +491,10 @@ export function CodePane() {
         scroller.scrollTop,
         scroller.clientHeight,
         scroller.scrollHeight,
+        shownMarks(view.state),
       );
     };
+    paintRef.current = paint;
     paint();
     scroller.addEventListener("scroll", paint, { passive: true });
     const ro = new ResizeObserver(paint);
@@ -481,6 +502,7 @@ export function CodePane() {
     return () => {
       scroller.removeEventListener("scroll", paint);
       ro.disconnect();
+      if (paintRef.current === paint) paintRef.current = null;
     };
   }, [activePath, value]);
 

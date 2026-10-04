@@ -12,6 +12,7 @@ import { CommandPalette } from "./command-palette";
 import { InlineEdit } from "./inline-edit";
 import { HelpDialog, NewFileDialog } from "./overlays";
 import { HistoryDialog } from "./history-dialog";
+import { AgentBoard } from "./agent-board";
 import { OpenProjectHost } from "./open-project";
 import { PreviewToggle } from "./tab-bar";
 import { LayoutMenu, PanelToggles } from "./layout-controls";
@@ -347,6 +348,10 @@ export function IdeShell() {
           ui.setHistoryOpen(false);
           return;
         }
+        if (ui.boardOpen) {
+          ui.setBoardOpen(false);
+          return;
+        }
         if (ui.designOpen) {
           ui.setDesignOpen(false);
         }
@@ -354,7 +359,7 @@ export function IdeShell() {
       }
       if (e.key === "F8") {
         const open = useIdeUi.getState();
-        if (open.commandOpen || open.helpOpen || open.githubOpen || open.historyOpen) return;
+        if (open.commandOpen || open.helpOpen || open.githubOpen || open.historyOpen || open.boardOpen) return;
         e.preventDefault();
         jumpReview(e.shiftKey ? -1 : 1, e.altKey);
         return;
@@ -377,6 +382,10 @@ export function IdeShell() {
       } else if (key === "l") {
         e.preventDefault();
         toggleChat();
+      } else if (key === "j") {
+        e.preventDefault();
+        const ui = useIdeUi.getState();
+        ui.setBoardOpen(!ui.boardOpen);
       } else if (key === "/") {
         e.preventDefault();
         setHelpOpen(true);
@@ -495,6 +504,7 @@ export function IdeShell() {
       <NewFileDialog />
       <HelpDialog />
       <HistoryDialog />
+      <AgentBoard />
     </div>
   );
 }

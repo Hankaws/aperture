@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, applyHeldBecause, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -286,4 +286,12 @@ test("shouldLookAgain: one look, after the preview has finished, and not on a re
   assert.equal(shouldLookAgain({ ...message, autoFixed: true }, red, now, { ready: true, replay: false }), false, "only once");
   assert.equal(shouldLookAgain(message, clear, now, { ready: true, replay: false }), false);
   assert.match(lookPrompt(red), /The staged page renders blank/);
+});
+
+test("the Apply shortcut follows the Apply buttons: not while a check is red or still running", () => {
+  assert.equal(applyHeldBecause("clear", false), null);
+  assert.match(applyHeldBecause("failed", false) ?? "", /A check is red/);
+  assert.match(applyHeldBecause("running", false) ?? "", /Waiting for the checks/);
+  assert.match(applyHeldBecause(null, false) ?? "", /Waiting for the checks/);
+  assert.match(applyHeldBecause("clear", true) ?? "", /Wait until this turn finishes/);
 });

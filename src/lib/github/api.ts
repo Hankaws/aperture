@@ -4,7 +4,9 @@ import { safeRelPath } from "@/lib/security/redact";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
 import { blobModes, cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
+import { checksFromGithub, failureNotes, logExcerpt, overallState, type CiCheck, type CiOverall } from "./ci";
 import {
+  githubChecksInput,
   githubImportInput,
   githubListInput,
   githubMergeInput,
@@ -239,6 +241,85 @@ export const publishGithub = createServerFn({ method: "POST" })
       const url = String((pr.body as { html_url?: string }).html_url ?? "");
       const pull = Number((pr.body as { number?: number }).number ?? 0);
       return { ok: true, sha, branch: head, url, pull: pull || undefined };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
+    }
+  });
+
+export type GithubChecksResult = { ok: true; state: CiOverall; checks: CiCheck[] } | { ok: false; error: string };
+
+/** Hosts GitHub hands job logs out from, by redirect. Only these are followed. */
+const LOG_HOSTS = [".actions.githubusercontent.com", ".blob.core.windows.net"];
+const LOG_TAIL_BYTES = 1_000_000;
+const LOG_READ_CAP = 20_000_000;
+
+/** The end of a GitHub Actions job's log, or "" when it cannot be read (no actions:read scope, not Actions). */
+async function jobLogTail(owner: string, repo: string, jobId: string, token: string): Promise<string> {
+  try {
+    const first = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`, {
+      headers: githubHeaders(token),
+      redirect: "manual",
+    });
+    const location = first.headers.get("location");
+    if (first.status < 300 || first.status >= 400 || !location) return "";
+    const target = new URL(location);
+    if (target.protocol !== "https:" || !LOG_HOSTS.some((host) => target.hostname.endsWith(host))) return "";
+    // A signed download URL: GitHub's token is not sent on.
+    const res = await fetch(target, { redirect: "manual" });
+    if (!res.ok || !res.body) return "";
+    const reader = res.body.getReader();
+    let tail = new Uint8Array(0);
+    let read = 0;
+    while (read < LOG_READ_CAP) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      read += value.byteLength;
+      const joined = new Uint8Array(tail.byteLength + value.byteLength);
+      joined.set(tail);
+      joined.set(value, tail.byteLength);
+      tail = joined.byteLength > LOG_TAIL_BYTES ? joined.slice(joined.byteLength - LOG_TAIL_BYTES) : joined;
+    }
+    await reader.cancel().catch(() => {});
+    return new TextDecoder().decode(tail);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * A commit's CI: GitHub check runs and the older commit statuses. Failed
+ * checks also bring where GitHub pinned them and the end of the job's log,
+ * which is what a fix needs; at most three failed checks are read in full.
+ */
+export const githubChecks = createServerFn({ method: "POST" })
+  .validator(githubChecksInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<GithubChecksResult> => {
+    const token = await useToken(context.userId, data.token);
+    if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
+    const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
+    if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
+    if (!/^[0-9a-f]{40}$/i.test(data.sha)) return { ok: false, error: "Missing the commit to check." };
+    const repoUrl = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`;
+    try {
+      const [runs, statuses] = await Promise.all([
+        githubJson(`${repoUrl}/commits/${data.sha}/check-runs?per_page=50`, token),
+        githubJson(`${repoUrl}/commits/${data.sha}/status`, token),
+      ]);
+      if (runs.status === 401) return { ok: false, error: "GitHub rejected that token." };
+      if (runs.status !== 200) return { ok: false, error: "Could not read this commit's checks." };
+      const { checks, actionsJobs } = checksFromGithub(runs.body, statuses.status === 200 ? statuses.body : null);
+      const failed = checks.filter((check) => check.state === "failure" && /^\d+$/.test(check.id)).slice(0, 3);
+      await Promise.all(
+        failed.map(async (check) => {
+          const notes = await githubJson(`${repoUrl}/check-runs/${check.id}/annotations?per_page=30`, token);
+          if (notes.status === 200) check.annotations = failureNotes(notes.body);
+          if (actionsJobs.has(check.id)) {
+            check.log = logExcerpt(await jobLogTail(parsed.owner, parsed.repo, check.id, token));
+          }
+        }),
+      );
+      return { ok: true, state: overallState(checks), checks };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not reach GitHub." };
     }

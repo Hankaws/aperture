@@ -60,7 +60,8 @@ export function WorkerConfirm({
   const seats = selectedSeats(availableSeats(account), crewIds);
   const files = fileList;
   const suggested = proposeWorkers(plan, files, seats);
-  const planKey = plan.map((p) => p.id).join("|");
+  // Content too: a step reworded before Build it keeps its id.
+  const planKey = plan.map((p) => `${p.id}:${p.content}`).join("|");
   const seatKey = seats.map((s) => `${s.id}:${s.ready ? 1 : 0}`).join("|");
   const [workers, setWorkers] = useState<WorkerSpec[]>(suggested);
 

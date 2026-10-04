@@ -9,14 +9,19 @@ const MAX_ADD_LINES = 80;
 class AddBlockWidget extends WidgetType {
   constructor(
     readonly lines: string[],
-    readonly marks: Array<string | null> = [],
+    readonly marks: Array<LineMark | null> = [],
   ) {
     super();
   }
   eq(other: AddBlockWidget) {
     return (
       this.lines.length === other.lines.length &&
-      this.lines.every((line, i) => line === other.lines[i] && this.marks[i] === other.marks[i])
+      this.lines.every(
+        (line, i) =>
+          line === other.lines[i] &&
+          this.marks[i]?.message === other.marks[i]?.message &&
+          this.marks[i]?.severity === other.marks[i]?.severity,
+      )
     );
   }
   toDOM() {
@@ -34,8 +39,8 @@ class AddBlockWidget extends WidgetType {
       body.textContent = text.length ? text : " ";
       const note = this.marks[i];
       if (note) {
-        body.className = "cm-lintRange-error";
-        body.title = note;
+        body.className = note.severity === "warning" ? "cm-lintRange-warning" : "cm-lintRange-error";
+        body.title = note.message;
       }
       row.append(sign, body);
       wrap.appendChild(row);
@@ -73,13 +78,13 @@ class SignMarker extends GutterMarker {
 
 const delMarker = new SignMarker("−", "cm-aperture-diff-sign cm-aperture-diff-sign-del");
 
-function addedNotes(edit: ProposedEdit, hunk: { insertAfter: number; added: string[] }, marks: LineMark[]): Array<string | null> {
+function addedNotes(edit: ProposedEdit, hunk: { insertAfter: number; added: string[] }, marks: LineMark[]): Array<LineMark | null> {
   return hunk.added.map((_, index) => {
     const hit = marks.find((mark) => {
       const place = placeMark(edit.oldText, edit.newText, mark.line);
       return place !== null && "addedIndex" in place && place.insertAfter === hunk.insertAfter && place.addedIndex === index;
     });
-    return hit?.message ?? null;
+    return hit ?? null;
   });
 }
 

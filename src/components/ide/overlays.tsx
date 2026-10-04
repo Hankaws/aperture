@@ -57,16 +57,18 @@ export function HelpDialog() {
 
   const steps = [
     { n: "1", title: "Open a file", body: "Single-click previews it (italic tab). Double-click keeps it. Pin from the tab. Open a folder, zip, or GitHub from Open." },
-    { n: "2", title: "Ask Composer", body: "Manual mode: Composer plans and waits — you click Build it, then Apply. Toggle Crew so Claude and GPT can split a confirmed build. Design Mode strips page scripts; click an element, add a note, send it here." },
-    { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. Apply, reject, or undo the run." },
+    { n: "2", title: "Ask Composer", body: "Manual mode: Composer plans and waits — edit the steps if you like, click Build it, then Apply. Toggle Crew so Claude and GPT can split a confirmed build. Design Mode strips page scripts; click an element, add a note, send it here." },
+    { n: "3", title: "Apply the diffs", body: "Green and red draw in the file. A failing check puts a dot in the margin: hover it for the message. Apply, reject, or undo the run." },
   ];
 
   const rows = [
     [`${mod}P`, "Go to file"],
     [`${mod}I`, "Focus Composer"],
+    [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}Enter`, "Apply the change in this file"],
     ["F8", "Next review hunk · Shift previous · Alt next file"],
+    ["F7", "Next check problem in the file · Shift previous"],
     ["/review /fix /explain", "Slash commands in Composer"],
     ["Tab", "Accept ghost text (Pro)"],
     [`${mod}→`, "Accept the next ghost word"],

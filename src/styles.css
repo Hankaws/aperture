@@ -719,6 +719,16 @@ html[data-theme="light"] {
     pointer-events: none;
   }
 
+  .aperture-minimap-mark {
+    position: absolute;
+    right: 0;
+    display: block;
+    width: 6px;
+    height: 3px;
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
   .aperture-minimap-slider {
     position: absolute;
     left: 2px;

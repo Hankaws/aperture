@@ -126,6 +126,21 @@ export function canApply(state: "running" | "clear" | "failed" | null | undefine
 }
 
 /**
+ * Why Ctrl/Cmd+Enter in the editor may not apply a staged change yet, or null
+ * when it may. The same rules as the Apply buttons, which a shortcut must not
+ * get around: a red check is applied only through "Apply anyway".
+ */
+export function applyHeldBecause(
+  state: "running" | "clear" | "failed" | null | undefined,
+  agentRunning: boolean,
+): string | null {
+  if (agentRunning) return "Wait until this turn finishes.";
+  if (state === "failed") return "A check is red. Send it back, or choose Apply anyway in Composer.";
+  if (!canApply(state)) return "Waiting for the checks.";
+  return null;
+}
+
+/**
  * The page the staged change should be rendered from, or null when the change
  * cannot affect what the preview shows. Scripts count only when the preview
  * runs them.

@@ -120,6 +120,8 @@ export type ChatMessage = {
   automatic?: boolean;
   /** MCP calls from this turn. Writes stay pending until the user confirms. */
   mcpCalls?: McpCall[];
+  /** Rules from .aperture/rules this turn was given, by path. */
+  rules?: string[];
   /** The composer copy this turn is working in, when a second run is open. */
   copyId?: string;
   /** The run this turn belongs to: the request and every turn that answers it (see board.ts). */

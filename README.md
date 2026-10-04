@@ -85,6 +85,28 @@ local in-process database (PGlite), so nothing else needs setting up.
     output goes straight back to it as the next turn. It can check a fix,
     see a failure and try again, at no cost, up to three runs per task.
   - Projects that need a real Node can run in Vercel Sandbox instead.
+- **Hooks.** `.aperture/hooks.json` names project scripts that run by
+  themselves, in the same sandboxed browser runner as the tests:
+
+  ```json
+  { "hooks": [{ "run": "check:store", "files": ["src/**"], "on": ["save", "stage"] }] }
+  ```
+
+  - On `save`, Ctrl/Cmd+S on a matching file runs the script, and the status
+    bar shows the result. If it fails, **Fix with Composer** is offered.
+  - On `stage`, the script is one more row in the check strip for any staged
+    change to a matching file. Red holds Apply like any other check, and a
+    script that needs a real Node is shown as not run.
+  - Hooks are read from the applied files, so a staged change cannot switch
+    off the hook that judges it.
+- **Rules for some files.** A Markdown file in `.aperture/rules/` with
+  `files: tests/**` in its front matter is given to Composer only when a turn
+  touches a matching file: the open file, an `@` mention, or a file the agent
+  reads or edits. Test conventions stay out of a CSS change, and the message
+  lists the rules it followed. `globs:` (as in Cursor) works too. A rule with
+  no files applies to every turn. The command palette has **Add a rule for
+  some files** and **Edit hooks**. The demo project ships with one hook and
+  two rules.
 - **Design mode.** Click an element in the preview to work on it. No model
   needed for the first two tabs:
   - **Style** edits the CSS rule behind the element: colours (or one of

@@ -35,7 +35,7 @@ export type CaseResult = {
   /** What the first red check said. */
   detail: string | null;
   /** Every check's state on this edit, as the strip shows it: pass, fail, warn (failing before too), skip. */
-  checks: Partial<Record<CheckId, string>>;
+  checks: Record<string, string>;
 };
 
 export type BenchSummary = {

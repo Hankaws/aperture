@@ -1362,6 +1362,22 @@ const MessageBlock = memo(function MessageBlock({
       {Array.isArray(message.mcpCalls) && message.mcpCalls.length > 0 && (
         <McpCallList messageId={message.id} calls={message.mcpCalls} />
       )}
+      {Array.isArray(message.rules) && message.rules.length > 0 && (
+        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-subtle">
+          <span>Followed {message.rules.length === 1 ? "rule" : "rules"}</span>
+          {message.rules.map((path) => (
+            <button
+              key={path}
+              type="button"
+              title={`Open ${path}`}
+              className="rounded border border-border px-1.5 py-px font-mono text-[11px] text-muted hover:text-fg"
+              onClick={() => useWorkspace.getState().openFile(path)}
+            >
+              {path.split("/").pop()}
+            </button>
+          ))}
+        </p>
+      )}
       {analyzing && <AnalyzingCard status={message.status} />}
       {live && !analyzing && (
         <p className="shimmer-text mt-2 text-sm text-muted">

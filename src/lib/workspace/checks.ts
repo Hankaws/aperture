@@ -12,11 +12,13 @@ import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./pre
 import { isScriptPath } from "./syntax-check.ts";
 import { isTypePath, typeIssues } from "./type-check.ts";
 import type { TscOutcome } from "./tsc";
+import type { HookRun } from "./hooks.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
 
-export type CheckId = "parse" | "imports" | "types" | "preview" | "tests";
+/** `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). */
+export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | `hook:${string}`;
 /** `warn`: failing, but failing the same way before this change. */
 export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
@@ -197,6 +199,8 @@ export function changeChecks(input: {
   browser?: BrowserTests;
   /** Real `tsc` in the browser. Without it, or when it cannot run, the light check answers. */
   tsc?: TscCheck;
+  /** The project's stage hooks for this change, run in the browser. */
+  hooks?: HookRun[];
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
@@ -281,7 +285,19 @@ export function changeChecks(input: {
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
-  return [parse, imports, types, preview, testsRow(verify ?? null, input.browser ?? null)];
+  return [parse, imports, types, preview, testsRow(verify ?? null, input.browser ?? null), ...(input.hooks ?? []).map(hookRow)];
+}
+
+/** A hook is judged like the tests: red only for a failure this change brought in. */
+export function hookRow(run: HookRun): CheckRow {
+  const id: CheckId = `hook:${run.hook.id}`;
+  const label = run.hook.name;
+  const command = `npm run ${run.hook.script}`;
+  if (run.state === "running") return { id, label, status: "running", detail: `Running ${command} in the browser…` };
+  if (run.state === "unsupported") return { id, label, status: "skip", detail: `Not run: ${run.reason}` };
+  if (run.passed) return { id, label, status: "pass", detail: `${command} passed in the browser.` };
+  if (run.preexisting) return { id, label, status: "warn", detail: `Already failing before this change: ${run.detail}` };
+  return { id, label, status: "fail", detail: `${command} fails in the browser: ${run.detail}` };
 }
 
 function testLabel(script: string | null): string {
@@ -365,10 +381,11 @@ export function verifyForPending(
 export const AUTO_FIX_WINDOW_MS = 10 * 60_000;
 
 /** The preview and the browser tests have both finished, so the look is real. */
-export function checksReady(render: RenderResult, browser: BrowserTests, tsc: TscCheck = null): boolean {
+export function checksReady(render: RenderResult, browser: BrowserTests, tsc: TscCheck = null, hooks: HookRun[] = []): boolean {
   if (render?.state === "pending") return false;
   if (browser?.state === "running") return false;
   if (tsc?.state === "running") return false;
+  if (hooks.some((run) => run.state === "running")) return false;
   return true;
 }
 

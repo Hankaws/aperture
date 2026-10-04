@@ -25,6 +25,8 @@ import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { TscCheck } from "@/lib/workspace/checks";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
+import { HOOKS_PATH, hooksFor, parseHooks, type HookRun } from "@/lib/workspace/hooks";
+import { runHooks } from "@/lib/workspace/hook-runner";
 
 /** Long enough for a page's own scripts to settle; a page slower than this is a finding. */
 const RENDER_TIMEOUT_MS = 5000;
@@ -201,6 +203,60 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
   return { state: "running" };
 }
 
+/**
+ * The project's stage hooks (`.aperture/hooks.json`) for this change, against
+ * the staged files. The hooks come from the applied files: a staged change to
+ * the hooks file cannot switch off the hook that judges it.
+ */
+function useStageHooks(files: Record<string, string>, edits: ProposedEdit[]): HookRun[] {
+  const hooks = useMemo(
+    () => hooksFor(parseHooks(files[HOOKS_PATH]).hooks, "stage", [...new Set(edits.map((e) => e.path))]),
+    [files, edits],
+  );
+  const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
+  const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
+  const key = `${versionOf(files)}:${editsKey}:${hooks.map((hook) => `${hook.id}=${hook.name}`).join(",")}`;
+  const [settled, setSettled] = useState<{ key: string; runs: HookRun[] } | null>(null);
+
+  useEffect(() => {
+    if (hooks.length === 0) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        let done: HookRun[] = [];
+        await runHooks(hooks, merged, {
+          before: files,
+          signal: controller.signal,
+          onRun: (run) => {
+            done = [...done, run];
+            setSettled({ key, runs: done });
+          },
+        });
+      } catch {
+        // Superseded by a newer change, or unmounted.
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+    // `key` covers files, edits and the hooks; merged and files are read at that version.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return useMemo(
+    () =>
+      hooks.map(
+        (hook): HookRun =>
+          (settled?.key === key ? settled.runs.find((run) => run.hook.id === hook.id) : undefined) ?? {
+            hook,
+            state: "running",
+          },
+      ),
+    [hooks, settled, key],
+  );
+}
+
 const ICON = { pass: Check, fail: X, warn: TriangleAlert, skip: Minus, running: LoaderCircle } as const;
 const SPOKEN = { pass: "passed", fail: "failed", warn: "failing before this change", skip: "not run", running: "running" } as const;
 
@@ -254,10 +310,12 @@ export function CheckResults({
   const { result, frame } = useRenderCheck(files, edits);
   const { tests: browser, output } = useBrowserTests(files, edits, verify);
   const tsc = useTypeCheck(files, edits);
-  const [showOutput, setShowOutput] = useState(false);
+  const hooks = useStageHooks(files, edits);
+  /** The row whose output is open: the tests, or a hook. */
+  const [openOutput, setOpenOutput] = useState<string | null>(null);
   const rows = useMemo(
-    () => changeChecks({ files, edits, render: result, verify, browser, tsc }),
-    [files, edits, result, verify, browser, tsc],
+    () => changeChecks({ files, edits, render: result, verify, browser, tsc, hooks }),
+    [files, edits, result, verify, browser, tsc, hooks],
   );
   const failed = rows.find((r) => r.status === "fail");
   const checkState = checkStripState(rows);
@@ -272,8 +330,16 @@ export function CheckResults({
     return () => useIdeUi.getState().setCheckHint(null);
   }, [checkState, failed, failedPath, failedDetail]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
-  const hasOutput = output.trim().length > 0;
-  const ready = checksReady(result, browser, tsc);
+  const outputs = useMemo(() => {
+    const byRow: Record<string, string> = {};
+    if (output.trim()) byRow.tests = output;
+    for (const run of hooks) {
+      if (run.state === "done" && run.output?.trim()) byRow[`hook:${run.hook.id}`] = run.output;
+    }
+    return byRow;
+  }, [output, hooks]);
+  const shownOutput = openOutput ? outputs[openOutput] : undefined;
+  const ready = checksReady(result, browser, tsc, hooks);
   useEffect(() => {
     if (!ready) return;
     const state = useWorkspace.getState();
@@ -297,10 +363,10 @@ export function CheckResults({
           <Chip
             key={row.id}
             row={row}
-            expanded={row.id === "tests" && hasOutput ? showOutput : undefined}
+            expanded={outputs[row.id] ? openOutput === row.id : undefined}
             onClick={
-              row.id === "tests" && hasOutput
-                ? () => setShowOutput((v) => !v)
+              outputs[row.id]
+                ? () => setOpenOutput((open) => (open === row.id ? null : row.id))
                 : row.status === "fail" && row.path
                   ? () => {
                       useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
@@ -331,12 +397,12 @@ export function CheckResults({
           {problem.detail}
         </p>
       )}
-      {showOutput && hasOutput && (
+      {shownOutput && (
         <pre
-          aria-label="Test output"
+          aria-label={openOutput === "tests" ? "Test output" : `Output of ${rows.find((row) => row.id === openOutput)?.label ?? "the hook"}`}
           className="mt-1.5 max-h-40 overflow-auto rounded-md border border-border bg-bg p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted"
         >
-          {output.split("\n").slice(-60).join("\n")}
+          {shownOutput.split("\n").slice(-60).join("\n")}
         </pre>
       )}
       {frame}

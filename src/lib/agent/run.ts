@@ -441,6 +441,7 @@ export async function submitAgent(
           debug: event.debug,
           verify: edits.length ? event.verify : undefined,
           ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
+          ...(event.rules?.length ? { rules: event.rules } : {}),
         });
         const firstPending = edits.find((e) => e.status === "pending");
         if (firstPending?.path) ws.openFile(firstPending.path);

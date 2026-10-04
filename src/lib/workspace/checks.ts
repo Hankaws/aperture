@@ -72,6 +72,11 @@ export function checkStripState(rows: Array<{ status: CheckStatus }>): "running"
   return "clear";
 }
 
+/** Apply waits until every row has passed or been skipped. A skip is not a pass, and a red or running row blocks. */
+export function canApply(state: "running" | "clear" | "failed" | null | undefined): boolean {
+  return state === "clear";
+}
+
 /**
  * The page the staged change should be rendered from, or null when the change
  * cannot affect what the preview shows. Scripts count only when the preview
@@ -287,12 +292,10 @@ export function shouldLookAgain(
 
 /** What the agent is told. The person sees a shorter line in the chat. */
 export function lookPrompt(rows: CheckRow[]): string {
-  const lines = lookFailures(rows).map((line) => `- ${line}`);
+  const line = lookFailures(rows)[0] ?? "A check is red.";
   return [
-    "Looked at the staged change before asking to keep it. These checks are red:",
-    ...lines,
-    "",
-    "Fix this now with propose_edit. Change only what the failure requires — do not restart the plan or widen the scope. If a failure is unrelated to your edits, say so plainly instead of editing.",
+    line,
+    "Fix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.",
   ].join("\n");
 }
 

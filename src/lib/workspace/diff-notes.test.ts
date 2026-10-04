@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatDiffNotes, keepReviewNote, notesOn, parseConfidence, reviewContext, reviewInstruction, reviewResultLine, withReviewLine } from "./diff-notes.ts";
+import { formatDiffNotes, keepEdit, keepReviewNote, notesOn, parseConfidence, reviewContext, reviewInstruction, reviewResultLine, withReviewLine } from "./diff-notes.ts";
 import type { ProposedEdit } from "./types.ts";
 
 const edit = (notes: ProposedEdit["notes"], status: ProposedEdit["status"] = "pending"): ProposedEdit => ({
@@ -45,6 +45,9 @@ test("keepReviewNote drops a nit and a low score", () => {
   assert.equal(keepReviewNote(true, 0.79), false);
   assert.equal(keepReviewNote(false, 0.99), false);
   assert.equal(keepReviewNote(true, null), false);
+  assert.equal(keepEdit(0.8), true);
+  assert.equal(keepEdit(0.79), false);
+  assert.equal(keepEdit(null), false);
   assert.equal(parseConfidence("90"), 0.9);
   assert.equal(parseConfidence(1.2), null);
 });

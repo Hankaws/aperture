@@ -2,6 +2,7 @@ import { Check, X } from "lucide-react";
 import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { modSymbol } from "@/lib/utils";
+import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { ProposedEdit } from "@/lib/workspace/types";
 
@@ -11,6 +12,7 @@ export function DiffBar({ edit }: { edit: ProposedEdit }) {
   const current = useWorkspace((s) => s.files[edit.path]);
   const live = current === edit.oldText;
   const stats = diffStats(edit.oldText, edit.newText);
+  const checksOpen = useIdeUi((s) => s.checkHint?.state) === "clear";
   const mod = modSymbol();
 
   return (
@@ -35,7 +37,8 @@ export function DiffBar({ edit }: { edit: ProposedEdit }) {
         size="sm"
         className="h-7 px-2.5"
         onClick={() => applyEdit(edit)}
-        title={`${mod}+Enter`}
+        disabled={!checksOpen}
+        title={checksOpen ? `${mod}+Enter` : "Waiting for the checks"}
       >
         <Check className="size-3.5" />
         Apply

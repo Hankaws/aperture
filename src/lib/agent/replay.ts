@@ -342,7 +342,7 @@ function browserRunAnswer(ran: NonNullable<ReturnType<typeof parseContinuation>>
 }
 
 function editCall(edit: Edit): Call {
-  return { name: "propose_edit", args: { ...edit } };
+  return { name: "propose_edit", args: { ...edit, confidence: 1 } };
 }
 
 /** Text as a model would stream it: short pieces, word-aligned where possible. */

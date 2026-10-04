@@ -213,6 +213,43 @@ that did not run reads "not run" with the reason and never counts as a pass.
   handed to the agent as a failure to fix. A real failure gets one fix attempt.
   The fix gets one re-run, and only if the edits actually changed.
 
+## The landing page must not download the editor
+
+Every route is code-split, `/app` included. The editor is most of the client
+code: with `/app` unsplit (a `splitBehavior` exception in `vite.config.ts`, or
+`codeSplitGroupings: []` on the route), every page downloaded about 1.7 MB of
+JavaScript; split, the landing page needs about 0.5 MB. `scripts/e2e-demo.mjs`
+fails above 800 KB, so do not bring either setting back.
+
+## Server function inputs are schemas
+
+Every `createServerFn` takes its input through a zod schema in
+`src/lib/security/inputs.ts`, never `.validator((input: T) => input)`: a
+TypeScript type says what the editor sends, not what reaches the endpoint. The
+agent request is a loose object, so a new `AgentInput` field passes through
+before its schema line exists; give it one anyway.
+
+## Themes and the editor's colours
+
+`cursor` and `claude` are the dark themes, `light` the light one, `system`
+follows the OS (`src/lib/appearance.ts`; the head script `THEME_BOOT_SCRIPT`
+applies the same choice before React loads, and `appearance.test.ts` checks
+the two agree). The editor and syntax colours are CSS variables (`ED` and
+`SYN` in `src/lib/editor/theme.ts`) that fall back to the dark hex values, so
+a theme recolours the editor by setting `--ed-*` and `--syn-*`; the light block
+in `styles.css` does. Use `ED`/`SYN`, not `EDITOR`/`SYNTAX`, in editor styles,
+or that colour stays dark in the light theme. Text colours clear 4.5:1 on the
+surfaces they sit on; check a new one before adding it.
+
+## End to end in CI
+
+`scripts/e2e-demo.mjs` runs the replay demo in Chromium against a production
+build (CI job "end to end (replay demo)"): landing size and console, plan →
+Build it → recap → checks → Apply → Revert, and the phone layout. Locally:
+`VITE_AUTH_ENABLED=false npm run build`, then `APERTURE_MODEL=replay
+VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
+`node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
+
 ## Tests are globbed
 
 `npm test` takes `'scripts/**/*.test.mjs' 'src/**/*.test.ts'`. Do not reintroduce

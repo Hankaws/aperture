@@ -39,3 +39,45 @@ jobs:
       - name: Test
         if: ${{ !cancelled() }}
         run: npm test
+
+  e2e:
+    name: end to end (replay demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      # The demo deploy's settings: no sign-in, recorded runs instead of a model.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_AUTH_ENABLED: "false"
+
+      - name: Serve the build
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 8095 > preview.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:8095/ && exit 0
+            sleep 1
+          done
+          cat preview.log
+          exit 1
+        env:
+          APERTURE_MODEL: replay
+          VITE_AUTH_ENABLED: "false"
+
+      - name: Run the demo in a browser
+        run: node scripts/e2e-demo.mjs http://127.0.0.1:8095
+
+      - name: Server log
+        if: ${{ failure() }}
+        run: cat preview.log

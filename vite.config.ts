@@ -166,13 +166,9 @@ export default defineConfig(({ command, isPreview }) => ({
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),
-    tanstackStart({
-      router: {
-        codeSplittingOptions: {
-          splitBehavior: ({ routeId }) => (routeId === "/app" ? [] : undefined),
-        },
-      },
-    }),
+    // Every route is code-split, /app included: the editor is most of the
+    // client code, and the landing page must not download it.
+    tanstackStart(),
     ...(command === "build" || isPreview
       ? [
           nitro({

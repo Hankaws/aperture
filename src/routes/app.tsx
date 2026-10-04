@@ -20,9 +20,9 @@ export const Route = createFileRoute("/app")({
     }
     await ensureVisitor();
   },
+  // Code-split like every other route: the editor is most of the client
+  // code, and the landing page must not download it.
   component: AppEditor,
-  // Compile-time hint for the TanStack splitter — not a runtime option.
-  codeSplitGroupings: [],
 });
 
 function AppEditor() {

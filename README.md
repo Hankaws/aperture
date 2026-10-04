@@ -121,6 +121,10 @@ npm run lint
 npm run build      # production build
 ```
 
+CI also runs the replay demo end to end in Chromium against a production
+build (`scripts/e2e-demo.mjs`; how to run it locally is in
+`AGENTS.project.md`).
+
 Read [`AGENTS.project.md`](AGENTS.project.md) before changing things. It lists
 the traps in this codebase that type-check cleanly and then fail at runtime,
 and how each one is verified.

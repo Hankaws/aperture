@@ -3,6 +3,7 @@ import type { AgentStreamEvent } from "@/lib/agent/events";
 import { collectSessionUpdates, parseJsonRpc, type JsonRpcMessage } from "./protocol";
 import { legacyEdits, mapAcpUpdates } from "./map";
 import { parseUnifiedDiff } from "./patch";
+import { acpFetch } from "./endpoint.server";
 
 type RpcOk = { ok: true; status: number; contentType: string; body: unknown; raw: string };
 type RpcFail = { ok: false; status: number; error: string };
@@ -13,40 +14,55 @@ async function post(
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<RpcOk | RpcFail> {
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, application/x-ndjson, text/event-stream",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  const contentType = res.headers.get("content-type") ?? "";
-  const raw = await res.text();
-  if (!res.ok) {
-    return { ok: false, status: res.status, error: raw.slice(0, 240) || `HTTP ${res.status}` };
-  }
-  if (contentType.includes("text/event-stream") || contentType.includes("ndjson")) {
-    const messages: unknown[] = [];
-    for (const line of raw.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
-      if (!data || data === "[DONE]") continue;
-      try {
-        messages.push(JSON.parse(data) as unknown);
-      } catch {
-        // skip
-      }
-    }
-    return { ok: true, status: res.status, contentType, body: messages, raw };
+  let close = async () => {};
+  let res: Response;
+  try {
+    const opened = await acpFetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, application/x-ndjson, text/event-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    close = opened.close;
+    res = opened.response;
+  } catch (err) {
+    return { ok: false, status: 0, error: err instanceof Error ? err.message : "That address is not allowed." };
   }
   try {
-    return { ok: true, status: res.status, contentType, body: JSON.parse(raw) as unknown, raw };
-  } catch {
-    return { ok: true, status: res.status, contentType, body: { text: raw }, raw };
+    if (res.status >= 300 && res.status < 400) {
+      return { ok: false, status: res.status, error: "The agent redirected. That is not allowed." };
+    }
+    const contentType = res.headers.get("content-type") ?? "";
+    const raw = await res.text();
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: raw.slice(0, 240) || `HTTP ${res.status}` };
+    }
+    if (contentType.includes("text/event-stream") || contentType.includes("ndjson")) {
+      const messages: unknown[] = [];
+      for (const line of raw.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
+        if (!data || data === "[DONE]") continue;
+        try {
+          messages.push(JSON.parse(data) as unknown);
+        } catch {
+          // skip
+        }
+      }
+      return { ok: true, status: res.status, contentType, body: messages, raw };
+    }
+    try {
+      return { ok: true, status: res.status, contentType, body: JSON.parse(raw) as unknown, raw };
+    } catch {
+      return { ok: true, status: res.status, contentType, body: { text: raw }, raw };
+    }
+  } finally {
+    await close();
   }
 }
 

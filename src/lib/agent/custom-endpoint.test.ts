@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanCustomModel, isPrivateAddress, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
+import { cleanCustomModel, isMetadataAddress, isPrivateAddress, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
 import { assertFetchableBase } from "./custom-endpoint.server.ts";
 
 test("normalizeCustomBase accepts the three presets and strips a completions suffix", () => {
@@ -24,6 +24,11 @@ test("isPrivateAddress covers metadata and carrier-grade NAT", () => {
   assert.equal(isPrivateAddress("169.254.169.254"), true);
   assert.equal(isPrivateAddress("100.64.0.1"), true);
   assert.equal(isPrivateAddress("8.8.8.8"), false);
+  assert.equal(isPrivateAddress("::ffff:a9fe:a9fe"), true);
+  assert.equal(isPrivateAddress("[::ffff:169.254.169.254]"), true);
+  assert.equal(isMetadataAddress("169.254.169.254"), true);
+  assert.equal(isMetadataAddress("metadata.google.internal"), true);
+  assert.equal(isMetadataAddress("10.0.0.1"), false);
 });
 
 test("cleanCustomModel allows vendor/name and rejects blanks", () => {

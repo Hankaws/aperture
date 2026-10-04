@@ -85,7 +85,7 @@ const FAQ = [
   },
   {
     q: "How do I take the code with me?",
-    a: "Download a zip from the Open menu, the command palette, or ⌘S / Ctrl+S. Secrets like .env never enter the zip. Apply is not final — Undo this run restores the files from before that Composer send.",
+    a: "Download a zip from the Open menu or the command palette. Secrets like .env never enter the zip. Apply is not final — Undo this run restores the files from before that Composer send.",
   },
   {
     q: "Is there a paid plan?",

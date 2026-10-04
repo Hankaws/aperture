@@ -67,12 +67,10 @@ export function HelpDialog() {
     [`${mod}K`, "Inline edit on the selection"],
     [`${mod}Enter`, "Apply the change in this file"],
     ["F8", "Next review hunk · Shift previous · Alt next file"],
-    ["Enter / Backspace", "Keep this hunk · drop this hunk"],
     ["/review /fix /explain", "Slash commands in Composer"],
     ["Tab", "Accept ghost text (Pro)"],
     [`${mod}→`, "Accept the next ghost word"],
     [`${mod}Space`, "Workspace symbols"],
-    [`${mod}S`, "Download a zip"],
     [`${mod}/`, "This guide"],
   ];
 
@@ -95,7 +93,7 @@ export function HelpDialog() {
           ))}
         </ol>
         <p className="mt-4 text-sm leading-relaxed text-muted">
-          Highlight code, then Explain or Fix. Ask never writes. Composer always waits for Build it — unless you click Build now.
+          Highlight code, then Explain or Fix. Ask never writes. Composer plans first, then waits for Build it.
         </p>
         <ul className="mt-5 space-y-2 border-t border-border pt-4">
           {rows.map(([key, label]) => (

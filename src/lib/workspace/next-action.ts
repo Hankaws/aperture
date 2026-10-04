@@ -98,7 +98,7 @@ export function nextAction(input: {
     return {
       kind: "review",
       title: `Review ${input.pending} staged ${input.pending === 1 ? "file" : "files"}`,
-      detail: "Enter keeps a hunk, Backspace drops it. F8 jumps. Apply when notes are clear.",
+      detail: "F8 jumps between hunks. Apply when the checks are clear.",
       cta: "Open review",
     };
   }

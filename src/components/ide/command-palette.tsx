@@ -144,7 +144,7 @@ export function CommandPalette() {
               className="cmdk-item flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
             >
               <Palette className="size-3.5 text-subtle" />
-              {theme === "claude" ? "Theme: Cursor" : "Theme: Claude"}
+              {theme === "claude" ? "Theme: Cool" : "Theme: Warm"}
             </Command.Item>
             <Command.Item
               onSelect={() => {

@@ -17,6 +17,7 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
   const [draft, setDraft] = useState("");
   const pending = edit.status === "pending";
   const checksOpen = useIdeUi((s) => s.checkHint?.state) === "clear";
+  const running = useWorkspace((s) => s.agentRunning);
   const lines = lineDiff(edit.oldText, edit.newText).filter((l, i, arr) => {
     if (l.type !== "eq") return true;
     const prev = arr[i - 1]?.type;
@@ -76,8 +77,8 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
             <Button
               size="sm"
               className="h-7 px-2.5"
-              disabled={notes.length > 0 || !checksOpen}
-              title={notes.length > 0 ? "Send or dismiss notes first" : !checksOpen ? "Waiting for the checks" : undefined}
+              disabled={running || notes.length > 0 || !checksOpen}
+              title={running ? "Wait until this turn finishes" : notes.length > 0 ? "Send or dismiss notes first" : !checksOpen ? "Waiting for the checks" : undefined}
               onClick={() => applyEdit(edit)}
             >
               <Check className="size-3.5" />

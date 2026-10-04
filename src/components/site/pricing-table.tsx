@@ -32,8 +32,11 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
     }
   }
 
+  const sellable = PLANS.some((plan) => planAvailable(plan) && plan.monthly > 0);
+
   return (
     <div>
+      {sellable && (
       <div className="mb-8 flex justify-center">
         <div className="flex rounded-lg border border-border p-1">
           <button
@@ -52,6 +55,7 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
           </button>
         </div>
       </div>
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => {
           const price = yearly ? plan.yearlyMonthly : plan.monthly;
@@ -73,8 +77,14 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
               </div>
               <p className="mt-1 text-sm text-muted">{plan.blurb}</p>
               <p className="mt-5 font-medium tracking-tight">
-                <span className="text-4xl">${price}</span>
-                <span className="text-sm text-muted"> / mo</span>
+                {comingSoon ? (
+                  <span className="text-2xl">Not for sale</span>
+                ) : (
+                  <>
+                    <span className="text-4xl">${price}</span>
+                    <span className="text-sm text-muted"> / mo</span>
+                  </>
+                )}
               </p>
               {comingSoon ? (
                 <p className="mt-1 text-xs text-subtle">Not available yet. Nothing is charged.</p>

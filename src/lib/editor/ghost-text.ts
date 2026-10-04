@@ -2,6 +2,7 @@ import { Prec, StateEffect, StateField, type Extension } from "@codemirror/state
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type ViewUpdate } from "@codemirror/view";
 import { requestTabCompletion } from "@/lib/agent/tab";
 import { EDITOR } from "@/lib/editor/theme";
+import { useIdeUi } from "@/lib/ui-store";
 import { takeGhostWord } from "./ghost-word";
 class GhostWidget extends WidgetType {
   constructor(readonly text: string) {
@@ -109,16 +110,22 @@ export function ghostText(path: () => string | null): Extension[] {
         const abort = new AbortController();
         inflight = abort;
         try {
-          const text = await requestTabCompletion({ path: filePath, prefix, suffix }, abort.signal);
+          const result = await requestTabCompletion({ path: filePath, prefix, suffix }, abort.signal);
           if (abort.signal.aborted) return;
           if (this.view.state.selection.main.head !== pos) return;
           lastKey = key;
-          const next = text ?? "";
+          const next = result.text ?? "";
+          if (result.reason) {
+            useIdeUi.getState().setTabNote(result.reason);
+            return;
+          }
           clientSet(key, next);
+          useIdeUi.getState().setTabNote(null);
           if (!next) return;
           this.view.dispatch({ effects: setGhost.of(next) });
         } catch {
-          // ignore abort / network
+          if (abort.signal.aborted) return;
+          useIdeUi.getState().setTabNote("Tab did not answer.");
         }
       }
       destroy() {

@@ -51,7 +51,7 @@ export function ReviewStrip() {
   const checkState = useIdeUi((s) => s.checkHint?.state);
   const checksOpen = checkState === "clear";
   const shownCopy = activeCopyOf(openIds, activeCopyId);
-  if (running || rows.length === 0) return null;
+  if (rows.length === 0) return null;
 
   function jump(path: string, detail?: string) {
     openFile(path);
@@ -90,7 +90,7 @@ export function ReviewStrip() {
           <span className="text-fg">Review</span>
           <span className="text-subtle">
             {" "}
-            · {rows.length} {rows.length === 1 ? "file" : "files"} · Enter keep · Backspace skip
+            · {rows.length} {rows.length === 1 ? "file" : "files"} · F8 next hunk{running ? " · still writing" : ""}
             {noteCount > 0 ? ` · ${noteCount} notes` : ""}
           </span>
         </p>
@@ -122,9 +122,11 @@ export function ReviewStrip() {
         <Button
           size="sm"
           className="h-7 px-2.5"
-          disabled={!checksOpen || noteCount > 0}
+          disabled={running || !checksOpen || noteCount > 0}
           title={
-            !checkState || checkState === "running"
+            running
+              ? "Wait until this turn finishes"
+              : !checkState || checkState === "running"
               ? "Waiting for the checks"
               : checkState === "failed"
                 ? "A check is red"
@@ -178,7 +180,7 @@ export function ReviewStrip() {
                   Dismiss
                 </Button>
               ) : (
-                <Button size="sm" className="h-7 px-2" disabled={!checksOpen} title={checksOpen ? undefined : "Waiting for the checks"} onClick={() => applyEdit(edit)}>
+                <Button size="sm" className="h-7 px-2" disabled={running || !checksOpen} title={running ? "Wait until this turn finishes" : checksOpen ? undefined : "Waiting for the checks"} onClick={() => applyEdit(edit)}>
                   Apply
                 </Button>
               )}

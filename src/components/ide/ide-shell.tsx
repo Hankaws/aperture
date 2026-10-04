@@ -27,7 +27,6 @@ import { jumpReview } from "@/lib/editor/review-jump";
 import { useIdeUi, hydrateAppearance } from "@/lib/ui-store";
 import { RESIZE_TARGET, usePanelLayout } from "@/lib/use-panel-layout";
 import { cn, isModEvent, modSymbol } from "@/lib/utils";
-import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { useWorkspace } from "@/lib/workspace/store";
 
 function useKeyboardInset() {
@@ -316,7 +315,24 @@ export function IdeShell() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        if (document.querySelector(".cm-panel.cm-search")) return;
         const ui = useIdeUi.getState();
+        if (ui.commandOpen) {
+          ui.setCommandOpen(false);
+          return;
+        }
+        if (ui.inlineOpen) {
+          ui.setInlineOpen(false);
+          return;
+        }
+        if (ui.helpOpen) {
+          ui.setHelpOpen(false);
+          return;
+        }
+        if (ui.newFileOpen) {
+          ui.setNewFileOpen(false);
+          return;
+        }
         if (ui.githubOpen) {
           ui.setGithubOpen(false);
           return;
@@ -327,12 +343,7 @@ export function IdeShell() {
         }
         if (ui.designOpen) {
           ui.setDesignOpen(false);
-          return;
         }
-        ui.setCommandOpen(false);
-        ui.setInlineOpen(false);
-        ui.setHelpOpen(false);
-        ui.setNewFileOpen(false);
         return;
       }
       if (e.key === "F8") {
@@ -365,9 +376,7 @@ export function IdeShell() {
         setHelpOpen(true);
       } else if (key === "s") {
         e.preventDefault();
-        void downloadCurrentWorkspace()
-          .then((r) => toast.success(`Downloaded ${r.name} · ${r.count} files`))
-          .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not download"));
+        toast.success("Saved", { id: "workspace-saved" });
       }
     }
     window.addEventListener("keydown", onKey);

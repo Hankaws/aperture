@@ -61,6 +61,54 @@ function firstIssue(rows: Array<{ path: string; issues: string[] }>): { detail: 
   };
 }
 
+/**
+ * The issues a change brought in. The applied file's own issues are not blamed
+ * on it, the way a test that already failed is not. Lines move with the edit,
+ * so issues are compared without their line numbers, and counted: a second use
+ * of an undeclared name is still new.
+ */
+export function newIssues(after: string[], before: string[]): string[] {
+  const key = (issue: string) => issue.replace(/ at line \d+:?/, "");
+  const left = new Map<string, number>();
+  for (const issue of before) left.set(key(issue), (left.get(key(issue)) ?? 0) + 1);
+  return after.filter((issue) => {
+    const n = left.get(key(issue)) ?? 0;
+    if (n === 0) return true;
+    left.set(key(issue), n - 1);
+    return false;
+  });
+}
+
+type FileIssues = { path: string; issues: string[]; fresh: string[] };
+
+function judged(
+  paths: string[],
+  check: (path: string, files: Record<string, string>) => string[],
+  snapshot: Record<string, string>,
+  files: Record<string, string>,
+): FileIssues[] {
+  return paths
+    .map((path) => {
+      const issues = check(path, snapshot);
+      const before = files[path] === undefined || issues.length === 0 ? [] : check(path, files);
+      return { path, issues, fresh: newIssues(issues, before) };
+    })
+    .filter((row) => row.issues.length > 0);
+}
+
+/** Red for issues this change brought in; amber, not blocking, for issues the file already had. */
+function judgedRow(
+  id: CheckId,
+  label: string,
+  rows: FileIssues[],
+): Pick<CheckRow, "id" | "label" | "status" | "detail" | "path"> | null {
+  const fresh = rows.filter((row) => row.fresh.length > 0).map((row) => ({ path: row.path, issues: row.fresh }));
+  if (fresh.length > 0) return { id, label, status: "fail", ...firstIssue(fresh) };
+  if (rows.length === 0) return null;
+  const first = firstIssue(rows);
+  return { id, label, status: "warn", detail: `Already there before this change: ${first.detail}`, path: first.path };
+}
+
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -125,16 +173,18 @@ export function changeChecks(input: {
   // A file that does not parse yields a partial import list; judging imports
   // then would bury the real cause under a second failure.
   const parsed = scripts.filter((p) => !broken.some((r) => r.path === p));
-  const unresolved = parsed
-    .map((path) => ({ path, issues: importIssues(path, snapshot) }))
-    .filter((r) => r.issues.length > 0);
+  const unresolved = judgedRow(
+    "imports",
+    "Imports resolve",
+    judged(parsed, (path, set) => importIssues(path, set), snapshot, files),
+  );
   const imports: CheckRow =
     scripts.length === 0
       ? { id: "imports", label: "Imports resolve", status: "skip", detail: "No scripts in this change." }
       : parsed.length === 0
         ? { id: "imports", label: "Imports resolve", status: "skip", detail: "Checked once the scripts parse." }
-        : unresolved.length > 0
-          ? { id: "imports", label: "Imports resolve", status: "fail", ...firstIssue(unresolved) }
+        : unresolved
+          ? unresolved
           : {
               id: "imports",
               label: "Imports resolve",
@@ -143,16 +193,18 @@ export function changeChecks(input: {
             };
 
   const typed = checkable.filter((path) => isTypePath(path) && !broken.some((row) => row.path === path));
-  const mistyped = typed
-    .map((path) => ({ path, issues: typeIssues(path, snapshot[path] ?? "", snapshot) }))
-    .filter((row) => row.issues.length > 0);
+  const mistyped = judgedRow(
+    "types",
+    "Types",
+    judged(typed, (path, set) => typeIssues(path, set[path] ?? "", set), snapshot, files),
+  );
   const types: CheckRow =
     !checkable.some(isTypePath)
       ? { id: "types", label: "Types", status: "skip", detail: "No TypeScript in this change." }
       : typed.length === 0
         ? { id: "types", label: "Types", status: "skip", detail: "Checked once the TypeScript parses." }
-        : mistyped.length > 0
-          ? { id: "types", label: "Types", status: "fail", ...firstIssue(mistyped) }
+        : mistyped
+          ? mistyped
           : {
               id: "types",
               label: "Types",

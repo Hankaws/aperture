@@ -3,7 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { safeRelPath } from "@/lib/security/redact";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
-import { cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
+import { blobModes, cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
 import type { GithubReviewComment } from "./review";
 
 export type GithubImportResult =
@@ -173,6 +173,12 @@ export const publishGithub = createServerFn({ method: "POST" })
       if (parent.status !== 200) return { ok: false, error: "Could not read the commit you opened." };
       const baseTree = String((parent.body as { tree?: { sha?: string } }).tree?.sha ?? "");
       if (!baseTree) return { ok: false, error: "Could not read the commit you opened." };
+      // Keep each file's mode: writing every blob as 100644 drops a script's executable bit.
+      const listing = await githubJson(
+        `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/trees/${baseTree}?recursive=1`,
+        token,
+      );
+      const modes = blobModes(listing.status === 200 ? (listing.body as { tree?: unknown }).tree : null);
       const tree = [];
       for (const change of changes) {
         if ("deleted" in change) {
@@ -186,7 +192,7 @@ export const publishGithub = createServerFn({ method: "POST" })
         if (blob.status !== 201) return { ok: false, error: `Could not write ${change.path}.` };
         const sha = String((blob.body as { sha?: string }).sha ?? "");
         if (!sha) return { ok: false, error: `Could not write ${change.path}.` };
-        tree.push({ path: change.path, mode: "100644", type: "blob", sha });
+        tree.push({ path: change.path, mode: modes.get(change.path) ?? "100644", type: "blob", sha });
       }
       const nextTree = await githubJson(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/trees`, token, {
         method: "POST",
@@ -287,12 +293,19 @@ export const clearGithubAccount = createServerFn({ method: "POST" })
 
 export const postGithubReview = createServerFn({ method: "POST" })
   .validator(
-    (input: { owner: string; repo: string; pull: number; sha: string; body: string; comments: GithubReviewComment[] }) =>
-      input,
+    (input: {
+      token?: string;
+      owner: string;
+      repo: string;
+      pull: number;
+      sha: string;
+      body: string;
+      comments: GithubReviewComment[];
+    }) => input,
   )
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
-    const token = await useToken(context.userId);
+    const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
     if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };
@@ -341,11 +354,12 @@ export const postGithubReview = createServerFn({ method: "POST" })
 
 export const mergeGithub = createServerFn({ method: "POST" })
   .validator(
-    (input: { owner: string; repo: string; base: string; head: string; pull?: number; message: string }) => input,
+    (input: { token?: string; owner: string; repo: string; base: string; head: string; pull?: number; message: string }) =>
+      input,
   )
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubPublishResult> => {
-    const token = await useToken(context.userId);
+    const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
     if (!parsed || parsed.ref) return { ok: false, error: "That repo name is not valid." };

@@ -49,8 +49,11 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
         setError(result.error);
         return;
       }
+      // After a pull request, the project follows its branch: the next push updates
+      // that pull request instead of fast-forwarding the base onto it unreviewed.
       useWorkspace.getState().setGithub({
         ...github,
+        branch: result.branch,
         sha: result.sha,
         pull: result.pull ?? github.pull,
         stamps: stampFiles(useWorkspace.getState().files),
@@ -59,7 +62,15 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
       const pull = result.pull ?? github.pull;
       if (mode === "pr" && pull && review) {
         const posted = await postGithubReview({
-          data: { owner: github.owner, repo: github.repo, pull, sha: result.sha, body: review.body, comments: review.comments },
+          data: {
+            token: readGithubToken() ?? undefined,
+            owner: github.owner,
+            repo: github.repo,
+            pull,
+            sha: result.sha,
+            body: review.body,
+            comments: review.comments,
+          },
         });
         if (!posted.ok) setError(posted.error);
         else toast.success(`Review posted on #${pull}`);
@@ -80,6 +91,7 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
     try {
       const posted = await postGithubReview({
         data: {
+          token: readGithubToken() ?? undefined,
           owner: github.owner,
           repo: github.repo,
           pull: github.pull,
@@ -109,6 +121,7 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
     try {
       const result = await mergeGithub({
         data: {
+          token: readGithubToken() ?? undefined,
           owner: github.owner,
           repo: github.repo,
           base,

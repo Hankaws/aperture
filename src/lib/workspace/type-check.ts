@@ -34,7 +34,32 @@ const GLOBALS = new Set([
   "FileReader", "ReadableStream", "WritableStream", "TransformStream", "MessageChannel", "MessagePort",
   "cancelAnimationFrame", "DOMException", "RTCPeerConnection", "RTCSessionDescription", "RTCIceCandidate",
   "PopStateEvent",
+  // Test runners (Vitest and Jest globals; the editor's own test runner provides them).
+  "describe", "it", "test", "expect", "vi", "jest", "beforeEach", "afterEach", "beforeAll", "afterAll",
+  "suite", "bench", "expectTypeOf", "assertType",
+  // Node and CommonJS.
+  "require", "module", "exports", "__dirname", "__filename", "setImmediate", "clearImmediate",
+  // Other runtimes, and the function-scoped `arguments`.
+  "Deno", "Bun", "arguments",
+  // Window members code calls bare.
+  "addEventListener", "removeEventListener", "dispatchEvent", "scrollTo", "scrollBy", "getComputedStyle",
+  "matchMedia", "alert", "confirm", "prompt", "requestIdleCallback", "cancelIdleCallback", "caches",
+  "indexedDB", "screen", "innerWidth", "innerHeight", "devicePixelRatio", "File", "FileList",
+  "BroadcastChannel", "AudioContext", "OffscreenCanvas", "ImageData", "CSS", "Range", "Selection",
 ]);
+
+/** DOM classes come in families too large to list: `KeyboardEvent`, `HTMLInputElement`, `PerformanceObserver`. */
+const GLOBAL_FAMILY = /^(?:[A-Z]\w*(?:Event|Observer|Element|Stream|Error)|HTML\w+|SVG\w+|CSS\w+|DOM\w+|WebGL\w+|RTC\w+)$/;
+
+/** A lone capital is a type parameter the parser read as a value (`async <T>(…) =>`). */
+const TYPE_PARAM = /^[A-Z]$/;
+
+/** Contextual keywords the parser can leave as names (`async <T>(…)`, `yield` in a generator). */
+const KEYWORDS = new Set(["async", "await", "yield", "of", "as", "satisfies", "from"]);
+
+function isGlobal(name: string): boolean {
+  return GLOBALS.has(name) || GLOBAL_FAMILY.test(name) || TYPE_PARAM.test(name) || KEYWORDS.has(name);
+}
 
 type Sig = { required: number; total: number; rest: boolean };
 
@@ -150,7 +175,8 @@ function paramsOf(list: SyntaxNode | null): Sig {
       restNext = true;
       continue;
     }
-    if (child.name !== "VariableDefinition") continue;
+    // A destructured parameter (`{ a, b }` or `[a, b]`) is one argument like any other.
+    if (child.name !== "VariableDefinition" && child.name !== "ObjectPattern" && child.name !== "ArrayPattern") continue;
     if (restNext) {
       sig.rest = true;
       restNext = false;
@@ -159,7 +185,15 @@ function paramsOf(list: SyntaxNode | null): Sig {
     let isOptional = kids(child).some((part) => part.name === "Optional" || part.name === "Equals");
     for (let j = i + 1; j < parts.length; j += 1) {
       const next = parts[j]!;
-      if (next.name === "," || next.name === "VariableDefinition" || next.name === ")") break;
+      if (
+        next.name === "," ||
+        next.name === "VariableDefinition" ||
+        next.name === "ObjectPattern" ||
+        next.name === "ArrayPattern" ||
+        next.name === ")"
+      ) {
+        break;
+      }
       if (next.name === "Optional" || next.name === "Equals") isOptional = true;
     }
     sig.total += 1;
@@ -193,6 +227,17 @@ function collectSignatures(files: Record<string, string>): Map<string, Sig | "ma
       continue;
     }
     if (treeHasError(tree)) continue;
+    // A name defined twice in a file (a function and a parameter of the same
+    // name, say) can mean either at a call site: no count is certain.
+    const defined = new Map<string, number>();
+    tree.iterate({
+      enter(node) {
+        if (node.name !== "VariableDefinition") return;
+        const name = text.slice(node.from, node.to);
+        defined.set(name, (defined.get(name) ?? 0) + 1);
+      },
+    });
+    for (const [name, count] of defined) if (count > 1) map.set(name, "many");
     tree.iterate({
       enter(node) {
         if (node.name === "FunctionDeclaration") {
@@ -241,6 +286,14 @@ function insideExportAlias(node: SyntaxNode): boolean {
   return node.prevSibling?.name === "as";
 }
 
+/** `export { a, b as c } from "./x"` names another module's exports, not this file's bindings. */
+function insideReexport(node: SyntaxNode): boolean {
+  const parent = node.parent;
+  // `export * as ns from "./x"`: the name sits right in the declaration.
+  const decl = parent?.name === "ExportGroup" ? parent.parent : parent;
+  return Boolean(decl && decl.name === "ExportDeclaration" && kids(decl).some((child) => child.name === "from"));
+}
+
 function insideImport(node: SyntaxNode): boolean {
   let parent = node.parent;
   while (parent) {
@@ -270,6 +323,7 @@ function argCount(list: SyntaxNode): number | null {
   let count = 0;
   for (const child of kids(list)) {
     if (child.name === "(" || child.name === ")" || child.name === ",") continue;
+    if (child.name === "LineComment" || child.name === "BlockComment") continue;
     if (child.name === "Spread") return null;
     count += 1;
   }
@@ -368,9 +422,15 @@ export function typeIssues(path: string, input: string, files: Record<string, st
         }
         return;
       }
-      if (node.name === "VariableName" && !insideType(node.node) && !insideImport(node.node) && !insideExportAlias(node.node)) {
+      if (
+        node.name === "VariableName" &&
+        !insideType(node.node) &&
+        !insideImport(node.node) &&
+        !insideExportAlias(node.node) &&
+        !insideReexport(node.node)
+      ) {
         const name = text.slice(node.from, node.to);
-        if (bindings.has(name) || GLOBALS.has(name)) return;
+        if (bindings.has(name) || isGlobal(name)) return;
         pushIssue(issues, starts, node.from, `cannot find name ${name}`);
         return;
       }
@@ -379,7 +439,7 @@ export function typeIssues(path: string, input: string, files: Record<string, st
         if (parent?.name === "JSXAttribute") return;
         if (parent?.name === "JSXMemberExpression" && parent.firstChild !== node.node) return;
         const name = text.slice(node.from, node.to);
-        if (!/^[A-Z]/.test(name) || bindings.has(name) || GLOBALS.has(name)) return;
+        if (!/^[A-Z]/.test(name) || bindings.has(name) || isGlobal(name)) return;
         pushIssue(issues, starts, node.from, `cannot find name ${name}`);
       }
     },

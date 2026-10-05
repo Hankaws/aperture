@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { publishGithub, mergeGithub, postGithubReview } from "@/lib/github/api";
 import { githubReview } from "@/lib/github/review";
-import { changesSince, readGithubToken, stampFiles } from "@/lib/github/roundtrip";
+import { changesSince, LESSONS_FILE, readGithubToken, sendable, stampsAfterSend } from "@/lib/github/roundtrip";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -23,7 +23,10 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState(commits.at(-1)?.message || "Update from Aperture");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"commit" | "pr" | "merge" | "review" | null>(null);
-  const changes = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
+  const [includeLessons, setIncludeLessons] = useState(false);
+  const all = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
+  const { send: changes, held } = useMemo(() => sendable(all, { includeLessons }), [all, includeLessons]);
+  const lessonsChanged = all.some((change) => change.path === LESSONS_FILE);
   const review = useMemo(() => githubReview(listPendingEdits(messages)), [messages]);
   const base = github?.defaultBranch || "main";
   const canMerge = Boolean(github && (github.pull || github.branch !== base));
@@ -56,7 +59,8 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
         branch: result.branch,
         sha: result.sha,
         pull: result.pull ?? github.pull,
-        stamps: stampFiles(useWorkspace.getState().files),
+        // Only what was sent is in the repository now; held-back lessons still differ.
+        stamps: stampsAfterSend(github.stamps, changes),
       });
       toast.success(mode === "pr" ? "Pull request opened" : `Pushed to ${github.branch}`);
       const pull = result.pull ?? github.pull;
@@ -173,7 +177,22 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
               {github.owner}/{github.repo} · {github.branch}
               {" · "}
               {changes.length === 0 ? "no changes" : `${changes.length} ${changes.length === 1 ? "file" : "files"}`}
+              {held.length > 0 ? " · lessons kept here" : ""}
             </p>
+            {lessonsChanged && (
+              <label className="mt-2 flex items-start gap-2 text-[12px] text-muted">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={includeLessons}
+                  onChange={(e) => setIncludeLessons(e.target.checked)}
+                />
+                <span>
+                  Include Composer&apos;s lessons ({LESSONS_FILE}). They are what it learned in this editor; leave them
+                  out to keep them yours.
+                </span>
+              </label>
+            )}
             {commits.length > 0 && (
               <ul className="mt-3 max-h-32 overflow-y-auto rounded-md border border-border">
                 {commits.slice(-5).map((commit) => {

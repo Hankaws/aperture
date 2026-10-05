@@ -1,3 +1,5 @@
+import { LESSONS_PATH } from "../workspace/lessons.ts";
+
 /** Where an opened project came from, plus a stamp of each file at that moment. */
 export type GithubOrigin = {
   owner: string;
@@ -27,6 +29,37 @@ export function stampFiles(files: Record<string, string>): Record<string, string
   const stamps: Record<string, string> = {};
   for (const [path, text] of Object.entries(files)) stamps[path] = fileStamp(text);
   return stamps;
+}
+
+/**
+ * The agent's lessons for this project (`.aperture/lessons.md`): what Composer
+ * learned in this editor. They stay out of what is sent to GitHub unless the
+ * person ticks them in, so a teammate's repository does not fill with one
+ * person's notes.
+ */
+export const LESSONS_FILE = LESSONS_PATH;
+
+/** What to send, and what is held back because it is only this editor's. */
+export function sendable(changes: GithubChange[], opts: { includeLessons: boolean }): { send: GithubChange[]; held: GithubChange[] } {
+  if (opts.includeLessons) return { send: changes, held: [] };
+  return {
+    send: changes.filter((change) => change.path !== LESSONS_FILE),
+    held: changes.filter((change) => change.path === LESSONS_FILE),
+  };
+}
+
+/**
+ * The repository's files after a send: the stamps as they were, with only
+ * what was sent updated. A held-back file still differs from the repository,
+ * and a file edited while the send was in flight is still unsent.
+ */
+export function stampsAfterSend(stamps: Record<string, string>, sent: GithubChange[]): Record<string, string> {
+  const next = { ...stamps };
+  for (const change of sent) {
+    if ("deleted" in change) delete next[change.path];
+    else next[change.path] = fileStamp(change.content);
+  }
+  return next;
 }
 
 /** Files that differ from the commit that was opened. Unchanged files are left out. */

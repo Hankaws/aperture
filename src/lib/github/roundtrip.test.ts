@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { blobModes, changesSince, cleanGithubToken, fileStamp, stampFiles } from "./roundtrip.ts";
+import { blobModes, changesSince, cleanGithubToken, fileStamp, sendable, stampFiles, stampsAfterSend } from "./roundtrip.ts";
 
 test("changesSince reports edits, new files, and deletions", () => {
   const files = { "a.ts": "one", "b.ts": "two" };
@@ -43,4 +43,29 @@ test("blobModes keeps executables and symlinks, and nothing else", () => {
   ]);
   assert.equal(blobModes(null).size, 0);
   assert.equal(blobModes({ message: "Not Found" }).size, 0);
+});
+
+test("Composer's lessons stay out of a send unless they are ticked in", () => {
+  const changes = [
+    { path: ".aperture/lessons.md", content: "# Lessons" },
+    { path: "src/a.ts", content: "a" },
+  ];
+  assert.deepEqual(
+    sendable(changes, { includeLessons: false }),
+    { send: [changes[1]], held: [changes[0]] },
+  );
+  assert.deepEqual(sendable(changes, { includeLessons: true }), { send: changes, held: [] });
+});
+
+test("after a send only what was sent counts as in the repository", () => {
+  const stamps = stampFiles({ "src/a.ts": "old", "src/gone.ts": "x", ".aperture/lessons.md": "old lessons" });
+  const files = { "src/a.ts": "new", ".aperture/lessons.md": "new lessons" };
+  const sent = sendable(changesSince(stamps, files), { includeLessons: false }).send;
+  const next = stampsAfterSend(stamps, sent);
+  // The sent edit and deletion are recorded; the held-back lessons still differ.
+  assert.deepEqual(
+    changesSince(next, files).map((change) => change.path),
+    [".aperture/lessons.md"],
+  );
+  assert.equal(next["src/gone.ts"], undefined);
 });

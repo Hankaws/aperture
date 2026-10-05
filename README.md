@@ -40,7 +40,8 @@ local in-process database (PGlite), so nothing else needs setting up.
 - **Plan, then build.** Composer reads the code, posts a plan, and waits for
   **Build it**. You can reword, reorder, remove or add steps first. Edits
   arrive as staged diffs you keep or skip file by file. Nothing touches your
-  files until you apply.
+  files until you apply. Turn off **Plan first** to have Composer edit
+  straight away; either way, nothing is applied until you Apply.
 - **An agent board.** Every run (its plan, Build it, the test runs and
   automatic fix that answer it) is one card: working, needs you, review or
   done, with background jobs alongside. Two runs with staged changes can be
@@ -144,6 +145,9 @@ local in-process database (PGlite), so nothing else needs setting up.
     rules that style the element and the page's tokens.
   - Every edit session is one undo step, and the preview can be shown at
     phone and tablet widths.
+- **Composer's lessons stay yours.** What Composer learns in a project
+  (`.aperture/lessons.md`) is left out of what is sent to GitHub unless you
+  tick it in, so a shared repository does not fill with one person's notes.
 - **Pull requests driven to green.** After **Open PR**, the status bar shows
   the pull request's CI. When a check fails, the dialog lists where GitHub
   pinned it and the end of the job's log. **Fix with Composer** sends all of

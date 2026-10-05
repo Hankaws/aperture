@@ -10,7 +10,7 @@ import { useAccount } from "@/lib/billing/use-account";
 import { quoteRun, replayQuote } from "@/lib/billing/cost";
 import { githubChecks, publishGithub } from "@/lib/github/api";
 import { ciFixLabel, ciFixPrompt, type CiCheck, type CiOverall } from "@/lib/github/ci";
-import { changesSince, readGithubToken, stampFiles } from "@/lib/github/roundtrip";
+import { changesSince, readGithubToken, sendable, stampsAfterSend } from "@/lib/github/roundtrip";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { useWorkspace } from "@/lib/workspace/store";
 
@@ -191,7 +191,8 @@ function PrChecks() {
   const { account, refresh: refreshAccount } = useAccount();
   const [pushing, setPushing] = useState(false);
   const changes = useMemo(
-    () => (github ? changesSince(github.stamps, files) : []),
+    // Composer's lessons stay in this editor here too: they never block a CI fix or ride along with one.
+    () => (github ? sendable(changesSince(github.stamps, files), { includeLessons: false }).send : []),
     [github, files],
   );
   const staged = useMemo(() => listPendingEdits(messages).length, [messages]);
@@ -259,7 +260,7 @@ function PrChecks() {
       useWorkspace.getState().setGithub({
         ...origin,
         sha: result.sha,
-        stamps: stampFiles(useWorkspace.getState().files),
+        stamps: stampsAfterSend(origin.stamps, changes),
       });
       toast.success(`Pushed to #${origin.pull}. Watching its checks.`);
     } catch (error) {

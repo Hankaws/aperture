@@ -193,6 +193,8 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
       try {
         const { pathsToCheck, typecheckChange } = await import("@/lib/workspace/tsc");
         const outcome = await typecheckChange(merged, files, pathsToCheck(merged, tsPaths), controller.signal);
+        // A newer change owns the margin now.
+        if (controller.signal.aborted) return;
         setSettled({ key, outcome });
         useIdeUi.getState().setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before } : null);
       } catch {

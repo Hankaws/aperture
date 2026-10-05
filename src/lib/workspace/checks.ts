@@ -13,6 +13,7 @@ import { isScriptPath } from "./syntax-check.ts";
 import { isTypePath, typeIssues } from "./type-check.ts";
 import type { TscOutcome } from "./tsc";
 import type { HookRun } from "./hooks.ts";
+import { excerpt } from "../runner/stack.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
@@ -30,13 +31,15 @@ export type CheckRow = {
   detail: string;
   /** The file to open for a failure, when there is one. */
   path?: string;
+  /** For a red row: what the editor saw, in full (every issue, a stack, the code where it broke). Sent with a fix. */
+  evidence?: string;
 };
 
 /** How the staged version of the page rendered, off screen. `null`: nothing to render. */
 export type RenderResult =
   | null
   | { state: "pending" }
-  | { state: "done"; errors: string[]; blank: boolean }
+  | { state: "done"; errors: string[]; blank: boolean; evidence?: string }
   | { state: "timeout" };
 
 /** The project's tests, run in this browser tab against the staged files. */
@@ -54,6 +57,8 @@ export type BrowserTests =
       pass?: number;
       /** The applied files fail the same way: this change did not break it. */
       preexisting?: boolean;
+      /** What failed in full, for a fix (see runner/stack.ts). */
+      evidence?: string;
     };
 
 const BROWSER_SCRIPT = /\.m?js$/i;
@@ -65,6 +70,17 @@ function firstIssue(rows: Array<{ path: string; issues: string[] }>): { detail: 
     detail: `${first.path}: ${first.issues[0]}${more > 0 ? ` (+${more} more)` : ""}`,
     path: first.path,
   };
+}
+
+/** Every issue, by file, with the code at the first one: what a fix needs that one line leaves out. */
+export function issueEvidence(rows: Array<{ path: string; issues: string[] }>, files: Record<string, string>): string {
+  const lines: string[] = [];
+  for (const row of rows) for (const issue of row.issues) lines.push(`${row.path}: ${issue}`);
+  const listed = lines.slice(0, 15).join("\n") + (lines.length > 15 ? `\n(+${lines.length - 15} more)` : "");
+  const first = rows[0];
+  const at = first ? /\bat line (\d+)/.exec(first.issues[0] ?? "") : null;
+  const code = first && at && files[first.path] !== undefined ? excerpt(files[first.path]!, Number(at[1])) : "";
+  return code ? `${listed}\n${first!.path}:\n${code}` : listed;
 }
 
 /**
@@ -107,9 +123,10 @@ function judgedRow(
   id: CheckId,
   label: string,
   rows: FileIssues[],
-): Pick<CheckRow, "id" | "label" | "status" | "detail" | "path"> | null {
+  files: Record<string, string> = {},
+): Pick<CheckRow, "id" | "label" | "status" | "detail" | "path" | "evidence"> | null {
   const fresh = rows.filter((row) => row.fresh.length > 0).map((row) => ({ path: row.path, issues: row.fresh }));
-  if (fresh.length > 0) return { id, label, status: "fail", ...firstIssue(fresh) };
+  if (fresh.length > 0) return { id, label, status: "fail", ...firstIssue(fresh), evidence: issueEvidence(fresh, files) };
   if (rows.length === 0) return null;
   const first = firstIssue(rows);
   return { id, label, status: "warn", detail: `Already there before this change: ${first.detail}`, path: first.path };
@@ -119,7 +136,7 @@ function judgedRow(
  * The Types row from real `tsc`. Like the other checks, an error the applied
  * files already had is amber, not blamed on the change.
  */
-function tscRow(tsc: Extract<TscCheck, { state: "done" }>, typed: string[]): CheckRow {
+function tscRow(tsc: Extract<TscCheck, { state: "done" }>, typed: string[], files: Record<string, string>): CheckRow {
   const paths = [...new Set([...typed, ...Object.keys(tsc.after)])];
   const rows: FileIssues[] = paths
     .map((path) => {
@@ -127,7 +144,7 @@ function tscRow(tsc: Extract<TscCheck, { state: "done" }>, typed: string[]): Che
       return { path, issues, fresh: newIssues(issues, tsc.before[path] ?? []) };
     })
     .filter((row) => row.issues.length > 0);
-  const judged = judgedRow("types", "Types", rows);
+  const judged = judgedRow("types", "Types", rows, files);
   if (judged) return judged;
   return {
     id: "types",
@@ -214,7 +231,7 @@ export function changeChecks(input: {
     checkable.length === 0
       ? { id: "parse", label: "Parses", status: "skip", detail: "No code, markup or JSON in this change." }
       : broken.length > 0
-        ? { id: "parse", label: "Parses", status: "fail", ...firstIssue(broken) }
+        ? { id: "parse", label: "Parses", status: "fail", ...firstIssue(broken), evidence: issueEvidence(broken, snapshot) }
         : { id: "parse", label: "Parses", status: "pass", detail: `${plural(checkable.length, "file")} parse.` };
 
   // A file that does not parse yields a partial import list; judging imports
@@ -224,6 +241,7 @@ export function changeChecks(input: {
     "imports",
     "Imports resolve",
     judged(parsed, (path, set) => importIssues(path, set), snapshot, files),
+    snapshot,
   );
   const imports: CheckRow =
     scripts.length === 0
@@ -244,6 +262,7 @@ export function changeChecks(input: {
     "types",
     "Types",
     judged(typed, (path, set) => typeIssues(path, set[path] ?? "", set), snapshot, files),
+    snapshot,
   );
   const tsc = input.tsc ?? null;
   const light: CheckRow = mistyped
@@ -262,7 +281,7 @@ export function changeChecks(input: {
         : tsc?.state === "running"
           ? { id: "types", label: "Types", status: "running", detail: "Type-checking with tsc…" }
           : tsc?.state === "done"
-            ? tscRow(tsc, typed)
+            ? tscRow(tsc, typed, snapshot)
             : tsc?.state === "unavailable"
               ? { ...light, detail: `${light.detail} (tsc did not run: ${tsc.reason})` }
               : light;
@@ -280,6 +299,7 @@ export function changeChecks(input: {
                 label: "Preview renders",
                 status: "fail",
                 detail: `${render.errors[0]}${render.errors.length > 1 ? ` (+${render.errors.length - 1} more)` : ""}`,
+                evidence: render.evidence || render.errors.join("\n"),
               }
             : render.blank
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
@@ -297,7 +317,13 @@ export function hookRow(run: HookRun): CheckRow {
   if (run.state === "unsupported") return { id, label, status: "skip", detail: `Not run: ${run.reason}` };
   if (run.passed) return { id, label, status: "pass", detail: `${command} passed in the browser.` };
   if (run.preexisting) return { id, label, status: "warn", detail: `Already failing before this change: ${run.detail}` };
-  return { id, label, status: "fail", detail: `${command} fails in the browser: ${run.detail}` };
+  return {
+    id,
+    label,
+    status: "fail",
+    detail: `${command} fails in the browser: ${run.detail}`,
+    ...(run.evidence ? { evidence: run.evidence } : {}),
+  };
 }
 
 function testLabel(script: string | null): string {
@@ -325,7 +351,13 @@ function browserRow(browser: Exclude<BrowserTests, null>): CheckRow {
       detail: `Already failing before this change: ${browser.detail}`,
     };
   }
-  return { id: "tests", label, status: "fail", detail: `npm run ${browser.script} fails in the browser: ${browser.detail}` };
+  return {
+    id: "tests",
+    label,
+    status: "fail",
+    detail: `npm run ${browser.script} fails in the browser: ${browser.detail}`,
+    ...(browser.evidence ? { evidence: browser.evidence } : {}),
+  };
 }
 
 /**
@@ -411,13 +443,39 @@ export function shouldLookAgain(
   return lookFailures(rows).length > 0;
 }
 
-/** What the agent is told. The person sees a shorter line in the chat. */
+/** Room for the evidence of every red row in one fix prompt. */
+export const LOOK_EVIDENCE_LIMIT = 6000;
+
+/** What the red rows saw, in full, within the limit: the first rows' evidence wins. */
+export function redEvidence(rows: CheckRow[]): string {
+  const parts: string[] = [];
+  let used = 0;
+  for (const row of rows) {
+    if (row.status !== "fail" || !row.evidence?.trim()) continue;
+    const part = `[${row.label}]\n${row.evidence.trim()}`;
+    const room = LOOK_EVIDENCE_LIMIT - used;
+    if (room < 200) break;
+    parts.push(part.length > room ? `${part.slice(0, room)}\n… (cut)` : part);
+    used += Math.min(part.length, room);
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * What the agent is told. The person sees a shorter line in the chat. The
+ * agent also gets what the editor saw: every issue, a stack mapped to the
+ * project's files, the code where it broke.
+ */
 export function lookPrompt(rows: CheckRow[]): string {
-  const line = lookFailures(rows)[0] ?? "A check is red.";
+  const failures = lookFailures(rows);
+  const evidence = redEvidence(rows);
   return [
-    line,
+    failures.length > 0 ? failures.join("\n") : "A check is red.",
+    evidence ? `What the editor saw:\n${evidence}` : "",
     "Fix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**

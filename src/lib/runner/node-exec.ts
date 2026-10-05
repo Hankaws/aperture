@@ -4,6 +4,7 @@
  * editor itself runs bundles in a sandboxed Worker (browser.ts).
  */
 import vm from "node:vm";
+import type { FailureDetail } from "./stack.ts";
 
 export type NodeRunDone = {
   type: "done";
@@ -13,6 +14,8 @@ export type NodeRunDone = {
   fail: number;
   firstFailure: string | null;
   failures: string[];
+  /** The first few failures in full: message and stack. */
+  details?: FailureDetail[];
   /** Set when the tests reached code the browser cannot run, such as a package that is not installed. */
   unsupported?: string | null;
   output: string;

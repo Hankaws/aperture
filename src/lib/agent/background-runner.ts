@@ -176,6 +176,7 @@ async function testsOn(
     detail: staged.detail,
     pass: staged.pass,
     preexisting,
+    ...(staged.evidence ? { evidence: staged.evidence } : {}),
   };
 }
 

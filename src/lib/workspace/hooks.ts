@@ -141,4 +141,6 @@ export type HookRun =
       /** Failing the same way before this change. Stage hooks only. */
       preexisting?: boolean;
       output?: string;
+      /** What failed in full, for a fix (see runner/stack.ts). */
+      evidence?: string;
     };

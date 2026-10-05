@@ -35,6 +35,13 @@ function spotFrom(
   };
 }
 
+/** The live preview's script errors, for the agent: what the running page says is wrong. */
+function runtimeFrom(errors: string[]): string | undefined {
+  if (errors.length === 0) return undefined;
+  const lines = errors.slice(0, 10).map((error) => `- ${error}`);
+  return `The live preview (the applied files) reports these script errors:\n${lines.join("\n")}`.slice(0, 4000);
+}
+
 function describeError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Request failed";
   if (/unauthorized/i.test(raw)) {
@@ -230,6 +237,7 @@ export function agentPayload(
     standing: readStanding().map((rule) => rule.line),
     refusals,
     spot: spotFrom(latest, useIdeUi.getState()),
+    runtime: runtimeFrom(useIdeUi.getState().previewErrors),
     userMove: formatUserMove({
       path: latest.selection?.path ?? latest.activePath,
       line: latest.selection?.fromLine ?? null,

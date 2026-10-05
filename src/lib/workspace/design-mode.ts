@@ -279,14 +279,15 @@ function injectFirst(html: string, script: string): string {
 /** Tells the editor about script errors in the live preview, once each. */
 export const ERROR_REPORTER_SCRIPT = `(() => {
   var seen = [];
-  function report(msg) {
+  function report(msg, error, line) {
     msg = String(msg || "Script error").slice(0, 180);
     if (seen.indexOf(msg) >= 0 || seen.length >= 20) return;
     seen.push(msg);
-    try { parent.postMessage({ type: "aperture-preview-error", message: msg }, "*"); } catch (e) {}
+    var stack = error && typeof error.stack === "string" ? error.stack.split("\\n").slice(0, 12).join("\\n") : "";
+    try { parent.postMessage({ type: "aperture-preview-error", message: msg, stack: stack, line: line || 0 }, "*"); } catch (e) {}
   }
-  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) report(e.message); });
-  window.addEventListener("unhandledrejection", function (e) { report(e.reason && e.reason.message ? e.reason.message : e.reason); });
+  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) report(e.message, e.error, e.lineno); });
+  window.addEventListener("unhandledrejection", function (e) { report(e.reason && e.reason.message ? e.reason.message : e.reason, e.reason, 0); });
 })();`;
 
 /**
@@ -297,14 +298,21 @@ export const ERROR_REPORTER_SCRIPT = `(() => {
  */
 export const RENDER_PROBE_SCRIPT = `(() => {
   var errors = [];
-  function add(msg) { msg = String(msg || "Script error").slice(0, 180); if (errors.indexOf(msg) < 0 && errors.length < 8) errors.push(msg); }
-  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) add(e.message); });
-  window.addEventListener("unhandledrejection", function (e) { add(e.reason && e.reason.message ? e.reason.message : e.reason); });
+  var details = [];
+  function add(msg, error, line) {
+    msg = String(msg || "Script error").slice(0, 180);
+    if (errors.indexOf(msg) >= 0 || errors.length >= 8) return;
+    errors.push(msg);
+    var stack = error && typeof error.stack === "string" ? error.stack.split("\\n").slice(0, 12).join("\\n") : "";
+    details.push({ message: msg, stack: stack, line: line || 0 });
+  }
+  window.addEventListener("error", function (e) { if (e instanceof ErrorEvent) add(e.message, e.error, e.lineno); });
+  window.addEventListener("unhandledrejection", function (e) { add(e.reason && e.reason.message ? e.reason.message : e.reason, e.reason, 0); });
   function finish() {
     var body = document.body;
     var text = body ? (body.innerText || "").trim().length : 0;
     var media = body ? body.querySelectorAll("img,svg,canvas,video,input,button,select,textarea").length : 0;
-    try { parent.postMessage({ type: "aperture-render-probe", errors: errors, blank: text === 0 && media === 0 }, "*"); } catch (e) {}
+    try { parent.postMessage({ type: "aperture-render-probe", errors: errors, details: details, blank: text === 0 && media === 0 }, "*"); } catch (e) {}
   }
   function later() { setTimeout(finish, 300); }
   if (document.readyState === "complete") later(); else window.addEventListener("load", later);

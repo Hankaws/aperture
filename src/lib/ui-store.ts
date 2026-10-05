@@ -86,7 +86,7 @@ type IdeUiState = {
   density: Density;
   composerUnread: boolean;
   /** What the staged checks say, so Composer can suggest Apply or Open. */
-  checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null;
+  checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string; prompt?: string } | null;
   /** Why ghost text is not showing. Empty when a suggestion arrived or none was asked for. */
   tabNote: string | null;
   /** The last failing check the user opened. */
@@ -125,7 +125,7 @@ type IdeUiState = {
   setTheme: (theme: EditorTheme) => void;
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
-  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string } | null) => void;
+  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string; prompt?: string } | null) => void;
   setTabNote: (note: string | null) => void;
   setLastCheck: (check: { label: string; detail: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
@@ -270,7 +270,13 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setComposerUnread: (on) => set({ composerUnread: on }),
   setCheckHint: (hint) =>
     set((s) => {
-      if (s.checkHint?.state === hint?.state && s.checkHint?.path === hint?.path && s.checkHint?.detail === hint?.detail) return s;
+      if (
+        s.checkHint?.state === hint?.state &&
+        s.checkHint?.path === hint?.path &&
+        s.checkHint?.detail === hint?.detail &&
+        s.checkHint?.prompt === hint?.prompt
+      )
+        return s;
       return { checkHint: hint };
     }),
   setTabNote: (note) =>

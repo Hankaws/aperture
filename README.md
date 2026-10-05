@@ -81,6 +81,17 @@ local in-process database (PGlite), so nothing else needs setting up.
 
   A check that could not run says why. It never shows as a pass.
 
+  **A fix starts from the evidence.** When a check is red, the fix turn
+  (the automatic one, Send back, a background run's fix) gets what the
+  editor saw, not only one line:
+  - every new issue;
+  - a failing test's message and its stack, mapped back to your files and
+    lines;
+  - the code around the line where it broke.
+
+  The live preview's script errors are shown at the line of your script
+  file that threw, and every Composer turn is told about them.
+
   **How well they work** is measured on the `/benchmark` page: 30 staged
   edits, 22 with a mistake and 8 correct, put through these checks. Every case
   is listed there, misses included, and `npm run bench` reproduces it.

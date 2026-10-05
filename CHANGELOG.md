@@ -8,6 +8,7 @@ under **Unreleased**; the site shows this file at `/changelog`.
 ### Added
 
 - A changelog, here and at `/changelog`.
+  ([#28](https://github.com/Hankaws/aperture/pull/28))
 
 ## 2026-10-05
 

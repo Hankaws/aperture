@@ -75,8 +75,10 @@ export function hydrateBackgroundRuns() {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
   const saved = readSaved();
-  if (saved.length > 0)
-    useBackgroundRuns.setState({ runs: [...saved, ...useBackgroundRuns.getState().runs] });
+  if (saved.length === 0) return;
+  useBackgroundRuns.setState({ runs: [...saved, ...useBackgroundRuns.getState().runs] });
+  // A run restored as stopped keeps that state and its finish time, or every reload would make it new again.
+  save();
 }
 
 /** Runs for the workspace on screen. */
@@ -251,6 +253,7 @@ async function drive(
     }
     patch(id, { state: "checking", text, edits, status: "Checking the change…" });
     let rows = await checkInBackground(snapshot, edits, verify, signal);
+    if (signal.aborted) return;
     let fixed = false;
     // The same one look the foreground gets. A replay cannot write a new fix.
     if (lookFailures(rows).length > 0 && !useIdeUi.getState().aiReplay) {
@@ -277,6 +280,7 @@ async function drive(
       for (const path of second.rules ?? []) rules.add(path);
       patch(id, { state: "checking", text, edits, status: "Checking the fix…" });
       rows = await checkInBackground(snapshot, edits, verify, signal);
+      if (signal.aborted) return;
     }
     const done = { edits, checks: rows, fixed, ...(rules.size > 0 ? { rules: [...rules] } : {}) };
     patch(id, { state: "ready", text, ...done, status: readyLine(done), finishedAt: Date.now() });

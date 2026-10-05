@@ -77,6 +77,11 @@ type WorkerMessage = { type: "out"; text: string } | DoneMessage | { type: "fata
 
 function execute(code: string, timeoutMs: number, signal?: AbortSignal): Promise<{ done?: DoneMessage; fatal?: string; timedOut?: boolean; out: string[] }> {
   return new Promise((resolve, reject) => {
+    // An abort that came before the run never fires its event again: a superseded run must not start.
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
     const out: string[] = [];
     const frame = document.createElement("iframe");
     frame.setAttribute("sandbox", "allow-scripts");

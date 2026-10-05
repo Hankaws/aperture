@@ -74,6 +74,11 @@ export function typecheckChange(
   signal?: AbortSignal,
 ): Promise<TscOutcome> {
   return new Promise((resolve, reject) => {
+    // Aborted before it was asked (while the compiler's chunk loaded): the abort event will not fire again.
+    if (signal?.aborted) {
+      reject(new DOMException("Superseded", "AbortError"));
+      return;
+    }
     let running: Worker;
     try {
       running = startWorker();

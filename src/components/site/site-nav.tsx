@@ -22,7 +22,10 @@ export function SiteNav() {
             Why
           </a>
           <Link to="/privacy" className="tap hover:text-fg">
-            Data
+            Privacy
+          </Link>
+          <Link to="/security" className="tap hidden hover:text-fg sm:inline">
+            Security
           </Link>
           {showPricing && (
             <Link to="/pricing" className="hover:text-fg">

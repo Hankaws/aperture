@@ -17,3 +17,6 @@ Areas where a report is especially welcome:
   receive this app's secrets (`src/lib/sandbox/policy.ts`, `sandboxEnv`).
 - **Sign-in:** sessions, and the rule that sign-in off never runs with a shared
   database.
+
+The hosted summary of this policy (threat model, sandbox limits, disclosure) is at
+https://aperturesais.grok.me/security.

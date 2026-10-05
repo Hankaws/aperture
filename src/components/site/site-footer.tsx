@@ -25,7 +25,10 @@ export function SiteFooter() {
             Benchmark
           </Link>
           <Link to="/privacy" className="hover:text-fg">
-            Data
+            Privacy
+          </Link>
+          <Link to="/security" className="hover:text-fg">
+            Security
           </Link>
           <Link to="/settings" search={{ tab: "models" }} className="hover:text-fg">
             Models

@@ -125,13 +125,13 @@ function BenchmarkPage() {
         <h2 className="mt-12 text-lg font-medium tracking-tight">How it is measured</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
           <li>
-            Each case is a staged edit to a small real project: the editor&apos;s demo API (TypeScript, Vitest, three
+            Each case is a staged edit to a small real project: the editor's demo API (TypeScript, Vitest, three
             tests already failing) or a small TSX library (node:test). A case counts as stopped when any check turns
             red, because a red check is what holds Apply back. An amber check (failing the same way before the edit)
             does not count.
           </li>
           <li>
-            The checks are the editor&apos;s own code: the same parse and import checks, the TypeScript compiler, and the
+            The checks are the editor's own code: the same parse and import checks, the TypeScript compiler, and the
             same test runner the browser uses, run in Node. The preview check renders pages in a browser, and no case
             touches a page, so it is not part of this score.
           </li>
@@ -142,6 +142,52 @@ function BenchmarkPage() {
             </a>
             . Run <code className="font-mono text-fg">npm run bench</code> to reproduce this page. A test in CI fails
             when these numbers stop matching what the checks do.
+          </li>
+        </ul>
+
+        <h2 className="mt-12 text-lg font-medium tracking-tight">What this shows</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
+          <li>
+            On these {s.catchable} mistakes a check can see (parse, imports, types, or behaviour a test covers), the
+            editor's checks stopped all of them before Apply: {s.caughtCatchable} of {s.catchable}.
+          </li>
+          <li>
+            On these {s.good} correct edits, no check turned red by mistake: {s.falseAlarms} of {s.good} false alarms.
+          </li>
+          <li>
+            Switching from a one-file light type check to the TypeScript compiler is what lifts catchable stops from{" "}
+            {s.lightCaught} of {s.bad} to {s.caught} of {s.bad} on this set.
+          </li>
+          <li>
+            The misses are listed on purpose: {s.bad - s.caught} of {s.bad} bad edits change behaviour no test
+            covers, so no check here can stop them. A green suite is not a proof the edit is right.
+          </li>
+        </ul>
+
+        <h2 className="mt-12 text-lg font-medium tracking-tight">What this does not show</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
+          <li>
+            These cases are hand-written, not a random sample of agent mistakes. They are chosen to cover
+            each check and to include the failure mode we know we miss.
+          </li>
+          <li>
+            Preview is not scored here: none of the cases touch a page. Scores for other languages, bigger repos, or
+            other models are not claimed.
+          </li>
+          <li>
+            The numbers are not a claim that Aperture is safer than another editor, or that Apply is always correct
+            when checks are green.
+          </li>
+          <li>
+            Reproduction is the source and <code className="font-mono text-fg">npm run bench</code>, not a CSV export.
+            Raw results live in{" "}
+            <a
+              href="https://github.com/Hankaws/aperture/blob/main/src/lib/bench/results.json"
+              className="text-fg underline-offset-2 hover:underline"
+            >
+              src/lib/bench/results.json
+            </a>
+            .
           </li>
         </ul>
 

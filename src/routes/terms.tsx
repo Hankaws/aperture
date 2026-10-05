@@ -145,16 +145,19 @@ function TermsPage() {
       <SiteNav />
       <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
         <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">Using Aperture</p>
-        <nav className="mt-3 flex gap-4 text-sm">
+        <nav className="mt-3 flex flex-wrap gap-4 text-sm">
           <Link to="/privacy" className="text-muted underline-offset-2 hover:underline hover:text-fg">
             Privacy
+          </Link>
+          <Link to="/security" className="text-muted underline-offset-2 hover:underline hover:text-fg">
+            Security
           </Link>
           <span className="text-fg">Terms</span>
         </nav>
         <h1 className="mt-3 text-3xl font-medium tracking-tight">Terms</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           The rules for the hosted editor. Twelve short sections. The privacy page is the one that says what leaves
-          the browser.
+          the browser. The security page covers threat model, sandboxes, and disclosure.
         </p>
         {SECTIONS.map((section) => (
           <section key={section.title}>

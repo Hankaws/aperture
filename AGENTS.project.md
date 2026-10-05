@@ -337,6 +337,25 @@ files.
 
 The server jobs in `src/lib/jobs` remain for external agents (ACP) only.
 
+## Server jobs outlive their request
+
+`startJob` answers at once and the job runs on. On Vercel a function may be
+frozen once it has answered, so the job is registered with `waitUntil`
+(`keepAlive` in `src/lib/jobs/keep-alive.server.ts`). It takes `waitUntil`
+from the request, which nitro's Vercel entry sets, or from Vercel's global
+request context. It is still bound by the function's time limit. A job that
+still says queued or running after `JOB_STALE_MINUTES` was ended by the
+platform. `failStaleJobs` marks it failed, so it neither spins forever nor
+holds a queue slot.
+
+## What is sent to GitHub
+
+`sendable` leaves `.aperture/lessons.md` out unless the person ticks it in.
+The PR checks push always leaves it out, so lessons never block or ride along
+with a CI fix. After a send, `stampsAfterSend` updates only what was sent;
+re-stamping every file would mark a held-back file as already in the
+repository.
+
 ## Pull request checks
 
 `githubChecks` reads a commit's check runs and commit statuses; for at most

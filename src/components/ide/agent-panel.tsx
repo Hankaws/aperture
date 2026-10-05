@@ -90,7 +90,26 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const { account, setAccount, refresh } = useAccount();
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<AgentMode>("composer");
-  const [phaseLock, setPhaseLock] = useState<AgentPhase | "auto">("auto");
+  // One choice instead of Plan / Build / Iterate: plan first (Composer follows the turn: a plan,
+  // Build it, then iterating on the staged change), or edit straight away. Remembered per browser.
+  const [planFirst, setPlanFirst] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(PLAN_FIRST_KEY) === "0") setPlanFirst(false);
+    } catch {
+      // Storage blocked: plan first.
+    }
+  }, []);
+  function togglePlanFirst() {
+    const next = !planFirst;
+    setPlanFirst(next);
+    try {
+      window.localStorage.setItem(PLAN_FIRST_KEY, next ? "1" : "0");
+    } catch {
+      // Storage blocked: it holds for this page.
+    }
+  }
+  const phaseLock: AgentPhase | "auto" = planFirst ? "auto" : "skip";
   const [caret, setCaret] = useState(0);
   const [mentionHi, setMentionHi] = useState(0);
   const [dismissMention, setDismissMention] = useState(false);
@@ -490,6 +509,36 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             </button>
           ))}
         </div>
+        {mode === "composer" && (
+          <button
+            type="button"
+            aria-pressed={planFirst}
+            disabled={agentRunning}
+            onClick={togglePlanFirst}
+            title={
+              planFirst
+                ? "Plan first: Composer posts a plan and waits for Build it. Click to edit straight away."
+                : "Edits straight away. Click to have Composer plan first. Nothing is applied until you Apply either way."
+            }
+            className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-subtle hover:text-fg disabled:opacity-50"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "relative inline-block h-3 w-5 rounded-full transition-colors",
+                planFirst ? "bg-accent" : "bg-elevated ring-1 ring-border",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 size-2 rounded-full bg-bg transition-[left]",
+                  planFirst ? "left-2.5" : "left-0.5",
+                )}
+              />
+            </span>
+            Plan first
+          </button>
+        )}
         <div className="ml-auto flex items-center">
           <Button
             variant="ghost"
@@ -536,10 +585,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       </div>
 
       <PlanChrome
-        mode={mode}
-        sendPhase={sendPhase}
-        locked={phaseLock !== "auto"}
-        onPhase={(next) => setPhaseLock(next)}
         actDisabled={agentRunning || !user}
         account={account}
         source={source}
@@ -551,6 +596,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         onFocus={() => composerRef.current?.focus()}
       />
       <MessageList
+        planFirst={planFirst}
         running={agentRunning}
         quoteLabel={quote.label}
         account={account}
@@ -703,7 +749,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   : mode === "chat"
                     ? "Ask about the repo. Use @ for context."
                     : sendPhase === "skip"
-                      ? "Describe the change. Use @ for context — Iterate edits straight away."
+                      ? "Describe the change. Use @ for context — Composer edits straight away."
                       : sendPhase === "build"
                         ? "Describe the change. Use @ for context — Build edits straight away."
                         : "Describe the change. Use @ for context — Composer plans first."
@@ -837,11 +883,21 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   );
 }
 
-function EmptyComposer({ suggestions, onPick }: { suggestions: string[]; onPick: (s: string) => void }) {
+function EmptyComposer({
+  suggestions,
+  onPick,
+  planFirst,
+}: {
+  suggestions: string[];
+  onPick: (s: string) => void;
+  planFirst: boolean;
+}) {
   return (
     <div className="flex h-full min-h-0 flex-col justify-end gap-3 py-2">
       <div>
-        <p className="text-sm font-medium text-fg">Composer plans first. You click Build it.</p>
+        <p className="text-sm font-medium text-fg">
+          {planFirst ? "Composer plans first. You click Build it." : "Composer edits straight away. You Apply."}
+        </p>
         <p className="mt-1 text-xs leading-relaxed text-subtle">
           @ a file for context, or open Preview, click a UI element, and send the notes here.
         </p>
@@ -863,11 +919,9 @@ function EmptyComposer({ suggestions, onPick }: { suggestions: string[]; onPick:
   );
 }
 
+const PLAN_FIRST_KEY = "aperture-plan-first";
+
 function PlanChrome({
-  mode,
-  sendPhase,
-  locked,
-  onPhase,
   actDisabled,
   account,
   source,
@@ -878,10 +932,6 @@ function PlanChrome({
   onSendNotes,
   onFocus,
 }: {
-  mode: AgentMode;
-  sendPhase: AgentPhase;
-  locked: boolean;
-  onPhase: (phase: AgentPhase) => void;
   actDisabled?: boolean;
   account: AccountSnapshot | null | undefined;
   source: Parameters<typeof quoteRuns>[1];
@@ -993,10 +1043,6 @@ function PlanChrome({
   return (
     <div className="min-w-0">
       <TaskStrip
-        mode={mode}
-        activePhase={sendPhase}
-        locked={locked}
-        onPhase={onPhase}
         hint={hint}
         onAct={actOnHint}
         onAlt={() => useWorkspace.getState().applyAllPending()}
@@ -1024,6 +1070,7 @@ function MessageList({
   fileList,
   suggestions,
   onPick,
+  planFirst,
   onBuild,
   onSendNotes,
 }: {
@@ -1034,6 +1081,7 @@ function MessageList({
   fileList: string[];
   suggestions: string[];
   onPick: (text: string) => void;
+  planFirst: boolean;
   onBuild: (message: ChatMessage) => void;
   onSendNotes: (edits: ChatMessage["edits"]) => void;
 }) {
@@ -1078,7 +1126,7 @@ function MessageList({
       }}
     >
       {messages.length === 0 ? (
-        <EmptyComposer suggestions={suggestions} onPick={onPick} />
+        <EmptyComposer suggestions={suggestions} onPick={onPick} planFirst={planFirst} />
       ) : (
         <div className="space-y-3">
           {messages.map((message) => (
@@ -1206,19 +1254,11 @@ function LessonBar({
 }
 
 function TaskStrip({
-  mode,
-  activePhase,
-  locked,
-  onPhase,
   hint,
   onAct,
   onAlt,
   actDisabled,
 }: {
-  mode: AgentMode;
-  activePhase: AgentPhase;
-  locked: boolean;
-  onPhase: (phase: AgentPhase) => void;
   hint: { title: string; cta: string; kind: string; altCta?: string };
   onAct: () => void;
   onAlt?: () => void;
@@ -1233,31 +1273,6 @@ function TaskStrip({
 
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2.5">
-      {mode === "composer" ? (
-        <div className="flex rounded-md border border-border p-px" title={locked ? "Phase locked" : "Phase follows the last turn"}>
-          {(
-            [
-              ["plan", "Plan"],
-              ["build", "Build"],
-              ["skip", "Iterate"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              disabled={agentRunning}
-              onClick={() => onPhase(id)}
-              className={cn(
-                "inline-flex h-5 items-center rounded px-1.5 text-[10px] font-medium tracking-wide uppercase",
-                activePhase === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
-              )}
-              aria-pressed={activePhase === id}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
       {task.total > 0 && (
         <span className="relative h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-elevated">
           <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${pct}%` }} />
@@ -1276,7 +1291,7 @@ function TaskStrip({
           {hint.altCta}
         </Button>
       )}
-      {hint.kind !== "wait" && (
+      {hint.kind !== "wait" && hint.kind !== "compose" && (
         <Button
           type="button"
           size="sm"

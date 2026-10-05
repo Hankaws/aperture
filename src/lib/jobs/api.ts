@@ -52,7 +52,30 @@ function toRecord(row: JobRow, agentName: string | null = null): JobRecord {
   };
 }
 
+/**
+ * Past this, a job that still says queued or running is not running: the
+ * function that ran it hit its time limit or was stopped. Longer than any
+ * function may run, so a live job is never marked.
+ */
+export const JOB_STALE_MINUTES = 15;
+
+export const STALE_JOB_ERROR = "Stopped: the server ended this job before it finished. Start it again.";
+
+/** Marks this account's abandoned jobs as failed, so they neither spin forever nor hold a queue slot. */
+async function failStaleJobs(userId: string) {
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  await sql`
+    update user_jobs
+    set status = 'failed', error = ${STALE_JOB_ERROR}, finished_at = now()
+    where user_id = ${userId}
+      and status in ('queued', 'running')
+      and created_at < now() - make_interval(mins => ${JOB_STALE_MINUTES})
+  `;
+}
+
 async function loadJobs(userId: string): Promise<JobRecord[]> {
+  await failStaleJobs(userId);
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   const rows = await sql<JobRow>`
@@ -87,6 +110,7 @@ export const startJob = createServerFn({ method: "POST" })
     if (plan.backgroundJobs <= 0) {
       throw new Error("Background jobs are on Pro. Composer in the panel still runs on Hobby.");
     }
+    await failStaleJobs(context.userId);
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const live = await sql<{ n: number }>`
@@ -124,7 +148,9 @@ export const startJob = createServerFn({ method: "POST" })
     `;
 
     const { runJob } = await import("./runner.server");
-    void runJob(id, context.userId, { ...clean, agentId }, agentId);
+    const { keepAlive } = await import("./keep-alive.server");
+    // The reply goes out now; the job runs on, registered so the platform does not freeze it.
+    keepAlive(runJob(id, context.userId, { ...clean, agentId }, agentId));
 
     return {
       id,

@@ -166,6 +166,8 @@ export function DesignPane() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const lastEntry = useRef<string | null>(null);
   const lastHtml = useRef("");
+  /** The document the frame last loaded. A CSS hot reload changes lastHtml, not the running page's lines. */
+  const loadedDoc = useRef("");
   const pulseTimer = useRef<number>(0);
   const [pulse, setPulse] = useState<string | null>(null);
   const runScripts = useIdeUi((s) => s.runPreviewScripts);
@@ -217,6 +219,7 @@ export function DesignPane() {
       };
       flash("HTML");
     }
+    loadedDoc.current = srcdoc;
     iframe.srcdoc = srcdoc;
   }, [srcdoc, entry]);
 
@@ -244,7 +247,7 @@ export function DesignPane() {
         const message = (data.message ?? "Preview error").trim();
         if (!message) return;
         // Where it happened, in the project's script file: the preview inlines scripts into one document.
-        const doc = lastHtml.current;
+        const doc = loadedDoc.current;
         const top = mapDocStack(typeof data.stack === "string" ? data.stack : "", doc)[0];
         const at = top ?? (typeof data.line === "number" && data.line > 0 ? mapDocLine(doc, data.line) : null);
         const line = at ? `${message} (at ${at.path}:${at.line}${top?.fn ? `, in ${top.fn}` : ""})` : message;

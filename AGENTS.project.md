@@ -32,6 +32,15 @@ constructor(x: T) { this.x = x; }            // fine
 
 Same class of problem: `enum`, decorators, namespaces.
 
+## An aborted signal does not fire again
+
+`signal.addEventListener("abort", …)` on a signal that is already aborted never
+fires. A run started after a lazy `import()` (the compiler, sucrase) can be
+superseded while that import loads, and then run in full anyway, publishing a
+stale result. Check `signal.aborted` before starting work, as `execute` in
+`runner/browser.ts` and `typecheckChange` in `tsc.ts` do, and again before
+publishing a result.
+
 ## Build output is not committed
 
 `.vercel/` is in `.gitignore`: the repository is open source, and 40 MB of

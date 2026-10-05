@@ -25,16 +25,25 @@ function PrivacyPage() {
       <SiteNav />
       <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
         <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">Data handling</p>
-        <nav className="mt-3 flex gap-4 text-sm">
+        <nav className="mt-3 flex flex-wrap gap-4 text-sm">
           <span className="text-fg">Privacy</span>
+          <Link to="/security" className="text-muted underline-offset-2 hover:text-fg hover:underline">
+            Security
+          </Link>
           <Link to="/terms" className="text-muted underline-offset-2 hover:text-fg hover:underline">
             Terms
           </Link>
         </nav>
         <h1 className="mt-3 text-3xl font-medium tracking-tight">What leaves the browser</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
-          Two copies can leave this browser. The project, after you sign in. And a snapshot, when you send. Checks
-          and the test sandbox stay in the tab.
+          Aperture is not pure browser-only after you sign in. Two copies can leave this tab: the project is saved to
+          your account as you edit, and each send uploads a snapshot through Aperture's server before the provider
+          you picked is called. Checks and the in-tab test sandbox stay in the browser. Threat model and disclosure
+          are on the{" "}
+          <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+            security page
+          </Link>
+          .
         </p>
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">What stays in the tab</h2>
@@ -62,11 +71,12 @@ function PrivacyPage() {
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">What a send includes</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Composer, Chat, Inline, and Tab upload a snapshot for that turn. That snapshot is your instruction, recent
-          chat, the file tree, a symbol map, the open file, the selection, a short note of the cursor line and
-          anything you just typed or dismissed, files you attach with @, and files the agent reads with its tools.
-          The server uses that snapshot to run the tools, then forwards the prompt to the provider you picked. The saved
-          project is the other copy.
+          Composer, Chat, Inline, and Tab each take a server hop. The browser uploads a snapshot for that turn to
+          Aperture's server. That snapshot is your instruction, recent chat, the file tree, a symbol map, the open
+          file, the selection, a short note of the cursor line and anything you just typed or dismissed, files you
+          attach with @, and files the agent reads with its tools. The server uses that snapshot to run the tools, then
+          forwards the prompt to the provider you picked. The saved project is the other copy. A model on this computer
+          (Ollama / LM Studio on localhost) is the exception: that turn does not pass through Aperture's server.
         </p>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           Secret-looking files are dropped before the send: <span className="text-fg">.env</span> (not{" "}
@@ -131,6 +141,10 @@ function PrivacyPage() {
           Keys are added under{" "}
           <Link to="/settings" search={{ tab: "models" }} className="text-fg underline-offset-2 hover:underline">
             Settings → Models
+          </Link>
+          . Sandbox limits and how to report a vulnerability are on the{" "}
+          <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+            security page
           </Link>
           .
         </p>

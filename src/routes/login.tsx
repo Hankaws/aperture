@@ -75,7 +75,11 @@ function Login() {
           <p className="mt-3 text-sm leading-relaxed text-muted">
             Before you open a repo or add a key, read{" "}
             <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
-              what code leaves the browser, where keys are stored, and what each model can see
+              what code leaves the browser
+            </Link>{" "}
+            (after sign-in the project is saved and each send goes through Aperture&apos;s server) and the{" "}
+            <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+              security page
             </Link>
             .
           </p>

@@ -3,6 +3,15 @@
 Traps in this repo that typecheck cleanly and fail later. Each one cost a debug
 cycle before it was written down.
 
+## Every pull request adds a changelog line
+
+Add one line to `CHANGELOG.md` under `## Unreleased`, in `### Added`,
+`### Changed` or `### Fixed`. Write what a user notices, not the code, and
+link the pull request. The `/changelog` page renders this file
+(`src/lib/changelog.ts`), and `changelog.test.ts` fails on a wrong heading, a
+dated entry without its pull request, or a link to another repository. On
+merge day, move the Unreleased lines under that day's date.
+
 ## Imports in `src/lib` that tests reach
 
 `npm test` runs `src/**/*.test.ts` under bare node (`--experimental-strip-types`),

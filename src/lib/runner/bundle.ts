@@ -18,8 +18,15 @@ import type { RunOptions, TestFramework } from "./plan.ts";
 import { FRAMEWORK_RUNTIME_SOURCE } from "./runtime-framework.ts";
 import { BROWSER_BUILTINS, RUNTIME_SOURCE } from "./runtime.ts";
 
+/** Bundle lines of each module's own code: line `start` is the module's line 1. */
+export type ModuleLines = Array<{ path: string; start: number; count: number }>;
+
+function countLines(text: string): number {
+  return text.split("\n").length;
+}
+
 export type Bundle =
-  | { ok: true; code: string; modules: string[] }
+  | { ok: true; code: string; modules: string[]; lines: ModuleLines }
   | { ok: false; kind: "unsupported" | "broken"; reason: string; path?: string };
 
 /** Beyond this the project is not a unit-test-sized thing to run in a tab. */
@@ -235,6 +242,15 @@ export function buildBundle(files: Record<string, string>, entries: string[], ru
   }
 
   const modules = [...compiled.keys()];
+  const head = [RUNTIME_SOURCE, `const __framework = ${JSON.stringify(framework)};`, `const __options = ${JSON.stringify(run.options)};`, frameworkRun ? FRAMEWORK_RUNTIME_SOURCE : "", "const __modules = {"].join("\n");
+  // Where each module's code starts in the bundle, so a stack line can be read back as a file and line.
+  const lines: ModuleLines = [];
+  let at = countLines(head) + 1;
+  for (const path of modules) {
+    const count = countLines(compiled.get(path)!);
+    lines.push({ path, start: at + 1, count });
+    at += count + 2;
+  }
   const body = modules
     .map(
       (path) =>
@@ -252,5 +268,5 @@ export function buildBundle(files: Record<string, string>, entries: string[], ru
     `const __entries = ${JSON.stringify(entries)};`,
     "__main();",
   ].join("\n");
-  return { ok: true, code, modules };
+  return { ok: true, code, modules, lines };
 }

@@ -340,6 +340,26 @@ while checks run and the tab is visible. "Fix with Composer" is refused while
 a change is staged or local edits are unpushed, so the fix starts from what CI
 ran. Nothing in this loop runs without a click.
 
+## Runtime evidence for a fix
+
+`runner/stack.ts` turns what a run saw into evidence an agent can act on.
+
+- **Tests.** The runtime records the first five failures in full (`details`:
+  message and stack). `bundle.ts` returns `lines`, where each module's code
+  starts in the bundle. `mapStack` reads a stack line back as file:line;
+  sucrase keeps line numbers, and the worker's one-line prelude is the offset.
+- **Pages.** Scripts are inlined with `data-from`, so `mapDocLine` maps a
+  document line to the script file. The page's own inline code maps to
+  nothing rather than to a shifted line.
+- **Fix prompt.** `CheckRow.evidence` carries it. `lookPrompt` sends every red
+  row and their evidence (`LOOK_EVIDENCE_LIMIT`); amber rows send none. "Send
+  back" uses the same prompt through `checkHint.prompt`.
+- **Live preview.** Errors in the live preview go into every Composer turn as
+  `AgentInput.runtime`.
+
+Verified in Chromium: an error in an inlined script maps to the exact line and
+function.
+
 ## Hooks and rules for some files
 
 `hooks.ts` parses `.aperture/hooks.json`; `hook-runner.ts` runs a hook with

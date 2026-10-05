@@ -47,6 +47,8 @@ export type AgentInput = {
   spot?: Spot;
   /** Cursor, a hand edit, and a dismissed note. Short. Not the whole history. */
   userMove?: string;
+  /** What the running app reported, in the editor: the live preview's script errors, mapped to files. */
+  runtime?: string;
   /** Set when the tab can run scripts in its browser test runner (see browser-handoff.ts). */
   browserRuns?: BrowserRuns;
 };

@@ -14,6 +14,7 @@
 import { clipOutput } from "../sandbox/runner.ts";
 import { failureDetail } from "../sandbox/auto-verify.ts";
 import { planBrowserRun } from "./plan.ts";
+import { failureEvidence, type FailureDetail } from "./stack.ts";
 
 export type BrowserTestResult =
   | { kind: "unsupported"; reason: string }
@@ -30,6 +31,8 @@ export type BrowserTestResult =
       timedOut?: boolean;
       /** Failing tests by file and name, to compare against another run. */
       failures?: string[];
+      /** What failed in full: messages, stacks in project files, and the code where it broke. For a fix turn. */
+      evidence?: string;
     };
 
 export const BROWSER_RUN_TIMEOUT_MS = 10_000;
@@ -53,6 +56,8 @@ parent.postMessage({ type: "aperture-run-ready" }, "*");
 <\u002fscript>`;
 
 const WORKER_PRELUDE = "const __host = { report: (message) => postMessage(message) };\n";
+/** Lines the worker runs before the bundle: a stack line minus this is a bundle line. */
+const PRELUDE_LINES = 1;
 
 type DoneMessage = {
   type: "done";
@@ -63,6 +68,7 @@ type DoneMessage = {
   durationMs: number;
   firstFailure: string | null;
   failures?: string[];
+  details?: FailureDetail[];
   /** Set when the tests reached code the browser cannot run (a mocked-away module that was loaded after all). */
   unsupported?: string | null;
   output: string;
@@ -193,6 +199,7 @@ export async function runTestsInBrowser(
       fail: done.fail,
       durationMs: done.durationMs,
       failures: done.failures ?? [],
+      evidence: failureEvidence(done.details, bundle.lines, PRELUDE_LINES, files),
       ...(done.firstFailure ? { detail: done.firstFailure.slice(0, 200) } : {}),
     }),
   );

@@ -20,6 +20,7 @@ import {
   type RenderResult,
 } from "@/lib/workspace/checks";
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
+import { pageErrorEvidence, type PageError } from "@/lib/runner/stack";
 import { issuesForText, mergeEdits } from "@/lib/workspace/preview-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { TscCheck } from "@/lib/workspace/checks";
@@ -38,10 +39,14 @@ const RENDER_TIMEOUT_MS = 5000;
  */
 function useRenderCheck(files: Record<string, string>, edits: ProposedEdit[]) {
   const runScripts = useIdeUi((s) => s.runPreviewScripts);
+  const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
+  // Read when the page reports, to map its errors to files. A ref: a change to another file must not restart the render.
+  const mergedRef = useRef(merged);
+  mergedRef.current = merged;
   const doc = useMemo(() => {
     const entry = renderEntry(files, edits, { runScripts });
-    return entry ? renderProbeDocument(mergeEdits(files, edits), entry, { runScripts }) : null;
-  }, [files, edits, runScripts]);
+    return entry ? renderProbeDocument(merged, entry, { runScripts }) : null;
+  }, [files, edits, merged, runScripts]);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [settled, setSettled] = useState<{ doc: string; result: RenderResult } | null>(null);
 
@@ -50,11 +55,20 @@ function useRenderCheck(files: Record<string, string>, edits: ProposedEdit[]) {
     const timer = window.setTimeout(() => setSettled({ doc, result: { state: "timeout" } }), RENDER_TIMEOUT_MS);
     function onMessage(event: MessageEvent) {
       if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
-      const data = event.data as { type?: string; errors?: unknown; blank?: unknown };
+      const data = event.data as { type?: string; errors?: unknown; details?: unknown; blank?: unknown };
       if (data?.type !== "aperture-render-probe") return;
       window.clearTimeout(timer);
       const errors = Array.isArray(data.errors) ? data.errors.map(String).slice(0, 8) : [];
-      setSettled({ doc: doc!, result: { state: "done", errors, blank: data.blank === true } });
+      const details: PageError[] = Array.isArray(data.details)
+        ? data.details.slice(0, 8).map((row: { message?: unknown; stack?: unknown; line?: unknown }) => ({
+            message: String(row?.message ?? ""),
+            stack: typeof row?.stack === "string" ? row.stack : "",
+            line: typeof row?.line === "number" ? row.line : 0,
+          }))
+        : [];
+      // Where each error happened, in the project's script files: what a fix needs.
+      const evidence = details.length > 0 ? pageErrorEvidence(details, doc!, mergedRef.current) : "";
+      setSettled({ doc: doc!, result: { state: "done", errors, blank: data.blank === true, evidence } });
     }
     window.addEventListener("message", onMessage);
     return () => {
@@ -134,6 +148,7 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
             detail: staged.detail,
             pass: staged.pass,
             preexisting,
+            ...(staged.evidence ? { evidence: staged.evidence } : {}),
           },
           output: staged.output,
         });
@@ -321,14 +336,16 @@ export function CheckResults({
   const checkState = checkStripState(rows);
   const failedPath = failed?.path;
   const failedDetail = failed?.detail;
+  // The fix prompt, evidence included, for Send back: the same words the automatic fix sends.
+  const fixPrompt = failed ? lookPrompt(rows) : undefined;
   useEffect(() => {
     useIdeUi.getState().setCheckHint(
       failed
-        ? { state: "failed", path: failedPath, detail: failedDetail }
+        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt }
         : { state: checkState, path: failedPath },
     );
     return () => useIdeUi.getState().setCheckHint(null);
-  }, [checkState, failed, failedPath, failedDetail]);
+  }, [checkState, failed, failedPath, failedDetail, fixPrompt]);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const outputs = useMemo(() => {
     const byRow: Record<string, string> = {};

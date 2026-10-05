@@ -960,13 +960,16 @@ function PlanChrome({
       return;
     }
     if (hint.kind === "fix") {
-      const detail = useIdeUi.getState().checkHint?.detail ?? "A check failed.";
-      const path = useIdeUi.getState().checkHint?.path;
+      const hint = useIdeUi.getState().checkHint;
+      const detail = hint?.detail ?? "A check failed.";
+      const path = hint?.path;
       if (path) useWorkspace.getState().openFile(path);
       useIdeUi.getState().setMobilePane("editor");
       void submitAgent("Fix the failing checks", "composer", source, {
         phase: "skip",
-        apiInstruction: `${detail}\nFix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.`,
+        apiInstruction:
+          hint?.prompt ??
+          `${detail}\nFix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.`,
         pendingEdits,
         copyId: useWorkspace.getState().activeCopyId ?? undefined,
       });

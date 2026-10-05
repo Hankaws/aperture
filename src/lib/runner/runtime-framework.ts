@@ -1389,6 +1389,7 @@ function __willRun(node) {
 function __recordFailure(name, error) {
   if (__firstFailure === null) __firstFailure = (name ? name + ": " : "") + __errorText(error).split("\n")[0];
   __failed(name || __currentFile);
+  __detail(name || __currentFile, error);
 }
 
 function __printError(pad, error) {

@@ -147,6 +147,7 @@ export const agentInput = z
     refusals: strings(500).optional(),
     spot: object<Spot>().optional(),
     userMove: z.string().optional(),
+    runtime: z.string().max(4000).optional(),
     browserRuns: object<BrowserRuns>().optional(),
   })
   .transform((input) => input as AgentInput);

@@ -33,6 +33,7 @@ export async function runHook(
     detail: run.detail,
     preexisting,
     output: run.output,
+    ...(run.evidence ? { evidence: run.evidence } : {}),
   };
 }
 

@@ -332,3 +332,29 @@ test("Types from real tsc: running, new errors red, old ones amber, clean is a p
   assert.equal(fallback.status, "fail", "the light check still catches a literal of the wrong type");
   assert.match(fallback.detail, /tsc did not run: Project too large\./);
 });
+
+test("the fix prompt carries what the editor saw: every issue, the stack, the code", () => {
+  const files = { "src/a.ts": "export const a = 1;\n" };
+  const edits = [edit("src/a.ts", "export const a = 1;\nexport const b = ;\n", files["src/a.ts"])];
+  const browser: BrowserTests = {
+    state: "done",
+    script: "test",
+    passed: false,
+    detail: "adds: AssertionError",
+    evidence: "✖ adds\nAssertionError: 3 !== 4\n  at src/a.ts:2:5 (add)",
+  };
+  const rows = changeChecks({ files, edits, render: null, browser });
+  const prompt = lookPrompt(rows);
+  assert.match(prompt, /^Parses: /);
+  assert.match(prompt, /Tests pass: npm run test fails in the browser/, "every red row, not only the first");
+  assert.match(prompt, /What the editor saw:\n\[Parses\]\nsrc\/a\.ts: .*line 2/);
+  assert.match(prompt, />\s+2 \| export const b = ;/, "the code at the first issue");
+  assert.match(prompt, /\[Tests pass\]\n✖ adds\nAssertionError: 3 !== 4\n {2}at src\/a\.ts:2:5 \(add\)/);
+  assert.match(prompt, /Fix only this with propose_edit/);
+});
+
+test("an amber row sends no evidence: it was failing before, and is not this change's to fix", () => {
+  const browser: BrowserTests = { state: "done", script: "test", passed: false, detail: "x", preexisting: true, evidence: "old stack" };
+  const rows = changeChecks({ files: {}, edits: [], render: null, browser });
+  assert.doesNotMatch(lookPrompt(rows), /old stack/);
+});

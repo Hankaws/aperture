@@ -50,6 +50,14 @@ function __failed(name) {
   const key = __entryNow + " › " + name;
   if (__failures.length < 200 && __failures.indexOf(key) < 0) __failures.push(key);
 }
+/** The first few failures in full, the message and the stack, so a fix can start from where it broke. */
+const __details = [];
+function __detail(name, error) {
+  if (__details.length >= 5 || (error && error.name === "Unsupported")) return;
+  const message = __errorText(error).slice(0, 800);
+  const stack = error && typeof error === "object" && typeof error.stack === "string" ? error.stack.split("\n").slice(0, 30).join("\n") : "";
+  __details.push({ name: name || "", message: message, stack: stack });
+}
 function __pathOf(node) {
   const names = [];
   for (let p = node; p && p.parent; p = p.parent) names.unshift(p.name);
@@ -382,6 +390,7 @@ async function __runTest(node) {
     if (node.children.length === 0 || error) __stats.fail++;
     if (error && __firstFailure === null) __firstFailure = node.name + ": " + __errorText(error).split("\n")[0];
     if (error) __failed(__pathOf(node));
+    if (error) __detail(__pathOf(node), error);
     __emit(pad + "✖ " + node.name + " (" + ms + "ms)");
     if (error) for (const line of __errorText(error).split("\n")) __emit(pad + "  " + line);
   } else {
@@ -410,6 +419,7 @@ async function __runSuite(node) {
     __stats.fail++;
     if (__firstFailure === null) __firstFailure = node.name + ": " + __errorText(e).split("\n")[0];
     __failed(__pathOf(node));
+    __detail(__pathOf(node), e);
     for (const line of __errorText(e).split("\n")) __emit(pad + "  " + line);
   }
 }
@@ -574,7 +584,7 @@ function __unsupported(reason) {
 
 function __onUncaught(error) {
   if (error instanceof __Exit) { if (__exitCode === null) __exitCode = error.code; return; }
-  if (!__uncaught) __uncaught = error;
+  if (!__uncaught) { __uncaught = error; __detail(__entryNow, error); }
   if (__firstFailure === null) __firstFailure = __errorText(error).split("\n")[0];
 }
 
@@ -617,6 +627,7 @@ async function __main() {
     durationMs: Date.now() - started,
     firstFailure: __firstFailure,
     failures: __failures,
+    details: __details,
     unsupported: __unsupportedReason,
     output: __out.join("\n"),
   });

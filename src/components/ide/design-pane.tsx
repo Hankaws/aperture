@@ -22,6 +22,7 @@ import { RESIZE_TARGET, usePanelLayout } from "@/lib/use-panel-layout";
 import { useWorkspace } from "@/lib/workspace/store";
 import { cn, isModEvent } from "@/lib/utils";
 import { StyleInspector, ThemePanel } from "@/components/ide/design-inspector";
+import { mapDocLine, mapDocStack } from "@/lib/runner/stack";
 import {
   assembleHtmlPreview,
   cssFromPreview,
@@ -235,11 +236,18 @@ export function DesignPane() {
       const data = event.data as {
         type?: string;
         message?: string;
+        stack?: string;
+        line?: number;
         payload?: Omit<DesignCapture, "id" | "path" | "source" | "note">;
       };
       if (data?.type === "aperture-preview-error") {
-        const line = (data.message ?? "Preview error").trim();
-        if (!line) return;
+        const message = (data.message ?? "Preview error").trim();
+        if (!message) return;
+        // Where it happened, in the project's script file: the preview inlines scripts into one document.
+        const doc = lastHtml.current;
+        const top = mapDocStack(typeof data.stack === "string" ? data.stack : "", doc)[0];
+        const at = top ?? (typeof data.line === "number" && data.line > 0 ? mapDocLine(doc, data.line) : null);
+        const line = at ? `${message} (at ${at.path}:${at.line}${top?.fn ? `, in ${top.fn}` : ""})` : message;
         const prev = useIdeUi.getState().previewErrors;
         if (prev.includes(line)) return;
         useIdeUi.getState().setPreviewErrors([...prev, line]);

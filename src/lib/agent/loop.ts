@@ -191,6 +191,7 @@ function buildContextMessage(
       ? `Selection in ${input.selection.path} L${input.selection.fromLine}-L${input.selection.toLine}:\n${input.selection.text}`
       : "",
     input.userMove ?? "",
+    input.runtime ? redactSecrets(input.runtime.slice(0, 4000)) : "",
   ];
   if (mentioned.includes("repo-map")) {
     parts.push("Attached @repo-map: the symbol map above is the map of this repo.");

@@ -1,6 +1,6 @@
 {
   "name": "aperture",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An AI code editor that checks its own work: every staged change is parsed, import-checked, type-checked with the TypeScript compiler, rendered and tested before you apply it.",
   "license": "MIT",
   "repository": {
@@ -26,6 +26,7 @@
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "test": "node --experimental-strip-types --test 'scripts/**/*.test.mjs' 'src/**/*.test.ts'",
     "bench": "node --experimental-strip-types scripts/bench.ts",
+    "release-notes": "node --experimental-strip-types scripts/release-notes.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

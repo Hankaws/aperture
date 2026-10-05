@@ -30,6 +30,9 @@ export function SiteFooter() {
           <Link to="/security" className="hover:text-fg">
             Security
           </Link>
+          <Link to="/changelog" className="hover:text-fg">
+            Changelog
+          </Link>
           <Link to="/settings" search={{ tab: "models" }} className="hover:text-fg">
             Models
           </Link>

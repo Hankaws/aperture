@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as BenchmarkRouteImport } from './routes/benchmark'
+import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -36,6 +37,11 @@ const AppRoute = AppRouteImport.update({
 const BenchmarkRoute = BenchmarkRouteImport.update({
   id: '/benchmark',
   path: '/benchmark',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogRoute = ChangelogRouteImport.update({
+  id: '/changelog',
+  path: '/changelog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/benchmark'
+    | '/changelog'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/benchmark'
+    | '/changelog'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/benchmark'
+    | '/changelog'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -187,6 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRoute
   BenchmarkRoute: typeof BenchmarkRoute
+  ChangelogRoute: typeof ChangelogRoute
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -220,6 +233,13 @@ declare module '@tanstack/react-router' {
       path: '/benchmark'
       fullPath: '/benchmark'
       preLoaderRoute: typeof BenchmarkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog': {
+      id: '/changelog'
+      path: '/changelog'
+      fullPath: '/changelog'
+      preLoaderRoute: typeof ChangelogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -299,6 +319,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRoute,
   BenchmarkRoute: BenchmarkRoute,
+  ChangelogRoute: ChangelogRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,

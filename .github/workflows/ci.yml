@@ -56,7 +56,7 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      # The demo deploy's settings: no sign-in, recorded runs instead of a model.
+      # The demo's settings: no sign-in, recorded runs instead of a model.
       - name: Build
         run: npm run build
         env:

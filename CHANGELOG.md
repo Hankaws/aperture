@@ -31,6 +31,12 @@ release notes are every line from there down to the previous version.
   or name that does not exist is caught.
   ([#34](https://github.com/Hankaws/aperture/pull/34))
 
+### Removed
+
+- The demo deploy workflow. It deployed to a private Vercel project, had no
+  credentials to do it with, and so skipped on every push while showing a
+  green tick. The site is published from Grok App Builder.
+
 ### Security
 
 - Dependency updates for three advisories in packages Aperture uses through

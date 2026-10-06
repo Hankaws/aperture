@@ -23,7 +23,6 @@ release notes are every line from there down to the previous version.
   check no longer counts `process.exit(0)` in a file under `bin/` or listed
   as a `bin` in package.json as cutting the tests short.
   ([#35](https://github.com/Hankaws/aperture/pull/35))
-
 - The Types check missed a caller that reaches a changed file through an
   `index.ts` that re-exports it. It now checks the files that depend on the
   change, nearest first, through re-exports and importers in turn.

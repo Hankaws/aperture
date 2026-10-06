@@ -84,8 +84,10 @@ export function collectImports(path: string, text: string): ImportRef[] {
   const refs: ImportRef[] = [];
   tree.iterate({
     enter(node) {
-      if (node.name !== "ImportDeclaration" && node.name !== "DynamicImport") return;
+      // `export … from "./x"` reads ./x as surely as an import does.
+      if (node.name !== "ImportDeclaration" && node.name !== "DynamicImport" && node.name !== "ExportDeclaration") return;
       const decl = text.slice(node.from, node.to);
+      if (node.name === "ExportDeclaration" && !/\bfrom\s*['"]/.test(decl)) return;
       const source =
         /from\s*(['"])([^'"]+)\1/.exec(decl) ??
         /\(\s*(['"])([^'"]+)\1/.exec(decl) ??

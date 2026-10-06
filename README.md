@@ -66,9 +66,10 @@ local in-process database (PGlite), so nothing else needs setting up.
   - **Parses**: the changed code, markup and JSON files parse.
   - **Imports resolve**: every import in the changed scripts resolves.
   - **Types**: the real TypeScript compiler, run in a worker in your tab on
-    the staged change. It checks the changed files and the files that import
-    them, against the whole project and its `tsconfig.json`, so a change that
-    breaks a caller in another file is caught. An error the files already had
+    the staged change. It checks the changed files and the files that depend
+    on them (importers, files that re-export them, and their importers in
+    turn, up to 40), against the whole project and its `tsconfig.json`, so a
+    change that breaks a caller in another file is caught. An error the files already had
     is shown amber, not blamed on the change. The editor has no
     `node_modules`, so packages are typed `any` (their types are not there to
     check against), and so are Node's and a test runner's globals; implicit

@@ -120,6 +120,18 @@ test("a named import the target does not export is reported", () => {
   assert.match(issues[0]!, /\{ missing \}.*does not export it/);
 });
 
+test("a re-export reads its target like an import: a missing file or name is reported", () => {
+  const files = {
+    "src/index.ts": 'export * from "./gone";\nexport { present, missing as renamed } from "./a";\nexport { local };\nconst local = 1;',
+    "src/a.ts": "export const present = 1;",
+  };
+  const issues = importIssues("src/index.ts", files);
+  assert.equal(issues.length, 2, issues.join("\n"));
+  assert.match(issues[0]!, /"\.\/gone" at line 1, which does not exist/);
+  assert.match(issues[1]!, /\{ missing \}.*does not export it/);
+  assert.deepEqual(importIssues("src/index.ts", { ...files, "src/index.ts": 'export { present } from "./a";' }), []);
+});
+
 test("a package that is not in package.json is reported", () => {
   const files = {
     "package.json": '{"dependencies":{"react":"^19.0.0"}}',

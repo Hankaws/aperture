@@ -14,6 +14,7 @@ import { isTypePath, typeIssues } from "./type-check.ts";
 import type { TscOutcome } from "./tsc";
 import type { HookRun } from "./hooks.ts";
 import { excerpt } from "../runner/stack.ts";
+import { testTampering } from "../runner/tampering.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
@@ -305,7 +306,28 @@ export function changeChecks(input: {
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
-  return [parse, imports, types, preview, testsRow(verify ?? null, input.browser ?? null), ...(input.hooks ?? []).map(hookRow)];
+  const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testTampering(files, edits));
+  return [parse, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow)];
+}
+
+/**
+ * A run cannot vouch for a change that skips, removes or cuts short the tests
+ * it is judged by, so the row is red whatever the run said. The person can
+ * still choose Apply anyway when that is what they asked for.
+ */
+function tamperedRow(row: CheckRow, tampering: string[]): CheckRow {
+  if (tampering.length === 0) return row;
+  const ran = row.status === "pass" || row.status === "fail" ? ` (${row.detail})` : "";
+  return {
+    id: "tests",
+    label: "Tests",
+    status: "fail",
+    detail: `Not counted as a pass: this change ${tampering.join("; ")}.`,
+    evidence: [
+      `The change ${tampering.join("; ")}.${ran}`,
+      "Make the code pass the tests as they were. Do not skip, remove or rewrite tests, or exit early, unless the person asked for exactly that.",
+    ].join("\n"),
+  };
 }
 
 /** A hook is judged like the tests: red only for a failure this change brought in. */

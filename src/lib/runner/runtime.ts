@@ -38,6 +38,12 @@ const __timers = {
 };
 const __out = [];
 const __stats = { pass: 0, fail: 0, skip: 0 };
+/**
+ * Tests registered, and tests that reached a verdict (pass, fail or skip). In
+ * a file that called process.exit(0), the difference is how many it cut off.
+ */
+let __registeredTests = 0;
+let __settledTests = 0;
 let __uncaught = null;
 let __exitCode = null;
 /** The first thing that went wrong, one line: what the person reads first. */
@@ -292,6 +298,7 @@ __assertStrict.strict = __assertStrict;
 // ---- node:test ----------------------------------------------------------
 
 function __node(name, fn, opts, parent, kind) {
+  if (kind === "test") __registeredTests++;
   return { name: String(name || "<anonymous>"), fn, opts: opts || {}, parent, kind, children: [], hooks: { before: [], after: [], beforeEach: [], afterEach: [] }, failed: false };
 }
 const __root = __node("root", null, {}, null, "suite");
@@ -355,6 +362,7 @@ async function __runTest(node) {
   const pad = __indent(__level(node));
   if (node.opts.skip || node.opts.todo) {
     __stats.skip++;
+    __settledTests++;
     __emit(pad + "﹣ " + node.name + " # " + (node.opts.todo ? "TODO" : "SKIP"));
     return;
   }
@@ -381,6 +389,7 @@ async function __runTest(node) {
   }
   const childFailed = node.children.some((c) => c.failed);
   const ms = Date.now() - started;
+  __settledTests++;
   if (node.skipped && !error) {
     __stats.skip++;
     __emit(pad + "﹣ " + node.name + " # SKIP");
@@ -403,6 +412,10 @@ async function __runSuite(node) {
   if (__exitCode !== null) return;
   const pad = __indent(__level(node));
   if (node.opts.skip || node.opts.todo) {
+    // Its tests registered when the suite was declared; none of them runs.
+    const count = (n) => (n.kind === "test" ? 1 : 0) + n.children.reduce((sum, c) => sum + count(c), 0);
+    __stats.skip += count(node);
+    __settledTests += count(node);
     __emit(pad + "﹣ " + node.name + " # SKIP");
     return;
   }
@@ -593,22 +606,42 @@ if (typeof addEventListener === "function") {
   addEventListener("error", (e) => { if (e.preventDefault) e.preventDefault(); __onUncaught(e.error || new Error(e.message)); });
 }
 
+/**
+ * process.exit(0) ends one test file, as it would end that file's own process
+ * under node --test: the next file still runs. A test it cut off counts as a
+ * failure, so exiting early cannot turn a run green.
+ */
+function __exitedEarly(entry, unrun) {
+  __exitCode = null;
+  if (unrun <= 0) return;
+  const message = "process.exit(0) ended " + entry + " before " + unrun + " test" + (unrun === 1 ? "" : "s") + " ran.";
+  __stats.fail += unrun;
+  __failed("process.exit(0)");
+  if (__firstFailure === null) __firstFailure = message;
+  __emit("✖ " + message);
+}
+
 async function __main() {
   const started = Date.now();
   for (const entry of __entries) {
     if (__exitCode !== null || __uncaught || __unsupportedReason !== null) break;
     __cache = {};
     __entryNow = entry;
+    const registered = __registeredTests;
+    const settled = __settledTests;
     if (__framework !== "node") {
       await __runFrameworkFile(entry);
-      continue;
+    } else {
+      try {
+        __load(entry);
+        await __settle();
+      } catch (e) {
+        __onUncaught(e);
+        // Tests queued before a top-level exit still drain now, while they see the exit, not in the next file.
+        if (__exitCode === 0) await __rootChain;
+      }
     }
-    try {
-      __load(entry);
-      await __settle();
-    } catch (e) {
-      __onUncaught(e);
-    }
+    if (__exitCode === 0) __exitedEarly(entry, __registeredTests - registered - (__settledTests - settled));
   }
   if (__uncaught) {
     __emit("");
@@ -616,11 +649,19 @@ async function __main() {
   }
   const ran = __stats.pass + __stats.fail;
   if (ran > 0) __emit("ℹ tests " + ran + " · pass " + __stats.pass + " · fail " + __stats.fail + (__stats.skip ? " · skipped " + __stats.skip : ""));
-  const exitCode = __exitCode !== null ? __exitCode : __uncaught || __stats.fail > 0 ? 1 : Number(__process.exitCode || 0);
+  // Skipping every test checks nothing, so it is not a pass. A plain script with no tests is unaffected.
+  const allSkipped = __stats.skip > 0 && ran === 0;
+  if (allSkipped) {
+    const message = "Every test was skipped (" + __stats.skip + "), so nothing was checked.";
+    __failed("every test skipped");
+    if (__firstFailure === null) __firstFailure = message;
+    __emit("✖ " + message);
+  }
+  const exitCode = __exitCode !== null ? __exitCode : __uncaught || __stats.fail > 0 || allSkipped ? 1 : Number(__process.exitCode || 0);
   if (exitCode !== 0 && __firstFailure === null) __firstFailure = "Exited with code " + exitCode + ".";
   __host.report({
     type: "done",
-    passed: exitCode === 0 && !__uncaught && __stats.fail === 0,
+    passed: exitCode === 0 && !__uncaught && __stats.fail === 0 && !allSkipped,
     exitCode,
     pass: __stats.pass,
     fail: __stats.fail,

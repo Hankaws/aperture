@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- The Tests check could be passed by the change it was checking: by skipping
+  every test, by calling `process.exit(0)` before the tests finished, or by
+  deleting, skipping or `.only`-ing tests, or rewriting the test script. Each
+  now shows red and says what the change did, and a fix turn is told to fix
+  the code instead. ([#31](https://github.com/Hankaws/aperture/pull/31))
+
 ## 0.2.0 - 2026-10-06
 
 ### Added

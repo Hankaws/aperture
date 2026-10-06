@@ -1163,6 +1163,7 @@ function __addTest(mode, name, a, b, extra) {
   if (args.options.todo) m = "todo";
   if (m === "run" && !args.fn) m = "todo";
   if (m === "only") __hasOnly = true;
+  __registeredTests++;
   __collecting.children.push({
     kind: "test", name: __title(name), parent: __collecting, mode: m, fn: args.fn, timeout: args.timeout,
     fails: !!(extra && extra.fails) || !!args.options.fails,
@@ -1414,6 +1415,7 @@ async function __runOne(node) {
   const skipped = __skippedBy(node);
   if (skipped) {
     __stats.skip++;
+    __settledTests++;
     __emit(pad + "﹣ " + node.name + " # " + skipped);
     return;
   }
@@ -1464,6 +1466,7 @@ async function __runOne(node) {
   if (error) for (const fn of test.onFailed) { try { await fn(ctx); } catch (e) { /* the test has already failed */ } }
   __activeTest = null;
   const ms = __timers.Date.now() - started;
+  __settledTests++;
   if (skippedNow) {
     __stats.skip++;
     __emit(pad + "﹣ " + node.name + " # SKIP" + (skippedNow.note ? " " + skippedNow.note : ""));
@@ -1482,6 +1485,7 @@ async function __runOne(node) {
 function __failAll(node, error) {
   for (const child of node.children) {
     if (child.kind === "suite") { __failAll(child, error); continue; }
+    __settledTests++;
     if (__skippedBy(child)) continue;
     __stats.fail++;
     __failed(__fullName(child));
@@ -1498,6 +1502,7 @@ async function __runSuiteNode(node) {
       __emit(pad + "﹣ " + node.name + " # " + (skipped || "SKIP"));
       const count = (n) => n.kind === "test" ? 1 : n.children.reduce((s, c) => s + count(c), 0);
       __stats.skip += count(node);
+      __settledTests += count(node);
       return;
     }
     __emit(pad + "▶ " + node.name);

@@ -208,7 +208,8 @@ npm run build      # production build
 
 CI also runs the replay demo end to end in Chromium against a production
 build (`scripts/e2e-demo.mjs`; how to run it locally is in
-`AGENTS.project.md`).
+`AGENTS.project.md`), and the signed-in visitor path with `npm run build &&
+npm run smoke` (`scripts/smoke-visitor.mjs`).
 
 Read [`AGENTS.project.md`](AGENTS.project.md) before changing things. It lists
 the traps in this codebase that type-check cleanly and then fail at runtime,

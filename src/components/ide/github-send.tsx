@@ -25,7 +25,7 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState<"commit" | "pr" | "merge" | "review" | null>(null);
   const [includeLessons, setIncludeLessons] = useState(false);
   const all = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
-  const { send: changes, held } = useMemo(() => sendable(all, { includeLessons }), [all, includeLessons]);
+  const { send: changes, held, secrets } = useMemo(() => sendable(all, { includeLessons }), [all, includeLessons]);
   const lessonsChanged = all.some((change) => change.path === LESSONS_FILE);
   const review = useMemo(() => githubReview(listPendingEdits(messages)), [messages]);
   const base = github?.defaultBranch || "main";
@@ -179,6 +179,12 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
               {changes.length === 0 ? "no changes" : `${changes.length} ${changes.length === 1 ? "file" : "files"}`}
               {held.length > 0 ? " · lessons kept here" : ""}
             </p>
+            {secrets.length > 0 && (
+              <p className="mt-2 text-[12px] text-muted">
+                Not sent: {secrets.map((change) => change.path).join(", ")}. Secret files such as .env stay in this editor;
+                put the values in your host&apos;s settings instead.
+              </p>
+            )}
             {lessonsChanged && (
               <label className="mt-2 flex items-start gap-2 text-[12px] text-muted">
                 <input

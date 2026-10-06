@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { safeRelPath } from "@/lib/security/redact";
+import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
 import { blobModes, cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
@@ -161,6 +161,9 @@ export const publishGithub = createServerFn({ method: "POST" })
     const changes = sanitizeChanges(data.changes);
     if (!changes) return { ok: false, error: "Too many or too large to send. Commit fewer files." };
     if (changes.length === 0) return { ok: false, error: "Nothing changed since you opened the repo." };
+    // The editor already holds these back; refuse here too, whoever is calling.
+    const secret = changes.find((change) => !("deleted" in change) && isSecretPath(change.path));
+    if (secret) return { ok: false, error: `${secret.path} looks like a secret file, and secret files are never sent to GitHub.` };
     const message = commitMessage(data.message, "Update from Aperture");
     try {
       const parent = await githubJson(

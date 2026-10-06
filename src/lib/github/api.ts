@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
+import { overLimit } from "@/lib/security/rate-limit";
 import { filesFromZipBuffer, MAX_ZIP_BYTES, type ImportResult } from "@/lib/workspace/project-files";
 import { parseGithubUrl } from "./parse";
 import { blobModes, cleanGithubToken, type GithubChange, type GithubSource } from "./roundtrip";
@@ -75,6 +76,8 @@ export const importGithubRepo = createServerFn({ method: "POST" })
   .validator(githubImportInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubImportResult> => {
+    const busy = overLimit("import", context.userId);
+    if (busy) return { ok: false, error: busy };
     const parsed = parseGithubUrl(data.url);
     if (!parsed) {
       return { ok: false, error: "Use owner/repo or a github.com URL." };
@@ -123,6 +126,8 @@ export const listGithubRepos = createServerFn({ method: "POST" })
   .validator(githubListInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<{ ok: true; repos: GithubRepoSummary[] } | { ok: false; error: string }> => {
+    const busy = overLimit("repos", context.userId);
+    if (busy) return { ok: false, error: busy };
     const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. A token with repo access opens private repos." };
     const { status, body } = await githubJson(
@@ -150,6 +155,8 @@ export const publishGithub = createServerFn({ method: "POST" })
   .validator(githubPublishInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubPublishResult> => {
+    const busy = overLimit("publish", context.userId);
+    if (busy) return { ok: false, error: busy };
     const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
@@ -298,6 +305,8 @@ export const githubChecks = createServerFn({ method: "POST" })
   .validator(githubChecksInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubChecksResult> => {
+    const busy = overLimit("checks", context.userId);
+    if (busy) return { ok: false, error: busy };
     const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
@@ -375,6 +384,8 @@ export const postGithubReview = createServerFn({ method: "POST" })
   .validator(githubReviewInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
+    const busy = overLimit("review", context.userId);
+    if (busy) return { ok: false, error: busy };
     const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);
@@ -426,6 +437,8 @@ export const mergeGithub = createServerFn({ method: "POST" })
   .validator(githubMergeInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<GithubPublishResult> => {
+    const busy = overLimit("merge", context.userId);
+    if (busy) return { ok: false, error: busy };
     const token = await useToken(context.userId, data.token);
     if (!token) return { ok: false, error: "Connect GitHub first. The token needs access to this repo." };
     const parsed = parseGithubUrl(`${data.owner}/${data.repo}`);

@@ -29,6 +29,9 @@ export const confirmMcpCall = createServerFn({ method: "POST" })
   .validator(mcpConfirmInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
+    const { overLimit } = await import("@/lib/security/rate-limit");
+    const busy = overLimit("mcp", context.userId);
+    if (busy) return { ok: false as const, error: busy };
     const { runConfirmedMcp } = await import("./account.server");
     return runConfirmedMcp(context.userId, data);
   });

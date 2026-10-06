@@ -25,10 +25,10 @@ export const Route = createFileRoute("/api/agent")({
           throw error;
         }
 
-        const { MAX_AGENT_BODY, rateLimit, sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
-        if (!rateLimit(userId)) {
-          return Response.json({ error: "Too many Composer sends. Wait a few seconds." }, { status: 429 });
-        }
+        const { MAX_AGENT_BODY, sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
+        const { overLimit } = await import("@/lib/security/rate-limit");
+        const busy = overLimit("composer", userId);
+        if (busy) return Response.json({ error: busy }, { status: 429 });
 
         const raw = await request.text();
         if (raw.length > MAX_AGENT_BODY) {

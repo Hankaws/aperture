@@ -47,6 +47,11 @@ release notes are every line from there down to the previous version.
 
 ### Security
 
+- Per-account limits on the server work a script could repeat in a loop:
+  repository imports and sends to GitHub (6 a minute), saves (60), CI checks
+  and MCP calls (30), and Composer sends through both of its entry points
+  (24). Normal use stays well under each; past one, the editor says to wait
+  a few seconds.
 - Dependency updates for three advisories in packages Aperture uses through
   others: brace-expansion, fast-uri and source-map-js.
   ([#34](https://github.com/Hankaws/aperture/pull/34))

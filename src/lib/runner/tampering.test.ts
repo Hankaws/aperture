@@ -60,6 +60,20 @@ test("a clean exit added to code the tests import is named", () => {
   assert.equal(testTampering(files, edit("src/math.ts", "process.exit();\n")).length, 1);
 });
 
+test("a program's own entry point may exit cleanly", () => {
+  const cli = {
+    ...files,
+    "package.json": JSON.stringify({ bin: { notes: "./cli/main.js" }, scripts: { test: "jest" } }),
+  };
+  assert.deepEqual(
+    testTampering(cli, edit("cli/main.js", 'if (flag === "--version") process.exit(0);\n')),
+    [],
+  );
+  assert.deepEqual(testTampering(files, edit("bin/run.js", "process.exit(0);\n")), []);
+  // The same exit in a module the tests import is still named.
+  assert.equal(testTampering(cli, edit("src/notes.js", "process.exit(0);\n")).length, 1);
+});
+
 test("rewriting the test script is named", () => {
   assert.deepEqual(
     testTampering(files, edit("package.json", JSON.stringify({ scripts: { test: "exit 0" } }))),

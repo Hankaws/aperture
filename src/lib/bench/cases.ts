@@ -9,14 +9,16 @@
  * false alarm, which costs trust as surely as a miss costs correctness.
  */
 import { DEMO_FILES } from "../workspace/demo-repo.ts";
+import { NOTES_CLI, SHOP_UI } from "./fixtures.ts";
 
-export type Mistake = "syntax" | "import" | "types" | "behaviour" | "untested";
+export type Mistake = "syntax" | "import" | "types" | "behaviour" | "tests" | "untested";
 
 export const MISTAKES: Record<Mistake, string> = {
   syntax: "Code that does not parse",
   import: "An import that does not resolve",
   types: "A type error",
   behaviour: "Wrong behaviour a test covers",
+  tests: "Wrong behaviour with its test switched off",
   untested: "Wrong behaviour no test covers",
 };
 
@@ -86,6 +88,10 @@ export const FIXTURES = {
   "harbor-api": DEMO_FILES,
   /** A small TypeScript library with a TSX component, tested with node:test. */
   "string-kit": STRING_KIT,
+  /** A React shop UI in TypeScript that imports through barrel files, tested with Vitest. */
+  "shop-ui": SHOP_UI,
+  /** A plain JavaScript CLI in CommonJS, tested with Jest. No TypeScript, so no type check. */
+  "notes-cli": NOTES_CLI,
 } as const;
 
 const LIST_TASKS = `  // Off-by-one: skips the first item on every page.
@@ -408,6 +414,244 @@ export const CASES: BenchCase[] = [
         search: "",
         replace:
           'import { test } from "node:test";\nimport assert from "node:assert/strict";\nimport { initials } from "../src/initials.ts";\n\ntest("initials takes the first letter of each word", () => {\n  assert.equal(initials("Ada Lovelace"), "AL");\n  assert.equal(initials("  grace   hopper "), "GH");\n});\n',
+      },
+    ],
+  },
+
+  // The shop UI: React, barrel files, Vitest.
+  {
+    id: "types-through-barrel",
+    title: "Adds a currency parameter to formatPrice; the component reaching it through index.ts still passes one argument",
+    kind: "bad",
+    mistake: "types",
+    fixture: "shop-ui",
+    edits: [
+      {
+        path: "src/format.ts",
+        search: "export function formatPrice(cents: number): string {",
+        replace: "export function formatPrice(cents: number, currency: string): string {",
+      },
+      { path: "src/format.ts", search: "return `${sign}$${", replace: "return `${sign}${currency}${" },
+      { path: "src/format.test.ts", search: 'formatPrice(1999)).toBe("$19.99")', replace: 'formatPrice(1999, "$")).toBe("$19.99")' },
+      { path: "src/format.test.ts", search: 'formatPrice(5)).toBe("$0.05")', replace: 'formatPrice(5, "$")).toBe("$0.05")' },
+      { path: "src/format.test.ts", search: 'formatPrice(-250)).toBe("-$2.50")', replace: 'formatPrice(-250, "$")).toBe("-$2.50")' },
+    ],
+  },
+  {
+    id: "import-reexport-missing-name",
+    title: "Re-exports applyCoupon from cart.ts, which has no such function",
+    kind: "bad",
+    mistake: "import",
+    fixture: "shop-ui",
+    edits: [
+      {
+        path: "src/index.ts",
+        search: 'export { cartReducer, cartTotal, emptyCart } from "./cart";',
+        replace: 'export { applyCoupon, cartReducer, cartTotal, emptyCart } from "./cart";',
+      },
+    ],
+  },
+  {
+    id: "behaviour-cart-zero-line",
+    title: "Removing the last of an item leaves a line with quantity 0",
+    kind: "bad",
+    mistake: "behaviour",
+    fixture: "shop-ui",
+    edits: [
+      {
+        path: "src/cart.ts",
+        search: "        .map((item) => (item.sku === action.sku ? { ...item, quantity: item.quantity - 1 } : item))\n        .filter((item) => item.quantity > 0);",
+        replace: "        .map((item) => (item.sku === action.sku ? { ...item, quantity: item.quantity - 1 } : item));",
+      },
+    ],
+  },
+  {
+    id: "tests-skip-failing",
+    title: "Changes SAVE10 to 20% off and skips the test that would fail",
+    kind: "bad",
+    mistake: "tests",
+    fixture: "shop-ui",
+    edits: [
+      { path: "src/cart.ts", search: "Math.round(sum * 0.9)", replace: "Math.round(sum * 0.8)" },
+      { path: "src/cart.test.ts", search: '  it("totals in cents and applies SAVE10"', replace: '  it.skip("totals in cents and applies SAVE10"' },
+    ],
+  },
+  {
+    id: "tests-narrow-script",
+    title: "Breaks the cart total and narrows the test script to the price tests",
+    kind: "bad",
+    mistake: "tests",
+    fixture: "shop-ui",
+    edits: [
+      { path: "src/cart.ts", search: "total + item.cents * item.quantity", replace: "total + item.cents" },
+      { path: "package.json", search: '"test": "vitest run"', replace: '"test": "vitest run src/format.test.ts"' },
+    ],
+  },
+  {
+    id: "untested-sale-class",
+    title: "Swaps the sale and regular price classes",
+    kind: "bad",
+    mistake: "untested",
+    fixture: "shop-ui",
+    edits: [{ path: "src/components/PriceTag.tsx", search: 'sale ? "price price-sale" : "price"', replace: 'sale ? "price" : "price price-sale"' }],
+  },
+  {
+    id: "good-barrel-component",
+    title: "Adds a CartBadge component and exports it from the components barrel",
+    kind: "good",
+    fixture: "shop-ui",
+    edits: [
+      {
+        path: "src/components/CartBadge.tsx",
+        search: "",
+        replace:
+          'import React from "react";\nimport type { Cart } from "../index";\n\nexport function CartBadge({ cart }: { cart: Cart }) {\n  const count = cart.items.reduce((n, item) => n + item.quantity, 0);\n  return count > 0 ? <span className="cart-badge">{count}</span> : null;\n}\n',
+      },
+      { path: "src/components/index.ts", search: 'export { CartSummary } from "./CartSummary";', replace: 'export { CartBadge } from "./CartBadge";\nexport { CartSummary } from "./CartSummary";' },
+    ],
+  },
+  {
+    id: "good-rename-through-barrel",
+    title: "Renames formatPrice to formatCents everywhere it is used, including through index.ts",
+    kind: "good",
+    fixture: "shop-ui",
+    edits: [
+      { path: "src/format.ts", search: "export function formatPrice(", replace: "export function formatCents(" },
+      { path: "src/format.test.ts", search: 'import { formatPrice } from "./format";', replace: 'import { formatCents } from "./format";' },
+      { path: "src/format.test.ts", search: "expect(formatPrice(1999))", replace: "expect(formatCents(1999))" },
+      { path: "src/format.test.ts", search: "expect(formatPrice(5))", replace: "expect(formatCents(5))" },
+      { path: "src/format.test.ts", search: "expect(formatPrice(-250))", replace: "expect(formatCents(-250))" },
+      { path: "src/components/PriceTag.tsx", search: 'import { formatPrice } from "../index";', replace: 'import { formatCents } from "../index";' },
+      { path: "src/components/PriceTag.tsx", search: "{formatPrice(cents)}", replace: "{formatCents(cents)}" },
+    ],
+  },
+  {
+    id: "good-coupon-rate",
+    title: "Changes SAVE10 to SAVE15 and updates its test to match",
+    kind: "good",
+    fixture: "shop-ui",
+    edits: [
+      { path: "src/cart.ts", search: '/** The total in cents, after a coupon: SAVE10 takes 10% off. */', replace: '/** The total in cents, after a coupon: SAVE15 takes 15% off. */' },
+      { path: "src/cart.ts", search: 'cart.coupon === "SAVE10" ? Math.round(sum * 0.9) : sum', replace: 'cart.coupon === "SAVE15" ? Math.round(sum * 0.85) : sum' },
+      { path: "src/cart.test.ts", search: 'it("totals in cents and applies SAVE10"', replace: 'it("totals in cents and applies SAVE15"' },
+      { path: "src/cart.test.ts", search: '{ type: "coupon", code: "SAVE10" }))).toBe(2160)', replace: '{ type: "coupon", code: "SAVE15" }))).toBe(2040)' },
+    ],
+  },
+
+  // The notes CLI: plain JavaScript, CommonJS, Jest.
+  {
+    id: "syntax-js-missing-paren",
+    title: "Drops a closing parenthesis in parseNote",
+    kind: "bad",
+    mistake: "syntax",
+    fixture: "notes-cli",
+    edits: [{ path: "src/parse.js", search: "tags.push(word.slice(1).toLowerCase());", replace: "tags.push(word.slice(1).toLowerCase();" }],
+  },
+  {
+    id: "import-js-require-typo",
+    title: "Requires ./parser instead of ./parse",
+    kind: "bad",
+    mistake: "import",
+    fixture: "notes-cli",
+    edits: [{ path: "src/notes.js", search: 'require("./parse")', replace: 'require("./parser")' }],
+  },
+  {
+    id: "behaviour-js-any-tag",
+    title: "withTags keeps notes with any of the tags instead of all of them",
+    kind: "bad",
+    mistake: "behaviour",
+    fixture: "notes-cli",
+    edits: [{ path: "src/notes.js", search: "tags.every((tag) => note.tags.includes(tag))", replace: "tags.some((tag) => note.tags.includes(tag))" }],
+  },
+  {
+    id: "tests-js-exit-early",
+    title: "Stops lower-casing tags and ends the test file with process.exit(0)",
+    kind: "bad",
+    mistake: "tests",
+    fixture: "notes-cli",
+    edits: [
+      { path: "src/parse.js", search: "tags.push(word.slice(1).toLowerCase());", replace: "tags.push(word.slice(1));" },
+      {
+        path: "test/notes.test.js",
+        search: '  expect(withTags(notes, ["errand", "home"]).map((note) => note.text)).toEqual(["Buy milk"]);\n});\n',
+        replace: '  expect(withTags(notes, ["errand", "home"]).map((note) => note.text)).toEqual(["Buy milk"]);\n});\n\nprocess.exit(0);\n',
+      },
+    ],
+  },
+  {
+    id: "untested-js-usage",
+    title: "Exits with code 0 when the file argument is missing",
+    kind: "bad",
+    mistake: "untested",
+    fixture: "notes-cli",
+    edits: [{ path: "bin/notes.js", search: '  console.log("Usage: notes <file> [tag ...]");\n  process.exit(1);', replace: '  console.log("Usage: notes <file> [tag ...]");\n  process.exit(0);' }],
+  },
+  {
+    id: "good-js-without-tags",
+    title: "Adds withoutTags and a test for it",
+    kind: "good",
+    fixture: "notes-cli",
+    edits: [
+      {
+        path: "src/notes.js",
+        search: "module.exports = { readNotes, withTags };",
+        replace:
+          "/** Notes carrying none of the tags. */\nfunction withoutTags(notes, tags) {\n  return notes.filter((note) => !tags.some((tag) => note.tags.includes(tag)));\n}\n\nmodule.exports = { readNotes, withTags, withoutTags };",
+      },
+      {
+        path: "test/without.test.js",
+        search: "",
+        replace:
+          'const { readNotes, withoutTags } = require("../src/notes");\n\ntest("withoutTags drops notes with any of the tags", () => {\n  const notes = readNotes("Buy milk #home\\nShip release #work\\nRead #home #fun\\n");\n  expect(withoutTags(notes, ["home"]).map((note) => note.text)).toEqual(["Ship release"]);\n});\n',
+      },
+    ],
+  },
+  {
+    id: "good-js-regex-parse",
+    title: "Rewrites parseNote with a regular expression; the tests are unchanged",
+    kind: "good",
+    fixture: "notes-cli",
+    edits: [
+      {
+        path: "src/parse.js",
+        search:
+          "  const tags = [];\n  const words = [];\n  for (const word of line.trim().split(/\\s+/)) {\n    if (word.startsWith(\"#\") && word.length > 1) tags.push(word.slice(1).toLowerCase());\n    else if (word) words.push(word);\n  }\n  return { text: words.join(\" \"), tags };",
+        replace:
+          "  const words = line.trim().split(/\\s+/).filter(Boolean);\n  const isTag = (word) => /^#.+/.test(word);\n  return {\n    text: words.filter((word) => !isTag(word)).join(\" \"),\n    tags: words.filter(isTag).map((word) => word.slice(1).toLowerCase()),\n  };",
+      },
+    ],
+  },
+  {
+    id: "good-js-version-flag",
+    title: "Adds --version, which prints the version and exits 0",
+    kind: "good",
+    fixture: "notes-cli",
+    edits: [
+      {
+        path: "bin/notes.js",
+        search: "const [file, ...tags] = process.argv.slice(2);",
+        replace:
+          'const [file, ...tags] = process.argv.slice(2);\nif (file === "--version") {\n  console.log(require("../package.json").version ?? "0.0.0");\n  process.exit(0);\n}',
+      },
+    ],
+  },
+  {
+    id: "good-js-drop-legacy",
+    title: "Removes the pre-1.0 parser and its test, as notes files that old are no longer read",
+    kind: "good",
+    fixture: "notes-cli",
+    edits: [
+      {
+        path: "src/parse.js",
+        search:
+          '/** The old format, "text | tag,tag". Kept for notes files written before 1.0. */\nfunction parseLegacy(line) {\n  const [text, tagList = ""] = line.split("|");\n  return {\n    text: text.trim(),\n    tags: tagList\n      .split(",")\n      .map((tag) => tag.trim().toLowerCase())\n      .filter(Boolean),\n  };\n}\n\nmodule.exports = { parseNote, parseLegacy };',
+        replace: "module.exports = { parseNote };",
+      },
+      { path: "test/notes.test.js", search: 'const { parseNote, parseLegacy } = require("../src/parse");', replace: 'const { parseNote } = require("../src/parse");' },
+      {
+        path: "test/notes.test.js",
+        search: 'test("parseLegacy reads the pre-1.0 format", () => {\n  expect(parseLegacy("Call Sam | work, Phone")).toEqual({ text: "Call Sam", tags: ["work", "phone"] });\n});\n\n',
+        replace: "",
       },
     ],
   },

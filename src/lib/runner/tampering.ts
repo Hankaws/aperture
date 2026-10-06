@@ -43,6 +43,29 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+/**
+ * A program's own entry points: the files package.json lists under `bin`, and
+ * anything in a `bin/` folder. Their exit code is theirs to choose, and tests
+ * import modules, not executables, so a clean exit there cuts no run short.
+ */
+function executables(files: Record<string, string>): Set<string> {
+  const out = new Set<string>();
+  for (const [path, text] of Object.entries(files)) {
+    if (path !== "package.json" && !path.endsWith("/package.json")) continue;
+    const dir = path.slice(0, path.length - "package.json".length);
+    try {
+      const bin = (JSON.parse(text) as { bin?: unknown }).bin;
+      const targets =
+        typeof bin === "string" ? [bin] : bin && typeof bin === "object" ? Object.values(bin) : [];
+      for (const target of targets)
+        if (typeof target === "string") out.add(`${dir}${target.replace(/^\.\//, "")}`);
+    } catch {
+      // Not JSON yet: nothing to read.
+    }
+  }
+  return out;
+}
+
 function testScript(text: string | undefined): string | null {
   try {
     const script = (JSON.parse(text ?? "") as { scripts?: Record<string, unknown> }).scripts?.test;
@@ -55,6 +78,7 @@ function testScript(text: string | undefined): string | null {
 /** What the change does to the tests, one clause each ("skips 1 test in tests/a.test.ts"); empty when nothing. */
 export function testTampering(files: Record<string, string>, edits: Edit[]): string[] {
   const found: string[] = [];
+  const entryPoints = executables(files);
   for (const { path, newText } of edits) {
     const before = files[path] ?? "";
     if (path === "package.json" || path.endsWith("/package.json")) {
@@ -65,7 +89,12 @@ export function testTampering(files: Record<string, string>, edits: Edit[]): str
       continue;
     }
     if (!isTestPath(path)) {
-      if (SCRIPT.test(path) && count(CLEAN_EXIT, newText) > count(CLEAN_EXIT, before))
+      const executable = entryPoints.has(path) || /(^|\/)bin\//.test(path);
+      if (
+        SCRIPT.test(path) &&
+        !executable &&
+        count(CLEAN_EXIT, newText) > count(CLEAN_EXIT, before)
+      )
         found.push(`calls process.exit(0) in ${path}, which ends a test run early as a pass`);
       continue;
     }

@@ -18,3 +18,10 @@ test("every case is named once and says what it is", () => {
     assert.ok(item.edits.length > 0, item.id);
   }
 });
+
+test("the README states the benchmark's size as it is", () => {
+  const { summary } = JSON.parse(readFileSync(new URL("./results.json", import.meta.url), "utf8"));
+  const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8").replace(/\s+/g, " ");
+  const said = `${summary.bad + summary.good} staged edits, ${summary.bad} with a mistake and ${summary.good} correct`;
+  assert.ok(readme.includes(said), `README.md should say "${said}"`);
+});

@@ -7,7 +7,20 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- The benchmark has 48 cases instead of 30, across four projects instead of
+  two: a React shop UI that imports through barrel files (Vitest) and a plain
+  JavaScript command-line tool (Jest) join the first two. A new kind of
+  mistake is counted: a test skipped, cut short or narrowed away to hide a
+  bug. The page lists its one false alarm and says what plain JavaScript
+  does not get.
+
 ### Fixed
+
+- A command-line tool's own entry point may now exit cleanly: the Tests
+  check no longer counts `process.exit(0)` in a file under `bin/` or listed
+  as a `bin` in package.json as cutting the tests short.
 
 - The Types check missed a caller that reaches a changed file through an
   `index.ts` that re-exports it. It now checks the files that depend on the

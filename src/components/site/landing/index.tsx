@@ -293,7 +293,7 @@ export function Landing() {
               <HeroCtas />
               <p className="mt-4 text-sm text-muted">
                 In our benchmark the checks stopped {bench.caughtCatchable} of {bench.catchable} bad edits they can
-                see, with {bench.falseAlarms} false alarms on {bench.good} correct ones.{" "}
+                see, with {bench.falseAlarms} false {bench.falseAlarms === 1 ? "alarm" : "alarms"} on {bench.good} correct ones.{" "}
                 <Link to="/benchmark" className="tap text-fg underline-offset-2 hover:underline">
                   Every case, misses included
                 </Link>

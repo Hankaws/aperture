@@ -72,6 +72,9 @@ function Stat({ value, label }: { value: string; label: string }) {
 function BenchmarkPage() {
   const s = results.summary;
   const untested = s.byMistake.find((row) => row.mistake === "untested");
+  const falseAlarms = results.cases.filter((item) => item.kind === "good" && item.caughtBy.length > 0);
+  const misses = results.cases.filter((item) => item.kind === "bad" && item.caughtBy.length === 0);
+  const missesUntested = misses.every((item) => item.mistake === "untested");
   return (
     <div className="min-h-dvh bg-bg text-fg">
       <SiteNav />
@@ -125,10 +128,11 @@ function BenchmarkPage() {
         <h2 className="mt-12 text-lg font-medium tracking-tight">How it is measured</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
           <li>
-            Each case is a staged edit to a small real project: the editor's demo API (TypeScript, Vitest, three
-            tests already failing) or a small TSX library (node:test). A case counts as stopped when any check turns
-            red, because a red check is what holds Apply back. An amber check (failing the same way before the edit)
-            does not count.
+            Each case is a staged edit to one of four small projects: the editor's demo API (TypeScript, Vitest,
+            three tests already failing), a TSX library (node:test), a React shop UI that imports through barrel
+            files (TypeScript, Vitest), and a command-line tool in plain JavaScript and CommonJS (Jest, no type
+            check). A case counts as stopped when any check turns red, because a red check is what holds Apply back.
+            An amber check (failing the same way before the edit) does not count.
           </li>
           <li>
             The checks are the editor's own code: the same parse and import checks, the TypeScript compiler, and the
@@ -148,19 +152,32 @@ function BenchmarkPage() {
         <h2 className="mt-12 text-lg font-medium tracking-tight">What this shows</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
           <li>
-            On these {s.catchable} mistakes a check can see (parse, imports, types, or behaviour a test covers), the
-            editor's checks stopped all of them before Apply: {s.caughtCatchable} of {s.catchable}.
+            On these {s.catchable} mistakes a check can see (parse, imports, types, behaviour a test covers, or a test
+            switched off to hide one), the editor's checks stopped{" "}
+            {s.caughtCatchable === s.catchable ? "all of them" : "some of them"} before Apply: {s.caughtCatchable} of{" "}
+            {s.catchable}.
           </li>
           <li>
-            On these {s.good} correct edits, no check turned red by mistake: {s.falseAlarms} of {s.good} false alarms.
+            {falseAlarms.length === 0 ? (
+              <>
+                On these {s.good} correct edits, no check turned red by mistake: 0 of {s.good} false alarms.
+              </>
+            ) : (
+              <>
+                On these {s.good} correct edits, {falseAlarms.length} turned a check red by mistake:{" "}
+                {falseAlarms.map((item) => `“${item.title}”`).join(", ")}. A change that removes tests is held for a
+                second look even when removing them is right; Apply anyway is one click.
+              </>
+            )}
           </li>
           <li>
             Switching from a one-file light type check to the TypeScript compiler is what lifts catchable stops from{" "}
             {s.lightCaught} of {s.bad} to {s.caught} of {s.bad} on this set.
           </li>
           <li>
-            The misses are listed on purpose: {s.bad - s.caught} of {s.bad} bad edits change behaviour no test
-            covers, so no check here can stop them. A green suite is not a proof the edit is right.
+            The misses are listed on purpose: {misses.length} of {s.bad} bad edits got through
+            {missesUntested ? ", all of them behaviour no test covers, which no check here can stop" : ""}. A green
+            suite is not a proof the edit is right.
           </li>
         </ul>
 
@@ -171,8 +188,14 @@ function BenchmarkPage() {
             each check and to include the failure mode we know we miss.
           </li>
           <li>
-            Preview is not scored here: none of the cases touch a page. Scores for other languages, bigger repos, or
-            other models are not claimed.
+            Preview is not scored here: none of the cases touch a page. Scores for languages other than TypeScript
+            and JavaScript, bigger repos, or other models are not claimed.
+          </li>
+          <li>
+            Plain JavaScript gets no type check, and the Imports check reads <code className="font-mono text-fg">import</code>{" "}
+            and <code className="font-mono text-fg">export … from</code>, not{" "}
+            <code className="font-mono text-fg">require()</code>: a mistyped require is stopped only when a test loads
+            it.
           </li>
           <li>
             The numbers are not a claim that Aperture is safer than another editor, or that Apply is always correct

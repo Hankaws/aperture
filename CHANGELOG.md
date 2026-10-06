@@ -7,6 +7,16 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- A launch smoke test, `npm run smoke`, that walks the signed-in site the
+  way a new visitor does against a production build: every public page on a
+  laptop and a phone, sign-up, Composer playing recordings on the public demo
+  host, the server refusing a paid plan, the project opening on a second
+  device, and Composer on any other host asking for the visitor's own key
+  rather than spending one on the server. CI runs it on every pull request.
+  ([#38](https://github.com/Hankaws/aperture/pull/38))
+
 ### Changed
 
 - The benchmark has 48 cases instead of 30, across four projects instead of

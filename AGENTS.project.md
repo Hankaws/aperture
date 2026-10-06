@@ -279,6 +279,19 @@ to anything else. Locally:
 VITE_AUTH_ENABLED=false npm run preview -- --port 8095`, then
 `node scripts/e2e-demo.mjs http://127.0.0.1:8095`.
 
+`scripts/smoke-visitor.mjs` (`npm run smoke`, CI job "launch smoke (signed-in
+visitor)") covers what only the signed-in site does, on a build with sign-in
+on: every public page on a laptop and a phone with a clean console, sign-up,
+Composer replaying on the public demo host (posed with `x-forwarded-host:
+aperturesais.grok.me`), the server refusing a forced paid plan, the project
+opening on a second device, and Composer off the demo host asking for the
+visitor's own key. It serves the build itself on port 8096 with
+`BETTER_AUTH_URL` set to that URL (Better Auth rejects origins it does not
+know) and a decoy `XAI_API_KEY`, so it proves a key in the server's
+environment is never spent on a visitor. Locally: `npm run build && npm run
+smoke`. Which file is open is not saved with the project, so a second device
+opens on the README; the test opens `src/store.ts` itself.
+
 ## The benchmark must stay true
 
 `src/lib/bench/` runs the cases in `cases.ts` through the editor's own

@@ -27,7 +27,8 @@ export const THEME_BOOT_SCRIPT =
   'try{var t=localStorage.getItem("aperture-theme");' +
   'if(t==="system")t=matchMedia("(prefers-color-scheme: light)").matches?"light":"cursor";' +
   'if(t==="cursor"||t==="claude"||t==="light")document.documentElement.setAttribute("data-theme",t);' +
-  'var d=localStorage.getItem("aperture-density");if(d)document.documentElement.setAttribute("data-density",d);}catch(e){}';
+  'var d=localStorage.getItem("aperture-density");if(!d&&matchMedia("(pointer: coarse)").matches)d="comfortable";' +
+  'if(d)document.documentElement.setAttribute("data-density",d);}catch(e){}';
 
 export function readTheme(): EditorTheme {
   try {
@@ -37,12 +38,19 @@ export function readTheme(): EditorTheme {
   }
 }
 
+/** The stored choice; with none, comfortable on a touch screen (bigger targets) and compact elsewhere. */
 export function readDensity(): Density {
   try {
-    return localStorage.getItem(DENSITY_KEY) === "comfortable" ? "comfortable" : "compact";
+    const stored = localStorage.getItem(DENSITY_KEY);
+    if (stored === "comfortable" || stored === "compact") return stored;
   } catch {
-    return "compact";
+    // Storage blocked: fall through to the device's default.
   }
+  return defaultDensity(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+}
+
+export function defaultDensity(touch: boolean): Density {
+  return touch ? "comfortable" : "compact";
 }
 
 const LIGHT_QUERY = "(prefers-color-scheme: light)";

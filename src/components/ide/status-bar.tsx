@@ -127,13 +127,12 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         <span className="hidden shrink-0 text-subtle md:inline" title="Composer waits for Build it, and a background run for you to open it. Nothing is applied until you Apply.">
           Manual
         </span>
-        <Link
-          to={aiLabel === "Sign in" ? "/login" : "/settings"}
-          search={aiLabel === "Sign in" ? { next: "/app" } : { tab: "models" }}
-          className="max-w-36 truncate hover:text-fg"
-        >
-          {aiLabel}
-        </Link>
+        {/* Signed out, the header and Composer already say where to sign in; a third link says nothing new. */}
+        {aiLabel !== "Sign in" && (
+          <Link to="/settings" search={{ tab: "models" }} className="max-w-36 truncate hover:text-fg">
+            {aiLabel}
+          </Link>
+        )}
         <button type="button" className="hidden hover:text-fg sm:inline" onClick={() => setHelpOpen(true)}>
           How this works
         </button>

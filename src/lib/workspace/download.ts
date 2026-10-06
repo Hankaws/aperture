@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { useWorkspace } from "./store";
 
@@ -12,6 +11,8 @@ export function zipName(name: string): string {
 }
 
 export async function zipWorkspace(files: Record<string, string>): Promise<{ blob: Blob; count: number }> {
+  // JSZip is only needed when someone downloads: it loads then, not with the editor.
+  const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   let count = 0;
   for (const [path, content] of Object.entries(files)) {

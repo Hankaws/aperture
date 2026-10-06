@@ -313,6 +313,44 @@ function Chip({
   );
 }
 
+const CHECKS_SEEN_KEY = "aperture-checks-explained";
+
+/**
+ * The first time anyone sees the strip, one sentence on what it is: the reason
+ * to use Aperture, and easy to miss as a row of small chips. Shown once per browser.
+ */
+function ChecksExplainer() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try {
+      setShow(window.localStorage.getItem(CHECKS_SEEN_KEY) !== "1");
+    } catch {
+      setShow(false);
+    }
+  }, []);
+  if (!show) return null;
+  function dismiss() {
+    setShow(false);
+    try {
+      window.localStorage.setItem(CHECKS_SEEN_KEY, "1");
+    } catch {
+      // Storage blocked: it shows again next time, nothing worse.
+    }
+  }
+  return (
+    <div role="note" className="mt-1.5 flex items-start gap-2 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-2 text-[12px] leading-snug text-muted">
+      <p className="min-w-0 flex-1">
+        <span className="text-fg">These checks ran on the staged change, before anything touched your files.</span>{" "}
+        Green passed. Red holds Apply and goes back to Composer once. Amber was already failing before this change.
+        A dash could not run here, and says why.
+      </p>
+      <button type="button" onClick={dismiss} className="shrink-0 rounded px-1.5 py-0.5 text-fg hover:bg-elevated">
+        Got it
+      </button>
+    </div>
+  );
+}
+
 export function CheckResults({
   files,
   edits,
@@ -396,6 +434,7 @@ export function CheckResults({
           />
         ))}
       </ul>
+      <ChecksExplainer />
       {problem && (
         <p
           className={cn(

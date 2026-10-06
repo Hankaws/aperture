@@ -795,7 +795,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                   search={{ next: "/app" }}
                   className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
                 >
-                  Sign in
+                  Sign in to send
                 </Link>
                 <Link
                   to="/login"

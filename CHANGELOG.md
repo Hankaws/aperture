@@ -7,13 +7,34 @@ under **Unreleased**; the site shows this file at `/changelog`.
 
 ### Added
 
-- A changelog, here and at `/changelog`.
-  ([#28](https://github.com/Hankaws/aperture/pull/28))
+- The first time the checks appear, one line says what they are: what green,
+  red, amber and a dash mean, and that nothing has touched your files yet.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
+- The landing page shows the benchmark's numbers, read from the benchmark
+  itself, and links every case.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
+
+### Changed
+
+- The site and README say what Types is now: the TypeScript compiler, not a
+  light check. The model section mentions a model on your own computer.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
+- On a phone, a first visit opens Composer and its demo tasks instead of a
+  file. ([#29](https://github.com/Hankaws/aperture/pull/29))
+- Touch screens start with the comfortable density.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
+- Signed out, the editor shows two sign-in links instead of three identical
+  ones: the header's, and "Sign in to send" in Composer.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
+- The editor loads less up front: the zip library loads when you download.
+  ([#29](https://github.com/Hankaws/aperture/pull/29))
 
 ## 2026-10-05
 
 ### Added
 
+- A changelog, here and at `/changelog`.
+  ([#28](https://github.com/Hankaws/aperture/pull/28))
 - **Plan first** switch in Composer, on by default and remembered per
   browser, in place of the Plan / Build / Iterate buttons. Turn it off to
   have Composer edit straight away; nothing is applied until you Apply

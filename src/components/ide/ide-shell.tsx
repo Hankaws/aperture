@@ -289,6 +289,11 @@ export function IdeShell() {
 
   useLayoutEffect(() => {
     hydrateAppearance();
+    // A phone shows one pane. With nothing in the thread yet, that pane is Composer and its demo
+    // tasks: a first visit should see where to start, not a file it did not open.
+    if (window.matchMedia("(max-width: 767px)").matches && useWorkspace.getState().messages.length === 0) {
+      useIdeUi.getState().setMobilePane("agent");
+    }
     setLayoutReady(true);
   }, []);
 

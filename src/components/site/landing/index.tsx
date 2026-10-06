@@ -10,6 +10,7 @@ import { showPricing } from "@/lib/billing/pricing-visible";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { cn } from "@/lib/utils";
 import { ProductDemo } from "./demo";
+import { summary as bench } from "@/lib/bench/results.json";
 import { Reveal } from "./reveal";
 import { usePrefersReducedMotion } from "./use-reduced-motion";
 import { SnippetShowcase } from "./snippets";
@@ -31,7 +32,7 @@ const HOW = [
   {
     n: "03",
     title: "Check, then apply",
-    body: "Edits arrive as staged diffs, each checked: it parses, imports resolve, a light type check passes, the preview renders, the tests pass. Keep or skip file by file.",
+    body: "Edits arrive as staged diffs, each checked: it parses, imports resolve, the TypeScript compiler passes, the preview renders, the tests pass. Keep or skip file by file.",
   },
 ];
 
@@ -57,7 +58,7 @@ const PILLARS = [
   {
     id: "model",
     title: "You pick the model",
-    body: "Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, or a custom OpenAI-compatible endpoint. If the key is missing, Aperture says so. It does not fall back to a shared key. The public demo plays recorded runs instead.",
+    body: "Your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, a custom OpenAI-compatible endpoint, or a model on your own computer (Ollama or LM Studio), called straight from your tab. It does not fall back to a shared key. The public demo plays recorded runs instead.",
     visual: "model",
   },
 ] as const;
@@ -69,7 +70,7 @@ const FAQ = [
   },
   {
     q: "What gets checked?",
-    a: "Five things, computed from the staged change: the changed files parse, every import in them resolves, a light type check finds no errors it can prove (it is not tsc), the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
+    a: "Five things, computed from the staged change: the changed files parse, every import in them resolves, the TypeScript compiler (run in a worker in your tab) finds no new errors in them or the files that import them, the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
   },
   {
     q: "Do the tests cost anything?",
@@ -81,7 +82,7 @@ const FAQ = [
   },
   {
     q: "Do I have to use your model?",
-    a: "There is no model of ours. Add your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, or a custom OpenAI-compatible endpoint, under Settings → Models. That provider bills you. Aperture does not use a shared key. The public demo plays recorded runs and calls no model. What a provider sees is on the data-handling page.",
+    a: "There is no model of ours. Add your own key for Grok, OpenAI, Anthropic, Gemini or DeepSeek, or a custom OpenAI-compatible endpoint, under Settings → Models. That provider bills you. Or point Composer at Ollama or LM Studio on your own computer: the agent then runs in your tab and costs nothing. Aperture does not use a shared key. The public demo plays recorded runs and calls no model. What a provider sees is on the data-handling page.",
   },
   {
     q: "How do I take the code with me?",
@@ -285,12 +286,19 @@ export function Landing() {
             </h1>
             <p className="landing-in mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted sm:text-lg" style={{ animationDelay: "720ms" }}>
               Composer plans a change and stages it as a diff. Before you apply it, Aperture checks that it parses,
-              its imports resolve, a light type check passes, the preview renders, and the tests pass. The tests run in
-              your browser tab, free, in about a second.
+              its imports resolve, the TypeScript compiler passes, the preview renders, and the tests pass. The tests
+              run in your browser tab, free, in about a second.
             </p>
             <div className="landing-in" style={{ animationDelay: "880ms" }}>
               <HeroCtas />
-              <p className="mt-3 text-sm text-subtle">
+              <p className="mt-4 text-sm text-muted">
+                In our benchmark the checks stopped {bench.caughtCatchable} of {bench.catchable} bad edits they can
+                see, with {bench.falseAlarms} false alarms on {bench.good} correct ones.{" "}
+                <Link to="/benchmark" className="tap text-fg underline-offset-2 hover:underline">
+                  Every case, misses included
+                </Link>
+              </p>
+              <p className="mt-2 text-sm text-subtle">
                 Open source · MIT ·{" "}
                 <Link to="/privacy" className="tap text-muted underline-offset-2 hover:text-fg hover:underline">
                   what leaves the browser

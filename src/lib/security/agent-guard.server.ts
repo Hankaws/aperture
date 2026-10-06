@@ -15,16 +15,7 @@ export const MAX_FILES = 120;
 export const MAX_FILE_CHARS = 200_000;
 export const MAX_TOTAL_CHARS = 2_500_000;
 
-const hits = new Map<string, number[]>();
-
-export function rateLimit(id: string, max = 24, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const arr = (hits.get(id) ?? []).filter((t) => now - t < windowMs);
-  if (arr.length >= max) return false;
-  arr.push(now);
-  hits.set(id, arr);
-  return true;
-}
+export { rateLimit } from "./rate-limit";
 
 export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "Invalid request" };

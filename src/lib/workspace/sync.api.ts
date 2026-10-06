@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { checkSyncLimits, withoutSecrets, type RemoteSnapshot, type WorkspaceFiles } from "./sync";
 import { workspaceSaveInput } from "@/lib/security/inputs";
+import { overLimit } from "@/lib/security/rate-limit";
 
 export type LoadResult = { ok: true; workspace: RemoteSnapshot | null } | { ok: false; error: string };
 
@@ -41,12 +42,14 @@ export const saveWorkspace = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(workspaceSaveInput)
   .handler(async ({ data, context }): Promise<SaveResult> => {
+    const busy = overLimit("save", context.userId);
+    if (busy) return { ok: false, error: busy };
     const name = data.name.trim().slice(0, 120) || "workspace";
     if (!data.files || typeof data.files !== "object" || Array.isArray(data.files)) {
       return { ok: false, error: "Nothing to save." };
     }
-    const overLimit = checkSyncLimits(data.files);
-    if (overLimit) return overLimit;
+    const tooBig = checkSyncLimits(data.files);
+    if (tooBig) return tooBig;
     const files = withoutSecrets(data.files);
 
     const { getSql } = await import("@/lib/db");

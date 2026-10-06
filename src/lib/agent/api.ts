@@ -14,6 +14,10 @@ export const runAgent = createServerFn({ method: "POST" })
   .validator(agentInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<AgentResult> => {
+    // The same limit as /api/agent: they are two doors to the same loop.
+    const { overLimit } = await import("@/lib/security/rate-limit");
+    const busy = overLimit("composer", context.userId);
+    if (busy) return { ok: false, error: busy };
     const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
     const input = sanitizeAgentInput(data);
     if ("error" in input) return { ok: false, error: input.error };

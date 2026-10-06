@@ -1,4 +1,5 @@
 import { LESSONS_PATH } from "../workspace/lessons.ts";
+import { isSecretPath } from "../security/redact.ts";
 
 /** Where an opened project came from, plus a stamp of each file at that moment. */
 export type GithubOrigin = {
@@ -39,12 +40,22 @@ export function stampFiles(files: Record<string, string>): Record<string, string
  */
 export const LESSONS_FILE = LESSONS_PATH;
 
-/** What to send, and what is held back because it is only this editor's. */
-export function sendable(changes: GithubChange[], opts: { includeLessons: boolean }): { send: GithubChange[]; held: GithubChange[] } {
-  if (opts.includeLessons) return { send: changes, held: [] };
+/**
+ * What to send; what is held back because it is only this editor's (the
+ * lessons, unless ticked in); and secret files such as `.env`, which are
+ * never sent, whatever is ticked. Deleting a secret file is sent: that takes
+ * it out of the repository.
+ */
+export function sendable(
+  changes: GithubChange[],
+  opts: { includeLessons: boolean },
+): { send: GithubChange[]; held: GithubChange[]; secrets: GithubChange[] } {
+  const secret = (change: GithubChange) => !("deleted" in change) && isSecretPath(change.path);
+  const lessons = (change: GithubChange) => !opts.includeLessons && change.path === LESSONS_FILE;
   return {
-    send: changes.filter((change) => change.path !== LESSONS_FILE),
-    held: changes.filter((change) => change.path === LESSONS_FILE),
+    send: changes.filter((change) => !secret(change) && !lessons(change)),
+    held: changes.filter((change) => !secret(change) && lessons(change)),
+    secrets: changes.filter(secret),
   };
 }
 

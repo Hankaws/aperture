@@ -14,6 +14,10 @@ release notes are every line from there down to the previous version.
   deleting, skipping or `.only`-ing tests, or rewriting the test script. Each
   now shows red and says what the change did, and a fix turn is told to fix
   the code instead. ([#31](https://github.com/Hankaws/aperture/pull/31))
+- Sending to GitHub could include secret files such as `.env`, for instance
+  one a Composer edit created. They are now never sent, the send says which
+  were left out, and the server refuses them too. Deleting one is still sent.
+  ([#32](https://github.com/Hankaws/aperture/pull/32))
 
 ## 0.2.0 - 2026-10-06
 

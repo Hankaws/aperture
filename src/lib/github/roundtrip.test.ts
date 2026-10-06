@@ -52,9 +52,31 @@ test("Composer's lessons stay out of a send unless they are ticked in", () => {
   ];
   assert.deepEqual(
     sendable(changes, { includeLessons: false }),
-    { send: [changes[1]], held: [changes[0]] },
+    { send: [changes[1]], held: [changes[0]], secrets: [] },
   );
-  assert.deepEqual(sendable(changes, { includeLessons: true }), { send: changes, held: [] });
+  assert.deepEqual(sendable(changes, { includeLessons: true }), { send: changes, held: [], secrets: [] });
+});
+
+test("secret files are never sent, whatever is ticked; deleting one is", () => {
+  const changes = [
+    { path: ".env", content: "OPENAI_API_KEY=sk-real" },
+    { path: "server/.env.production", content: "DATABASE_URL=postgres://u:p@h/db" },
+    { path: "certs/server.key", content: "-----BEGIN PRIVATE KEY-----" },
+    { path: ".env.example", content: "OPENAI_API_KEY=" },
+    { path: "src/a.ts", content: "a" },
+    { path: ".env.local", deleted: true as const },
+  ];
+  for (const includeLessons of [false, true]) {
+    const { send, held, secrets } = sendable(changes, { includeLessons });
+    assert.deepEqual(send.map((c) => c.path), [".env.example", "src/a.ts", ".env.local"]);
+    assert.deepEqual(held, []);
+    assert.deepEqual(secrets.map((c) => c.path), [".env", "server/.env.production", "certs/server.key"]);
+  }
+  // Unsent, a secret file still differs from the repository after a send.
+  const stamps = stampFiles({ "src/a.ts": "old" });
+  const files = { "src/a.ts": "new", ".env": "KEY=1" };
+  const next = stampsAfterSend(stamps, sendable(changesSince(stamps, files), { includeLessons: false }).send);
+  assert.deepEqual(changesSince(next, files).map((c) => c.path), [".env"]);
 });
 
 test("after a send only what was sent counts as in the repository", () => {

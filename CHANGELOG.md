@@ -22,6 +22,19 @@ release notes are every line from there down to the previous version.
   markup such as `<svg/onload=…>`. The preview now carries a policy that lets
   only Aperture's own scripts run, so nothing of the page's does.
   ([#33](https://github.com/Hankaws/aperture/pull/33))
+- The Types check missed a caller that reaches a changed file through an
+  `index.ts` that re-exports it. It now checks the files that depend on the
+  change, nearest first, through re-exports and importers in turn.
+  ([#34](https://github.com/Hankaws/aperture/pull/34))
+- The Imports check now reads `export … from` too, so a re-export of a file
+  or name that does not exist is caught.
+  ([#34](https://github.com/Hankaws/aperture/pull/34))
+
+### Security
+
+- Dependency updates for three advisories in packages Aperture uses through
+  others: brace-expansion, fast-uri and source-map-js.
+  ([#34](https://github.com/Hankaws/aperture/pull/34))
 
 ## 0.2.0 - 2026-10-06
 

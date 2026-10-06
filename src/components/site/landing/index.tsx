@@ -70,7 +70,7 @@ const FAQ = [
   },
   {
     q: "What gets checked?",
-    a: "Five things, computed from the staged change: the changed files parse, every import in them resolves, the TypeScript compiler (run in a worker in your tab) finds no new errors in them or the files that import them, the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
+    a: "Five things, computed from the staged change: the changed files parse, every import in them resolves, the TypeScript compiler (run in a worker in your tab) finds no new errors in them or the files that depend on them, the staged page renders without errors and is not blank, and the project’s tests pass. A check that could not run says why. It never shows as a pass.",
   },
   {
     q: "Do the tests cost anything?",

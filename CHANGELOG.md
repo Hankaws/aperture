@@ -18,6 +18,10 @@ release notes are every line from there down to the previous version.
   one a Composer edit created. They are now never sent, the send says which
   were left out, and the server refuses them too. Deleting one is still sent.
   ([#32](https://github.com/Hankaws/aperture/pull/32))
+- With **Scripts off**, a page's code could still run in the preview through
+  markup such as `<svg/onload=…>`. The preview now carries a policy that lets
+  only Aperture's own scripts run, so nothing of the page's does.
+  ([#33](https://github.com/Hankaws/aperture/pull/33))
 
 ## 0.2.0 - 2026-10-06
 

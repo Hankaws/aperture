@@ -241,6 +241,35 @@ function inlineScripts(html: string, files: Record<string, string>, entry: strin
   });
 }
 
+/**
+ * One per session, for the preview's own scripts (picker, error reporter,
+ * render probe). The page's markup cannot know it, so with scripts off a
+ * Content-Security-Policy that admits only this nonce runs ours and nothing
+ * of the page's: no script tag, no inline handler, no javascript: URL, however
+ * it is spelled. Stripping them with patterns alone missed `<svg/onload=…>`.
+ */
+const PREVIEW_NONCE = (() => {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+})();
+
+/** Our own script, carrying the nonce. `\u002f` keeps a literal `</script>` out of this source. */
+function ownScript(body: string): string {
+  return `<script nonce="${PREVIEW_NONCE}">${body}<\u002fscript>`;
+}
+
+/** The policy for a page whose scripts are off. First in the document, so it covers everything after it. */
+export function scriptsOffPolicy(): string {
+  return `<meta http-equiv="Content-Security-Policy" content="script-src 'nonce-${PREVIEW_NONCE}'; object-src 'none'; base-uri 'none'">`;
+}
+
+/** Puts `tag` before any of the page's own markup: right after a leading doctype, else at the very start. */
+function atDocumentStart(html: string, tag: string): string {
+  const doctype = /^\s*(?:<!--[\s\S]*?-->\s*)*<!doctype[^>]*>/i.exec(html);
+  return doctype ? `${doctype[0]}${tag}${html.slice(doctype[0].length)}` : `${tag}${html}`;
+}
+
 export function assembleHtmlPreview(
   files: Record<string, string>,
   entry: string,
@@ -260,13 +289,12 @@ export function assembleHtmlPreview(
   if (!/<body[\s>]/i.test(html)) {
     html = `<!doctype html><html><body>${html}</body></html>`;
   }
-  // `\u002f` keeps the literal `</script>` sequence out of this source, so the
-  // tag cannot close early if this module is ever inlined into a document.
-  const script = `<script>${PICKER_SCRIPT}<\u002fscript>`;
+  const script = ownScript(PICKER_SCRIPT);
   html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}</body>`) : `${html}${script}`;
   // The error reporter goes first: the page's own scripts run before the
   // picker at the end, and an error they throw while loading would be missed.
-  return injectFirst(html, `<script>${ERROR_REPORTER_SCRIPT}<\u002fscript>`);
+  html = injectFirst(html, ownScript(ERROR_REPORTER_SCRIPT));
+  return runScripts ? html : atDocumentStart(html, scriptsOffPolicy());
 }
 
 /** Puts `script` before anything the page runs: first in <head>, else first in <body>. */
@@ -324,7 +352,7 @@ export function renderProbeDocument(
   entry: string,
   options: { runScripts?: boolean } = {},
 ): string {
-  return injectFirst(assembleHtmlPreview(files, entry, options), `<script>${RENDER_PROBE_SCRIPT}<\u002fscript>`);
+  return injectFirst(assembleHtmlPreview(files, entry, options), ownScript(RENDER_PROBE_SCRIPT));
 }
 
 export function previewMarkupKey(html: string): string {

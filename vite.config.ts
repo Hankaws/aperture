@@ -180,6 +180,10 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // The MCP server's check_change runs the TypeScript compiler. Bundled
+            // into an ES module it crashes on load (it reads __filename), so it
+            // ships as its own CommonJS package next to the function.
+            traceDeps: ["typescript"],
           }),
         ]
       : []),

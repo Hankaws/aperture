@@ -10,8 +10,8 @@
  * only the signed-in site does: every public page on a laptop and a phone,
  * sign-up, Composer on the public demo host playing recordings, the server
  * refusing a paid plan, the project saved to the account and opened on a
- * second device, and Composer on any other host refusing to run without the
- * visitor's own key.
+ * second device, an agent token checking a change through the MCP server, and
+ * Composer on any other host refusing to run without the visitor's own key.
  *
  * When it serves the build itself it sets BETTER_AUTH_URL to the URL it serves
  * (Better Auth only trusts origins it knows) and a decoy XAI_API_KEY, so the
@@ -263,6 +263,71 @@ try {
     await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
     check(/Current plan\s+Hobby/.test(await bodyText(page)), "Settings still shows Hobby");
     clean(errors, "plans");
+
+    // Connect an agent: a token made in Settings lets an MCP client check a change.
+    await page.goto(`${base}/settings?tab=agents`, { waitUntil: "networkidle" });
+    await page.getByPlaceholder("Token name, e.g. Grok Bot").fill("Smoke agent");
+    await page.getByRole("button", { name: "Make a token" }).click();
+    const token = await page
+      .locator("[data-agent-token]")
+      .innerText({ timeout: 15_000 })
+      .catch(() => "");
+    check(/^apt_[A-Za-z0-9_-]{43}$/.test(token), "Settings makes an agent token and shows it once");
+    const mcp = (body, headers = { authorization: `Bearer ${token}` }) =>
+      fetch(`${base}/api/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          ...headers,
+        },
+        body: JSON.stringify(body),
+      });
+    const listed = await mcp({ jsonrpc: "2.0", id: 1, method: "tools/list" }).then((r) => r.json());
+    check(
+      listed.result?.tools?.[0]?.name === "check_change",
+      "the MCP server lists check_change for that token",
+    );
+    const checked = await mcp({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "check_change",
+        arguments: {
+          files: {
+            "src/math.ts":
+              "export function add(a: number, b: number): number {\n  return a + b;\n}\n",
+            "src/index.ts":
+              'import { add } from "./math";\nexport const total: number = add(1, 2);\n',
+          },
+          changes: {
+            "src/math.ts":
+              "export function add(a: number, b: number): string {\n  return String(a + b);\n}\n",
+          },
+        },
+      },
+    }).then((r) => r.json());
+    check(
+      checked.result?.structuredContent?.verdict === "red" &&
+        /src\/index\.ts: TS2322/.test(checked.result?.content?.[0]?.text ?? ""),
+      "check_change flags the caller a change breaks",
+    );
+    const cookieOnly = await page.request.post(`${base}/api/mcp`, {
+      data: { jsonrpc: "2.0", id: 3, method: "ping" },
+    });
+    check(
+      cookieOnly.status() === 401,
+      `the MCP server ignores a signed-in browser's cookie (${cookieOnly.status()})`,
+    );
+    await page.getByRole("button", { name: "Revoke Smoke agent" }).click();
+    await page
+      .getByText("No tokens yet.")
+      .waitFor({ timeout: 10_000 })
+      .catch(() => {});
+    const revoked = await mcp({ jsonrpc: "2.0", id: 4, method: "ping" });
+    check(revoked.status === 401, `a revoked token is refused (${revoked.status})`);
+    clean(errors, "agent tokens");
     await context.close();
   }
 

@@ -122,6 +122,32 @@ export function libFilesFor(ts: Ts, options: ts.CompilerOptions, read: (name: st
   return out;
 }
 
+/**
+ * Fetches the library files `options` need through `load` (each name once,
+ * kept in `texts`), following `/// <reference lib>` until the set is whole,
+ * and returns them as `libFilesFor` would. `load` is undefined for a name
+ * the compiler does not ship.
+ */
+export async function loadLibFiles(
+  ts: Ts,
+  options: ts.CompilerOptions,
+  texts: Map<string, string>,
+  load: (name: string) => (() => Promise<string>) | undefined,
+): Promise<Map<string, string>> {
+  for (;;) {
+    const missing: Array<[string, () => Promise<string>]> = [];
+    libFilesFor(ts, options, (name) => {
+      const text = texts.get(name);
+      const loader = text === undefined ? load(name) : undefined;
+      if (loader) missing.push([name, loader]);
+      return text;
+    });
+    if (missing.length === 0) break;
+    await Promise.all(missing.map(async ([name, loader]) => texts.set(name, await loader())));
+  }
+  return libFilesFor(ts, options, (name) => texts.get(name));
+}
+
 /** Library files parse once and are reused across checks. */
 export type TscCache = Map<string, { text: string; file: ts.SourceFile }>;
 

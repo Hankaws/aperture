@@ -106,6 +106,9 @@ export const mcpAddInput = z.object({ name: text(100), url: text(500), token: te
 export const mcpRemoveInput = z.object({ id: idInput });
 export const mcpConfirmInput = z.object({ server: text(100), tool: text(200), args: text(100_000) });
 
+export const agentTokenCreateInput = z.object({ name: text(100) });
+export const agentTokenRevokeInput = z.object({ id: idInput });
+
 export const acpAddInput = z.object({
   name: text(100),
   kind: z.enum(["claude-code", "codex", "opencode", "grok-build", "custom"]),

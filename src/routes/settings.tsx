@@ -5,6 +5,7 @@ import { ModelKeys } from "@/components/site/model-keys";
 import { GithubAccountCard } from "@/components/site/github-account";
 import { PricingTable } from "@/components/site/pricing-table";
 import { SessionLimits } from "@/components/site/session-limits";
+import { AgentTokens } from "@/components/site/agent-tokens";
 import { ExternalAgents } from "@/components/site/external-agents";
 import { McpServersCard } from "@/components/site/mcp-servers";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -131,6 +132,7 @@ function SettingsPage() {
 
         {tab === "agents" && account && (
           <section className="mt-8 space-y-8">
+            <AgentTokens />
             <ExternalAgents account={account} />
             <McpServersCard />
           </section>

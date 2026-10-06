@@ -49,6 +49,13 @@ function SecurityPage() {
             provider. There is no shared Grok key on the hosted demo.
           </li>
           <li>
+            <span className="text-fg">An agent&apos;s code running on Aperture&apos;s server.</span> The MCP server&apos;s{" "}
+            <span className="text-fg">check_change</span> parses and type-checks what an agent sends; it never runs
+            it, so the project&apos;s tests are left to the agent. Agents sign in with a token made in Settings, kept
+            only as a SHA-256 hash. The endpoint ignores browser cookies and refuses other sites&apos; pages, so a page
+            cannot use a signed-in visitor&apos;s session to call it.
+          </li>
+          <li>
             <span className="text-fg">Secrets in the project being sent to a model.</span>{" "}
             <span className="text-fg">.env</span> (not <span className="text-fg">.env.example</span>), private keys,
             and credential files are dropped before a send. Lines that look like API keys, tokens, or passwords are

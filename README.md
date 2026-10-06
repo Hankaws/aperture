@@ -171,6 +171,13 @@ local in-process database (PGlite), so nothing else needs setting up.
   a model that can call tools, such as `qwen2.5-coder` or `llama3.1`. A crew
   and the sandbox's script runs stay on the server, so a local turn builds
   alone and checks with the browser test runner.
+- **The checks, for any agent.** Aperture is also an MCP server. Make a token
+  under Settings → Agents → **Connect an agent** and point Grok Bot, Claude
+  Code, Cursor or any MCP client at `/api/mcp`. Its one tool, `check_change`,
+  takes the project and a change and answers with Parses, Imports resolve,
+  Types (the real compiler, new errors only) and whether the change tampers
+  with the tests, the same verdicts the editor gives. Nothing is run or kept,
+  so the agent runs its own tests. Free on every plan.
 
 ## Using a real model
 

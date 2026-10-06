@@ -6,7 +6,7 @@
  * The compiler only parses and type-checks: no project code runs here.
  */
 import ts from "typescript";
-import { checkProject, compilerOptions, libFilesFor, type TscCache, type TscResult } from "./tsc-core";
+import { checkProject, compilerOptions, loadLibFiles, type TscCache, type TscResult } from "./tsc-core";
 
 /** Load the compiler's library files and parse them, so the first real check is quick. */
 export type TscWarm = { type: "warm"; files: Record<string, string> };
@@ -41,19 +41,8 @@ const libTexts = new Map<string, string>();
 const cache: TscCache = new Map();
 
 /** The library files these options need, fetched once each. */
-async function loadLibs(options: ts.CompilerOptions): Promise<Map<string, string>> {
-  // Follow `/// <reference lib>` until every file it names is here, then hand over the set.
-  for (;;) {
-    const missing: string[] = [];
-    libFilesFor(ts, options, (name) => {
-      const text = libTexts.get(name);
-      if (text === undefined && libLoaders[`${LIB_PREFIX}${name}`]) missing.push(name);
-      return text;
-    });
-    if (missing.length === 0) break;
-    await Promise.all(missing.map(async (name) => libTexts.set(name, await libLoaders[`${LIB_PREFIX}${name}`]!())));
-  }
-  return libFilesFor(ts, options, (name) => libTexts.get(name));
+function loadLibs(options: ts.CompilerOptions): Promise<Map<string, string>> {
+  return loadLibFiles(ts, options, libTexts, (name) => libLoaders[`${LIB_PREFIX}${name}`]);
 }
 
 self.onmessage = async (event: MessageEvent<TscRequest | TscWarm>) => {

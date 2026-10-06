@@ -465,6 +465,36 @@ Unit tests and a green typecheck have repeatedly passed over real bugs in this
 repo: a sync that never persisted its revision, a hash taken before seeding
 rather than after, an adapter nobody has exercised. Run the thing.
 
+## Aperture as an MCP server
+
+`POST /api/mcp` (`src/routes/api/mcp.ts`) is an MCP server with one tool,
+`check_change`: the project's files plus a change in, the editor's verdicts
+out. `src/lib/mcp-server/protocol.ts` is the JSON-RPC (stateless Streamable
+HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
+`tokens*.ts` are the agent tokens made in Settings → Agents.
+
+- **It never runs code.** Parses, Imports resolve, Types (tsc before and
+  after) and the tests row's tampering rule, all static, all from
+  `src/lib/workspace/static-checks.ts`, which the benchmark uses too. Running
+  tests here would mean running a stranger's code in this process
+  (`node:vm` is not a sandbox), so the tests row always says "not run".
+  `protocol.test.ts` puts every benchmark case through `check_change` and
+  requires the editor's parse, imports and types verdicts.
+- **Tokens, never cookies.** An agent token (`apt_` + 32 random bytes) is
+  shown once and stored as a SHA-256 (`agent_tokens`, migration 0011). The
+  route reads only `Authorization: Bearer`, refuses a foreign `Origin`, and
+  answers 401 otherwise, so another site cannot drive it with a visitor's
+  session. Five tokens per account; deleting the account deletes them.
+- **Limits.** 20 `tools/call` a minute per account (`agentChecks`), 160
+  files and 2.5 MB per check, 200 KB per file, paths relative with no `..`.
+- **TypeScript ships unbundled.** Bundled into the server's ES modules the
+  compiler crashes on load (it reads `__filename`), so `vite.config.ts`
+  passes `traceDeps: ["typescript"]` to nitro and `typescript` is a runtime
+  dependency. Its library files come through `import.meta.glob`, as in the
+  browser's tsc worker. A build that drops either one fails the smoke test.
+- **No deletes yet.** A change is new and changed files; the editor's edits
+  have no deletion either.
+
 ## Auth and the database
 
 Auth is **on** here, so `.grok/app-env.json` carries no `VITE_AUTH_ENABLED` and

@@ -16,7 +16,7 @@ export function DeleteAccount() {
     <section className="mt-12 rounded-2xl border border-danger/40 p-5">
       <h2 className="text-lg font-medium tracking-tight">Delete account</h2>
       <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-        This removes the saved project, your keys, your GitHub token, and the account. It also removes the project in
+        This removes the saved project, your keys, your GitHub token, your agent tokens, and the account. It also removes the project in
         this browser, so it is not saved again the next time you sign in. It cannot be undone.
       </p>
       <label className="mt-4 block text-sm text-muted" htmlFor="delete-account">

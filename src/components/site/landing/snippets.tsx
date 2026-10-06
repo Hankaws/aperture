@@ -148,12 +148,13 @@ export function SnippetShowcase() {
             type="button"
             onClick={() => setActive(i)}
             className={cn(
-              "rounded-lg border px-3 py-2 text-left text-sm transition-colors duration-200",
+              // Three to a row on a phone: each takes a third and cuts a long file name, so none sticks out.
+              "min-w-0 flex-1 rounded-lg border px-3 py-2 text-left text-sm transition-colors duration-200 lg:flex-none",
               i === active ? "border-accent/40 bg-elevated text-fg" : "border-border text-muted hover:text-fg",
             )}
           >
             <span className="font-mono text-xs text-subtle">{item.tab}</span>
-            <span className="mt-0.5 block font-medium tracking-tight">{item.file}</span>
+            <span className="mt-0.5 block truncate font-medium tracking-tight">{item.file}</span>
           </button>
         ))}
       </div>

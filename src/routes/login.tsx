@@ -18,6 +18,9 @@ function parseNext(value: unknown): NextRoute {
  * What to say when Google or X sign-in comes back with an error. Better Auth
  * redirects here with `?error=<code>`; only the code is read, never shown.
  */
+/** Where to report an account someone made with your email: a private GitHub security report. */
+const REPORT_URL = "https://github.com/Hankaws/aperture/security/advisories/new";
+
 function providerErrorMessage(code: string): string {
   if (code === "account_not_linked")
     return "An account with this email was already made with a password, and its email was never confirmed, so Aperture won't join this sign-in to it. Sign in with that email and password below.";
@@ -98,6 +101,21 @@ function Login() {
           {providerError && (
             <p role="alert" className="mt-4 rounded-lg border border-border bg-elevated p-3 text-sm leading-relaxed text-fg">
               {providerErrorMessage(providerError)}
+              {providerError === "account_not_linked" && (
+                <>
+                  {" "}
+                  Didn&apos;t make that account? Someone else may have used your email.{" "}
+                  <a
+                    href={REPORT_URL}
+                    className="underline underline-offset-2 hover:text-accent"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Report it privately
+                  </a>{" "}
+                  and it will be removed, so you can sign in with Google or X.
+                </>
+              )}
             </p>
           )}
 

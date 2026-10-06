@@ -19,6 +19,11 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- If someone made an account with your email and a password, the sign-in
+  page now gives you a way out: a private report, after which that account
+  is removed and you can sign in with Google or X.
+- On the narrowest phones (320 pixels), the landing page's code demo no
+  longer runs off the side of the screen.
 - A command-line tool's own entry point may now exit cleanly: the Tests
   check no longer counts `process.exit(0)` in a file under `bin/` or listed
   as a `bin` in package.json as cutting the tests short.

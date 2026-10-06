@@ -11,6 +11,7 @@ import {
   pickHtmlEntry,
   PICKER_SCRIPT,
   previewMarkupKey,
+  renderProbeDocument,
   sanitizePreviewHtml,
   type DesignCapture,
 } from "./design-mode.ts";
@@ -220,9 +221,31 @@ test("embedding and navigation stay blocked whether scripts run or not", () => {
     assert.doesNotMatch(out, /<iframe/i, `iframe leaked (runScripts=${runScripts})`);
     assert.doesNotMatch(out, /<base/i, `base leaked (runScripts=${runScripts})`);
     assert.doesNotMatch(out, /<object/i, `object leaked (runScripts=${runScripts})`);
-    assert.doesNotMatch(out, /http-equiv/i, `meta refresh leaked (runScripts=${runScripts})`);
+    assert.doesNotMatch(out, /http-equiv\s*=\s*["']?refresh/i, `meta refresh leaked (runScripts=${runScripts})`);
     assert.doesNotMatch(out, /<form/i, `form leaked (runScripts=${runScripts})`);
   }
+});
+
+test("with scripts off, a policy first in the document admits only the preview's own scripts", () => {
+  const page = '<!doctype html><html><head></head><body><svg/onload=go()></svg><script>go()</script></body></html>';
+  for (const [name, out] of [
+    ["preview", assembleHtmlPreview({ "index.html": page }, "index.html")],
+    ["render check", renderProbeDocument({ "index.html": page }, "index.html")],
+  ] as const) {
+    const policy = /^<!doctype html><meta http-equiv="Content-Security-Policy" content="script-src 'nonce-([0-9a-f]{32})'; object-src 'none'; base-uri 'none'">/.exec(out);
+    assert.ok(policy, `${name}: the policy is not first: ${out.slice(0, 120)}`);
+    const scripts = out.match(/<script\b[^>]*>/g) ?? [];
+    assert.ok(scripts.length >= 2, name);
+    assert.ok(scripts.every((tag) => tag === `<script nonce="${policy![1]}">`), `${name}: ${scripts.join(" ")}`);
+  }
+  // Markup before any <head> still comes after the policy, so the policy covers it.
+  for (const html of ["<img src=x onerror=go()><p>hi</p>", "<img src=x onerror=go()><html><head></head><body><p>hi</p></body></html>"]) {
+    const early = assembleHtmlPreview({ "index.html": html }, "index.html");
+    assert.ok(early.indexOf("Content-Security-Policy") < early.indexOf("<img"), early.slice(0, 160));
+    assert.match(early, /^(<!doctype html>)?<meta http-equiv="Content-Security-Policy"/);
+  }
+  // With scripts on, the page runs as written: no policy.
+  assert.doesNotMatch(assembleHtmlPreview({ "index.html": page }, "index.html", { runScripts: true }), /Content-Security-Policy/);
 });
 
 test("inline handlers and javascript: URLs follow the switch", () => {

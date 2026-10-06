@@ -22,8 +22,10 @@ release notes are every line from there down to the previous version.
 - If someone made an account with your email and a password, the sign-in
   page now gives you a way out: a private report, after which that account
   is removed and you can sign in with Google or X.
+  ([#36](https://github.com/Hankaws/aperture/pull/36))
 - On the narrowest phones (320 pixels), the landing page's code demo no
   longer runs off the side of the screen.
+  ([#36](https://github.com/Hankaws/aperture/pull/36))
 - A command-line tool's own entry point may now exit cleanly: the Tests
   check no longer counts `process.exit(0)` in a file under `bin/` or listed
   as a `bin` in package.json as cutting the tests short.
@@ -41,6 +43,7 @@ release notes are every line from there down to the previous version.
 - The demo deploy workflow. It deployed to a private Vercel project, had no
   credentials to do it with, and so skipped on every push while showing a
   green tick. The site is published from Grok App Builder.
+  ([#36](https://github.com/Hankaws/aperture/pull/36))
 
 ### Security
 

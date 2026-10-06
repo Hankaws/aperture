@@ -74,14 +74,6 @@ Grok App Builder's own publish used to deploy the committed `.vercel/output`.
 It no longer can. If an export from Grok puts build output back, remove it
 again rather than route around the ignore rule.
 
-## The demo deploy builds from source
-
-The private `aperture-demo` Vercel project does not deploy from Git; its Git
-builds are skipped. `.github/workflows/demo-deploy.yml` runs `vercel build`
-from source with the project's env (including `VITE_AUTH_ENABLED=false`), then
-`vercel deploy --prebuilt`, on every push to `main`. Keep Vercel
-Authentication on for its deployments until the repository is public.
-
 ## Sign-in off: one anonymous user per browser, one shared spending pool
 
 With `VITE_AUTH_ENABLED=false`, `requireUserId` gives each browser its own

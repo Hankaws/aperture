@@ -1,12 +1,19 @@
 # Changelog
 
 What changed in Aperture, newest first. Every pull request adds its line
-under **Unreleased**; the site shows this file at `/changelog`.
+under **Unreleased**; the site shows this file at `/changelog`. A heading
+with a version number is the day that version was released, and its
+release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-06
+
 ### Added
 
+- Version numbers. This changelog marks each release, the release notes on
+  GitHub are built from it, and the site's footer shows the version.
+  ([#30](https://github.com/Hankaws/aperture/pull/30))
 - The first time the checks appear, one line says what they are: what green,
   red, amber and a dash mean, and that nothing has touched your files yet.
   ([#29](https://github.com/Hankaws/aperture/pull/29))
@@ -28,6 +35,17 @@ under **Unreleased**; the site shows this file at `/changelog`.
   ([#29](https://github.com/Hankaws/aperture/pull/29))
 - The editor loads less up front: the zip library loads when you download.
   ([#29](https://github.com/Hankaws/aperture/pull/29))
+
+### Fixed
+
+- Someone could sign up with another person's email and a password, and when
+  that person later signed in with Google or X they landed in that account.
+  A sign-in now joins an existing account only if its email was confirmed;
+  otherwise the sign-in page says why and nothing is joined.
+  ([#30](https://github.com/Hankaws/aperture/pull/30))
+- Signed out on a phone, the top bar no longer runs off the edge of the
+  screen; Pricing is in the footer there.
+  ([#30](https://github.com/Hankaws/aperture/pull/30))
 
 ## 2026-10-05
 

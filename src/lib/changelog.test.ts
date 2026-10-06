@@ -1,9 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { inlineParts, parseChangelog, sectionLabel } from "./changelog.ts";
+import {
+  GROUPS,
+  inlineParts,
+  latestVersion,
+  parseChangelog,
+  parseHeading,
+  releaseNotes,
+  sectionLabel,
+} from "./changelog.ts";
 
 const FILE = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
+const PACKAGE = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+) as {
+  version: string;
+};
 
 test("parseChangelog reads sections, groups and wrapped items", () => {
   const log = parseChangelog(
@@ -56,24 +69,63 @@ test("inlineParts keeps bold, code and https links, and nothing else", () => {
   ]);
 });
 
-test("sectionLabel writes a date out, and leaves Unreleased alone", () => {
+test("sectionLabel writes a date out, with its version, and leaves Unreleased alone", () => {
   assert.equal(sectionLabel("2026-10-05"), "5 October 2026");
+  assert.equal(sectionLabel("0.2.0 - 2026-10-05"), "0.2.0 · 5 October 2026");
   assert.equal(sectionLabel("Unreleased"), "Unreleased");
+  assert.deepEqual(parseHeading("0.2.0 - 2026-10-05"), { version: "0.2.0", date: "2026-10-05" });
+  assert.deepEqual(parseHeading("2026-10-04"), { version: null, date: "2026-10-04" });
+  assert.deepEqual(parseHeading("Unreleased"), { version: null, date: null });
+});
+
+test("releaseNotes gathers every line down to the previous version, grouped in order", () => {
+  const log = parseChangelog(
+    [
+      "## Unreleased",
+      "### Added",
+      "- Not out yet.",
+      "## 0.3.0 - 2026-10-20",
+      "### Fixed",
+      "- A fix.",
+      "## 2026-10-12",
+      "### Added",
+      "- A feature.",
+      "### Fixed",
+      "- An older fix.",
+      "## 0.2.0 - 2026-10-05",
+      "### Added",
+      "- Belongs to 0.2.0.",
+    ].join("\n"),
+  );
+  assert.equal(latestVersion(log), "0.3.0");
+  assert.equal(
+    releaseNotes(log, "0.3.0"),
+    "### Added\n\n- A feature.\n\n### Fixed\n\n- A fix.\n- An older fix.",
+  );
+  assert.equal(releaseNotes(log, "0.2.0"), "### Added\n\n- Belongs to 0.2.0.");
+  assert.equal(releaseNotes(log, "9.9.9"), null);
+  assert.equal(latestVersion(parseChangelog("## Unreleased\n### Added\n- x")), null);
 });
 
 test("CHANGELOG.md keeps its shape: Unreleased first, then dates newest first", () => {
   const log = parseChangelog(FILE);
   assert.equal(log.sections[0]?.title, "Unreleased");
-  const dates = log.sections.slice(1).map((section) => section.title);
-  for (const date of dates)
-    assert.match(date, /^\d{4}-\d{2}-\d{2}$/, `"${date}" is not a date heading`);
+  const headings = log.sections.slice(1).map((section) => section.title);
+  for (const title of headings)
+    assert.ok(parseHeading(title).date, `"${title}" is not "YYYY-MM-DD" or "X.Y.Z - YYYY-MM-DD"`);
+  const dates = headings.map((title) => parseHeading(title).date!);
   assert.deepEqual(dates, [...dates].sort().reverse(), "dates run newest first");
+  assert.equal(new Set(dates).size, dates.length, "one heading per day");
+  const versions = headings.flatMap((title) => parseHeading(title).version ?? []);
+  const sorted = [...versions].sort((a, b) => {
+    const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+    return y![0]! - x![0]! || y![1]! - x![1]! || y![2]! - x![2]!;
+  });
+  assert.deepEqual(versions, sorted, "versions run newest first");
+  assert.equal(new Set(versions).size, versions.length, "each version released once");
   for (const section of log.sections) {
     for (const group of section.groups) {
-      assert.ok(
-        ["Added", "Changed", "Fixed", "Removed", "Security"].includes(group.title),
-        `unknown group "${group.title}"`,
-      );
+      assert.ok(GROUPS.includes(group.title), `unknown group "${group.title}"`);
       assert.ok(group.items.length > 0, `${section.title} › ${group.title} is empty`);
     }
   }
@@ -91,4 +143,12 @@ test("every pull request CHANGELOG.md links is one of this repository's", () => 
         assert.match(item, /\[#\d+\]\(/, `no pull request on: ${item.slice(0, 60)}`);
     }
   }
+});
+
+test("package.json's version is the newest one CHANGELOG.md releases", () => {
+  assert.equal(
+    PACKAGE.version,
+    latestVersion(parseChangelog(FILE)),
+    "bump package.json and the changelog's version heading together",
+  );
 });

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { ApertureMark } from "@/components/ide/logo";
 import { showPricing } from "@/lib/billing/pricing-visible";
+import { version } from "../../../package.json";
 
 export function SiteFooter() {
   const { user, isPending } = useHydratedUserState();
@@ -11,6 +12,13 @@ export function SiteFooter() {
         <span className="inline-flex items-center gap-2 text-sm text-subtle">
           <ApertureMark className="size-4" />
           Aperture
+          <Link
+            to="/changelog"
+            className="font-mono text-xs hover:text-fg"
+            aria-label={`Version ${version}, changelog`}
+          >
+            v{version}
+          </Link>
         </span>
         <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
           <Link to="/" className="hover:text-fg">

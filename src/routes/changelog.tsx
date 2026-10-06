@@ -8,6 +8,9 @@ import source from "../../CHANGELOG.md?raw";
 export const Route = createFileRoute("/changelog")({ component: ChangelogPage });
 
 const log = parseChangelog(source);
+// Unreleased is empty right after a release; a heading with nothing under it says nothing.
+const sections = log.sections.filter((section) => section.groups.length > 0);
+const anchor = (title: string) => `changes-${title.replace(/[^\w.-]+/g, "-")}`;
 const FILE_URL = "https://github.com/Hankaws/aperture/blob/main/CHANGELOG.md";
 
 function Rich({ text }: { text: string }) {
@@ -62,9 +65,9 @@ function ChangelogPage() {
         </p>
 
         <ol className="mt-10 space-y-12">
-          {log.sections.map((section) => (
-            <li key={section.title} aria-labelledby={`changes-${section.title}`}>
-              <h2 id={`changes-${section.title}`} className="text-lg font-medium tracking-tight">
+          {sections.map((section) => (
+            <li key={section.title} aria-labelledby={anchor(section.title)}>
+              <h2 id={anchor(section.title)} className="text-lg font-medium tracking-tight">
                 {sectionLabel(section.title)}
               </h2>
               {section.groups.map((group) => (

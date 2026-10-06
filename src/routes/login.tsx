@@ -14,15 +14,26 @@ function parseNext(value: unknown): NextRoute {
   return NEXT_ROUTES.includes(value as NextRoute) ? (value as NextRoute) : "/app";
 }
 
+/**
+ * What to say when Google or X sign-in comes back with an error. Better Auth
+ * redirects here with `?error=<code>`; only the code is read, never shown.
+ */
+function providerErrorMessage(code: string): string {
+  if (code === "account_not_linked")
+    return "An account with this email was already made with a password, and its email was never confirmed, so Aperture won't join this sign-in to it. Sign in with that email and password below.";
+  return "That sign-in didn't complete. Try again.";
+}
+
 export const Route = createFileRoute("/login")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { next: NextRoute; error?: string } => ({
     next: parseNext(s.next),
+    ...(typeof s.error === "string" && s.error ? { error: s.error } : {}),
   }),
   component: Login,
 });
 
 function Login() {
-  const { next } = Route.useSearch();
+  const { next, error: providerError } = Route.useSearch();
   const { user, isPending } = useHydratedUserState();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
@@ -83,6 +94,12 @@ function Login() {
             </Link>
             .
           </p>
+
+          {providerError && (
+            <p role="alert" className="mt-4 rounded-lg border border-border bg-elevated p-3 text-sm leading-relaxed text-fg">
+              {providerErrorMessage(providerError)}
+            </p>
+          )}
 
           {authEnabled ? (
             <div className="mt-6 flex flex-col gap-2">

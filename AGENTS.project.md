@@ -12,6 +12,19 @@ link the pull request. The `/changelog` page renders this file
 dated entry without its pull request, or a link to another repository. On
 merge day, move the Unreleased lines under that day's date.
 
+## Releasing a version
+
+A release is one pull request and one tag:
+
+1. In `CHANGELOG.md`, move the Unreleased lines under `## X.Y.Z - YYYY-MM-DD`
+   (the merge day; if that day already has a heading, give it the version).
+   Leave `## Unreleased` in place, empty.
+2. `npm version X.Y.Z --no-git-tag-version`. `changelog.test.ts` fails while
+   `package.json` and the newest version heading disagree.
+3. Once that pull request merges, tag its merge commit `vX.Y.Z` and publish a
+   GitHub release whose notes are `npm run -s release-notes -- X.Y.Z`: every
+   line from that heading down to the previous version.
+
 ## Imports in `src/lib` that tests reach
 
 `npm test` runs `src/**/*.test.ts` under bare node (`--experimental-strip-types`),

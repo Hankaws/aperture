@@ -1,11 +1,15 @@
 /**
- * Reads CHANGELOG.md for the /changelog page, so the page and the file can
- * never disagree. The format is the file's own: `## Unreleased` or `## YYYY-MM-DD`,
- * `### Added | Changed | Fixed`, and `- ` items that may wrap onto indented
- * lines. Inline text allows **bold**, `code` and [links](https://…) only.
+ * Reads CHANGELOG.md for the /changelog page and the release notes, so neither
+ * can disagree with the file. The format is the file's own: `## Unreleased`,
+ * `## YYYY-MM-DD`, or `## X.Y.Z - YYYY-MM-DD` for the day a version was
+ * released; `### Added | Changed | Fixed`; and `- ` items that may wrap onto
+ * indented lines. Inline text allows **bold**, `code` and [links](https://…) only.
  *
  * Pure: tests import it directly.
  */
+
+/** The group headings the file uses, in the order release notes list them. */
+export const GROUPS = ["Added", "Changed", "Fixed", "Removed", "Security"];
 
 export type ChangeGroup = { title: string; items: string[] };
 export type ChangeSection = { title: string; groups: ChangeGroup[] };
@@ -84,10 +88,24 @@ export function inlineParts(text: string): Inline[] {
   return parts;
 }
 
-/** "2026-10-05" as "5 October 2026"; any other heading as it is. */
+export type Heading = { version: string | null; date: string | null };
+
+/** The version and date a section heading names; both null for Unreleased. */
+export function parseHeading(title: string): Heading {
+  const match = /^(?:(\d+\.\d+\.\d+) - )?(\d{4}-\d{2}-\d{2})$/.exec(title);
+  return match ? { version: match[1] ?? null, date: match[2]! } : { version: null, date: null };
+}
+
+/** "2026-10-05" as "5 October 2026", "0.2.0 - 2026-10-05" as "0.2.0 · 5 October 2026"; any other heading as it is. */
 export function sectionLabel(title: string): string {
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(title);
-  if (!date) return title;
+  const { version, date: day } = parseHeading(title);
+  if (!day) return title;
+  const label = dateLabel(day);
+  return version ? `${version} · ${label}` : label;
+}
+
+function dateLabel(day: string): string {
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)!;
   const months = [
     "January",
     "February",
@@ -103,4 +121,37 @@ export function sectionLabel(title: string): string {
     "December",
   ];
   return `${Number(date[3])} ${months[Number(date[2]) - 1]} ${date[1]}`;
+}
+
+/** The newest released version, or null before the first release. */
+export function latestVersion(log: Changelog): string | null {
+  for (const section of log.sections) {
+    const { version } = parseHeading(section.title);
+    if (version) return version;
+  }
+  return null;
+}
+
+/**
+ * The notes for one release, as Markdown: every line from the section that
+ * names `version` down to the previous release, grouped as the file groups
+ * them. Null when no section names that version.
+ */
+export function releaseNotes(log: Changelog, version: string): string | null {
+  const start = log.sections.findIndex(
+    (section) => parseHeading(section.title).version === version,
+  );
+  if (start < 0) return null;
+  const groups = new Map<string, string[]>();
+  for (const [i, section] of log.sections.slice(start).entries()) {
+    if (i > 0 && parseHeading(section.title).version) break;
+    for (const group of section.groups)
+      groups.set(group.title, [...(groups.get(group.title) ?? []), ...group.items]);
+  }
+  // A group the list does not name goes last.
+  const order = (title: string) => (GROUPS.includes(title) ? GROUPS.indexOf(title) : GROUPS.length);
+  return [...groups]
+    .sort(([a], [b]) => order(a) - order(b))
+    .map(([title, items]) => [`### ${title}`, "", ...items.map((item) => `- ${item}`)].join("\n"))
+    .join("\n\n");
 }

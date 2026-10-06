@@ -34,7 +34,12 @@ export function AuthSlot({ compact = false }: { compact?: boolean }) {
   }
   return (
     <div className="flex items-center gap-2">
-      <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+      {/* Same page as Start free; dropped on the narrowest phones so the bar fits. */}
+      <Link
+        to="/login"
+        search={{ next: "/app" }}
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "max-[359px]:hidden")}
+      >
         Sign in
       </Link>
       <Link to="/login" search={{ next: "/app" }} className={cn(buttonVariants({ size: "sm" }))}>

@@ -1,60 +1,66 @@
 {
   "summary": {
-    "caught": 18,
-    "bad": 22,
-    "caughtCatchable": 18,
-    "catchable": 18,
-    "falseAlarms": 0,
-    "good": 8,
-    "lightCaught": 12,
+    "caught": 27,
+    "bad": 33,
+    "caughtCatchable": 27,
+    "catchable": 27,
+    "falseAlarms": 1,
+    "good": 15,
+    "lightCaught": 20,
     "byMistake": [
       {
         "mistake": "syntax",
         "label": "Code that does not parse",
-        "caught": 3,
-        "total": 3
+        "caught": 4,
+        "total": 4
       },
       {
         "mistake": "import",
         "label": "An import that does not resolve",
-        "caught": 3,
-        "total": 3
+        "caught": 5,
+        "total": 5
       },
       {
         "mistake": "types",
         "label": "A type error",
-        "caught": 7,
-        "total": 7
+        "caught": 8,
+        "total": 8
       },
       {
         "mistake": "behaviour",
         "label": "Wrong behaviour a test covers",
-        "caught": 5,
-        "total": 5
+        "caught": 7,
+        "total": 7
+      },
+      {
+        "mistake": "tests",
+        "label": "Wrong behaviour with its test switched off",
+        "caught": 3,
+        "total": 3
       },
       {
         "mistake": "untested",
         "label": "Wrong behaviour no test covers",
         "caught": 0,
-        "total": 4
+        "total": 6
       }
     ],
     "byCheck": [
       {
         "check": "parse",
-        "caught": 3
+        "caught": 4
       },
       {
         "check": "imports",
-        "caught": 3
+        "caught": 4
       },
       {
         "check": "types",
-        "caught": 10
+        "caught": 12
       },
       {
         "check": "tests",
-        "caught": 9
+        "caught": 16
       }
     ]
   },
@@ -638,6 +644,353 @@
         "types": "pass",
         "preview": "skip",
         "tests": "pass"
+      }
+    },
+    {
+      "id": "types-through-barrel",
+      "title": "Adds a currency parameter to formatPrice; the component reaching it through index.ts still passes one argument",
+      "kind": "bad",
+      "mistake": "types",
+      "fixture": "shop-ui",
+      "caughtBy": [
+        "types"
+      ],
+      "lightCaughtBy": [],
+      "detail": "src/components/PriceTag.tsx: TS2554 at line 5: Expected 2 arguments, but got 1.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "import-reexport-missing-name",
+      "title": "Re-exports applyCoupon from cart.ts, which has no such function",
+      "kind": "bad",
+      "mistake": "import",
+      "fixture": "shop-ui",
+      "caughtBy": [
+        "imports",
+        "types"
+      ],
+      "lightCaughtBy": [
+        "imports"
+      ],
+      "detail": "src/index.ts: imports { applyCoupon } from \"./cart\" at line 2, which does not export it",
+      "checks": {
+        "parse": "pass",
+        "imports": "fail",
+        "types": "fail",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "behaviour-cart-zero-line",
+      "title": "Removing the last of an item leaves a line with quantity 0",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "shop-ui",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: cart removes one at a time and drops the line at zero: AssertionError: expected [ { sku: \"mug\", name: \"Mug\", cents: 900, quantity: 0 } ] to deeply equal [  ]",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "tests-skip-failing",
+      "title": "Changes SAVE10 to 20% off and skips the test that would fail",
+      "kind": "bad",
+      "mistake": "tests",
+      "fixture": "shop-ui",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "Not counted as a pass: this change skips 1 test in src/cart.test.ts.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "tests-narrow-script",
+      "title": "Breaks the cart total and narrows the test script to the price tests",
+      "kind": "bad",
+      "mistake": "tests",
+      "fixture": "shop-ui",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "Not counted as a pass: this change changes the test script in package.json from \"vitest run\" to \"vitest run src/format.test.ts\".",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "untested-sale-class",
+      "title": "Swaps the sale and regular price classes",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "shop-ui",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-barrel-component",
+      "title": "Adds a CartBadge component and exports it from the components barrel",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "shop-ui",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-rename-through-barrel",
+      "title": "Renames formatPrice to formatCents everywhere it is used, including through index.ts",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "shop-ui",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-coupon-rate",
+      "title": "Changes SAVE10 to SAVE15 and updates its test to match",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "shop-ui",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "pass",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "syntax-js-missing-paren",
+      "title": "Drops a closing parenthesis in parseNote",
+      "kind": "bad",
+      "mistake": "syntax",
+      "fixture": "notes-cli",
+      "caughtBy": [
+        "parse",
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "parse",
+        "tests"
+      ],
+      "detail": "src/parse.js: parse error at line 6",
+      "checks": {
+        "parse": "fail",
+        "imports": "skip",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "import-js-require-typo",
+      "title": "Requires ./parser instead of ./parse",
+      "kind": "bad",
+      "mistake": "import",
+      "fixture": "notes-cli",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: src/notes.js imports ./parser, which does not exist",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "behaviour-js-any-tag",
+      "title": "withTags keeps notes with any of the tags instead of all of them",
+      "kind": "bad",
+      "mistake": "behaviour",
+      "fixture": "notes-cli",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "npm run test fails in the browser: readNotes skips blank lines and withTags needs every tag: AssertionError: expected [ \"Buy milk\", \"Post parcel\" ] to deeply equal [ \"Buy milk\" ]",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "tests-js-exit-early",
+      "title": "Stops lower-casing tags and ends the test file with process.exit(0)",
+      "kind": "bad",
+      "mistake": "tests",
+      "fixture": "notes-cli",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "Not counted as a pass: this change calls process.exit in test/notes.test.js.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
+      }
+    },
+    {
+      "id": "untested-js-usage",
+      "title": "Exits with code 0 when the file argument is missing",
+      "kind": "bad",
+      "mistake": "untested",
+      "fixture": "notes-cli",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-js-without-tags",
+      "title": "Adds withoutTags and a test for it",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "notes-cli",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-js-regex-parse",
+      "title": "Rewrites parseNote with a regular expression; the tests are unchanged",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "notes-cli",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-js-version-flag",
+      "title": "Adds --version, which prints the version and exits 0",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "notes-cli",
+      "caughtBy": [],
+      "lightCaughtBy": [],
+      "detail": null,
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "pass"
+      }
+    },
+    {
+      "id": "good-js-drop-legacy",
+      "title": "Removes the pre-1.0 parser and its test, as notes files that old are no longer read",
+      "kind": "good",
+      "mistake": null,
+      "fixture": "notes-cli",
+      "caughtBy": [
+        "tests"
+      ],
+      "lightCaughtBy": [
+        "tests"
+      ],
+      "detail": "Not counted as a pass: this change removes 1 test from test/notes.test.js.",
+      "checks": {
+        "parse": "pass",
+        "imports": "pass",
+        "types": "skip",
+        "preview": "skip",
+        "tests": "fail"
       }
     }
   ]

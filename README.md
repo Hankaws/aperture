@@ -94,9 +94,11 @@ local in-process database (PGlite), so nothing else needs setting up.
   The live preview's script errors are shown at the line of your script
   file that threw, and every Composer turn is told about them.
 
-  **How well they work** is measured on the `/benchmark` page: 30 staged
-  edits, 22 with a mistake and 8 correct, put through these checks. Every case
-  is listed there, misses included, and `npm run bench` reproduces it.
+  **How well they work** is measured on the `/benchmark` page: 48 staged
+  edits, 33 with a mistake and 15 correct, across four small projects in
+  TypeScript and plain JavaScript, put through these checks. Every case is
+  listed there, misses and false alarms included, and `npm run bench`
+  reproduces it.
 - **Tests in the browser.** `npm run test` runs in a sandboxed Worker in your
   tab. This covers `node`, `node --test` and `tsx` scripts, with `node:test`
   and `node:assert`. It also covers Vitest and Jest: `describe`, `it`,

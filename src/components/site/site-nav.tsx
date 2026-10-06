@@ -28,7 +28,7 @@ export function SiteNav() {
             Security
           </Link>
           {showPricing && (
-            <Link to="/pricing" className="hover:text-fg">
+            <Link to="/pricing" className="hidden hover:text-fg sm:inline">
               Pricing
             </Link>
           )}

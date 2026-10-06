@@ -37,6 +37,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
+import { accountLinkingPolicy } from "./account-linking";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
 import { GROK_PROVIDERS } from "./providers";
@@ -186,23 +187,16 @@ export const auth = betterAuth({
   trustedOrigins,
 
   // Encrypt broker-issued OAuth tokens at rest, and treat the broker's upstreams
-  // as trusted first-party identities. The broker owns identity and X emails are
-  // synthetic/unverified, so WITHOUT this a login can fail with
-  // `account_not_linked` (Better Auth refuses to attach an untrusted, unverified
-  // identity to an existing user). Google and X carry DISTINCT emails, so this
-  // never merges them into one user — they stay separate identities.
+  // as trusted first-party identities (X emails are synthetic/unverified).
+  // Linking still refuses to join an account whose email was never confirmed:
+  // email/password sign-up sends no confirmation, so that account may belong to
+  // someone who signed up with another person's address. See `./account-linking`.
   account: {
     encryptOAuthTokens: true,
-    accountLinking: {
-      enabled: true,
-      trustedProviders: [
-        ...GROK_PROVIDERS.map((p) => p.providerId),
-        GATE_PROVIDER_ID,
-      ],
-      // X's synthetic email is never "verified", so don't gate linking on the
-      // local user's email-verified state.
-      requireLocalEmailVerified: false,
-    },
+    accountLinking: accountLinkingPolicy([
+      ...GROK_PROVIDERS.map((p) => p.providerId),
+      GATE_PROVIDER_ID,
+    ]),
   },
 
   // Cache the session in the short-lived signed `session_data` cookie so reads

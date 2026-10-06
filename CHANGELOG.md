@@ -36,6 +36,17 @@ release notes are every line from there down to the previous version.
 - The editor loads less up front: the zip library loads when you download.
   ([#29](https://github.com/Hankaws/aperture/pull/29))
 
+### Fixed
+
+- Someone could sign up with another person's email and a password, and when
+  that person later signed in with Google or X they landed in that account.
+  A sign-in now joins an existing account only if its email was confirmed;
+  otherwise the sign-in page says why and nothing is joined.
+  ([#30](https://github.com/Hankaws/aperture/pull/30))
+- Signed out on a phone, the top bar no longer runs off the edge of the
+  screen; Pricing is in the footer there.
+  ([#30](https://github.com/Hankaws/aperture/pull/30))
+
 ## 2026-10-05
 
 ### Added

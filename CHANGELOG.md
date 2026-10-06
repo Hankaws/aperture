@@ -15,12 +15,14 @@ release notes are every line from there down to the previous version.
   mistake is counted: a test skipped, cut short or narrowed away to hide a
   bug. The page lists its one false alarm and says what plain JavaScript
   does not get.
+  ([#35](https://github.com/Hankaws/aperture/pull/35))
 
 ### Fixed
 
 - A command-line tool's own entry point may now exit cleanly: the Tests
   check no longer counts `process.exit(0)` in a file under `bin/` or listed
   as a `bin` in package.json as cutting the tests short.
+  ([#35](https://github.com/Hankaws/aperture/pull/35))
 
 - The Types check missed a caller that reaches a changed file through an
   `index.ts` that re-exports it. It now checks the files that depend on the

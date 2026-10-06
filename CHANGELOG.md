@@ -52,6 +52,7 @@ release notes are every line from there down to the previous version.
   and MCP calls (30), and Composer sends through both of its entry points
   (24). Normal use stays well under each; past one, the editor says to wait
   a few seconds.
+  ([#37](https://github.com/Hankaws/aperture/pull/37))
 - Dependency updates for three advisories in packages Aperture uses through
   others: brace-expansion, fast-uri and source-map-js.
   ([#34](https://github.com/Hankaws/aperture/pull/34))

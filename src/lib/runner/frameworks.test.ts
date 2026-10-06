@@ -609,3 +609,19 @@ it("chai failure", () => { expect(1).to.equal(2); });
   assert.equal(done.pass, 1, done.output);
   assert.equal(done.firstFailure, "chai failure: AssertionError: expected 1 to equal 2");
 });
+
+test("vitest and jest: exiting early or skipping everything is not a pass", async () => {
+  const exited = await run(
+    vitest({
+      "src/a.test.ts": `import { test, expect } from "vitest";\ntest("a", () => { process.exit(0); });\ntest("b", () => { expect(1).toBe(2); });`,
+    }),
+  );
+  assert.equal(exited.passed, false, exited.output);
+  assert.equal(exited.fail, 2);
+  assert.match(exited.firstFailure ?? "", /process\.exit\(0\) ended src\/a\.test\.ts before 2 tests ran/);
+  const skipped = await run(
+    jest({ "src/a.test.js": `test.skip("a", () => {});\ndescribe.skip("s", () => { it("b", () => {}); });` }),
+  );
+  assert.equal(skipped.passed, false, skipped.output);
+  assert.equal(skipped.firstFailure, "Every test was skipped (2), so nothing was checked.");
+});

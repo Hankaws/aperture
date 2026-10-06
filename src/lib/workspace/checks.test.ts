@@ -200,6 +200,20 @@ test("the tests row reports the agent's run as it happened", () => {
   assert.match(notRun.detail, /^Not run: No sandbox/);
 });
 
+test("a green run cannot vouch for a change that skips the tests it is judged by", () => {
+  const files = { ...FILES, "tests/b.test.ts": 'import { test } from "node:test";\ntest("b is 1", () => {});\n' };
+  const skipping = edit("tests/b.test.ts", 'import { test } from "node:test";\ntest.skip("b is 1", () => {});\n');
+  const passed: VerifyReport = { script: "test", status: "passed", detail: "npm run test passed." };
+  const tests = row(changeChecks({ files, edits: [edit("src/b.ts", "export const b = 2;\n"), skipping], render: null, verify: passed }), "tests");
+  assert.equal(tests.status, "fail");
+  assert.equal(tests.detail, "Not counted as a pass: this change skips 1 test in tests/b.test.ts.");
+  assert.match(tests.evidence ?? "", /\(npm run test passed\.\)\nMake the code pass the tests as they were\./);
+  assert.match(lookPrompt([tests]), /skips 1 test in tests\/b\.test\.ts/);
+  // The same run with the code fixed and the tests left alone is green.
+  const honest = row(changeChecks({ files, edits: [edit("src/b.ts", "export const b = 2;\n")], render: null, verify: passed }), "tests");
+  assert.equal(honest.status, "pass");
+});
+
 test("renderEntry: only a change that can alter the page is rendered", () => {
   assert.equal(renderEntry(FILES, [edit("src/a.ts", "")]), null);
   assert.equal(renderEntry(FILES, [edit("style.css", "")]), "index.html");

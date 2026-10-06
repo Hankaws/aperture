@@ -138,6 +138,41 @@ test("process.exit and process.exitCode decide the result, as in Node", async ()
   assert.equal(exit0.passed, true);
 });
 
+test("process.exit(0) cannot turn a run green by cutting tests off", async () => {
+  const header = `import test from "node:test";\nimport assert from "node:assert/strict";\n`;
+  // A top-level exit after the tests are queued: whatever it cut off counts against the run.
+  const topLevel = await run(project(`${header}test("a", () => {});\ntest("b", () => {});\nprocess.exit(0);`));
+  assert.equal(topLevel.passed, false, topLevel.output);
+  assert.ok(topLevel.failures.includes("src/math.test.ts › process.exit(0)"), topLevel.output);
+  assert.match(topLevel.firstFailure ?? "", /^process\.exit\(0\) ended src\/math\.test\.ts before \d tests? ran\.$/);
+  // Exiting from inside a test is not passing it.
+  const inside = await run(project(`${header}test("a", () => { process.exit(0); });\ntest("b", () => {});`));
+  assert.equal(inside.passed, false, inside.output);
+  assert.equal(inside.fail, 2);
+  // One file's exit ends that file, as its own process would; the next file still runs and fails.
+  const nextFile = await run(
+    project(`${header}test("a", () => {});`, {
+      "src/b.test.ts": `${header}test("b", () => assert.equal(1, 2));`,
+      "src/a.test.ts": `process.exit(0);`,
+    }),
+  );
+  assert.equal(nextFile.passed, false, nextFile.output);
+  assert.equal(nextFile.pass, 1);
+  assert.equal(nextFile.fail, 1);
+});
+
+test("a run where every test was skipped is not a pass; one with some skipped still is", async () => {
+  const header = `import test, { describe } from "node:test";\n`;
+  const allSkipped = await run(
+    project(`${header}test("a", { skip: true }, () => {});\ndescribe.skip("s", () => { test("b", () => {}); test("c", () => {}); });`),
+  );
+  assert.equal(allSkipped.passed, false, allSkipped.output);
+  assert.equal(allSkipped.firstFailure, "Every test was skipped (3), so nothing was checked.");
+  assert.deepEqual([...allSkipped.failures], ["src/math.test.ts › every test skipped"]);
+  const some = await run(project(`${header}test("a", { skip: true }, () => {});\ntest("b", () => {});`));
+  assert.equal(some.passed, true, some.output);
+});
+
 test("an unhandled failure in a later tick still fails the run", async () => {
   const done = await run(
     project(`import test from "node:test";\ntest("late", async () => { await Promise.resolve(); throw new Error("late failure"); });`),

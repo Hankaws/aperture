@@ -16,9 +16,9 @@ import { buildBundle } from "../runner/bundle.ts";
 import { compareRuns } from "../runner/compare.ts";
 import { executeBundle } from "../runner/node-exec.ts";
 import { planBrowserRun } from "../runner/plan.ts";
-import { changeChecks, type BrowserTests, type CheckId, type TscCheck } from "../workspace/checks.ts";
-import { checkProject, compilerOptions, libFilesFor, tscIssue, type TscCache, type TscResult } from "../workspace/tsc-core.ts";
-import { pathsToCheck } from "../workspace/tsc-paths.ts";
+import { changeChecks, type BrowserTests, type CheckId } from "../workspace/checks.ts";
+import { typecheckChange } from "../workspace/static-checks.ts";
+import type { TscCache } from "../workspace/tsc-core.ts";
 import type { ProposedEdit } from "../workspace/types.ts";
 import { CASES, FIXTURES, MISTAKES, type BenchCase, type Mistake } from "./cases.ts";
 
@@ -80,24 +80,6 @@ function applyEdits(files: Record<string, string>, edits: BenchCase["edits"]): R
   return next;
 }
 
-function issues(result: TscResult): Record<string, string[]> {
-  if (!result.ok) return {};
-  return Object.fromEntries(Object.entries(result.diagnostics).map(([path, rows]) => [path, rows.map(tscIssue)]));
-}
-
-/** What the editor's tsc worker would answer for this change. */
-function typecheck(before: Record<string, string>, after: Record<string, string>, changed: string[]): TscCheck {
-  const paths = pathsToCheck(after, changed);
-  if (paths.length === 0) return null;
-  const afterOptions = compilerOptions(ts, after);
-  const beforeOptions = compilerOptions(ts, before);
-  const afterResult = checkProject(ts, after, paths, libFilesFor(ts, afterOptions, readLib), afterOptions, cache);
-  if (!afterResult.ok) return { state: "unavailable", reason: afterResult.reason };
-  const known = paths.filter((path) => before[path] !== undefined);
-  const beforeResult = checkProject(ts, before, known, libFilesFor(ts, beforeOptions, readLib), beforeOptions, cache);
-  return { state: "done", after: issues(afterResult), before: issues(beforeResult), checked: afterResult.files, ms: 0 };
-}
-
 /** A run as runTestsInBrowser (browser.ts) reports it: unsupported, or done and passed or not. */
 async function runTests(files: Record<string, string>) {
   const plan = planBrowserRun(files);
@@ -142,7 +124,7 @@ export async function runCase(item: BenchCase): Promise<CaseResult> {
     status: "pending",
   }));
   const browser = await testcheck(before, after);
-  const tsc = typecheck(before, after, changed);
+  const tsc = typecheckChange(ts, before, after, changed, readLib, cache);
   const rows = changeChecks({ files: before, edits, render: null, browser, tsc });
   const light = changeChecks({ files: before, edits, render: null, browser, tsc: null });
   const red = rows.filter((row) => row.status === "fail");

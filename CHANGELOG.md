@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture is an MCP server. Make a token under Settings → Agents →
+  Connect an agent, and Grok Bot, Claude Code, Cursor or any MCP client can
+  call `check_change` at `/api/mcp`: Parses, Imports resolve, Types (the
+  real compiler, new errors only) and test tampering, the editor's own
+  verdicts, before it applies a change. Nothing the agent sends is run or
+  kept. Free on every plan.
+  ([#39](https://github.com/Hankaws/aperture/pull/39))
 - A launch smoke test, `npm run smoke`, that walks the signed-in site the
   way a new visitor does against a production build: every public page on a
   laptop and a phone, sign-up, Composer playing recordings on the public demo

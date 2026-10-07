@@ -18,6 +18,8 @@ export const LIMITS = {
   save: 60,
   checks: 30,
   mcp: 30,
+  agentChecks: 20,
+  tokens: 10,
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -32,6 +34,8 @@ const WHAT: Record<LimitName, string> = {
   save: "saves",
   checks: "CI checks",
   mcp: "MCP tool calls",
+  agentChecks: "checks from an agent",
+  tokens: "new agent tokens",
 };
 
 const WINDOW_MS = 60_000;

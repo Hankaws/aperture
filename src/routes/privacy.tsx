@@ -129,6 +129,14 @@ function PrivacyPage() {
           same as a folder you dropped. The token itself is not sent to the model.
         </p>
 
+        <h2 className="mt-10 text-lg font-medium tracking-tight">Agents that check their work here</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          An agent you connect in Settings → Agents sends the project's files and its change to Aperture's MCP server.
+          The server parses and type-checks them in memory and answers. Nothing in them is run, saved, logged, or sent
+          to a model. The agent signs in with a token that is shown to you once; the account keeps only a SHA-256 hash
+          of it, with its name and when it was last used. Revoking the token, or deleting the account, removes it.
+        </p>
+
         <h2 className="mt-10 text-lg font-medium tracking-tight">The public demo</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           On aperturesais.grok.me, and wherever the server is started with{" "}

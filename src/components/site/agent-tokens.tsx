@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authEnabled } from "@/lib/auth/client";
+import { agentSetups } from "./agent-setup";
 import { createAgentToken, listAgentTokens, revokeAgentToken } from "@/lib/mcp-server/tokens.api";
 import type { AgentTokenView } from "@/lib/mcp-server/tokens.server";
 
@@ -16,27 +18,6 @@ function copy(value: string, what: string) {
 function when(iso: string | null): string {
   if (!iso) return "never used";
   return `used ${new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
-}
-
-function setups(url: string, token: string): Array<{ name: string; text: string }> {
-  return [
-    {
-      name: "Claude Code",
-      text: `claude mcp add --transport http aperture ${url} --header "Authorization: Bearer ${token}"`,
-    },
-    {
-      name: "Cursor (.cursor/mcp.json)",
-      text: JSON.stringify(
-        { mcpServers: { aperture: { url, headers: { Authorization: `Bearer ${token}` } } } },
-        null,
-        2,
-      ),
-    },
-    {
-      name: "Grok Bot or any MCP client",
-      text: `Server URL: ${url}\nHeader: Authorization: Bearer ${token}`,
-    },
-  ];
 }
 
 /** Settings → Agents: tokens that let an agent call Aperture's MCP server. */
@@ -90,7 +71,10 @@ export function AgentTokens() {
           Let Grok Bot, Claude Code, Cursor or any MCP client check its own changes with Aperture
           before it applies them: Parses, Imports resolve and Types, the same checks as the editor,
           plus tests skipped or cut short. Nothing the agent sends is run or kept. Free on every
-          plan.
+          plan.{" "}
+          <Link to="/agents" className="text-fg underline-offset-2 hover:underline">
+            How it works
+          </Link>
         </p>
       </div>
 
@@ -146,7 +130,7 @@ export function AgentTokens() {
           )}
 
           <div className="mt-5 space-y-3">
-            {setups(url, made ?? "<token>").map((setup) => (
+            {agentSetups(url, made ?? "<token>").map((setup) => (
               <div key={setup.name}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-muted">{setup.name}</p>

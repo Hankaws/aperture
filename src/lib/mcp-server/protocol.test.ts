@@ -18,6 +18,7 @@ import {
   type CheckInput,
   type ServerContext,
 } from "./protocol.ts";
+import { AGENT_STOPS } from "./example.ts";
 
 const libDir = dirname(createRequire(import.meta.url).resolve("typescript/lib/lib.d.ts"));
 const readLib = (name: string) => {
@@ -219,6 +220,6 @@ test("every benchmark case gets the editor's verdict from check_change, except t
   }
   // Of the 27 a check can see, 8 need a test run: the 7 behaviour mistakes, and the
   // mistyped require() the Imports check does not read yet. The editor's one false alarm is here too.
-  assert.equal(stoppedBad, 19);
+  assert.equal(stoppedBad, AGENT_STOPS, "/agents states AGENT_STOPS: update it in example.ts");
   assert.equal(flaggedGood, 1);
 });

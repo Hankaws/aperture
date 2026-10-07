@@ -177,7 +177,8 @@ local in-process database (PGlite), so nothing else needs setting up.
   takes the project and a change and answers with Parses, Imports resolve,
   Types (the real compiler, new errors only) and whether the change tampers
   with the tests, the same verdicts the editor gives. Nothing is run or kept,
-  so the agent runs its own tests. Free on every plan.
+  so the agent runs its own tests. Free on every plan. `/agents` has the
+  setup for each agent and a real answer.
 
 ## Using a real model
 

@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A page for connecting an agent, `/agents`: setup for Claude Code, Cursor
+  and Grok Bot, the instruction to give the agent, and a real
+  `check_change` answer that a test keeps word for word. The landing page
+  links to it, and its questions say what the checks catch without running
+  tests: 19 of the benchmark's 33 bad edits, against 27 in the editor.
+  ([#40](https://github.com/Hankaws/aperture/pull/40))
 - Aperture is an MCP server. Make a token under Settings → Agents →
   Connect an agent, and Grok Bot, Claude Code, Cursor or any MCP client can
   call `check_change` at `/api/mcp`: Parses, Imports resolve, Types (the
@@ -36,6 +42,8 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- The Parses check says "1 file parses", not "1 file parse".
+  ([#40](https://github.com/Hankaws/aperture/pull/40))
 - If someone made an account with your email and a password, the sign-in
   page now gives you a way out: a private report, after which that account
   is removed and you can sign in with Google or X.

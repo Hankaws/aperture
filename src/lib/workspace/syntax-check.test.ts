@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  isJsonPath,
-  isScriptPath,
-  jsonIssues,
-  scriptIssues,
-  stripJsonc,
-} from "./syntax-check.ts";
+import { isJsonPath, isScriptPath, jsonIssues, scriptIssues, stripJsonc } from "./syntax-check.ts";
 
 test("claims the script and json extensions, and nothing else", () => {
   for (const path of ["a.ts", "a.tsx", "a.js", "a.jsx", "a.mjs", "a.cjs", "a.mts", "a.cts"]) {
@@ -85,4 +79,35 @@ test("stripJsonc leaves string contents alone", () => {
 test("stripJsonc keeps an escaped quote from ending the string", () => {
   const src = '{"q": "say \\" // not a comment"}';
   assert.deepEqual(JSON.parse(stripJsonc(src)), JSON.parse(src));
+});
+
+test("ambient modules named by a string parse in TypeScript, and an error inside one is still found", () => {
+  const augmentation = [
+    'import type { getRouter } from "./router.tsx";',
+    "declare module '@tanstack/react-start' {",
+    "  interface Register {",
+    "    router: Awaited<ReturnType<typeof getRouter>>;",
+    "  }",
+    "}",
+    'declare module "*.svg";',
+    'export declare module "x" {}',
+  ].join("\n");
+  assert.deepEqual(scriptIssues("routeTree.gen.ts", augmentation), []);
+  assert.deepEqual(
+    scriptIssues(
+      "env.d.ts",
+      'declare module "*.css" {\n  const css: string;\n  export default css;\n}\n',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    scriptIssues("a.ts", 'const n = 1;\ndeclare module "x" {\n  interface R {\n}\n'),
+    ["parse error at line 5"],
+  );
+  // Not TypeScript: left to the parser, which rejects it.
+  assert.notDeepEqual(scriptIssues("a.js", "module 'x' {}\n"), []);
+});
+
+test("a module name with mismatched quotes is still an error", () => {
+  assert.deepEqual(scriptIssues("a.ts", "declare module \"x' {}\n"), ["parse error at line 1"]);
 });

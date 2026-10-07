@@ -66,6 +66,10 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Parses no longer reports valid TypeScript as broken when it declares a
+  module by name, `declare module "@tanstack/react-router" {` or
+  `declare module "*.svg";`, as module augmentations and `.d.ts` files do.
+  ([#43](https://github.com/Hankaws/aperture/pull/43))
 - Aperture Agent Check no longer misses a failing `node --test` run when it
   is itself started from a test runner: the project's tests no longer inherit
   `NODE_TEST_CONTEXT`. ([#43](https://github.com/Hankaws/aperture/pull/43))

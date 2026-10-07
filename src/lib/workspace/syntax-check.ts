@@ -47,6 +47,32 @@ function lineAt(starts: number[], pos: number): number {
   return lo + 1;
 }
 
+const TS_EXT = /\.(m|c)?tsx?$/i;
+/** `declare module "x" {`: an ambient module named by a string, with a body. */
+const STRING_MODULE = /^(\s*(?:export\s+)?(?:declare\s+)?module\s+)((["'])[^"'\n]*\3)(?=\s*\{)/gm;
+/** `declare module "*.svg";`: the same without one. */
+const BARE_STRING_MODULE =
+  /^(\s*(?:export\s+)?declare\s+module\s+)((["'])[^"'\n]*\3)(?=\s*;|[ \t]*$)/gm;
+
+/**
+ * Lezer's TypeScript grammar takes only an identifier after `module`, and
+ * always a body, so the ambient module declarations every `.d.ts` and module
+ * augmentation use (`declare module "@tanstack/react-router" {`,
+ * `declare module "*.svg";`) parse as errors. The name is swapped for an
+ * identifier of the same length (and a bodiless one gets `{}`), on the same
+ * line, so the lines reported stay exact and an error inside a body is still
+ * found.
+ */
+function withIdentifierModuleNames(text: string): string {
+  const name = (quoted: string) => "_".repeat(quoted.length);
+  return text
+    .replace(STRING_MODULE, (_all, head: string, quoted: string) => `${head}${name(quoted)}`)
+    .replace(
+      BARE_STRING_MODULE,
+      (_all, head: string, quoted: string) => `${head}${name(quoted)} {}`,
+    );
+}
+
 /**
  * Parse errors, one per line at most.
  *
@@ -58,7 +84,7 @@ export function scriptIssues(path: string, text: string): string[] {
   if (text.length > MAX_PARSE_CHARS) return [];
   let tree;
   try {
-    tree = jsParserFor(path).parse(text);
+    tree = jsParserFor(path).parse(TS_EXT.test(path) ? withIdentifierModuleNames(text) : text);
   } catch (error) {
     return [error instanceof Error ? error.message.slice(0, 160) : "parse error"];
   }

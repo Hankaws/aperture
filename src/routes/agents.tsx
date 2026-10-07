@@ -26,7 +26,7 @@ const QUESTIONS = [
   },
   {
     q: "Which projects can it check?",
-    a: "JavaScript and TypeScript. Imports are read from import and export statements; require() is not read yet. Up to 160 files and 2.5 MB per check, and 20 checks a minute per account.",
+    a: "JavaScript and TypeScript. Imports are read from import, export … from and require() of a string; a require inside try is left alone, since a missing module there is usually on purpose. Up to 160 files and 2.5 MB per check, and 20 checks a minute per account.",
   },
   {
     q: "How do I stop an agent using it?",

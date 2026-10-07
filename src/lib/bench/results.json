@@ -52,7 +52,7 @@
       },
       {
         "check": "imports",
-        "caught": 4
+        "caught": 5
       },
       {
         "check": "types",
@@ -848,15 +848,17 @@
       "mistake": "import",
       "fixture": "notes-cli",
       "caughtBy": [
+        "imports",
         "tests"
       ],
       "lightCaughtBy": [
+        "imports",
         "tests"
       ],
-      "detail": "npm run test fails in the browser: src/notes.js imports ./parser, which does not exist",
+      "detail": "src/notes.js: requires \"./parser\" at line 1, which does not exist in the project",
       "checks": {
         "parse": "pass",
-        "imports": "pass",
+        "imports": "fail",
         "types": "skip",
         "preview": "skip",
         "tests": "fail"

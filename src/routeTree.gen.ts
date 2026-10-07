@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgentCheckRouteImport } from './routes/agent-check'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as BenchmarkRouteImport } from './routes/benchmark'
@@ -29,6 +30,11 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentCheckRoute = AgentCheckRouteImport.update({
+  id: '/agent-check',
+  path: '/agent-check',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentsRoute = AgentsRouteImport.update({
@@ -109,6 +115,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agent-check': typeof AgentCheckRoute
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agent-check': typeof AgentCheckRoute
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
@@ -146,6 +154,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agent-check': typeof AgentCheckRoute
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agent-check'
     | '/agents'
     | '/app'
     | '/benchmark'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agent-check'
     | '/agents'
     | '/app'
     | '/benchmark'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agent-check'
     | '/agents'
     | '/app'
     | '/benchmark'
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentCheckRoute: typeof AgentCheckRoute
   AgentsRoute: typeof AgentsRoute
   AppRoute: typeof AppRoute
   BenchmarkRoute: typeof BenchmarkRoute
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-check': {
+      id: '/agent-check'
+      path: '/agent-check'
+      fullPath: '/agent-check'
+      preLoaderRoute: typeof AgentCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agents': {
@@ -357,6 +377,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentCheckRoute: AgentCheckRoute,
   AgentsRoute: AgentsRoute,
   AppRoute: AppRoute,
   BenchmarkRoute: BenchmarkRoute,

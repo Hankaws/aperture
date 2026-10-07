@@ -24,6 +24,9 @@ export function SiteNav() {
           <Link to="/agents" className="hidden hover:text-fg sm:inline">
             Agents
           </Link>
+          <Link to="/agent-check" className="hidden hover:text-fg md:inline">
+            Agent Check
+          </Link>
           <Link to="/privacy" className="tap hover:text-fg">
             Privacy
           </Link>

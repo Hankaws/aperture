@@ -179,7 +179,11 @@ function AgentsPage() {
           ))}
         </div>
         <p className="mt-6 text-sm text-muted">
-          What the server keeps and why is on the{" "}
+          To run the same checks on every pull request in a repository, there is{" "}
+          <Link to="/agent-check" className="text-fg underline-offset-2 hover:underline">
+            Aperture Agent Check
+          </Link>
+          , a GitHub Action. What the server keeps and why is on the{" "}
           <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
             privacy
           </Link>{" "}

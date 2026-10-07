@@ -545,6 +545,16 @@ build workflow, and the source stays here.
   does; CI runs it, then runs the bundle on the pull request itself.
 - **The README's numbers** are held to `results.json` and `AGENT_STOPS`
   by `packages/agent-check/src/readme.test.ts`.
+- **`/agent-check` must stay true.** Its run is `RUN_EXAMPLE` in
+  `packages/agent-check/src/run-example.ts` (the action repo's `example/`
+  project plus one change); `run-example.test.ts` runs the real tool on it,
+  tests included, and requires the headline, rows and annotation word for
+  word. It also requires the README's `uses:` line to be `ACTION_USES` and
+  every input in `action/action.yml` to appear on the page. Change what
+  the tool prints, or add an input, and it fails until the page follows.
+- **The tests' environment** drops `NODE_TEST_CONTEXT` (`testEnv`): run
+  from a `node --test` runner, a project's own `node --test` would
+  otherwise report to that runner and its failures would be lost.
 
 ## Auth and the database
 

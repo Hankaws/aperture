@@ -463,6 +463,29 @@ export function Landing() {
           </div>
         </section>
 
+        <section id="agent-check" className="border-t border-border">
+          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">GitHub Action</p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-medium tracking-tight text-balance sm:text-4xl">
+                Every pull request, checked. Agents&apos; too.
+              </h2>
+              <p className="mt-3 max-w-xl text-pretty text-muted">
+                Aperture Agent Check runs the same checks on every pull request in your repository: parses, imports,
+                types with your packages&apos; real types, and your own tests. A red check marks the line and fails
+                the step. It runs on your runner, and nothing leaves it.
+              </p>
+              <pre className="mt-6 max-w-xl overflow-x-auto rounded-lg border border-border bg-surface p-3 font-mono text-xs">
+                - uses: hankaws/aperture-agent-check@v1
+              </pre>
+              <Link to="/agent-check" className={cn(buttonVariants({ variant: "outline" }), "mt-6")}>
+                How to add it
+                <ArrowRight className="size-4" />
+              </Link>
+            </Reveal>
+          </div>
+        </section>
+
         <section id="models" className="border-t border-border">
           <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
             <Reveal>

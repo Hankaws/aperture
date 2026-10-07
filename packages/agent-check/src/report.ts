@@ -147,7 +147,7 @@ export function summaryMarkdown(rows: CheckRow[], meta: Meta): string {
   }
   lines.push(
     "",
-    "Same checks as the [Aperture](https://aperturesais.grok.me) editor. Nothing left this runner.",
+    "Same checks as the [Aperture](https://aperturesais.grok.me/agent-check) editor. Nothing left this runner.",
   );
   return `${lines.join("\n")}\n`;
 }

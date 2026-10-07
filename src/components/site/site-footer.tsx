@@ -35,6 +35,9 @@ export function SiteFooter() {
           <Link to="/agents" className="hover:text-fg">
             Agents
           </Link>
+          <Link to="/agent-check" className="hover:text-fg">
+            Agent Check
+          </Link>
           <Link to="/privacy" className="hover:text-fg">
             Privacy
           </Link>

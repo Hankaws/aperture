@@ -192,10 +192,10 @@ function BenchmarkPage() {
             and JavaScript, bigger repos, or other models are not claimed.
           </li>
           <li>
-            Plain JavaScript gets no type check, and the Imports check reads <code className="font-mono text-fg">import</code>{" "}
-            and <code className="font-mono text-fg">export … from</code>, not{" "}
-            <code className="font-mono text-fg">require()</code>: a mistyped require is stopped only when a test loads
-            it.
+            Plain JavaScript gets no type check. The Imports check reads{" "}
+            <code className="font-mono text-fg">require()</code> as well as <code className="font-mono text-fg">import</code>,
+            but not the names a require takes: what <code className="font-mono text-fg">module.exports</code> holds
+            cannot be listed safely, so a mistyped name there is stopped only when a test loads it.
           </li>
           <li>
             The numbers are not a claim that Aperture is safer than another editor, or that Apply is always correct

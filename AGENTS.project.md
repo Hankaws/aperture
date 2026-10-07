@@ -154,6 +154,12 @@ The review strip shows five checks for whatever is staged: **Parses**,
 from `changeChecks` in `src/lib/workspace/checks.ts` (pure and tested). A check
 that did not run reads "not run" with the reason and never counts as a pass.
 
+- **Imports resolve** is `importIssues` in `module-graph.ts`. It reads
+  `import`, `export … from`, dynamic `import()` and `require("…")` of a
+  string. A require's names are never judged (what `module.exports` holds
+  cannot be listed), and a require inside `try` is skipped entirely: an
+  optional dependency or a local config that may not exist is the usual
+  reason for the `try`. Anything it cannot be sure of stays silent.
 - **Types** is `typeIssues` in `type-check.ts`, run on changed TypeScript files
   that parse. It is not `tsc`: it reports only errors it can prove from the
   file's text (a literal against a primitive annotation, a returned literal, an

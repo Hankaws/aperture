@@ -12,8 +12,8 @@ release notes are every line from there down to the previous version.
 - A page for connecting an agent, `/agents`: setup for Claude Code, Cursor
   and Grok Bot, the instruction to give the agent, and a real
   `check_change` answer that a test keeps word for word. The landing page
-  links to it, and its questions say what the checks catch without running
-  tests: 19 of the benchmark's 33 bad edits, against 27 in the editor.
+  links to it, and says what the checks catch without running tests, as a
+  share of the benchmark's bad edits.
   ([#40](https://github.com/Hankaws/aperture/pull/40))
 - Aperture is an MCP server. Make a token under Settings → Agents →
   Connect an agent, and Grok Bot, Claude Code, Cursor or any MCP client can
@@ -32,6 +32,13 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The Imports check reads `require()`. A CommonJS require of a file that
+  does not exist, or of a package missing from package.json, is red before
+  any test runs. A require inside `try` is left alone, and the names a
+  require takes are not judged. On the benchmark, a mistyped require is now
+  stopped by the Imports check, so agents calling `check_change` get 20 of
+  the 33 bad edits stopped without running anything, up from 19.
+  ([#41](https://github.com/Hankaws/aperture/pull/41))
 - The benchmark has 48 cases instead of 30, across four projects instead of
   two: a React shop UI that imports through barrel files (Vitest) and a plain
   JavaScript command-line tool (Jest) join the first two. A new kind of

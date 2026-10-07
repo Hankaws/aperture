@@ -47,6 +47,13 @@ export type ImportRef = {
   names: string[];
   /** 1-based line of the import statement. */
   line: number;
+  /**
+   * A CommonJS `require("…")`. Its names are not checked: what `module.exports`
+   * holds cannot be listed from the file the way ES exports can.
+   */
+  require?: true;
+  /** Inside a `try`, where a missing module is often the point (an optional dependency, a local config). */
+  guarded?: true;
 };
 
 function lineNumberAt(text: string, pos: number): number {
@@ -82,8 +89,24 @@ export function collectImports(path: string, text: string): ImportRef[] {
     return [];
   }
   const refs: ImportRef[] = [];
+  let tries = 0;
   tree.iterate({
     enter(node) {
+      if (node.name === "TryStatement") tries += 1;
+      if (node.name === "CallExpression") {
+        // Only a plain require of a string: not require.resolve, not require(variable).
+        const call = /^require\s*\(\s*(['"])([^'"]+)\1\s*\)$/.exec(text.slice(node.from, node.to));
+        if (call?.[2]) {
+          refs.push({
+            spec: call[2],
+            names: [],
+            line: lineNumberAt(text, node.from),
+            require: true,
+            ...(tries > 0 ? { guarded: true as const } : {}),
+          });
+        }
+        return;
+      }
       // `export … from "./x"` reads ./x as surely as an import does.
       if (node.name !== "ImportDeclaration" && node.name !== "DynamicImport" && node.name !== "ExportDeclaration") return;
       const decl = text.slice(node.from, node.to);
@@ -100,6 +123,9 @@ export function collectImports(path: string, text: string): ImportRef[] {
         names: group ? groupNames(group[0], "left") : [],
         line: lineNumberAt(text, node.from),
       });
+    },
+    leave(node) {
+      if (node.name === "TryStatement") tries -= 1;
     },
   });
   return refs;
@@ -264,14 +290,15 @@ export function importIssues(path: string, files: Record<string, string>): strin
   const packages = declaredPackages(files);
   const issues: string[] = [];
   for (const ref of collectImports(path, text)) {
+    if (ref.guarded) continue;
     const resolved = resolveSpecifier(path, ref.spec, files);
     if (resolved.kind === "missing") {
-      issues.push(`imports "${ref.spec}" at line ${ref.line}, which does not exist in the project`);
+      issues.push(`${ref.require ? "requires" : "imports"} "${ref.spec}" at line ${ref.line}, which does not exist in the project`);
       continue;
     }
     if (resolved.kind === "external") {
       if (packages && !packages.has(resolved.pkg)) {
-        issues.push(`imports "${resolved.pkg}" at line ${ref.line}, which is not in package.json`);
+        issues.push(`${ref.require ? "requires" : "imports"} "${resolved.pkg}" at line ${ref.line}, which is not in package.json`);
       }
       continue;
     }

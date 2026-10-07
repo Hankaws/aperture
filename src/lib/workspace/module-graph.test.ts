@@ -223,3 +223,69 @@ test("an undeclared `@/` alias is unknown, never a package", () => {
     [],
   );
 });
+
+test("collectImports reads CommonJS require() of a string, and nothing else called require", () => {
+  const src = [
+    'const { a } = require("./a");',
+    'const b = require("pkg").b;',
+    'try { require("optional-dep"); } catch {}',
+    'require.resolve("./not-a-load");',
+    "const name = './dyn';",
+    "require(name);",
+    "require(`./template`);",
+  ].join("\n");
+  const refs = collectImports("src/x.js", src);
+  assert.deepEqual(
+    refs.map((r) => [r.spec, r.line, r.require, r.guarded ?? false, r.names]),
+    [
+      ["./a", 1, true, false, []],
+      ["pkg", 2, true, false, []],
+      ["optional-dep", 3, true, true, []],
+    ],
+  );
+});
+
+test("a require() of a file that does not exist is reported", () => {
+  const files = {
+    "package.json": JSON.stringify({ name: "x" }),
+    "src/notes.js": 'const { parseNote } = require("./parser");\nmodule.exports = {};\n',
+    "src/parse.js": "module.exports = { parseNote() {} };\n",
+  };
+  assert.deepEqual(importIssues("src/notes.js", files), [
+    'requires "./parser" at line 1, which does not exist in the project',
+  ]);
+  files["src/notes.js"] = 'const { parseNote } = require("./parse");\nmodule.exports = {};\n';
+  assert.deepEqual(importIssues("src/notes.js", files), []);
+});
+
+test("a require() of an undeclared package is reported, a builtin is not", () => {
+  const files = {
+    "package.json": JSON.stringify({ dependencies: { lodash: "^4.0.0" } }),
+    "index.js": [
+      'const _ = require("lodash");',
+      'const fs = require("node:fs");',
+      'const path = require("path");',
+      'const left = require("left-pad");',
+    ].join("\n"),
+  };
+  assert.deepEqual(importIssues("index.js", files), [
+    'requires "left-pad" at line 4, which is not in package.json',
+  ]);
+});
+
+test("a require() stays silent where a missing module may be the point, or its names cannot be known", () => {
+  const files = {
+    "package.json": JSON.stringify({ name: "x" }),
+    // An optional dependency and a local config that may not exist, both inside try.
+    "a.js": [
+      "let watcher;",
+      'try { watcher = require("fsevents"); } catch {}',
+      'try { module.exports = require("./local-config"); } catch { module.exports = {}; }',
+    ].join("\n"),
+    // CommonJS exports are not listed, so destructured names are never judged.
+    "b.js": 'const { anything, at, all } = require("./c");\n',
+    "c.js": "module.exports = makeThings();\n",
+  };
+  assert.deepEqual(importIssues("a.js", files), []);
+  assert.deepEqual(importIssues("b.js", files), []);
+});

@@ -5,7 +5,7 @@
  */
 
 /** Bad edits in the benchmark that check_change stops without running tests (protocol.test.ts holds it to this). */
-export const AGENT_STOPS = 19;
+export const AGENT_STOPS = 20;
 
 export const EXAMPLE = {
   files: {

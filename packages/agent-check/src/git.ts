@@ -18,6 +18,15 @@ export function git(args: string[], cwd: string): string {
   });
 }
 
+/** Where `cwd` sits in its repository, e.g. `apps/web/`; empty at the root. GitHub annotations name files from the root. */
+export function repoPrefix(cwd: string): string {
+  try {
+    return git(["rev-parse", "--show-prefix"], cwd).trim();
+  } catch {
+    return "";
+  }
+}
+
 /** The commit the change grew from: where the base branch and this checkout meet. */
 export function mergeBase(base: string, cwd: string): string {
   try {
@@ -33,10 +42,17 @@ export function mergeBase(base: string, cwd: string): string {
  * Files that differ between `rev` and the working tree: added, modified,
  * deleted. A rename counts as the old path deleted and the new one added.
  * Untracked files that git would not ignore count as added.
+ *
+ * Every path here is relative to `cwd`, and only files under it are listed,
+ * so a project in a subfolder of its repository (a monorepo) works: `git diff`
+ * needs `--relative` for that, `ls-files` and `ls-tree` do it by default, and
+ * `readAt` asks for `rev:./path`.
  */
 export function changedFiles(rev: string, cwd: string): Change[] {
   const out: Change[] = [];
-  const fields = git(["diff", "--name-status", "--no-renames", "-z", rev], cwd).split("\0");
+  const fields = git(["diff", "--name-status", "--no-renames", "--relative", "-z", rev], cwd).split(
+    "\0",
+  );
   for (let i = 0; i + 1 < fields.length; i += 2) {
     const status = fields[i]![0];
     const path = fields[i + 1]!;
@@ -49,7 +65,7 @@ export function changedFiles(rev: string, cwd: string): Change[] {
   return out;
 }
 
-/** Every file in `rev` with its size in bytes. */
+/** Every file in `rev` under `cwd`, relative to it, with its size in bytes. */
 export function filesAt(rev: string, cwd: string): Array<{ path: string; bytes: number }> {
   const out: Array<{ path: string; bytes: number }> = [];
   for (const entry of git(["ls-tree", "-r", "-l", "-z", rev], cwd).split("\0")) {
@@ -59,13 +75,13 @@ export function filesAt(rev: string, cwd: string): Array<{ path: string; bytes: 
   return out;
 }
 
-/** The text of `paths` as they are in `rev`, read in one `git cat-file --batch`. */
+/** The text of `paths` (relative to `cwd`) as they are in `rev`, read in one `git cat-file --batch`. */
 export function readAt(rev: string, paths: string[], cwd: string): Record<string, string> {
   const wanted = paths.filter((path) => !path.includes("\n"));
   if (wanted.length === 0) return {};
   const run = spawnSync("git", ["cat-file", "--batch"], {
     cwd,
-    input: wanted.map((path) => `${rev}:${path}\n`).join(""),
+    input: wanted.map((path) => `${rev}:./${path}\n`).join(""),
     maxBuffer: MAX_BUFFER,
   });
   if (run.status !== 0)

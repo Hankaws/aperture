@@ -100,6 +100,45 @@ test("deleting a file something still imports is red", () => {
   );
 });
 
+test("a project in a subfolder of its repository is checked there (working-directory)", () => {
+  const nested = Object.fromEntries(
+    Object.entries(shop).map(([path, text]) => [`apps/web/${path}`, text]),
+  );
+  const dir = repo(
+    {
+      ...nested,
+      "README.md": "# monorepo\n",
+      "apps/api/index.ts": "export const broken: number = 1;\n",
+    },
+    {
+      "apps/web/src/price.ts":
+        "export function formatPrice(cents: number, currency: string): string {\n  return currency + cents;\n}\n",
+      "apps/api/index.ts": 'export const broken: number = "not checked from apps/web";\n',
+    },
+  );
+  const result = check(options(join(dir, "apps/web")));
+  assert.equal(result.verdict, "red");
+  const printed: string[] = [];
+  const log = console.log;
+  console.log = (line: string) => printed.push(line);
+  try {
+    main(["--cwd", join(dir, "apps/web"), "--base", "main", "--no-tests"], {
+      GITHUB_ACTIONS: "true",
+    });
+  } finally {
+    console.log = log;
+  }
+  assert.ok(
+    printed.some((line) => line.startsWith("::error file=apps/web/src/cart.ts,line=3,")),
+    `annotations name the file from the repository root:\n${printed.join("\n")}`,
+  );
+  assert.equal(result.meta.changed, 1, "only the files under apps/web count");
+  assert.match(
+    result.rows.find((row) => row.id === "types")!.detail,
+    /^src\/cart\.ts: TS2554 at line 3/,
+  );
+});
+
 test("a change to nothing it reads is not checked, and says so", () => {
   const dir = repo(shop, { "README.md": "# Shop\n" });
   const result = check(options(dir));

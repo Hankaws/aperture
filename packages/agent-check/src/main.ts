@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import type { BrowserTests, CheckRow } from "../../../src/lib/workspace/checks.ts";
 import { staticChangeChecks } from "../../../src/lib/workspace/static-checks.ts";
-import { mergeBase } from "./git.ts";
+import { mergeBase, repoPrefix } from "./git.ts";
 import { installedFiles } from "./installed.ts";
 import { loadProject } from "./project.ts";
 import {
@@ -177,9 +177,11 @@ export function check(options: Options): Result {
 
 /** Runs the check and reports it where it runs: a GitHub runner, or a terminal. */
 export function main(argv: string[], env: NodeJS.ProcessEnv): number {
+  let options: Options;
   let result: Result;
   try {
-    result = check(parseOptions(argv, env));
+    options = parseOptions(argv, env);
+    result = check(options);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.log(
@@ -191,7 +193,13 @@ export function main(argv: string[], env: NodeJS.ProcessEnv): number {
   }
   console.log(result.text);
   if (env.GITHUB_ACTIONS) {
-    for (const line of workflowCommands(annotationsFor(result.rows))) console.log(line);
+    // GitHub names files from the repository root; a project in a subfolder reports from there.
+    const prefix = repoPrefix(options.cwd);
+    const annotations = annotationsFor(result.rows).map((a) => ({
+      ...a,
+      file: `${prefix}${a.file}`,
+    }));
+    for (const line of workflowCommands(annotations)) console.log(line);
   }
   if (env.GITHUB_STEP_SUMMARY) {
     const summary =

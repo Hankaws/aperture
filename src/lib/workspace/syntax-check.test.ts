@@ -111,3 +111,16 @@ test("ambient modules named by a string parse in TypeScript, and an error inside
 test("a module name with mismatched quotes is still an error", () => {
   assert.deepEqual(scriptIssues("a.ts", "declare module \"x' {}\n"), ["parse error at line 1"]);
 });
+
+test("typeof import parses in TypeScript, and an error after it is still found", () => {
+  assert.deepEqual(
+    scriptIssues(
+      "a.ts",
+      "type Main = typeof import(\"./main.ts\");\ntype Run = typeof import('./run').runTask;\n",
+    ),
+    [],
+  );
+  assert.deepEqual(scriptIssues("a.ts", 'type M = typeof import("./m");\nconst x = ;\n'), [
+    "parse error at line 2",
+  ]);
+});

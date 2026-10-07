@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The core of Aperture Bot, a coding bot for GitHub, and its command line,
+  `aperture-bot run --task "…"`. The editor's agent plans and makes the
+  change on a checkout, then Aperture Agent Check judges it against where it
+  started, with the tests run in a container that has no network and no
+  secrets. A red check goes back to the agent; a change still red is
+  reported, never passed as done. It never writes workflows, secrets files or
+  lockfiles, stops at a token budget, and reports the tokens it used.
+  ([#44](https://github.com/Hankaws/aperture/pull/44))
 - A page for Aperture Agent Check, `/agent-check`: the workflow to add, what
   it checks, a real run that a test keeps word for word, its settings, what
   leaves the runner, the benchmark numbers and a README badge. The landing
@@ -66,6 +74,8 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Parses no longer reports `typeof import("./module")` as broken
+  TypeScript. ([#44](https://github.com/Hankaws/aperture/pull/44))
 - Parses no longer reports valid TypeScript as broken when it declares a
   module by name, `declare module "@tanstack/react-router" {` or
   `declare module "*.svg";`, as module augmentations and `.d.ts` files do.

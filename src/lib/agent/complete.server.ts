@@ -3,6 +3,7 @@ import { cachedText } from "./cost";
 import type { ProviderId } from "@/lib/billing/plans";
 import { REPLAY_INLINE_ERROR, replayCompletion, streamPieces } from "./replay";
 import { iterateSseData, readOpenAiStream } from "./openai-stream";
+import { anthropicUsage, openAiUsage, type TokenUsage } from "./usage";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -20,6 +21,8 @@ export type ChatMessage = {
 export type Completion = {
   content: string;
   tool_calls?: ChatMessage["tool_calls"];
+  /** Tokens the provider billed for this call, when it said. Set by `complete`, not by streaming. */
+  usage?: TokenUsage;
 };
 
 /** A real provider, the replay model, or an OpenAI-compatible custom endpoint. */
@@ -111,9 +114,10 @@ export async function complete(
   const res = await postChat(cfg, body, signal);
   const data = (await res.json()) as {
     choices: Array<{ message: ChatMessage }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
   };
   const message = data.choices[0]?.message;
-  return { content: message?.content ?? "", tool_calls: message?.tool_calls };
+  return { content: message?.content ?? "", tool_calls: message?.tool_calls, usage: openAiUsage(data) };
 }
 
 export async function completeStreaming(
@@ -183,6 +187,7 @@ async function completeAnthropic(
   }
   const data = (await res.json()) as {
     content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
+    usage?: Parameters<typeof anthropicUsage>[0]["usage"];
   };
   const text = data.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
   const tool_calls = data.content
@@ -192,7 +197,7 @@ async function completeAnthropic(
       type: "function" as const,
       function: { name: b.name ?? "", arguments: JSON.stringify(b.input ?? {}) },
     }));
-  return { content: text, tool_calls: tool_calls.length ? tool_calls : undefined };
+  return { content: text, tool_calls: tool_calls.length ? tool_calls : undefined, usage: anthropicUsage(data) };
 }
 
 async function streamAnthropic(

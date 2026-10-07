@@ -51,6 +51,8 @@ export type AgentInput = {
   runtime?: string;
   /** Set when the tab can run scripts in its browser test runner (see browser-handoff.ts). */
   browserRuns?: BrowserRuns;
+  /** Lets propose_edit create files. Aperture Bot sets it; the editor does not. */
+  newFiles?: boolean;
 };
 
 export type AgentResult =

@@ -210,6 +210,8 @@ export type ToolContext = {
   handOff?: (script: string) => string | null;
   /** Set when this account has MCP servers. Returns the tool text. */
   mcpCall?: (server: string, tool: string, args: string) => Promise<string>;
+  /** When set, an edit with an empty search on a path that does not exist creates the file. */
+  newFiles?: boolean;
 };
 
 function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
@@ -328,6 +330,18 @@ export async function executeTool(
     const replace = String(args.replace ?? "");
     const description = String(args.description ?? "Update file");
     const current = ctx.files[path];
+    if (current === undefined && ctx.newFiles && path && path !== LESSONS_PATH && !search) {
+      ctx.files[path] = replace;
+      ctx.edits.push({
+        id: `edit_${ctx.edits.length + 1}_${path}`,
+        path,
+        oldText: "",
+        newText: replace,
+        description,
+        status: "pending",
+      });
+      return `Edit staged for ${path}: a new file.`;
+    }
     if (current === undefined) {
       if (path !== LESSONS_PATH || search.trim()) return `File not found: ${path}`;
       const line = replace.replace(/^- /, "").trim();

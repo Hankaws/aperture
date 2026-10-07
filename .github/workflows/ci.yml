@@ -134,3 +134,24 @@ jobs:
       - name: Check this pull request
         if: ${{ github.event_name == 'pull_request' }}
         run: node packages/agent-check/dist/index.cjs --no-tests
+
+  aperture-bot:
+    name: Aperture Bot (bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the bot's bundle
+        run: npm run build:aperture-bot
+
+      # A stand-in model over HTTP: one clear change, and one that stays red.
+      - name: The bundle finishes a clear change and refuses a red one
+        run: node packages/aperture-bot/smoke.mjs packages/aperture-bot/dist/index.cjs

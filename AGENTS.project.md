@@ -555,6 +555,44 @@ build workflow, and the source stays here.
 - **The tests' environment** drops `NODE_TEST_CONTEXT` (`testEnv`): run
   from a `node --test` runner, a project's own `node --test` would
   otherwise report to that runner and its failures would be lost.
+- **`testRunner`** (an option of `check`) replaces running the tests on
+  this machine. Aperture Bot passes its sandbox; the Action never sets it.
+
+## Aperture Bot (in progress)
+
+`packages/aperture-bot/` is a coding bot for GitHub: a maintainer asks for a
+change on an issue or pull request, the editor's agent makes it, and Agent
+Check judges it before anything is published. This first part is the core and
+a command line (`aperture-bot run --task "…"`); the GitHub side (the trigger,
+the permission check, the branch and pull request) comes next, then its own
+action repo and a page.
+
+- **The same agent.** `runLoop` from `src/lib/agent/loop.ts` with a runner
+  `LoopHost` (`model.ts`): one plan turn, then build turns with the plan
+  approved. The bot's rules ride in `standing` (`BOT_RULES` in `run.ts`).
+  `newFiles` on `AgentInput` lets `propose_edit` create a file from an
+  empty search; the editor does not set it.
+- **Every model call is the plain `complete`**, counted by `Budget`: the
+  providers' `usage` is read in `src/lib/agent/usage.ts`. The budget is
+  checked before each call, so a run stops at the call that would start past
+  `--max-tokens`, never mid-call.
+- **Code the agent wrote never runs next to a secret** (`sandbox.ts`). Tests
+  run on a copy of the project without `.git` or `node_modules`: in Docker
+  with `--network none`, four plain variables, the packages mounted
+  read-only and the image `mirror.gcr.io/library/node:22-slim` (Docker Hub's
+  image without its pull limits); or, with `--sandbox none` for local tries,
+  here with only PATH and HOME. The checkout is never written by a test.
+- **The final word is Agent Check** (`check` with the sandbox as
+  `testRunner`), against the commit the run started from. A red result goes
+  back to the agent with the report, for at most `--rounds` checks; still
+  red, the run says nothing should be published.
+- **Never written** (`refusedReason` in `files.ts`): `.github/`, secrets
+  files, lockfiles, `node_modules`, `.git` and paths outside the project.
+- **Tests load a bundle** (`test-bundle.ts`): the loop's `@/` imports do not
+  resolve under plain Node. `run.test.ts` drives the real loop and Agent
+  Check with a scripted model, and runs the Docker case when a daemon is
+  there. `smoke.mjs` runs the built CLI against a stand-in model over HTTP
+  (`--provider custom`, local endpoints being allowed outside production).
 
 ## Auth and the database
 

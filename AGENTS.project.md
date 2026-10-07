@@ -507,6 +507,45 @@ HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
   says and those fail until the page says it too. The setup snippets come
   from `src/components/site/agent-setup.ts`, shared with Settings → Agents.
 
+## Aperture Agent Check (the GitHub Action)
+
+`packages/agent-check/` is a command-line tool and GitHub Action that runs
+the editor's checks on a pull request. It is published from its own repo
+(`Hankaws/aperture-agent-check`, which needs `action.yml` at its root);
+`packages/agent-check/action/` holds that repo's `action.yml`, README and
+build workflow, and the source stays here.
+
+- **Same checks.** `staticChangeChecks` from `src/lib/workspace/static-checks.ts`,
+  given the pull request's files: `git.ts` reads the base (`git merge-base`,
+  `git ls-tree`, one `git cat-file --batch`) and the working tree;
+  `project.ts` keeps JS, TS, JSON, HTML and CSS under 5,000 files / 50 MB
+  and reports "not checked" above that, never a pass.
+- **Deleted files** are handled in `staticChangeChecks` (`deleted`): files
+  that imported one are checked again, and a deleted test file counts as
+  deleting its tests.
+- **Tests run for real** (`tests.ts`): `npm run <test-script>` in the
+  checkout. When it fails, the base runs in a `git worktree` that borrows
+  `node_modules`, and a failure the base shares is amber. That runs the
+  pull request's code, so the README says `pull_request`, never
+  `pull_request_target`.
+- **Installed types.** With `node_modules` present (`installed.ts`), the
+  compiler reads the packages' real `.d.ts` files and keeps the project's
+  `types` and `noImplicitAny` (`compilerOptions(…, { installed: true })`).
+  Without them the editor's loose typing would report artifacts: on this
+  repo, 55 errors that `tsc` does not have; with them, 0. The editor, the
+  benchmark and `check_change` never pass `installed`.
+- **Reporting** (`report.ts`): red rows become `::error` workflow commands
+  (annotations on the pull request's lines), the run summary gets the rows
+  and everything red, and `verdict` is written to `GITHUB_OUTPUT`. Amber
+  rows are not annotated: they mark lines the change did not touch.
+- **The bundle** (`npm run build:agent-check`, rolldown) is one CommonJS
+  file with TypeScript inside and its `lib.*.d.ts` beside it: CommonJS
+  because the compiler reads `__filename` when it loads.
+  `packages/agent-check/smoke.mjs` runs a built bundle the way the action
+  does; CI runs it, then runs the bundle on the pull request itself.
+- **The README's numbers** are held to `results.json` and `AGENT_STOPS`
+  by `packages/agent-check/src/readme.test.ts`.
+
 ## Auth and the database
 
 Auth is **on** here, so `.grok/app-env.json` carries no `VITE_AUTH_ENABLED` and

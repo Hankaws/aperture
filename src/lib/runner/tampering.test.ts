@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { testTampering } from "./tampering.ts";
+import { testTampering, widensTestScript } from "./tampering.ts";
 
 const TESTS = [
   'import { test, expect } from "vitest";',
@@ -128,4 +128,23 @@ test("ordinary edits are not tampering", () => {
     [],
   );
   assert.deepEqual(testTampering(files, edit("tests/new.test.ts", TESTS)), []);
+});
+
+test("a test script that only adds test paths to the paths it already named is widening, not tampering", () => {
+  const was = "node --test 'scripts/**/*.test.mjs' 'src/**/*.test.ts'";
+  assert.equal(widensTestScript(was, `${was} 'packages/*/src/**/*.test.ts'`), true);
+  assert.equal(widensTestScript("jest test/a.test.js", "jest test/a.test.js test/b.test.js"), true);
+  // A script that ran everything and gains a path now runs only that path.
+  assert.equal(widensTestScript("vitest run", "vitest run src/format.test.ts"), false);
+  // A flag can filter: not a path.
+  assert.equal(widensTestScript("jest test/", "jest test/ --testNamePattern=cart"), false);
+  // Dropping or replacing a path is not adding one.
+  assert.equal(widensTestScript("node --test a.test.js b.test.js", "node --test a.test.js"), false);
+  assert.equal(widensTestScript("node --test a.test.js", "node --test b.test.js"), false);
+
+  const files = { "package.json": JSON.stringify({ scripts: { test: was } }) };
+  const widened = JSON.stringify({ scripts: { test: `${was} 'packages/*/src/**/*.test.ts'` } });
+  assert.deepEqual(testTampering(files, [{ path: "package.json", newText: widened }]), []);
+  const narrowed = JSON.stringify({ scripts: { test: "node --test 'src/**/*.test.ts'" } });
+  assert.equal(testTampering(files, [{ path: "package.json", newText: narrowed }]).length, 1);
 });

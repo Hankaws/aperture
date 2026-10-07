@@ -110,7 +110,19 @@ export function collectImports(path: string, text: string): ImportRef[] {
       // `export … from "./x"` reads ./x as surely as an import does.
       if (node.name !== "ImportDeclaration" && node.name !== "DynamicImport" && node.name !== "ExportDeclaration") return;
       const decl = text.slice(node.from, node.to);
-      if (node.name === "ExportDeclaration" && !/\bfrom\s*['"]/.test(decl)) return;
+      if (node.name === "ExportDeclaration") {
+        // Only a re-export reads another module. `export function f() { … from "x" … }`
+        // spans the whole function, and its body can say `from "…"` in a string.
+        const reexport = /^export\s+(?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*(['"])([^'"]+)\1/.exec(decl);
+        if (!reexport?.[2]) return;
+        const group = /^export\s+(?:type\s+)?(\{[^}]*\})/.exec(decl);
+        refs.push({
+          spec: unquote(reexport[2]),
+          names: group ? groupNames(group[1]!, "left") : [],
+          line: lineNumberAt(text, node.from),
+        });
+        return;
+      }
       const source =
         /from\s*(['"])([^'"]+)\1/.exec(decl) ??
         /\(\s*(['"])([^'"]+)\1/.exec(decl) ??

@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture Agent Check, a command-line tool and GitHub Action that runs the
+  editor's checks on a pull request: Parses, Imports resolve, Types (with the
+  installed packages' real types) and the project's own tests, with
+  annotations on the lines a red check names and a summary of the run. A
+  failure the base already had is amber, a deleted file is checked through
+  whatever imported it, and nothing leaves the runner. Aperture's own pull
+  requests are checked by it.
+  ([#42](https://github.com/Hankaws/aperture/pull/42))
 - A page for connecting an agent, `/agents`: setup for Claude Code, Cursor
   and Grok Bot, the instruction to give the agent, and a real
   `check_change` answer that a test keeps word for word. The landing page
@@ -32,6 +40,10 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- Adding test paths to a test script that already names its own paths is
+  no longer counted as tampering: more tests run, none fewer. A script that
+  ran everything and gains a path filter still is.
+  ([#42](https://github.com/Hankaws/aperture/pull/42))
 - The Imports check reads `require()`. A CommonJS require of a file that
   does not exist, or of a package missing from package.json, is red before
   any test runs. A require inside `try` is left alone, and the names a
@@ -49,6 +61,9 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- An exported function whose body says `from "…"` in a string is no longer
+  read as a re-export of a module that does not exist.
+  ([#42](https://github.com/Hankaws/aperture/pull/42))
 - The Parses check says "1 file parses", not "1 file parse".
   ([#40](https://github.com/Hankaws/aperture/pull/40))
 - If someone made an account with your email and a password, the sign-in

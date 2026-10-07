@@ -60,6 +60,8 @@ export type BrowserTests =
       preexisting?: boolean;
       /** What failed in full, for a fix (see runner/stack.ts). */
       evidence?: string;
+      /** Where the tests ran, for the row's wording. Default: "in the browser". */
+      where?: string;
     };
 
 const BROWSER_SCRIPT = /\.m?js$/i;
@@ -353,6 +355,7 @@ function testLabel(script: string | null): string {
 }
 
 function browserRow(browser: Exclude<BrowserTests, null>): CheckRow {
+  const where = (browser.state === "done" && browser.where) || "in the browser";
   if (browser.state === "unsupported") {
     return { id: "tests", label: "Tests", status: "skip", detail: `Not run: ${browser.reason}` };
   }
@@ -362,7 +365,7 @@ function browserRow(browser: Exclude<BrowserTests, null>): CheckRow {
   const label = testLabel(browser.script);
   if (browser.passed) {
     const count = browser.pass ? ` (${browser.pass} test${browser.pass === 1 ? "" : "s"})` : "";
-    return { id: "tests", label, status: "pass", detail: `npm run ${browser.script} passed in the browser${count}.` };
+    return { id: "tests", label, status: "pass", detail: `npm run ${browser.script} passed ${where}${count}.` };
   }
   if (browser.preexisting) {
     return {
@@ -377,7 +380,7 @@ function browserRow(browser: Exclude<BrowserTests, null>): CheckRow {
     id: "tests",
     label,
     status: "fail",
-    detail: `npm run ${browser.script} fails in the browser: ${browser.detail}`,
+    detail: `npm run ${browser.script} fails ${where}: ${browser.detail}`,
     ...(browser.evidence ? { evidence: browser.evidence } : {}),
   };
 }

@@ -21,3 +21,6 @@ screenshots/*
 !screenshots/.gitkeep
 .grok/preview.log
 .grok/preview.pid
+
+# Built by npm run build:agent-check; published from the action repo, never committed here.
+packages/*/dist/

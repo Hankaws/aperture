@@ -31,6 +31,8 @@
   },
   "include": [
     "src",
-    "server"
+    "server",
+    // Package sources only: their built bundles are megabytes of generated JavaScript.
+    "packages/*/src"
   ]
 }

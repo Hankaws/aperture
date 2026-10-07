@@ -289,3 +289,24 @@ test("a require() stays silent where a missing module may be the point, or its n
   assert.deepEqual(importIssues("a.js", files), []);
   assert.deepEqual(importIssues("b.js", files), []);
 });
+
+test("an exported function whose body says from \"…\" in a string is not a re-export", () => {
+  const src = [
+    'export * from "./all";',
+    'export { a, b as c } from "./named";',
+    'export type { T } from "./types";',
+    "export function describe(was: string) {",
+    '  return `changes the script from "${was}" to "x"`;',
+    "}",
+    'export const note = \'moved from "./old" to "./new"\';',
+  ].join("\n");
+  const refs = collectImports("src/x.ts", src);
+  assert.deepEqual(
+    refs.map((r) => [r.spec, r.names]),
+    [
+      ["./all", []],
+      ["./named", ["a", "b"]],
+      ["./types", ["T"]],
+    ],
+  );
+});

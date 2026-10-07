@@ -60,7 +60,7 @@ Nothing. The checks run in this step: no token, no network, no account. Free.
 ## Badge
 
 ```markdown
-[![Checked by Aperture Agent Check](https://img.shields.io/badge/checked%20by-Aperture%20Agent%20Check-7c3aed)](https://aperturesais.grok.me)
+[![Checked by Aperture Agent Check](https://img.shields.io/badge/checked%20by-Aperture%20Agent%20Check-7c3aed)](https://aperturesais.grok.me/agent-check)
 ```
 
 ## How good is it

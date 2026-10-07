@@ -62,12 +62,23 @@ export function testsRunnable(cwd: string, script: string): string | null {
   return null;
 }
 
+/**
+ * The environment the project's tests get. NODE_TEST_CONTEXT is dropped: when
+ * this tool itself runs under `node --test`, a project's `node --test` would
+ * inherit it and report to a parent runner that is not listening, so its
+ * failures would go unseen.
+ */
+export function testEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { NODE_TEST_CONTEXT: _parent, ...rest } = env;
+  return { ...rest, CI: "true", FORCE_COLOR: "0", NO_COLOR: "1" };
+}
+
 export function runTests(cwd: string, script: string, timeoutMs: number): TestRun {
   const why = testsRunnable(cwd, script);
   if (why) return { ran: false, reason: why };
   const run = spawnSync("npm", ["run", script], {
     cwd,
-    env: { ...process.env, CI: "true", FORCE_COLOR: "0", NO_COLOR: "1" },
+    env: testEnv(process.env),
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: 64 * 1024 * 1024,

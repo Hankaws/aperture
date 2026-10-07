@@ -9,6 +9,11 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A page for Aperture Agent Check, `/agent-check`: the workflow to add, what
+  it checks, a real run that a test keeps word for word, its settings, what
+  leaves the runner, the benchmark numbers and a README badge. The landing
+  page, the nav, the footer and `/agents` link to it.
+  ([#43](https://github.com/Hankaws/aperture/pull/43))
 - Aperture Agent Check, a command-line tool and GitHub Action that runs the
   editor's checks on a pull request: Parses, Imports resolve, Types (with the
   installed packages' real types) and the project's own tests, with
@@ -61,6 +66,9 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Aperture Agent Check no longer misses a failing `node --test` run when it
+  is itself started from a test runner: the project's tests no longer inherit
+  `NODE_TEST_CONTEXT`. ([#43](https://github.com/Hankaws/aperture/pull/43))
 - An exported function whose body says `from "…"` in a string is no longer
   read as a re-export of a module that does not exist.
   ([#42](https://github.com/Hankaws/aperture/pull/42))

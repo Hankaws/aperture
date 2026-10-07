@@ -168,6 +168,7 @@ try {
     ["/benchmark", new RegExp(`with ${benchCases} edits an agent might stage`)],
     ["/pricing", /Hobby is free today/],
     ["/agents", /Your agent writes the change\. Aperture checks it first\./],
+    ["/agent-check", /Catches AI agents.{1,2}mistakes in pull requests, before they merge\./],
     ["/changelog", new RegExp(pkg.version.replace(/\./g, "\\."))],
     ["/security", /security/i],
     ["/privacy", /privacy/i],

@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { baseFromEvent, check, main, parseOptions, type Options } from "./main.ts";
 import { workflowCommands } from "./report.ts";
+import { testEnv } from "./tests.ts";
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -289,4 +290,11 @@ test("annotation text and properties are escaped the way GitHub reads them", () 
     ]),
     ["::error file=a%2Cb%3Ac.ts,line=2,title=T%3A x::50%25 done%0Anext"],
   );
+});
+
+test("the project's tests never inherit a parent test runner's context", () => {
+  const env = testEnv({ NODE_TEST_CONTEXT: "child-v8", PATH: "/bin" });
+  assert.equal(env.NODE_TEST_CONTEXT, undefined);
+  assert.equal(env.PATH, "/bin");
+  assert.equal(env.CI, "true");
 });

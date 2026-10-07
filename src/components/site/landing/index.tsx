@@ -77,6 +77,10 @@ const FAQ = [
     a: "No. npm run test runs in a sandboxed Worker in your browser tab, with no network access, in about a second. It covers node:test, Vitest and Jest. Projects that need a real Node can run in Vercel Sandbox instead.",
   },
   {
+    q: "Can my own agent use the checks?",
+    a: "Yes. Aperture is an MCP server too: make a token in Settings → Agents, add Aperture to Grok Bot, Claude Code, Cursor or any MCP client, and it can call check_change before it applies a change. It gets the editor’s parse, import and type verdicts; nothing it sends is run or kept, so it runs its own tests.",
+  },
+  {
     q: "Can I try it without an API key?",
     a: "Yes. Run it locally with APERTURE_MODEL=replay. Replay plays back recorded runs on the built-in demo project, harbor-api, and costs nothing. The commands are in the README.",
   },
@@ -407,6 +411,55 @@ export function Landing() {
                 </Reveal>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section id="agents" className="border-t border-border">
+          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+            <Reveal>
+              <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">For your agent</p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-medium tracking-tight text-balance sm:text-4xl">
+                Already use an agent? Give it these checks.
+              </h2>
+              <p className="mt-3 max-w-xl text-pretty text-muted">
+                Grok Bot, Claude Code, Cursor or any MCP client can ask Aperture before it applies a change, and get
+                the editor&apos;s own verdicts: parses, imports resolve, types. Nothing is run or kept. Free on every
+                plan.
+              </p>
+            </Reveal>
+            <div className="mt-10 grid gap-6 sm:grid-cols-3">
+              {[
+                {
+                  icon: KeyRound,
+                  title: "Make a token",
+                  body: "Settings → Agents. It is shown once, kept only as a hash, and you can revoke it any time.",
+                },
+                {
+                  icon: Layers,
+                  title: "Add one MCP server",
+                  body: "One URL and one header. The setup for Claude Code, Cursor and Grok Bot is a copy and paste.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "The agent fixes what is red",
+                  body: "A red check names the file and line, including the callers the agent never opened.",
+                },
+              ].map((item, i) => (
+                <Reveal key={item.title} delay={i * 90}>
+                  <article className="h-full rounded-2xl border border-border bg-surface p-6">
+                    <item.icon className="size-5 text-accent" strokeWidth={1.6} />
+                    <h3 className="mt-4 text-lg font-medium tracking-tight">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-pretty text-muted">{item.body}</p>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+            <Reveal delay={200}>
+              <Link to="/agents" className={cn(buttonVariants({ variant: "outline" }), "mt-8")}>
+                How to connect an agent
+                <ArrowRight className="size-4" />
+              </Link>
+            </Reveal>
           </div>
         </section>
 

@@ -167,6 +167,7 @@ try {
     ["/", /checks its own work/i],
     ["/benchmark", new RegExp(`with ${benchCases} edits an agent might stage`)],
     ["/pricing", /Hobby is free today/],
+    ["/agents", /Your agent writes the change\. Aperture checks it first\./],
     ["/changelog", new RegExp(pkg.version.replace(/\./g, "\\."))],
     ["/security", /security/i],
     ["/privacy", /privacy/i],

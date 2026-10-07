@@ -233,7 +233,7 @@ export function changeChecks(input: {
       ? { id: "parse", label: "Parses", status: "skip", detail: "No code, markup or JSON in this change." }
       : broken.length > 0
         ? { id: "parse", label: "Parses", status: "fail", ...firstIssue(broken), evidence: issueEvidence(broken, snapshot) }
-        : { id: "parse", label: "Parses", status: "pass", detail: `${plural(checkable.length, "file")} parse.` };
+        : { id: "parse", label: "Parses", status: "pass", detail: `${plural(checkable.length, "file")} ${checkable.length === 1 ? "parses" : "parse"}.` };
 
   // A file that does not parse yields a partial import list; judging imports
   // then would bury the real cause under a second failure.

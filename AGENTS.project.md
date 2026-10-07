@@ -494,6 +494,12 @@ HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
   browser's tsc worker. A build that drops either one fails the smoke test.
 - **No deletes yet.** A change is new and changed files; the editor's edits
   have no deletion either.
+- **`/agents` must stay true.** Its worked example is `EXAMPLE` in
+  `src/lib/mcp-server/example.ts`; `example.test.ts` runs the real checks on
+  it and requires `EXAMPLE.answer` word for word, and `protocol.test.ts`
+  holds the benchmark count to `AGENT_STOPS`. Change what `check_change`
+  says and those fail until the page says it too. The setup snippets come
+  from `src/components/site/agent-setup.ts`, shared with Settings → Agents.
 
 ## Auth and the database
 

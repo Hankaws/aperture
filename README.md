@@ -179,6 +179,11 @@ local in-process database (PGlite), so nothing else needs setting up.
   with the tests, the same verdicts the editor gives. Nothing is run or kept,
   so the agent runs its own tests. Free on every plan. `/agents` has the
   setup for each agent and a real answer.
+- **Aperture Agent Check, for every pull request.** The same checks as a
+  GitHub Action (`packages/agent-check`): add one step, and every pull
+  request, an agent's or yours, gets Parses, Imports resolve, Types with
+  your installed packages' real types, and your own tests, with red lines
+  on the files it changed. It runs on your runner; nothing leaves it.
 
 ## Using a real model
 

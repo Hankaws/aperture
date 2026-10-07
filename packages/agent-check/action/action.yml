@@ -1,0 +1,35 @@
+name: Aperture Agent Check
+description: Catches AI agents' mistakes in pull requests before merge. Parse, imports, types and tests, the checks of the Aperture editor.
+author: Hankaws
+branding:
+  icon: aperture
+  color: purple
+inputs:
+  base:
+    description: Branch, tag or commit to compare against. Defaults to the pull request's base, or the commit before a push.
+    required: false
+  run-tests:
+    description: Run the project's tests ("true" or "false"). Install dependencies in an earlier step.
+    required: false
+    default: "true"
+  test-script:
+    description: The package.json script that runs the tests.
+    required: false
+    default: test
+  timeout-minutes:
+    description: How long one test run may take.
+    required: false
+    default: "10"
+  fail-on:
+    description: '"red" fails the step when a check is red; "never" only reports.'
+    required: false
+    default: red
+  working-directory:
+    description: The project's folder, when it is not the repository root.
+    required: false
+outputs:
+  verdict:
+    description: '"red" or "clear".'
+runs:
+  using: node24
+  main: dist/index.cjs

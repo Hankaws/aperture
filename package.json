@@ -24,8 +24,9 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --experimental-strip-types --test 'scripts/**/*.test.mjs' 'src/**/*.test.ts'",
+    "test": "node --experimental-strip-types --test 'scripts/**/*.test.mjs' 'src/**/*.test.ts' 'packages/*/src/**/*.test.ts'",
     "smoke": "node scripts/smoke-visitor.mjs",
+    "build:agent-check": "node packages/agent-check/build.mjs",
     "bench": "node --experimental-strip-types scripts/bench.ts",
     "release-notes": "node --experimental-strip-types scripts/release-notes.ts",
     "lint": "eslint .",
@@ -122,6 +123,7 @@
     "nitro": "3.0.260610-beta",
     "playwright": "^1.62.0",
     "prettier": "^3.4.0",
+    "rolldown": "^1.2.7",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.0"
   }

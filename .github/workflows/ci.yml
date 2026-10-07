@@ -105,3 +105,32 @@ jobs:
 
       - name: Walk the visitor path in a browser
         run: npm run smoke
+
+  agent-check:
+    name: Aperture Agent Check (bundle + this PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The check compares against the pull request's base.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the action's bundle
+        run: npm run build:agent-check
+
+      - name: The bundle catches a broken change and passes a correct one
+        run: node packages/agent-check/smoke.mjs packages/agent-check/dist/index.cjs
+
+      # Aperture's own pull requests are checked by it. The tests run in the
+      # job above, so this step only parses, resolves imports and type-checks.
+      - name: Check this pull request
+        if: ${{ github.event_name == 'pull_request' }}
+        run: node packages/agent-check/dist/index.cjs --no-tests

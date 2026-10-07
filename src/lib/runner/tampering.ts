@@ -75,6 +75,29 @@ function testScript(text: string | undefined): string | null {
   }
 }
 
+/** A test file, folder or glob in a script, unquoted: a quoted glob, `test/`, `a.spec.js`. */
+function isPathArg(token: string): boolean {
+  return !token.startsWith("-") && (/[/*]/.test(token) || /\.(?:[cm]?[jt]sx?)$/.test(token));
+}
+
+function scriptTokens(script: string): string[] {
+  return (script.match(/'[^']*'|"[^"]*"|\S+/g) ?? []).map((token) =>
+    token.replace(/^['"]|['"]$/g, ""),
+  );
+}
+
+/**
+ * Whether `now` only adds test paths to a script that already named its own
+ * paths: more tests run, none fewer. A script that ran everything and gains
+ * a path ran everything before and only that path after, so it narrows.
+ */
+export function widensTestScript(was: string, now: string): boolean {
+  if (!now.startsWith(was) || now === was) return false;
+  if (!scriptTokens(was).some(isPathArg)) return false;
+  const added = scriptTokens(now.slice(was.length));
+  return added.length > 0 && added.every(isPathArg);
+}
+
 /** What the change does to the tests, one clause each ("skips 1 test in tests/a.test.ts"); empty when nothing. */
 export function testTampering(files: Record<string, string>, edits: Edit[]): string[] {
   const found: string[] = [];
@@ -84,7 +107,7 @@ export function testTampering(files: Record<string, string>, edits: Edit[]): str
     if (path === "package.json" || path.endsWith("/package.json")) {
       const was = testScript(before);
       const now = testScript(newText);
-      if (was !== null && now !== was)
+      if (was !== null && now !== was && !(now !== null && widensTestScript(was, now)))
         found.push(`changes the test script in ${path} from "${was}" to "${now ?? "nothing"}"`);
       continue;
     }

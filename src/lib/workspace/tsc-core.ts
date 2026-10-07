@@ -24,6 +24,9 @@ export type TscResult =
 /** Projects bigger than this are left to the light check: the compiler would take too long in a tab. */
 export const TSC_LIMITS = { files: 600, bytes: 4_000_000 } as const;
 
+/** How big a project the compiler takes on, and where, for the message when it is too big. */
+export type TscLimits = { files: number; bytes: number; where?: string };
+
 const SHIM_PATH = "/__aperture__/ambient.d.ts";
 
 /**
@@ -78,7 +81,26 @@ export function isTsPath(path: string): boolean {
 }
 
 /** The project's tsconfig.json options, or sensible defaults. `extends` cannot be followed: there are no packages. */
-export function compilerOptions(ts: Ts, files: Record<string, string>): ts.CompilerOptions {
+/**
+ * Files outside the project that the compiler may read: the installed
+ * packages under node_modules, on a machine that has them (a CI runner).
+ * Paths are absolute in the compiler's view, e.g. `/node_modules/react/index.d.ts`.
+ */
+export type InstalledFiles = {
+  read(path: string): string | undefined;
+  isFile(path: string): boolean;
+  isDirectory(path: string): boolean;
+  /** The folders directly inside `path`. */
+  folders(path: string): string[];
+};
+
+const isInstalledPath = (name: string) => name === "/node_modules" || name.startsWith("/node_modules/");
+
+export function compilerOptions(
+  ts: Ts,
+  files: Record<string, string>,
+  opts: { installed?: boolean } = {},
+): ts.CompilerOptions {
   const raw = files["tsconfig.json"];
   let json: Record<string, unknown> = DEFAULTS;
   if (raw !== undefined) {
@@ -91,12 +113,11 @@ export function compilerOptions(ts: Ts, files: Record<string, string>): ts.Compi
     ...options,
     noEmit: true,
     skipLibCheck: true,
-    // `types` would name packages that are not here.
-    types: [],
-    // A callback handed to an untyped package (an http server, an Express route)
-    // has no type to take its parameters from, so every one would be an error.
-    noImplicitAny: false,
-    typeRoots: [],
+    // `types` would name packages that are not here, and a callback handed to an untyped
+    // package (an http server, an Express route) has no type to take its parameters from,
+    // so every one would be an error. With the packages installed, the project's own
+    // settings stand: they are what its `tsc` runs with.
+    ...(opts.installed ? {} : { types: [], typeRoots: [], noImplicitAny: false }),
     composite: false,
     incremental: false,
     declaration: false,
@@ -163,11 +184,16 @@ export function checkProject(
   libs: Map<string, string>,
   options: ts.CompilerOptions,
   cache: TscCache = new Map(),
+  limits: TscLimits = TSC_LIMITS,
+  installed?: InstalledFiles,
 ): TscResult {
   const roots = Object.keys(files).filter(isTsPath);
   const bytes = roots.reduce((n, path) => n + (files[path]?.length ?? 0), 0);
-  if (roots.length > TSC_LIMITS.files || bytes > TSC_LIMITS.bytes) {
-    return { ok: false, reason: `Project too large for the compiler in the browser (${roots.length} files).` };
+  if (roots.length > limits.files || bytes > limits.bytes) {
+    return {
+      ok: false,
+      reason: `Project too large for the compiler ${limits.where ?? "in the browser"} (${roots.length} files).`,
+    };
   }
   const libDir = "/__lib__/";
   const byPath = new Map<string, string>();
@@ -175,28 +201,30 @@ export function checkProject(
   byPath.set(SHIM_PATH, SHIM);
   for (const [name, text] of libs) byPath.set(`${libDir}${name}`, text);
 
+  const outside = (name: string) => installed !== undefined && isInstalledPath(name);
+  const read = (name: string) => byPath.get(name) ?? (outside(name) ? installed!.read(name) : undefined);
   const host: ts.CompilerHost = {
     getSourceFile(fileName, languageVersion) {
-      const text = byPath.get(fileName);
+      const text = read(fileName);
       if (text === undefined) return undefined;
       const cached = cache.get(fileName);
       if (cached && cached.text === text) return cached.file;
       const file = ts.createSourceFile(fileName, text, languageVersion, true);
-      // Only library files are worth keeping: project files change between checks.
-      if (fileName.startsWith(libDir)) cache.set(fileName, { text, file });
+      // Library and installed package files are worth keeping: project files change between checks.
+      if (fileName.startsWith(libDir) || outside(fileName)) cache.set(fileName, { text, file });
       return file;
     },
     getDefaultLibFileName: (opts) => `${libDir}${ts.getDefaultLibFileName(opts)}`,
     getDefaultLibLocation: () => libDir.slice(0, -1),
     writeFile: () => undefined,
     getCurrentDirectory: () => "/",
-    getDirectories: () => [],
+    getDirectories: (name) => (outside(name) ? installed!.folders(name) : []),
     getCanonicalFileName: (name) => name,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => "\n",
-    fileExists: (name) => byPath.has(name),
-    readFile: (name) => byPath.get(name),
-    directoryExists: () => true,
+    fileExists: (name) => byPath.has(name) || (outside(name) && installed!.isFile(name)),
+    readFile: read,
+    directoryExists: (name) => (outside(name) ? installed!.isDirectory(name) : true),
   };
 
   const program = ts.createProgram({

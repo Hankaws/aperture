@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture Bot as a GitHub Action. Someone with write access comments
+  `/aperture <task>` on an issue or pull request; the bot makes the change,
+  runs Aperture Agent Check with the tests in a sandbox, and only when nothing
+  is red opens a pull request that fixes the issue, or pushes to the pull
+  request. Otherwise it replies with what is still red and the change it did
+  not push. It never runs a fork's code.
+  ([#45](https://github.com/Hankaws/aperture/pull/45))
 - The core of Aperture Bot, a coding bot for GitHub, and its command line,
   `aperture-bot run --task "…"`. The editor's agent plans and makes the
   change on a checkout, then Aperture Agent Check judges it against where it

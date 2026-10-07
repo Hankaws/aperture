@@ -1,0 +1,53 @@
+# Builds dist/ from the Aperture source and commits it, so `uses:` runs it
+# with no install. Run it by hand with the Aperture tag or branch to build.
+name: Build from Aperture
+
+on:
+  workflow_dispatch:
+    inputs:
+      aperture-ref:
+        description: Tag, branch or commit of Hankaws/aperture to build
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Hankaws/aperture
+          ref: ${{ inputs.aperture-ref }}
+          path: aperture
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: aperture/package-lock.json
+
+      - name: Build
+        working-directory: aperture
+        run: |
+          npm ci
+          npm run build:aperture-bot
+
+      - name: Check the bundle on a clear change and a red one
+        run: node aperture/packages/aperture-bot/smoke.mjs aperture/packages/aperture-bot/dist/index.cjs
+
+      - name: Commit dist/
+        run: |
+          rm -rf dist
+          cp -r aperture/packages/aperture-bot/dist dist
+          rm -rf aperture
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist
+          if git diff --cached --quiet; then echo "dist/ is unchanged."; exit 0; fi
+          git commit -m "Build dist from Hankaws/aperture@${{ inputs.aperture-ref }}"
+          git push

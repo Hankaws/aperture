@@ -634,6 +634,19 @@ page (`/bot`).
   approve pull requests" (the last two only for admins), and can open a pull
   request adding `.github/workflows/aperture-bot.yml`, pinned to `v1` once
   that tag exists and to `main` until then.
+- **The chat** (`src/components/bot/bot-chat.tsx`, `botChat` in
+  `src/lib/github/bot.ts`, the turn itself in `src/lib/bot/chat.ts`, pure and
+  tested) is the page's front: the person talks about the repo, the model
+  reads it through read-only tools (open issues and pull requests, one
+  thread, CI on the default branch, the bot's tasks; their text in
+  `github-text.ts`), and work comes back only as `propose_task` cards. A card
+  is sent by the person (`askBot`), never by the model, and once sent it
+  becomes the task's live card. What GitHub returns reaches the model inside
+  `<github>` tags, as data. The model is the person's own key or endpoint:
+  `resolveModel(…, { replay: false })`, since a recording cannot answer about
+  a real repository, so the chat works on the demo host too and each turn is
+  recorded against the session cap like a Composer run. The conversation is
+  kept per repository in the browser (`localStorage`), nowhere else.
 - **Inputs stay in step**: `action-yml.test.ts` requires `action.yml` to
   declare exactly the inputs `action.ts` reads, and the README to list them.
 - **Tests load a bundle** (`test-bundle.ts`): the loop's `@/` imports do not

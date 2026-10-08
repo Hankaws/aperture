@@ -101,6 +101,14 @@ export const botAskInput = z.object({
   title: text(256).optional(),
   task: text(4000),
 });
+export const botChatInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  turns: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), text: text(20_000) }))
+    .min(1)
+    .max(60),
+});
 export const botSetupInput = z.object({
   owner: repoName,
   repo: repoName,

@@ -22,6 +22,7 @@ export const LIMITS = {
   tokens: 10,
   bot: 30,
   botAsk: 6,
+  botChat: 12,
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -40,6 +41,7 @@ const WHAT: Record<LimitName, string> = {
   tokens: "new agent tokens",
   bot: "Bot page refreshes",
   botAsk: "asks to Aperture Bot",
+  botChat: "messages to Aperture Bot",
 };
 
 const WINDOW_MS = 60_000;

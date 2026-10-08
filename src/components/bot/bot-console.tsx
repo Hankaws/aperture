@@ -24,6 +24,7 @@ import {
   type TaskState,
 } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
+import { BotChat } from "./bot-chat";
 
 const REPO_KEY = "aperture-bot-repo";
 
@@ -182,51 +183,71 @@ function RepoBot({ fullName }: { fullName: string }) {
     return () => window.clearInterval(timer);
   }, [active, loadTasks, tasks]);
 
+  const asked = () => {
+    eager.current = Date.now() + 5 * 60_000;
+    void loadTasks();
+  };
+
   return (
-    <div className="space-y-6">
-      {setupError ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
-          {setupError}
-        </p>
-      ) : setup ? (
-        <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
-      ) : (
-        <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
-      )}
-      {setup && (
-        <AskCard
-          setup={setup}
-          owner={owner}
-          name={name}
-          onAsked={() => {
-            eager.current = Date.now() + 5 * 60_000;
-            void loadTasks();
-          }}
-        />
-      )}
-      <section aria-labelledby="bot-tasks">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="bot-tasks" className="text-lg font-medium">
-            Tasks
-          </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void loadTasks()}
-            disabled={refreshing}
-            aria-label="Refresh tasks"
-          >
-            <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
-        {tasksError && <p className="mt-3 text-sm text-danger">{tasksError}</p>}
-        {tasks === null ? (
-          <div className="mt-3 h-32 animate-pulse rounded-2xl bg-elevated" />
-        ) : (
-          <TaskList tasks={tasks} now={now} />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+      <div className="min-w-0 space-y-4 lg:sticky lg:top-20">
+        {setup ? (
+          <BotChat
+            owner={owner}
+            name={name}
+            setup={setup}
+            tasks={tasks ?? []}
+            now={now}
+            onSent={asked}
+          />
+        ) : setupError ? null : (
+          <div className="h-[32rem] animate-pulse rounded-2xl bg-elevated" />
         )}
-      </section>
+        {setup && (
+          <details className="group rounded-2xl border border-border bg-surface">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm text-muted hover:text-fg">
+              Or write the task yourself
+            </summary>
+            <div className="border-t border-border">
+              <AskCard setup={setup} owner={owner} name={name} onAsked={asked} />
+            </div>
+          </details>
+        )}
+      </div>
+      <div className="min-w-0 space-y-6">
+        {setupError ? (
+          <p className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
+            {setupError}
+          </p>
+        ) : setup ? (
+          <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
+        ) : (
+          <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+        )}
+        <section aria-labelledby="bot-tasks">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="bot-tasks" className="text-lg font-medium">
+              Tasks
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void loadTasks()}
+              disabled={refreshing}
+              aria-label="Refresh tasks"
+            >
+              <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+          {tasksError && <p className="mt-3 text-sm text-danger">{tasksError}</p>}
+          {tasks === null ? (
+            <div className="mt-3 h-32 animate-pulse rounded-2xl bg-elevated" />
+          ) : (
+            <TaskList tasks={tasks} now={now} />
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -457,11 +478,8 @@ function AskCard({
   const canSend = !busy && (isNew ? task.trim().length > 0 : true);
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="bot-ask">
-      <h2 id="bot-ask" className="text-lg font-medium">
-        Ask
-      </h2>
-      <p className="mt-1 text-sm text-pretty text-muted">
+    <section className="p-5" aria-label="Write the task yourself">
+      <p className="text-sm text-pretty text-muted">
         Posts <code className="font-mono text-xs">{trigger}</code> and your task as a comment, from
         your GitHub account, the same as typing it there.
       </p>
@@ -654,7 +672,7 @@ const MARK_TONE: Record<string, string> = {
   skip: "text-subtle",
 };
 
-function TaskCard({ task, now }: { task: BotTask; now: number }) {
+export function TaskCard({ task, now }: { task: BotTask; now: number }) {
   const s = task.summary;
   const state = STATE[task.state];
   const [showDiff, setShowDiff] = useState(false);

@@ -1,0 +1,65 @@
+name: Aperture Bot
+description: A coding bot for issues and pull requests that checks before it pushes. Comment /aperture and a task; it opens a pull request only when Aperture Agent Check is clear.
+author: Hankaws
+branding:
+  icon: aperture
+  color: purple
+inputs:
+  model-key:
+    description: The model provider's API key, from a repository secret. It never reaches the code the bot runs.
+    required: true
+  provider:
+    description: grok, openai, anthropic, gemini, deepseek or custom.
+    required: false
+    default: grok
+  base-url:
+    description: For provider custom, an OpenAI-compatible endpoint.
+    required: false
+  model:
+    description: For provider custom, the model to ask for.
+    required: false
+  github-token:
+    description: Token for comments, pushes and pull requests. A personal or app token here lets the bot's pull requests start your CI.
+    required: false
+    default: ${{ github.token }}
+  trigger:
+    description: The word a comment starts with to ask the bot.
+    required: false
+    default: /aperture
+  test-script:
+    description: The package.json script that runs the tests.
+    required: false
+    default: test
+  timeout-minutes:
+    description: How long one test run may take.
+    required: false
+    default: "10"
+  max-tokens:
+    description: The run stops before a model call once it has used this many tokens.
+    required: false
+    default: "1000000"
+  rounds:
+    description: How many times Aperture Agent Check may run; each red result but the last goes back to the agent.
+    required: false
+    default: "2"
+  install:
+    description: '"auto" runs npm ci --ignore-scripts when there is a package-lock.json and no node_modules; "none" leaves installing to you.'
+    required: false
+    default: auto
+  sandbox-image:
+    description: The Docker image tests run in, with no network and no secrets.
+    required: false
+    default: mirror.gcr.io/library/node:22-slim
+  working-directory:
+    description: The project's folder, when it is not the repository root.
+    required: false
+outputs:
+  outcome:
+    description: clear, red, stopped, no-change, declined, ignored or error.
+  pull-request:
+    description: The pull request the bot opened, if it opened one.
+  commit:
+    description: The commit the bot pushed, if it pushed one.
+runs:
+  using: node24
+  main: dist/action.cjs

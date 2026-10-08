@@ -13,16 +13,22 @@ import { build } from "rolldown";
 
 type Main = typeof import("./main.ts");
 type Run = typeof import("./run.ts");
+type Action = typeof import("./action.ts");
+type Bundle = { main: Main; run: Run; action: Action };
 
-let loaded: Promise<{ main: Main; run: Run }> | null = null;
+let loaded: Promise<Bundle> | null = null;
 
-export function bundled(): Promise<{ main: Main; run: Run }> {
+export function bundled(): Promise<Bundle> {
   loaded ??= (async () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const out = join(here, "../dist", `test-${process.pid}`);
     process.on("exit", () => rmSync(out, { recursive: true, force: true }));
     await build({
-      input: { main: join(here, "main.ts"), run: join(here, "run.ts") },
+      input: {
+        main: join(here, "main.ts"),
+        run: join(here, "run.ts"),
+        action: join(here, "action.ts"),
+      },
       platform: "node",
       cwd: join(here, "../../.."),
       external: ["typescript"],
@@ -35,7 +41,11 @@ export function bundled(): Promise<{ main: Main; run: Run }> {
       logLevel: "silent",
     });
     const load = createRequire(join(out, "main.cjs"));
-    return { main: load("./main.cjs") as Main, run: load("./run.cjs") as Run };
+    return {
+      main: load("./main.cjs") as Main,
+      run: load("./run.cjs") as Run,
+      action: load("./action.cjs") as Action,
+    };
   })();
   return loaded;
 }

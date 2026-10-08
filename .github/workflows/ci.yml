@@ -152,6 +152,7 @@ jobs:
       - name: Build the bot's bundle
         run: npm run build:aperture-bot
 
-      # A stand-in model over HTTP: one clear change, and one that stays red.
-      - name: The bundle finishes a clear change and refuses a red one
+      # A stand-in model over HTTP: the CLI on a clear change and a red one,
+      # then the Action on a comment, with a fake GitHub and the Docker sandbox.
+      - name: The bundle finishes a clear change, refuses a red one, and opens a pull request
         run: node packages/aperture-bot/smoke.mjs packages/aperture-bot/dist/index.cjs

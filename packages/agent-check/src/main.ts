@@ -37,6 +37,8 @@ export type Options = {
   failOn: "red" | "never";
   /** Where the tests run. Unset, on this machine. */
   testRunner?: TestRunner;
+  /** How the report says where `testRunner` ran them, e.g. "in a container with no network". */
+  testsWhere?: string;
 };
 
 /** The runner can afford a bigger project than a browser tab. */
@@ -136,7 +138,11 @@ function testsFor(options: Options, rev: string): BrowserTests {
       )
     : runTests(options.cwd, options.testScript, options.timeoutMs);
   if (!head.ran) return { state: "unsupported", reason: head.reason };
-  const done = { state: "done" as const, script: options.testScript, where: "on this runner" };
+  const done = {
+    state: "done" as const,
+    script: options.testScript,
+    where: options.testsWhere ?? "on this runner",
+  };
   if (head.passed) return { ...done, passed: true, detail: "" };
   const base = runTestsAtBase(
     options.cwd,

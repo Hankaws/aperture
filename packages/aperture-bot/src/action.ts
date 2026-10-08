@@ -1,0 +1,231 @@
+/**
+ * Aperture Bot as a GitHub Action, on `issue_comment`. A comment that starts
+ * with `/aperture` from someone with write access becomes a task; the bot runs
+ * it on the checkout and, only when Aperture Agent Check is clear, opens a pull
+ * request (asked on an issue) or pushes to the pull request (asked on one).
+ * Otherwise it replies with what it tried and why it stopped.
+ *
+ * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
+ */
+import { spawnSync } from "node:child_process";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.server.ts";
+import { threadContext } from "./context.ts";
+import { DEFAULT_TRIGGER, parseEvent } from "./event.ts";
+import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
+import type { Model } from "./model.ts";
+import { checkoutPullHead, commitFiles, diffOf, freeBranch, push } from "./publish.ts";
+import {
+  commitMessage,
+  doneReply,
+  errorReply,
+  FORK_REPLY,
+  notDoneReply,
+  pullBody,
+  titleFor,
+} from "./replies.ts";
+import { runTask } from "./run.ts";
+import { DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
+
+export type ActionDeps = {
+  fetch?: Fetch;
+  model?: Model;
+  /** Replaces the Docker sandbox (and its image pull). Null: tests are not run. */
+  sandbox?: Sandbox | null;
+  log?: (line: string) => void;
+};
+
+function input(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const value = env[`INPUT_${name.toUpperCase()}`];
+  return value === undefined || value.trim() === "" ? undefined : value.trim();
+}
+
+function number(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const raw = input(env, name);
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`${name} must be a positive number.`);
+  return n;
+}
+
+function setOutput(env: NodeJS.ProcessEnv, values: Record<string, string>): void {
+  if (!env.GITHUB_OUTPUT) return;
+  appendFileSync(
+    env.GITHUB_OUTPUT,
+    Object.entries(values)
+      .map(([k, v]) => `${k}=${v}\n`)
+      .join(""),
+  );
+}
+
+export function modelConfig(env: NodeJS.ProcessEnv): CompletionCfg {
+  const provider = (input(env, "provider") ?? "grok") as EngineId;
+  const allowed = ["grok", "openai", "anthropic", "gemini", "deepseek", "custom"];
+  if (!allowed.includes(provider))
+    throw new Error(`provider must be one of ${allowed.join(", ")}.`);
+  const cfg: CompletionCfg = { provider, apiKey: input(env, "model-key") ?? "" };
+  if (!cfg.apiKey && provider !== "custom")
+    throw new Error(
+      "model-key is empty. Add the model provider's key as a repository secret and pass it as model-key.",
+    );
+  if (provider === "custom") {
+    cfg.base = input(env, "base-url");
+    cfg.model = input(env, "model");
+    if (!cfg.base || !cfg.model) throw new Error("provider custom needs base-url and model.");
+  }
+  return cfg;
+}
+
+/** Installs the project's packages with no install scripts, when npm can and nothing is installed. */
+function install(cwd: string, mode: string, log: (line: string) => void): void {
+  if (mode === "none" || existsSync(join(cwd, "node_modules"))) return;
+  if (!existsSync(join(cwd, "package-lock.json"))) {
+    log("No package-lock.json and no node_modules: tests that need packages will say so.");
+    return;
+  }
+  log("Installing packages: npm ci --ignore-scripts");
+  const run = spawnSync("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (run.status !== 0)
+    throw new Error(`npm ci failed: ${(run.stderr ?? "").trim().split("\n").at(-1)}`);
+}
+
+/** Docker with its image pulled first, so the pull never eats into a test's time. */
+function prepareDocker(image: string, log: (line: string) => void): Sandbox {
+  log(`Pulling the sandbox image ${image}`);
+  const pull = spawnSync("docker", ["pull", "--quiet", image], { encoding: "utf8" });
+  if (pull.status !== 0)
+    throw new Error(
+      `the sandbox image ${image} could not be pulled: ${(pull.stderr ?? "").trim().split("\n").at(-1)}`,
+    );
+  return dockerSandbox(image);
+}
+
+export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): Promise<number> {
+  const log = deps.log ?? ((line: string) => console.log(line));
+  let payload: unknown = {};
+  try {
+    payload = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH ?? "", "utf8"));
+  } catch {
+    // No event file: nothing is a command.
+  }
+  const parsed = parseEvent(
+    env.GITHUB_EVENT_NAME ?? "",
+    payload,
+    input(env, "trigger") ?? DEFAULT_TRIGGER,
+  );
+  if ("ignored" in parsed) {
+    log(`Aperture Bot: nothing to do: ${parsed.ignored}`);
+    setOutput(env, { outcome: "ignored" });
+    return 0;
+  }
+  const command = parsed.command;
+  const token = input(env, "github-token") ?? env.GITHUB_TOKEN;
+  if (!token) throw new Error("github-token is empty.");
+  const gh = new GitHub(
+    { owner: command.owner, repo: command.repo },
+    token,
+    env.GITHUB_API_URL ?? "https://api.github.com",
+    deps.fetch,
+  );
+  const permission = await gh.permission(command.author);
+  if (!canWrite(permission)) {
+    log(
+      `Aperture Bot: @${command.author} has ${permission} access; only people who can write may ask.`,
+    );
+    setOutput(env, { outcome: "ignored" });
+    return 0;
+  }
+  await gh.react(command.commentId, "eyes").catch(() => undefined);
+
+  const server = env.GITHUB_SERVER_URL ?? "https://github.com";
+  const repoUrl = `${server}/${command.owner}/${command.repo}`;
+  const runUrl = env.GITHUB_RUN_ID ? `${repoUrl}/actions/runs/${env.GITHUB_RUN_ID}` : repoUrl;
+  const cwd = resolve(input(env, "working-directory") ?? env.GITHUB_WORKSPACE ?? process.cwd());
+
+  try {
+    const model = modelConfig(env);
+    let pull: Pull | null = null;
+    let diff: string | null = null;
+    if (command.isPull) {
+      pull = await gh.pull(command.number);
+      if (pull.headRepo.toLowerCase() !== `${command.owner}/${command.repo}`.toLowerCase()) {
+        await gh.comment(command.number, FORK_REPLY);
+        setOutput(env, { outcome: "declined" });
+        return 0;
+      }
+      checkoutPullHead(cwd, pull.headRef);
+      diff = await gh.diff(command.number);
+    }
+    install(cwd, input(env, "install") ?? "auto", log);
+    const sandbox =
+      deps.sandbox !== undefined
+        ? deps.sandbox
+        : prepareDocker(input(env, "sandbox-image") ?? DEFAULT_IMAGE, log);
+    const comments = await gh.comments(command.number);
+
+    log(`Aperture Bot: working on #${command.number} for @${command.author}: ${command.task}`);
+    const result = await runTask(
+      {
+        cwd,
+        task: command.task,
+        context: threadContext(command, comments, diff),
+        model,
+        sandbox,
+        testScript: input(env, "test-script") ?? "test",
+        timeoutMs: number(env, "timeout-minutes", 10) * 60_000,
+        maxTokens: number(env, "max-tokens", 1_000_000),
+        rounds: Math.floor(number(env, "rounds", 2)),
+      },
+      { model: deps.model },
+    );
+    log(result.text);
+    if (env.GITHUB_STEP_SUMMARY)
+      appendFileSync(
+        env.GITHUB_STEP_SUMMARY,
+        `### Aperture Bot\n\n\`\`\`\n${result.text}\n\`\`\`\n`,
+      );
+    const where = sandbox?.where ?? null;
+
+    if (result.outcome === "clear") {
+      const sha = commitFiles(cwd, result.written, commitMessage(command, result));
+      if (pull) {
+        push(cwd, pull.headRef);
+        const url = `${repoUrl}/commit/${sha}`;
+        await gh.comment(command.number, doneReply(result, { url, what: "commit" }));
+        setOutput(env, { outcome: "clear", commit: sha });
+      } else {
+        const branch = freeBranch(cwd, command.number, titleFor(command));
+        push(cwd, branch);
+        const opened = await gh.createPull({
+          title: titleFor(command),
+          head: branch,
+          base: command.defaultBranch,
+          body: pullBody(command, result, runUrl, where),
+        });
+        await gh.comment(command.number, doneReply(result, { url: opened.url, what: "pull" }));
+        setOutput(env, { outcome: "clear", "pull-request": opened.url, commit: sha });
+      }
+      return 0;
+    }
+    await gh.comment(
+      command.number,
+      notDoneReply(result, diffOf(cwd, result.written), runUrl, where),
+    );
+    setOutput(env, { outcome: result.outcome });
+    return result.outcome === "no-change" ? 0 : 1;
+  } catch (error) {
+    let message = error instanceof Error ? error.message : String(error);
+    if (error instanceof GitHubError && error.status === 403 && /POST \S+\/pulls/.test(message))
+      message +=
+        ' Turn on "Allow GitHub Actions to create and approve pull requests" in the repository\'s Settings, under Actions, General, or pass a token that can.';
+    log(`Aperture Bot: ${message}`);
+    await gh.comment(command.number, errorReply(message, runUrl)).catch(() => undefined);
+    setOutput(env, { outcome: "error" });
+    return 1;
+  }
+}

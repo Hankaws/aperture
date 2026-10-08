@@ -178,6 +178,7 @@ export async function runTask(
       timeoutMs: options.timeoutMs,
       failOn: "red",
       testRunner: sandbox ? asTestRunner(sandbox) : undefined,
+      testsWhere: sandbox?.where,
     });
     result.checks += 1;
     if (result.check.verdict === "clear") return finish("clear");

@@ -558,14 +558,14 @@ build workflow, and the source stays here.
 - **`testRunner`** (an option of `check`) replaces running the tests on
   this machine. Aperture Bot passes its sandbox; the Action never sets it.
 
-## Aperture Bot (in progress)
+## Aperture Bot
 
-`packages/aperture-bot/` is a coding bot for GitHub: a maintainer asks for a
-change on an issue or pull request, the editor's agent makes it, and Agent
-Check judges it before anything is published. This first part is the core and
-a command line (`aperture-bot run --task "…"`); the GitHub side (the trigger,
-the permission check, the branch and pull request) comes next, then its own
-action repo and a page.
+`packages/aperture-bot/` is a coding bot for GitHub: a maintainer comments
+`/aperture <task>` on an issue or pull request, the editor's agent makes the
+change, and Agent Check judges it before anything is published. It is a
+command line (`aperture-bot run --task "…"`, `main.ts`) and a GitHub Action
+(`action.ts`, published from its own repo like Agent Check; `action/` holds
+that repo's `action.yml`, README and build workflow). A page comes next.
 
 - **The same agent.** `runLoop` from `src/lib/agent/loop.ts` with a runner
   `LoopHost` (`model.ts`): one plan turn, then build turns with the plan
@@ -588,11 +588,27 @@ action repo and a page.
   red, the run says nothing should be published.
 - **Never written** (`refusedReason` in `files.ts`): `.github/`, secrets
   files, lockfiles, `node_modules`, `.git` and paths outside the project.
+- **The Action** (`action.ts`): only a new comment that starts with the
+  trigger is a command (`event.ts`; `/aperture`, not `@aperture`, which would
+  notify whoever owns that username), and only from someone the API says can
+  write. It reacts 👀, checks out a same-repo pull request's branch, installs
+  with `npm ci --ignore-scripts`, pulls the sandbox image, and runs the task
+  with the thread as context (`context.ts`). Clear: a commit by "Aperture
+  Bot" of exactly the files written, then a branch `aperture/<n>-<slug>` and
+  a pull request saying `Fixes #n`, or a push to the pull request's branch.
+  Anything else: a reply with what is red and the diff, nothing pushed. On a
+  fork's pull request it runs nothing and says why. Every wording is in
+  `replies.ts`, tested as text.
+- **Inputs stay in step**: `action-yml.test.ts` requires `action.yml` to
+  declare exactly the inputs `action.ts` reads, and the README to list them.
 - **Tests load a bundle** (`test-bundle.ts`): the loop's `@/` imports do not
   resolve under plain Node. `run.test.ts` drives the real loop and Agent
   Check with a scripted model, and runs the Docker case when a daemon is
-  there. `smoke.mjs` runs the built CLI against a stand-in model over HTTP
-  (`--provider custom`, local endpoints being allowed outside production).
+  there. `action.test.ts` runs the Action against a GitHub API faked in
+  memory and a bare repository as `origin`. `smoke.mjs` runs the built CLI
+  against a stand-in model over HTTP (`--provider custom`, local endpoints
+  being allowed outside production), then the built Action on a comment, with
+  a fake GitHub over HTTP and the real Docker sandbox.
 
 ## Auth and the database
 

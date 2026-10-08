@@ -14,6 +14,7 @@ import { Route as AgentCheckRouteImport } from './routes/agent-check'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as BenchmarkRouteImport } from './routes/benchmark'
+import { Route as BotRouteImport } from './routes/bot'
 import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -50,6 +51,11 @@ const AppRoute = AppRouteImport.update({
 const BenchmarkRoute = BenchmarkRouteImport.update({
   id: '/benchmark',
   path: '/benchmark',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BotRoute = BotRouteImport.update({
+  id: '/bot',
+  path: '/bot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChangelogRoute = ChangelogRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/app': typeof AppRoute
   '/benchmark': typeof BenchmarkRoute
+  '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/app'
     | '/benchmark'
+    | '/bot'
     | '/changelog'
     | '/login'
     | '/pricing'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/app'
     | '/benchmark'
+    | '/bot'
     | '/changelog'
     | '/login'
     | '/pricing'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/app'
     | '/benchmark'
+    | '/bot'
     | '/changelog'
     | '/login'
     | '/pricing'
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   AppRoute: typeof AppRoute
   BenchmarkRoute: typeof BenchmarkRoute
+  BotRoute: typeof BotRoute
   ChangelogRoute: typeof ChangelogRoute
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/benchmark'
       fullPath: '/benchmark'
       preLoaderRoute: typeof BenchmarkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bot': {
+      id: '/bot'
+      path: '/bot'
+      fullPath: '/bot'
+      preLoaderRoute: typeof BotRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/changelog': {
@@ -381,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   AppRoute: AppRoute,
   BenchmarkRoute: BenchmarkRoute,
+  BotRoute: BotRoute,
   ChangelogRoute: ChangelogRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,

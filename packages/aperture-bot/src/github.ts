@@ -138,13 +138,17 @@ export class GitHub {
     return { number: out.number, url: out.html_url };
   }
 
-  async comment(issue: number, body: string): Promise<string> {
-    const out = await this.call<{ html_url: string }>(
+  async comment(issue: number, body: string): Promise<{ id: number; url: string }> {
+    const out = await this.call<{ id: number; html_url: string }>(
       "POST",
       `${this.base}/issues/${issue}/comments`,
       { body },
     );
-    return out.html_url;
+    return { id: out.id, url: out.html_url };
+  }
+
+  async editComment(id: number, body: string): Promise<void> {
+    await this.call("PATCH", `${this.base}/issues/comments/${id}`, { body });
   }
 }
 

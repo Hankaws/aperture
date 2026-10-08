@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { readSummary } from "../../../src/lib/bot/summary.ts";
 import { bundled } from "./test-bundle.ts";
 import { dollars, repo, scripted, shop, type Edit } from "./test-helpers.ts";
 
@@ -66,7 +67,8 @@ function fakeGitHub(
         { id: 2, body: "an earlier bot reply", user: { login: "aperture", type: "Bot" } },
       ]);
     if (method === "POST" && /\/issues\/\d+\/comments$/.test(path))
-      return json({ html_url: "https://github.com/acme/shop/issues/7#comment" }, 201);
+      return json({ id: 900, html_url: "https://github.com/acme/shop/issues/7#comment" }, 201);
+    if (method === "PATCH" && /\/issues\/comments\/900$/.test(path)) return json({ id: 900 });
     if (method === "GET" && /\/pulls\/\d+$/.test(path)) {
       const accept = new Headers(init?.headers).get("accept") ?? "";
       if (accept.includes("diff")) return new Response("diff --git a/src/cart.ts b/src/cart.ts\n");
@@ -169,7 +171,16 @@ async function act(
   });
   const posted = (suffix: RegExp) =>
     gh.calls.filter((c) => c.method === "POST" && suffix.test(c.path));
-  return { code, origin, ws, gh, lines, output: e.output(), summary: e.summary(), posted };
+  /** What the thread shows at the end: the bot's comment as last written. */
+  const replied = () => {
+    const writes = gh.calls.filter(
+      (c) =>
+        (c.method === "POST" && /\/issues\/7\/comments$/.test(c.path)) ||
+        (c.method === "PATCH" && /\/issues\/comments\/\d+$/.test(c.path)),
+    );
+    return (writes.at(-1)?.body as { body: string } | undefined)?.body ?? "";
+  };
+  return { code, origin, ws, gh, lines, output: e.output(), summary: e.summary(), posted, replied };
 }
 
 const branchesOf = (origin: string) =>
@@ -201,9 +212,8 @@ test("asked on an issue, a clear change becomes a branch and a pull request that
   assert.match(pr.body, /^@maintainer asked in #7:\n\n> Show prices in dollars\n\nFixes #7/);
   assert.match(pr.body, /\*\*Aperture Agent Check\*\*: nothing red\./);
   assert.match(pr.body, /\[The run\]\(https:\/\/github\.com\/acme\/shop\/actions\/runs\/42\)/);
-  const [reply] = run.posted(/\/issues\/7\/comments$/);
   assert.match(
-    (reply!.body as { body: string }).body,
+    run.replied(),
     /^Opened https:\/\/github\.com\/acme\/shop\/pull\/8, changing `src\/price\.ts`/,
   );
   assert.deepEqual(
@@ -215,6 +225,54 @@ test("asked on an issue, a clear change becomes a branch and a pull request that
     /^outcome=clear\npull-request=https:\/\/github\.com\/acme\/shop\/pull\/8\ncommit=[0-9a-f]{40}\n$/,
   );
   assert.match(run.summary, /^### Aperture Bot/);
+});
+
+test("one comment says where the run is, and becomes the reply with its summary", async () => {
+  const run = await act();
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(run.posted(/\/issues\/7\/comments$/).length, 1, "one comment, edited after");
+  const writes = run.gh.calls
+    .filter((c) => c.method !== "GET" && /\/issues\/(7\/comments|comments\/900)$/.test(c.path))
+    .map((c) => readSummary((c.body as { body: string }).body));
+  assert.deepEqual(
+    writes.map((s) => (s?.state === "working" ? `${s.phase}${s.round ?? ""}` : s?.state)),
+    ["starting", "planning", "building", "checking1", "publishing", "clear"],
+  );
+  assert.match(
+    (
+      run.gh.calls.find((c) => c.method === "POST" && /\/issues\/7\/comments$/.test(c.path))!
+        .body as { body: string }
+    ).body,
+    /^\*\*Aperture Bot is on it\.\*\* Reading the thread and setting up\.\n\n\[Follow the run\]\(https:\/\/github\.com\/acme\/shop\/actions\/runs\/42\)/,
+  );
+  const done = readSummary(run.replied())!;
+  assert.equal(done.asked, 55);
+  assert.equal(done.run, "https://github.com/acme/shop/actions/runs/42");
+  assert.deepEqual(done.link, { url: "https://github.com/acme/shop/pull/8", what: "pull" });
+  assert.deepEqual(done.files, ["src/price.ts"]);
+  assert.ok(done.plan!.length >= 3);
+  assert.ok(done.checks!.some((row) => row.label === "Types"));
+});
+
+test("a red run goes back to the agent, and the comment says which round it is on", async () => {
+  const breaking = {
+    path: "src/price.ts",
+    search: "formatPrice(cents: number)",
+    replace: "formatPrice(cents: number, currency: string)",
+  };
+  const run = await act({ builds: [[breaking], []] });
+  const phases = run.gh.calls
+    .filter((c) => c.method === "PATCH")
+    .map((c) => readSummary((c.body as { body: string }).body))
+    .map((s) => (s?.state === "working" ? `${s.phase}${s.round ?? ""}/${s.rounds}` : s?.state));
+  assert.deepEqual(phases, [
+    "planning/2",
+    "building/2",
+    "checking1/2",
+    "fixing2/2",
+    "checking2/2",
+    "red",
+  ]);
 });
 
 test("the thread reaches the agent as context, without the bot's own replies", async () => {
@@ -263,9 +321,8 @@ test("asked on a pull request from this repository, the fix is pushed to its bra
   assert.match(git(run.origin, "show", "feature:src/price.ts"), /toFixed\(2\)/);
   assert.equal(git(run.origin, "show", "feature:README.md"), "feature work\n");
   assert.equal(run.posted(/\/pulls$/).length, 0);
-  const [reply] = run.posted(/\/issues\/7\/comments$/);
   assert.match(
-    (reply!.body as { body: string }).body,
+    run.replied(),
     /^Pushed https:\/\/github\.com\/acme\/shop\/commit\/[0-9a-f]{40} to this pull request/,
   );
 });
@@ -274,8 +331,9 @@ test("on a pull request from a fork, the bot runs nothing and says why", async (
   const run = await act({ pull: { headRef: "feature", fork: true } });
   assert.equal(run.code, 0);
   assert.deepEqual(branchesOf(run.origin), ["main"]);
-  const [reply] = run.posted(/\/issues\/7\/comments$/);
-  assert.match((reply!.body as { body: string }).body, /^This pull request comes from a fork/);
+  assert.equal(run.posted(/\/issues\/7\/comments$/).length, 1);
+  assert.match(run.replied(), /^This pull request comes from a fork/);
+  assert.equal(readSummary(run.replied())?.state, "declined");
   assert.match(run.output, /^outcome=declined\n$/);
 });
 
@@ -289,7 +347,7 @@ test("a change still red is not pushed; the reply says why and shows it", async 
   assert.equal(run.code, 1);
   assert.deepEqual(branchesOf(run.origin), ["main"]);
   assert.equal(run.posted(/\/pulls$/).length, 0);
-  const body = (run.posted(/\/issues\/7\/comments$/)[0]!.body as { body: string }).body;
+  const body = run.replied();
   assert.match(
     body,
     /^I made a change, but Aperture Agent Check is still red after my fixes, so I did not push it\./,
@@ -330,7 +388,7 @@ test("comments that are not commands cost no call at all", async () => {
 test("a missing model key is said on the thread, and nothing changes", async () => {
   const run = await act({ env: { "INPUT_MODEL-KEY": "" } });
   assert.equal(run.code, 1);
-  const body = (run.posted(/\/issues\/7\/comments$/)[0]!.body as { body: string }).body;
+  const body = run.replied();
   assert.match(
     body,
     /^Aperture Bot stopped with an error and changed nothing:\n\n> model-key is empty\./,

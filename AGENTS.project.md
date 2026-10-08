@@ -565,7 +565,8 @@ build workflow, and the source stays here.
 change, and Agent Check judges it before anything is published. It is a
 command line (`aperture-bot run --task "…"`, `main.ts`) and a GitHub Action
 (`action.ts`, published from its own repo like Agent Check; `action/` holds
-that repo's `action.yml`, README and build workflow). A page comes next.
+that repo's `action.yml`, README and build workflow), and the site's Bot
+page (`/bot`).
 
 - **The same agent.** `runLoop` from `src/lib/agent/loop.ts` with a runner
   `LoopHost` (`model.ts`): one plan turn, then build turns with the plan
@@ -599,6 +600,26 @@ that repo's `action.yml`, README and build workflow). A page comes next.
   Anything else: a reply with what is red and the diff, nothing pushed. On a
   fork's pull request it runs nothing and says why. Every wording is in
   `replies.ts`, tested as text.
+- **One comment per run.** Once work starts the Action posts "on it" with the
+  run's link and edits that comment at each step (`onProgress` in `runTask`,
+  awaited so the edit is out before Agent Check blocks the event loop), then
+  edits it into the reply. Every comment the bot writes ends with
+  `<!-- aperture-bot {…} -->`: `src/lib/bot/summary.ts` writes and reads it,
+  for both the bot and the page. `<` and `>` are escaped in the JSON, so no
+  text ends the HTML comment early.
+- **The Bot page** (`src/routes/bot.tsx`, `src/components/bot/`,
+  `src/lib/github/bot.ts`) only uses GitHub, with the token on the account
+  (`bot-github.server.ts`, loaded inside handlers so nothing server-only
+  reaches the browser). Asking is posting the `/aperture` comment, so the
+  workflow's write-access gate still decides. Tasks are read back from the
+  repo's issue comments (`src/lib/bot/tasks.ts`, pure and tested): a
+  summary is believed only on a comment GitHub says a bot wrote, and only
+  github.com links in it are kept. It polls every 10 seconds while a task
+  moves, every minute otherwise, never in a hidden tab. Set up reads the
+  workflow, the secret it names and "Allow GitHub Actions to create and
+  approve pull requests" (the last two only for admins), and can open a pull
+  request adding `.github/workflows/aperture-bot.yml`, pinned to `v1` once
+  that tag exists and to `main` until then.
 - **Inputs stay in step**: `action-yml.test.ts` requires `action.yml` to
   declare exactly the inputs `action.ts` reads, and the README to list them.
 - **Tests load a bundle** (`test-bundle.ts`): the loop's `@/` imports do not

@@ -9,6 +9,17 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The Bot page, `/bot`: pick one of your repos, ask Aperture Bot for a
+  change (on an open issue or pull request, or as a new issue), and follow
+  every task as it plans, changes, checks and publishes, with its plan, its
+  Agent Check rows, the pull request it opened or the change it did not push,
+  and the tokens it used. It also checks a repo's setup and can open a pull
+  request that adds the bot's workflow. It works with the GitHub token on
+  your account and posts the same `/aperture` comment you would; the run,
+  the model key and the code stay on GitHub. Aperture Bot now posts one
+  comment when it starts, updates it at each step, and turns it into its
+  reply, with a hidden summary the page reads.
+  ([#47](https://github.com/Hankaws/aperture/pull/47))
 - Aperture Bot as a GitHub Action. Someone with write access comments
   `/aperture <task>` on an issue or pull request; the bot makes the change,
   runs Aperture Agent Check with the tests in a sandbox, and only when nothing

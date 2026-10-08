@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { clearGithubAccount, githubStatus, saveGithubToken, type GithubAccount } from "@/lib/github/api";
 import { clearGithubToken } from "@/lib/github/roundtrip";
 
-/** GitHub on the signed-in account. The token stays on the server. */
-export function GithubAccountCard() {
+/** GitHub on the signed-in account. The token stays on the server. `onAccount` hears every change. */
+export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubAccount) => void } = {}) {
   const [account, setAccount] = useState<GithubAccount | null>(null);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,6 +21,10 @@ export function GithubAccountCard() {
       cancel = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (account) onAccount?.(account);
+  }, [account, onAccount]);
 
   async function save() {
     setBusy(true);

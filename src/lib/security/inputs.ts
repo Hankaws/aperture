@@ -92,6 +92,19 @@ export const githubChecksInput = z.object({
   repo: repoName,
   sha: text(64),
 });
+export const botRepoInput = z.object({ owner: repoName, repo: repoName });
+export const botAskInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  number: z.number().int().positive().optional(),
+  title: text(256).optional(),
+  task: text(4000),
+});
+export const botSetupInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  provider: z.enum(["grok", "openai", "anthropic", "gemini", "deepseek"]),
+});
 export const githubMergeInput = z.object({
   token: githubToken,
   owner: repoName,

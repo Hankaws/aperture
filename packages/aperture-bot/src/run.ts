@@ -13,6 +13,7 @@ import { git } from "../../agent-check/src/git.ts";
 import type { CompletionCfg } from "../../../src/lib/agent/complete.server.ts";
 import { runLoop } from "../../../src/lib/agent/loop.ts";
 import type { AgentInput } from "../../../src/lib/agent/types.ts";
+import type { BotPhase } from "../../../src/lib/bot/summary.ts";
 import type { PlanEntry } from "../../../src/lib/workspace/types.ts";
 import { finalTexts, loadWorkingFiles, writeTexts } from "./files.ts";
 import { Budget, providerModel, runnerHost, type Model } from "./model.ts";
@@ -34,6 +35,9 @@ export type BotOptions = {
   /** Agent Check runs at most this many times; each red one but the last goes back to the agent. */
   rounds: number;
 };
+
+/** Where a run is, for whoever is watching. */
+export type BotProgress = { phase: BotPhase; plan?: string[]; round?: number; rounds?: number };
 
 export type BotOutcome = "clear" | "red" | "no-change" | "stopped";
 
@@ -82,9 +86,20 @@ function changedFrom(texts: Map<string, string>, before: Record<string, string>)
 
 export async function runTask(
   options: BotOptions,
-  deps: { model?: Model } = {},
+  deps: {
+    model?: Model;
+    /** Awaited before each step, so a report of it is out before the step blocks. */
+    onProgress?: (progress: BotProgress) => void | Promise<void>;
+  } = {},
 ): Promise<BotResult> {
   const { cwd } = options;
+  const progress = async (p: BotProgress) => {
+    await deps.onProgress?.({
+      ...p,
+      plan: result.plan.map((s) => s.content),
+      rounds: options.rounds,
+    });
+  };
   const start = git(["rev-parse", "HEAD"], cwd).trim();
   const budget = new Budget(options.maxTokens);
   const sandbox = options.sandbox;
@@ -145,6 +160,7 @@ export async function runTask(
   };
   const stopped = (error: string) => finish("stopped", error);
 
+  await progress({ phase: "planning" });
   const planned = await turn({ phase: "plan" });
   if (!planned.out.ok) return stopped(planned.out.error);
   result.summary = planned.out.text;
@@ -156,6 +172,7 @@ export async function runTask(
     { role: "assistant", content: planned.out.text },
   ];
   let ask = instruction;
+  await progress({ phase: "building" });
   for (let round = 1; ; round += 1) {
     const built = await turn({
       phase: "build",
@@ -170,6 +187,7 @@ export async function runTask(
     result.refused.push(...written.refused);
     if (result.written.length === 0) return finish("no-change");
 
+    await progress({ phase: "checking", round });
     result.check = check({
       cwd,
       base: start,
@@ -183,6 +201,7 @@ export async function runTask(
     result.checks += 1;
     if (result.check.verdict === "clear") return finish("clear");
     if (round >= options.rounds) return finish("red");
+    await progress({ phase: "fixing", round: round + 1 });
     history.push({ role: "user", content: ask }, { role: "assistant", content: built.out.text });
     ask = fixInstruction(result.check.text);
   }

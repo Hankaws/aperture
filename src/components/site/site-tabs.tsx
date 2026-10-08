@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { ChevronDown, Search } from "lucide-react";
 import { showPricing } from "@/lib/billing/pricing-visible";
 
-/** `wide`: in the bar only on wide screens; always in the menu. */
-type Item = { label: string; href?: string; to?: string; wide?: boolean };
+/** `wide`: in the bar only on wide screens, `widest` only on the widest; always in the menu. */
+type Item = { label: string; href?: string; to?: string; wide?: boolean; widest?: boolean };
 
 const ITEMS: Item[] = [
   { label: "How", href: "/#how" },
@@ -12,6 +12,7 @@ const ITEMS: Item[] = [
   { label: "Benchmark", to: "/benchmark" },
   { label: "Agents", to: "/agents", wide: true },
   { label: "Agent Check", to: "/agent-check", wide: true },
+  { label: "Bot", to: "/bot", widest: true },
   { label: "Privacy", to: "/privacy" },
   { label: "Changelog", to: "/changelog" },
   ...(showPricing ? [{ label: "Pricing", to: "/pricing" } satisfies Item] : []),
@@ -22,7 +23,11 @@ export function SiteLinks() {
   return (
     <nav className="hidden items-center gap-5 lg:flex" aria-label="Sections">
       {ITEMS.map((item) => {
-        const className = item.wide ? `${base} hidden xl:inline` : base;
+        const className = item.widest
+          ? `${base} hidden 2xl:inline`
+          : item.wide
+            ? `${base} hidden xl:inline`
+            : base;
         return item.to ? (
           <Link key={item.label} to={item.to} className={className}>
             {item.label}

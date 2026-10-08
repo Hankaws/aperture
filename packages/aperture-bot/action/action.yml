@@ -26,6 +26,13 @@ inputs:
     description: The word a comment starts with to ask the bot.
     required: false
     default: /aperture
+  label:
+    description: The label that, added to an issue by someone who can write, asks the bot to do what the issue says.
+    required: false
+    default: aperture
+  scheduled:
+    description: 'What to do when the workflow runs on its schedule or by hand: "fix-ci" fixes whatever is red on the default branch; any other text is a task to do each time. Empty: nothing.'
+    required: false
   test-script:
     description: The package.json script that runs the tests.
     required: false
@@ -55,7 +62,7 @@ inputs:
     required: false
 outputs:
   outcome:
-    description: clear, red, stopped, no-change, declined, ignored or error.
+    description: clear, red, stopped, no-change, declined, ignored or error. A scheduled run with nothing to do (a green branch, a fix waiting for review) is ignored.
   pull-request:
     description: The pull request the bot opened, if it opened one.
   commit:

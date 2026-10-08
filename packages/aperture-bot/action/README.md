@@ -62,6 +62,34 @@ While it works, one comment on the thread says what it is doing and links the ru
 
 Only people with write access to the repository can ask; anyone else's comment is ignored. Edited comments and other bots' comments are never commands.
 
+## Standing jobs
+
+Two more ways to ask, both optional, both still on your runner and your key:
+
+- **The `aperture` label.** Add it to an issue and the bot does what the issue says, as if you had commented `/aperture`. Only a label added by someone with write access counts.
+- **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
+
+```yaml
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
+  schedule:
+    - cron: "17 3 * * *" # every night at 03:17 UTC
+
+jobs:
+  bot:
+    if: >-
+      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture')) ||
+      (github.event_name == 'issues' && github.event.label.name == 'aperture') ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # … the same steps as above, with:
+    #     scheduled: fix-ci
+```
+
+The [Bot page](https://aperturesais.grok.me/bot) writes this for you.
+
 ## What it will not do
 
 - **Run code next to a secret.** Your tests run on a copy of the project without `.git`, in a container with no network and none of the runner's environment: no model key, no GitHub token.
@@ -83,6 +111,8 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `model`             |                                      | For `custom`: the model to ask for.                                                                                                            |
 | `github-token`      | the workflow's token                 | Comments, pushes and pull requests.                                                                                                            |
 | `trigger`           | `/aperture`                          | The word a comment starts with.                                                                                                                |
+| `label`             | `aperture`                           | The label that asks the bot to do what an issue says.                                                                                          |
+| `scheduled`         |                                      | On the schedule: `fix-ci`, or a task to do each time. Empty: nothing.                                                                          |
 | `test-script`       | `test`                               | The package.json script that runs the tests.                                                                                                   |
 | `timeout-minutes`   | `10`                                 | How long one test run may take.                                                                                                                |
 | `max-tokens`        | `1000000`                            | The token budget for one run.                                                                                                                  |

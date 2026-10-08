@@ -37,6 +37,10 @@ function fakeGitHub(
     pull?: { headRef: string; fork?: boolean };
     /** The first request fails as one sent on a connection the server had closed. */
     staleOnce?: boolean;
+    /** The default branch's checks: one failed, or all passed. */
+    red?: boolean;
+    openIssues?: Array<{ number: number; title: string }>;
+    openPulls?: Array<{ ref: string; url: string }>;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -56,6 +60,34 @@ function fakeGitHub(
         headers: { "content-type": "application/json" },
       });
     if (path.endsWith("/permission")) return json({ role_name: options.permission ?? "write" });
+    if (method === "GET" && path === "/repos/acme/shop") return json({ default_branch: "main" });
+    if (path === "/repos/acme/shop/branches/main") return json({ commit: { sha: "abc1234def" } });
+    if (path.endsWith("/check-runs"))
+      return json({
+        check_runs: [
+          options.red
+            ? {
+                id: 11,
+                name: "test",
+                status: "completed",
+                conclusion: "failure",
+                output: { title: "1 test failed", summary: "cart: expected $1.00, got 100" },
+              }
+            : { id: 11, name: "test", status: "completed", conclusion: "success", output: {} },
+          // The bot's own run, on the same commit, still going.
+          { id: 12, name: "bot", status: "in_progress", conclusion: null, output: {} },
+        ],
+      });
+    if (path.endsWith("/check-runs/11/annotations"))
+      return json([{ path: "src/cart.ts", start_line: 3, message: "expected $1.00" }]);
+    if (path.endsWith("/status")) return json({ statuses: [] });
+    if (method === "GET" && path === "/repos/acme/shop/issues")
+      return json(options.openIssues ?? []);
+    if (method === "POST" && path === "/repos/acme/shop/issues") return json({ number: 7 }, 201);
+    if (method === "GET" && path === "/repos/acme/shop/pulls")
+      return json(
+        (options.openPulls ?? []).map((p) => ({ head: { ref: p.ref }, html_url: p.url })),
+      );
     if (path.endsWith("/reactions")) return json({}, 201);
     if (method === "GET" && /\/issues\/\d+\/comments$/.test(path))
       return json([
@@ -146,6 +178,12 @@ async function act(
     branches?: Record<string, Record<string, string>>;
     env?: Record<string, string>;
     staleOnce?: boolean;
+    red?: boolean;
+    openIssues?: Array<{ number: number; title: string }>;
+    openPulls?: Array<{ ref: string; url: string }>;
+    /** Another event than a new comment: its name, and its payload. */
+    eventName?: string;
+    payload?: unknown;
   } = {},
 ) {
   const { action } = await bundled();
@@ -154,13 +192,20 @@ async function act(
     permission: options.permission,
     pull: options.pull,
     staleOnce: options.staleOnce,
+    red: options.red,
+    openIssues: options.openIssues,
+    openPulls: options.openPulls,
   });
-  const e = env(
-    root,
-    ws,
-    event(root, { body: options.body, pull: Boolean(options.pull), action: options.action }),
-    options.env,
-  );
+  const eventPath =
+    options.payload === undefined
+      ? event(root, { body: options.body, pull: Boolean(options.pull), action: options.action })
+      : join(root, "event.json");
+  if (options.payload !== undefined) writeFileSync(eventPath, JSON.stringify(options.payload));
+  const e = env(root, ws, eventPath, {
+    GITHUB_REPOSITORY: "acme/shop",
+    ...(options.eventName ? { GITHUB_EVENT_NAME: options.eventName } : {}),
+    ...options.env,
+  });
   const lines: string[] = [];
   const { model } = scripted(options.builds ?? [[dollars]]);
   const code = await action.runAction(e.env, {
@@ -394,4 +439,102 @@ test("a missing model key is said on the thread, and nothing changes", async () 
     /^Aperture Bot stopped with an error and changed nothing:\n\n> model-key is empty\./,
   );
   assert.match(run.output, /^outcome=error\n$/);
+});
+
+test("the bot's label on an issue is a task for whoever added it, with no comment to react to", async () => {
+  const run = await act({
+    eventName: "issues",
+    payload: {
+      action: "labeled",
+      label: { name: "aperture" },
+      sender: { login: "grace", type: "User" },
+      issue: { number: 7, title: "Show prices in dollars", body: "formatPrice prints 100." },
+      repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+    },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(run.posted(/\/reactions$/).length, 0);
+  assert.ok(run.gh.calls.some((c) => c.path.endsWith("/collaborators/grace/permission")));
+  const [opened] = run.posted(/\/pulls$/);
+  assert.match((opened!.body as { body: string }).body, /^@grace labelled #7 for the bot:/);
+  const done = readSummary(run.replied())!;
+  assert.deepEqual([done.state, done.asked, done.via, done.by], ["clear", 0, "label", "grace"]);
+  assert.equal(done.task, "Do what this issue asks: Show prices in dollars");
+});
+
+test("the nightly job fixes what is red on the default branch, on a tracking issue", async () => {
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    red: true,
+    env: { INPUT_SCHEDULED: "fix-ci" },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [issue] = run.posted(/\/repos\/acme\/shop\/issues$/);
+  const created = issue!.body as { title: string; body: string };
+  assert.equal(created.title, "Aperture Bot: fix what is red on main");
+  assert.match(created.body, /These checks fail on main at abc1234\./);
+  assert.match(
+    created.body,
+    /- test\n {2}1 test failed\n {2}cart: expected \$1\.00, got 100\n {2}src\/cart\.ts:3: expected \$1\.00/,
+  );
+  assert.doesNotMatch(created.body, /- bot/, "a run still going is not a failure");
+  assert.equal(run.gh.calls.filter((c) => c.path.endsWith("/permission")).length, 0);
+  const [opened] = run.posted(/\/pulls$/);
+  const pr = opened!.body as { title: string; body: string; head: string };
+  assert.equal(pr.title, "Fix what is red on main");
+  assert.match(pr.body, /^A standing job, on #7:/);
+  assert.match(pr.body, /Fixes #7/);
+  assert.equal(pr.head, "aperture/7-fix-what-is-red-on-main");
+  assert.equal(readSummary(run.replied())?.via, "schedule");
+});
+
+test("the nightly job does nothing on a green branch, or while its last fix waits for review", async () => {
+  const green = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "fix-ci" },
+  });
+  assert.equal(green.code, 0);
+  assert.match(green.lines.join("\n"), /nothing to do: main is green: nothing to fix\./);
+  assert.equal(green.posted(/./).length, 0);
+  assert.match(green.output, /^outcome=ignored\n$/);
+
+  const waiting = await act({
+    eventName: "schedule",
+    payload: {},
+    red: true,
+    env: { INPUT_SCHEDULED: "fix-ci" },
+    openIssues: [{ number: 7, title: "Aperture Bot: fix what is red on main" }],
+    openPulls: [
+      { ref: "aperture/7-fix-what-is-red-on-main", url: "https://github.com/acme/shop/pull/8" },
+    ],
+  });
+  assert.match(
+    waiting.lines.join("\n"),
+    /a pull request for #7 is waiting for review: https:\/\/github\.com\/acme\/shop\/pull\/8/,
+  );
+  assert.equal(waiting.posted(/./).length, 0);
+
+  const unset = await act({ eventName: "schedule", payload: {} });
+  assert.match(unset.lines.join("\n"), /its scheduled input is empty/);
+  assert.equal(unset.gh.calls.length, 0);
+});
+
+test("a scheduled task is done on its own issue, found again on the next run", async () => {
+  const run = await act({
+    eventName: "workflow_dispatch",
+    payload: {},
+    env: { INPUT_SCHEDULED: "Show prices in dollars" },
+    openIssues: [{ number: 7, title: "Aperture Bot: Show prices in dollars" }],
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(
+    run.posted(/\/repos\/acme\/shop\/issues$/).length,
+    0,
+    "the existing issue is reused",
+  );
+  assert.ok(run.posted(/\/issues\/7\/comments$/).length > 0);
+  const [opened] = run.posted(/\/pulls$/);
+  assert.equal((opened!.body as { title: string }).title, "Show prices in dollars");
 });

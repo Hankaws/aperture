@@ -25,6 +25,7 @@ import {
 } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
 import { BotChat } from "./bot-chat";
+import { JobsCard } from "./jobs-card";
 
 const REPO_KEY = "aperture-bot-repo";
 
@@ -220,7 +221,17 @@ function RepoBot({ fullName }: { fullName: string }) {
             {setupError}
           </p>
         ) : setup ? (
-          <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
+          <>
+            <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
+            {setup.workflow && (
+              <JobsCard
+                key={JSON.stringify(setup.workflow.jobs)}
+                setup={setup}
+                owner={owner}
+                name={name}
+              />
+            )}
+          </>
         ) : (
           <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
         )}
@@ -672,6 +683,12 @@ const MARK_TONE: Record<string, string> = {
   skip: "text-subtle",
 };
 
+function whoAsked(task: BotTask): string {
+  if (task.via === "schedule") return "Standing job";
+  if (task.via === "label") return `Labelled by @${task.author}`;
+  return `@${task.author}`;
+}
+
 export function TaskCard({ task, now }: { task: BotTask; now: number }) {
   const s = task.summary;
   const state = STATE[task.state];
@@ -698,7 +715,7 @@ export function TaskCard({ task, now }: { task: BotTask; now: number }) {
           #{task.number} {task.thread?.title ?? ""}
         </a>
         <span className="ml-auto shrink-0 text-xs text-subtle">
-          @{task.author} · {ago(task.askedAt, now)}
+          {whoAsked(task)} · {ago(task.askedAt, now)}
         </span>
       </div>
       <p className="mt-2 text-sm text-pretty [overflow-wrap:anywhere] whitespace-pre-line">

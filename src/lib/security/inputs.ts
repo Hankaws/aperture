@@ -109,6 +109,13 @@ export const botChatInput = z.object({
     .min(1)
     .max(60),
 });
+export const botJobsInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  label: z.boolean(),
+  scheduled: text(2_000).optional(),
+  weekly: z.boolean().optional(),
+});
 export const botSetupInput = z.object({
   owner: repoName,
   repo: repoName,

@@ -79,7 +79,13 @@ export function tasksText(tasks: BotTask[]): string {
     .slice(0, 15)
     .map((t) => {
       const link = t.summary?.link ? ` → ${t.summary.link.url}` : "";
-      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by @${t.author}: ${TASK_STATE[t.state] ?? t.state}${link}`;
+      const who =
+        t.via === "schedule"
+          ? "a standing job"
+          : t.via === "label"
+            ? `the label, added by @${t.author}`
+            : `@${t.author}`;
+      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${TASK_STATE[t.state] ?? t.state}${link}`;
     })
     .join("\n");
 }

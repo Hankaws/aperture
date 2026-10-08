@@ -18,11 +18,36 @@ const firstLine = (text: string) => text.split("\n")[0]!.trim();
 
 export const SITE = "https://aperturesais.grok.me";
 
-/** Which comment a reply answers, the run doing the work, and where its tests run. */
-export type ReplyContext = { asked: number; run: string; tests: string | null };
+/**
+ * Which comment a reply answers (0 when a label or the schedule asked, which
+ * `via`, `by` and `task` then say), the run doing the work, and where its
+ * tests run.
+ */
+export type Asked = {
+  asked: number;
+  run: string;
+  via?: "label" | "schedule";
+  by?: string;
+  task?: string;
+};
+export type ReplyContext = Asked & { tests: string | null };
+
+/** How the asking reads in a commit or a pull request: who asked, and how. */
+function askedBy(command: Command): string {
+  if (command.via === "label") return `@${command.author} labelled #${command.number} for the bot`;
+  if (command.via === "schedule") return `A standing job, on #${command.number}`;
+  return `@${command.author} asked in #${command.number}`;
+}
+
+/** The fields of a summary that say who asked, when no comment did. */
+const askedFields = (ctx: Asked) => (ctx.via ? { via: ctx.via, by: ctx.by, task: ctx.task } : {});
 
 /** A title for the commit and the pull request: the task's first line, or the issue's title. */
 export function titleFor(command: Command): string {
+  if (command.via === "schedule") {
+    const job = command.title.replace(/^Aperture Bot: /, "");
+    return `${job.charAt(0).toUpperCase()}${job.slice(1)}`.slice(0, 72);
+  }
   const asked = firstLine(command.task);
   const title = asked.startsWith("Do what this ") ? command.title : asked;
   return title.length <= 72 ? title : `${title.slice(0, 71)}…`;
@@ -71,6 +96,7 @@ export function resultSummary(
     state: result.outcome,
     asked: ctx.asked,
     run: ctx.run,
+    ...askedFields(ctx),
     plan: result.plan.map((s) => s.content),
     checks: result.check
       ? shownRows(result.check.rows).map((r) => ({
@@ -96,7 +122,7 @@ const join = (...blocks: string[][]) =>
 export function commitMessage(command: Command, result: BotResult): string {
   return join(
     [titleFor(command)],
-    [`Asked by @${command.author} in #${command.number}. Checked by Aperture Agent Check.`],
+    [`${askedBy(command)}. Checked by Aperture Agent Check.`],
     result.plan.length > 0 ? result.plan.map((s) => `- ${s.content}`) : [],
   );
 }
@@ -108,7 +134,7 @@ export function pullBody(
   where: string | null,
 ): string {
   return join(
-    [`@${command.author} asked in #${command.number}:`, "", `> ${firstLine(command.task)}`],
+    [`${askedBy(command)}:`, "", `> ${firstLine(command.task)}`],
     command.isPull ? [] : [`Fixes #${command.number}`],
     plan(result),
     [
@@ -124,13 +150,22 @@ export function pullBody(
 /** While the bot works: the comment it edits as it goes, and at the end into its reply. */
 export function workingReply(
   progress: { phase: BotPhase; plan?: string[]; round?: number; rounds?: number },
-  ctx: Pick<ReplyContext, "asked" | "run">,
+  ctx: Asked,
 ): string {
   return join(
     [`**Aperture Bot is on it.** ${phaseLine(progress)}`],
     progress.plan?.length ? ["**Plan**", ...progress.plan.map((s) => `- ${s}`)] : [],
     [`[Follow the run](${ctx.run}) · [Aperture Bot](${SITE})`],
-    [summaryMarker({ v: 1, state: "working", asked: ctx.asked, run: ctx.run, ...progress })],
+    [
+      summaryMarker({
+        v: 1,
+        state: "working",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        ...progress,
+      }),
+    ],
   );
 }
 
@@ -184,7 +219,7 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
   );
 }
 
-export function forkReply(ctx: Pick<ReplyContext, "asked" | "run">): string {
+export function forkReply(ctx: Asked): string {
   return join(
     [
       "This pull request comes from a fork, so Aperture Bot will not check out its code, run it, or push to it.",
@@ -195,10 +230,19 @@ export function forkReply(ctx: Pick<ReplyContext, "asked" | "run">): string {
   );
 }
 
-export function errorReply(message: string, ctx: Pick<ReplyContext, "asked" | "run">): string {
+export function errorReply(message: string, ctx: Asked): string {
   return join(
     ["Aperture Bot stopped with an error and changed nothing:", "", `> ${message}`],
     [`[The run](${ctx.run})`],
-    [summaryMarker({ v: 1, state: "error", asked: ctx.asked, run: ctx.run, error: message })],
+    [
+      summaryMarker({
+        v: 1,
+        state: "error",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        error: message,
+      }),
+    ],
   );
 }

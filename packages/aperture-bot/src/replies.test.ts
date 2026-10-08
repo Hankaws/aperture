@@ -13,6 +13,7 @@ const command: Command = {
   task: "Fix the total for discounts",
   commentId: 1,
   author: "ada",
+  via: "comment",
   owner: "acme",
   repo: "shop",
   defaultBranch: "main",

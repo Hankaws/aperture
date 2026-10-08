@@ -652,6 +652,18 @@ page (`/bot`).
   scheduled task, since Actions would read it as an expression. Tasks a label
   or the schedule started have no asking comment: the bot's summary carries
   `via`, `by` and `task`, and `tasksFrom` reads them from its comment alone.
+- **Its own GitHub identity** (`identity-card.tsx`, `setBotApp`,
+  `src/lib/bot/app-manifest.ts`): the page prefills GitHub's "new app from a
+  manifest" form (a private app, no webhook, only the bot's permissions) and
+  ignores the code GitHub sends back, so the app's private key is generated
+  on GitHub and only ever lives in the repository's secret. `withJobs(…, app)`
+  adds `actions/create-github-app-token` with `APERTURE_BOT_APP_ID` (a
+  variable) and `APERTURE_BOT_PRIVATE_KEY` (a secret), and passes its token
+  to checkout and the bot; a `github-token` of the person's own is kept. The
+  bot names its commits after whoever its status comment was posted as
+  (`authorFor` in `publish.ts`), so an app's commits show the app. The
+  avatar to upload is `public/bot/aperture-bot.png` (from `.svg`), the same
+  lens as `BotAvatar`.
 - **The chat** (`src/components/bot/bot-chat.tsx`, `botChat` in
   `src/lib/github/bot.ts`, the turn itself in `src/lib/bot/chat.ts`, pure and
   tested) is the page's front: the person talks about the repo, the model

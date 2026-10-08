@@ -5,11 +5,24 @@
  */
 import { git } from "../../agent-check/src/git.ts";
 
+export type Author = { name: string; email: string };
+
 /** The identity GitHub shows for commits made with a workflow's token. */
-export const BOT_AUTHOR = {
+export const BOT_AUTHOR: Author = {
   name: "Aperture Bot",
   email: "41898282+github-actions[bot]@users.noreply.github.com",
 };
+
+/**
+ * The commit author for whoever the token posts as: a GitHub App's bot user
+ * (`my-app[bot]`), so its commits show the app's name and avatar, or else
+ * the workflow's own identity.
+ */
+export function authorFor(poster: { login: string; id: number } | null): Author {
+  if (!poster || !poster.login.endsWith("[bot]") || poster.login === "github-actions[bot]")
+    return BOT_AUTHOR;
+  return { name: "Aperture Bot", email: `${poster.id}+${poster.login}@users.noreply.github.com` };
+}
 
 export function slug(text: string, max = 40): string {
   const words = text
@@ -37,14 +50,19 @@ export function checkoutPullHead(cwd: string, ref: string): void {
 }
 
 /** Commits exactly `paths` (relative to `cwd`) and returns the commit. */
-export function commitFiles(cwd: string, paths: string[], message: string): string {
+export function commitFiles(
+  cwd: string,
+  paths: string[],
+  message: string,
+  author: Author = BOT_AUTHOR,
+): string {
   git(["add", "--", ...paths], cwd);
   git(
     [
       "-c",
-      `user.name=${BOT_AUTHOR.name}`,
+      `user.name=${author.name}`,
       "-c",
-      `user.email=${BOT_AUTHOR.email}`,
+      `user.email=${author.email}`,
       "commit",
       "--no-verify",
       "-m",

@@ -25,6 +25,7 @@ import {
 } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
 import { BotChat } from "./bot-chat";
+import { IdentityCard } from "./identity-card";
 import { JobsCard } from "./jobs-card";
 
 const REPO_KEY = "aperture-bot-repo";
@@ -231,6 +232,7 @@ function RepoBot({ fullName }: { fullName: string }) {
                 name={name}
               />
             )}
+            {setup.workflow && <IdentityCard setup={setup} owner={owner} name={name} />}
           </>
         ) : (
           <div className="h-24 animate-pulse rounded-2xl bg-elevated" />

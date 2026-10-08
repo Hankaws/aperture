@@ -141,13 +141,21 @@ export class GitHub {
     return { number: out.number, url: out.html_url };
   }
 
-  async comment(issue: number, body: string): Promise<{ id: number; url: string }> {
-    const out = await this.call<{ id: number; html_url: string }>(
-      "POST",
-      `${this.base}/issues/${issue}/comments`,
-      { body },
-    );
-    return { id: out.id, url: out.html_url };
+  /** Posts a comment; `by` is who the token posts as, which names the bot's commits. */
+  async comment(
+    issue: number,
+    body: string,
+  ): Promise<{ id: number; url: string; by: { login: string; id: number } | null }> {
+    const out = await this.call<{
+      id: number;
+      html_url: string;
+      user?: { login?: string; id?: number } | null;
+    }>("POST", `${this.base}/issues/${issue}/comments`, { body });
+    const by =
+      out.user?.login && typeof out.user.id === "number"
+        ? { login: out.user.login, id: out.user.id }
+        : null;
+    return { id: out.id, url: out.html_url, by };
   }
 
   async defaultBranch(): Promise<string> {

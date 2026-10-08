@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture Bot can post as a GitHub App of your own, with its own name and
+  avatar, and the pull requests it opens then start your CI. The Bot page
+  prefills the app on GitHub, links the avatar to upload, checks for its ID
+  and key, and opens a pull request that switches the workflow to it. The
+  private key stays on GitHub.
+  ([#52](https://github.com/Hankaws/aperture/pull/52))
 - Standing jobs for Aperture Bot. Add the `aperture` label to an issue and
   the bot does what it says. Give it a schedule and it fixes whatever is red
   on the default branch each night (quiet when it is green, or while its last

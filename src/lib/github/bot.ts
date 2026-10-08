@@ -10,6 +10,7 @@ import { overLimit } from "@/lib/security/rate-limit";
 import {
   botAskInput,
   botChatInput,
+  botAppInput,
   botJobsInput,
   botRepoInput,
   botSetupInput,
@@ -29,6 +30,8 @@ import {
   workflowFile,
   workflowUse,
   WORKFLOW_PATH,
+  APP_ID_VARIABLE,
+  APP_KEY_SECRET,
   type Jobs,
   type BotTask,
   type RawComment,
@@ -52,7 +55,19 @@ export type BotSetup = {
   /** The person administers the repository, so the secret and setting below could be read. */
   isAdmin: boolean;
   /** `jobs`: its standing jobs; the page can change them only at WORKFLOW_PATH. */
-  workflow: { path: string; secret: string | null; trigger: string; jobs: Jobs } | null;
+  workflow: {
+    path: string;
+    secret: string | null;
+    trigger: string;
+    jobs: Jobs;
+    /** It posts as the repository's own GitHub App. */
+    app: boolean;
+  } | null;
+  /** "User" or "Organization": where a GitHub App for it is created. */
+  ownerType: string;
+  /** The App's ID variable and private key secret exist. Null: this token cannot tell. */
+  appVariable: boolean | null;
+  appSecret: boolean | null;
   /** The secret the workflow reads exists. Null: this token cannot tell. */
   secret: boolean | null;
   /** "Allow GitHub Actions to create and approve pull requests" is on. Null: this token cannot tell. */
@@ -104,7 +119,13 @@ async function findWorkflow(base: string, get: Get): Promise<BotSetup["workflow"
     if (got.status !== 200 || typeof content !== "string") continue;
     const use = workflowUse(fromBase64(content));
     if (use.uses)
-      return { path: file.path!, secret: use.secret, trigger: use.trigger, jobs: use.jobs };
+      return {
+        path: file.path!,
+        secret: use.secret,
+        trigger: use.trigger,
+        jobs: use.jobs,
+        app: use.app,
+      };
   }
   return null;
 }
@@ -130,6 +151,7 @@ export const botSetup = createServerFn({ method: "POST" })
         full_name?: string;
         default_branch?: string;
         permissions?: { admin?: boolean; push?: boolean };
+        owner?: { type?: string };
       };
       const isAdmin = Boolean(info.permissions?.admin);
       const [workflow, open] = await Promise.all([
@@ -138,17 +160,23 @@ export const botSetup = createServerFn({ method: "POST" })
       ]);
       let secret: boolean | null = null;
       let pullsAllowed: boolean | null = null;
+      let appVariable: boolean | null = null;
+      let appSecret: boolean | null = null;
       if (isAdmin) {
-        const [secrets, permissions] = await Promise.all([
+        const [secrets, permissions, variable] = await Promise.all([
           githubJson(`${base}/actions/secrets?per_page=100`, token),
           githubJson(`${base}/actions/permissions/workflow`, token),
+          githubJson(`${base}/actions/variables/${APP_ID_VARIABLE}`, token),
         ]);
-        if (secrets.status === 200 && workflow?.secret) {
+        if (secrets.status === 200) {
           const names = (
             (secrets.body as { secrets?: Array<{ name?: string }> }).secrets ?? []
           ).map((s) => s.name);
-          secret = names.includes(workflow.secret);
+          if (workflow?.secret) secret = names.includes(workflow.secret);
+          appSecret = names.includes(APP_KEY_SECRET);
         }
+        if (variable.status === 200) appVariable = true;
+        else if (variable.status === 404) appVariable = false;
         if (permissions.status === 200)
           pullsAllowed = Boolean(
             (permissions.body as { can_approve_pull_request_reviews?: boolean })
@@ -165,6 +193,9 @@ export const botSetup = createServerFn({ method: "POST" })
         workflow,
         secret,
         pullsAllowed,
+        ownerType: String(info.owner?.type ?? "User"),
+        appVariable,
+        appSecret,
         open: items.flatMap((row) => {
           const r = row as { number?: number; title?: string; pull_request?: unknown };
           return typeof r.number === "number"
@@ -481,6 +512,21 @@ function jobsText(jobs: Jobs): string[] {
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
 
+/** The bot's workflow at WORKFLOW_PATH, with its blob for replacing it. */
+async function readWorkflow(
+  call: Call,
+  base: string,
+): Promise<{ ok: true; text: string; sha?: string } | Failure> {
+  const current = await call(`${base}/contents/${WORKFLOW_PATH}`);
+  const file = current.body as { content?: string; sha?: string };
+  if (current.status === 404 || typeof file.content !== "string")
+    return {
+      ok: false,
+      error: `The bot's workflow is not at ${WORKFLOW_PATH}, so the page cannot change it. Change it by hand: see the bot's README.`,
+    };
+  return { ok: true, text: fromBase64(file.content), sha: file.sha };
+}
+
 /** Opens a pull request that sets the bot's standing jobs, keeping the rest of its workflow. */
 export const setBotJobs = createServerFn({ method: "POST" })
   .validator(botJobsInput)
@@ -501,20 +547,15 @@ export const setBotJobs = createServerFn({ method: "POST" })
       cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
     };
     try {
-      const current = await call(`${base}/contents/${WORKFLOW_PATH}`);
-      const file = current.body as { content?: string; sha?: string };
-      if (current.status === 404 || typeof file.content !== "string")
-        return {
-          ok: false,
-          error: `The bot's workflow is not at ${WORKFLOW_PATH}, so the page cannot change it. Add the jobs by hand: see the bot's README.`,
-        };
-      const text = fromBase64(file.content);
+      const read = await readWorkflow(call, base);
+      if (!read.ok) return read;
+      const { text, sha } = read;
       const next = withJobs(text, jobs);
       if (!next) return { ok: false, error: `${WORKFLOW_PATH} does not use Aperture Bot.` };
       if (next === text) return { ok: false, error: "The workflow already has these jobs." };
       return await proposeWorkflow(call, base, {
         content: next,
-        sha: file.sha,
+        sha,
         branch: "aperture-bot-jobs",
         message: "Aperture Bot: set its standing jobs",
         title: "Aperture Bot: standing jobs",
@@ -525,6 +566,69 @@ export const setBotJobs = createServerFn({ method: "POST" })
           "",
           "The rest of the bot's settings are kept. Opened from Aperture's Bot page.",
         ].join("\n"),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/**
+ * Opens a pull request that has the bot post, commit and open pull requests
+ * as the repository's own GitHub App (or, off, as the workflow again),
+ * keeping its jobs and every other setting.
+ */
+export const setBotApp = createServerFn({ method: "POST" })
+  .validator(botAppInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true; url: string } | Failure> => {
+    const busy = overLimit("botAsk", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const base = repoBase(data.owner, data.repo);
+    if (!base) return { ok: false, error: "That repo name is not valid." };
+    const call: Call = (url, init) => githubJson(url, token, init);
+    try {
+      const read = await readWorkflow(call, base);
+      if (!read.ok) return read;
+      const use = workflowUse(read.text);
+      const next = withJobs(read.text, use.jobs, data.on);
+      if (!next) return { ok: false, error: `${WORKFLOW_PATH} does not use Aperture Bot.` };
+      if (next === read.text)
+        return {
+          ok: false,
+          error: data.on ? "It already posts as its app." : "It already posts as the workflow.",
+        };
+      return await proposeWorkflow(call, base, {
+        content: next,
+        sha: read.sha,
+        branch: "aperture-bot-app",
+        message: data.on
+          ? "Aperture Bot: post as its own GitHub App"
+          : "Aperture Bot: post as the workflow",
+        title: data.on
+          ? "Aperture Bot: post as its own GitHub App"
+          : "Aperture Bot: post as the workflow again",
+        body: (data.on
+          ? [
+              "Has [Aperture Bot](https://aperturesais.grok.me/bot) comment, commit and open pull requests as this repository's own GitHub App, with its name and avatar. Pull requests it opens then start CI, which they do not with the workflow's token.",
+              "",
+              "Before merging:",
+              "",
+              `- [ ] The app is installed on this repository, with Contents, Issues and Pull requests: read and write.`,
+              `- [ ] Secrets and variables, Actions, Variables: \`${APP_ID_VARIABLE}\` is the app's ID.`,
+              `- [ ] Secrets and variables, Actions, Secrets: \`${APP_KEY_SECRET}\` is a private key generated on the app's page.`,
+            ]
+          : [
+              "Has Aperture Bot post as the workflow (`github-actions[bot]`) again, instead of its own GitHub App.",
+            ]
+        )
+          .concat(["", "Its jobs and other settings are kept. Opened from Aperture's Bot page."])
+          .join("\n"),
       });
     } catch (error) {
       return {

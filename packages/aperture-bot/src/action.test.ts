@@ -31,10 +31,20 @@ type Call = { method: string; path: string; body?: unknown };
 
 /** GitHub's REST API, in memory: records every call and answers the ones the bot makes. */
 function fakeGitHub(
-  options: { permission?: string; pull?: { headRef: string; fork?: boolean } } = {},
+  options: {
+    permission?: string;
+    pull?: { headRef: string; fork?: boolean };
+    /** The first request fails as one sent on a connection the server had closed. */
+    staleOnce?: boolean;
+  } = {},
 ) {
   const calls: Call[] = [];
+  let stale = options.staleOnce ?? false;
   const fetch = async (url: string, init?: RequestInit) => {
+    if (stale) {
+      stale = false;
+      throw Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } });
+    }
     const path = new URL(url).pathname;
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -133,11 +143,16 @@ async function act(
     action?: string;
     branches?: Record<string, Record<string, string>>;
     env?: Record<string, string>;
+    staleOnce?: boolean;
   } = {},
 ) {
   const { action } = await bundled();
   const { origin, ws, root } = checkout(options.branches);
-  const gh = fakeGitHub({ permission: options.permission, pull: options.pull });
+  const gh = fakeGitHub({
+    permission: options.permission,
+    pull: options.pull,
+    staleOnce: options.staleOnce,
+  });
   const e = env(
     root,
     ws,
@@ -225,6 +240,12 @@ test("the thread reaches the agent as context, without the bot's own replies", a
   );
   assert.match(first, /@ada: The cart shows 100 instead of \$1\.00\./);
   assert.doesNotMatch(first, /an earlier bot reply/);
+});
+
+test("a request on a connection GitHub had closed is sent again, and the run goes on", async () => {
+  const run = await act({ staleOnce: true });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.ok(branchesOf(run.origin).includes("aperture/7-show-prices-in-dollars"));
 });
 
 test("a second run on the same issue gets its own branch", async () => {

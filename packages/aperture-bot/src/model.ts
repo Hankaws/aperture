@@ -11,6 +11,7 @@ import {
 } from "../../../src/lib/agent/complete.server.ts";
 import type { LoopHost, ScriptOutcome } from "../../../src/lib/agent/loop.ts";
 import type { AgentToolDef } from "../../../src/lib/agent/tools.ts";
+import { retryStale } from "./retry.ts";
 
 export type Model = (
   cfg: CompletionCfg,
@@ -66,7 +67,7 @@ export function runnerHost(
       throw new BudgetSpent(
         `Stopped at the token budget: ${budget.total.toLocaleString("en-US")} of ${budget.maxTokens.toLocaleString("en-US")} tokens used.`,
       );
-    const completion = await model(cfg, messages, useTools, signal, tools);
+    const completion = await retryStale(() => model(cfg, messages, useTools, signal, tools));
     budget.add(completion);
     return completion;
   };

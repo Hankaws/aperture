@@ -87,6 +87,11 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Aperture Bot no longer fails with "fetch failed" after a long wait, such as
+  pulling its sandbox image or running the tests: a request sent on a
+  connection the server had closed in the meantime is sent once more, the
+  image is pulled without blocking, and errors name fetch's hidden cause.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
 - Parses no longer reports `typeof import("./module")` as broken
   TypeScript. ([#44](https://github.com/Hankaws/aperture/pull/44))
 - Parses no longer reports valid TypeScript as broken when it declares a

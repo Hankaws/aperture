@@ -3,6 +3,7 @@
  * workflow's token. `fetch` is injectable so the tests run against an API
  * that lives in memory.
  */
+import { retryStale } from "./retry.ts";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -41,17 +42,19 @@ export class GitHub {
     body?: unknown,
     accept = "application/vnd.github+json",
   ): Promise<T> {
-    const res = await this.fetcher(`${this.api}${path}`, {
-      method,
-      headers: {
-        Accept: accept,
-        Authorization: `Bearer ${this.token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "aperture-bot",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    const res = await retryStale(() =>
+      this.fetcher(`${this.api}${path}`, {
+        method,
+        headers: {
+          Accept: accept,
+          Authorization: `Bearer ${this.token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "aperture-bot",
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new GitHubError(

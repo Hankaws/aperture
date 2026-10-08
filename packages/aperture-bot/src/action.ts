@@ -20,13 +20,14 @@ import {
   commitMessage,
   doneReply,
   errorReply,
-  FORK_REPLY,
+  forkReply,
   notDoneReply,
   pullBody,
   titleFor,
+  workingReply,
 } from "./replies.ts";
 import { describeError } from "./retry.ts";
-import { runTask } from "./run.ts";
+import { runTask, type BotProgress } from "./run.ts";
 import { DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
 
 export type ActionDeps = {
@@ -159,6 +160,25 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   const repoUrl = `${server}/${command.owner}/${command.repo}`;
   const runUrl = env.GITHUB_RUN_ID ? `${repoUrl}/actions/runs/${env.GITHUB_RUN_ID}` : repoUrl;
   const cwd = resolve(input(env, "working-directory") ?? env.GITHUB_WORKSPACE ?? process.cwd());
+  const asked = { asked: command.commentId, run: runUrl };
+
+  // One comment for the whole run: posted when work starts, edited as it goes,
+  // and edited into the reply at the end. Until it exists, replies are new comments.
+  let status: number | null = null;
+  let edits: Promise<void> = Promise.resolve();
+  const reply = async (body: string) => {
+    await edits;
+    if (status === null) await gh.comment(command.number, body);
+    else await gh.editComment(status, body);
+  };
+  const report = (progress: BotProgress): Promise<void> => {
+    if (status === null) return Promise.resolve();
+    const id = status;
+    edits = edits
+      .then(() => gh.editComment(id, workingReply(progress, asked)))
+      .catch(() => undefined);
+    return edits;
+  };
 
   try {
     const model = modelConfig(env);
@@ -167,10 +187,16 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     if (command.isPull) {
       pull = await gh.pull(command.number);
       if (pull.headRepo.toLowerCase() !== `${command.owner}/${command.repo}`.toLowerCase()) {
-        await gh.comment(command.number, FORK_REPLY);
+        await gh.comment(command.number, forkReply(asked));
         setOutput(env, { outcome: "declined" });
         return 0;
       }
+    }
+    status = await gh
+      .comment(command.number, workingReply({ phase: "starting" }, asked))
+      .then((posted) => (Number.isSafeInteger(posted.id) ? posted.id : null))
+      .catch(() => null);
+    if (pull) {
       checkoutPullHead(cwd, pull.headRef);
       diff = await gh.diff(command.number);
     }
@@ -194,7 +220,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         maxTokens: number(env, "max-tokens", 1_000_000),
         rounds: Math.floor(number(env, "rounds", 2)),
       },
-      { model: deps.model },
+      { model: deps.model, onProgress: report },
     );
     log(result.text);
     if (env.GITHUB_STEP_SUMMARY)
@@ -202,14 +228,15 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         env.GITHUB_STEP_SUMMARY,
         `### Aperture Bot\n\n\`\`\`\n${result.text}\n\`\`\`\n`,
       );
-    const where = sandbox?.where ?? null;
+    const ctx = { ...asked, tests: sandbox?.where ?? null };
 
     if (result.outcome === "clear") {
+      await report({ phase: "publishing", plan: result.plan.map((s) => s.content) });
       const sha = commitFiles(cwd, result.written, commitMessage(command, result));
       if (pull) {
         push(cwd, pull.headRef);
         const url = `${repoUrl}/commit/${sha}`;
-        await gh.comment(command.number, doneReply(result, { url, what: "commit" }));
+        await reply(doneReply(result, { url, what: "commit" }, ctx));
         setOutput(env, { outcome: "clear", commit: sha });
       } else {
         const branch = freeBranch(cwd, command.number, titleFor(command));
@@ -218,17 +245,14 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
           title: titleFor(command),
           head: branch,
           base: command.defaultBranch,
-          body: pullBody(command, result, runUrl, where),
+          body: pullBody(command, result, runUrl, ctx.tests),
         });
-        await gh.comment(command.number, doneReply(result, { url: opened.url, what: "pull" }));
+        await reply(doneReply(result, { url: opened.url, what: "pull" }, ctx));
         setOutput(env, { outcome: "clear", "pull-request": opened.url, commit: sha });
       }
       return 0;
     }
-    await gh.comment(
-      command.number,
-      notDoneReply(result, diffOf(cwd, result.written), runUrl, where),
-    );
+    await reply(notDoneReply(result, diffOf(cwd, result.written), ctx));
     setOutput(env, { outcome: result.outcome });
     return result.outcome === "no-change" ? 0 : 1;
   } catch (error) {
@@ -237,7 +261,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       message +=
         ' Turn on "Allow GitHub Actions to create and approve pull requests" in the repository\'s Settings, under Actions, General, or pass a token that can.';
     log(`Aperture Bot: ${message}`);
-    await gh.comment(command.number, errorReply(message, runUrl)).catch(() => undefined);
+    await reply(errorReply(message, asked)).catch(() => undefined);
     setOutput(env, { outcome: "error" });
     return 1;
   }

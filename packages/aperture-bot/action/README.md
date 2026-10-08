@@ -58,6 +58,8 @@ Then, on an issue:
 | A pull request from this repository | A commit on its branch                                                                                                      | The same reply                                            |
 | A pull request from a fork          | Nothing: it replies that it will not run a fork's code                                                                      |                                                           |
 
+While it works, one comment on the thread says what it is doing and links the run; at the end that comment becomes its reply. [The Bot page](https://aperturesais.grok.me/bot) shows every task on a repo in one place, and can ask the bot and add this workflow for you.
+
 Only people with write access to the repository can ask; anyone else's comment is ignored. Edited comments and other bots' comments are never commands.
 
 ## What it will not do

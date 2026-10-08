@@ -12,6 +12,7 @@ const PAGES: Item[] = [
   { label: "Benchmark", hint: "What the checks caught, and what they missed.", to: "/benchmark" },
   { label: "Agents", hint: "Give your agent the same checks.", to: "/agents" },
   { label: "Agent Check", hint: "The checks on every pull request.", to: "/agent-check" },
+  { label: "Bot", hint: "Ask the coding bot, watch it work.", to: "/bot" },
   { label: "Privacy", hint: "What leaves the browser.", to: "/privacy" },
   { label: "Security", hint: "How the checks and keys are handled.", to: "/security" },
   { label: "Changelog", hint: "What changed.", to: "/changelog" },

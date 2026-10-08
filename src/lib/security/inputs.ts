@@ -17,8 +17,9 @@ import type { GithubReviewComment } from "../github/review.ts";
 import type { Spot } from "../workspace/lessons.ts";
 import type { PlanEntry, ProposedEdit } from "../workspace/types.ts";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /** A list of objects the handler normalises itself. */
 function objects<T>() {
@@ -91,6 +92,19 @@ export const githubChecksInput = z.object({
   owner: repoName,
   repo: repoName,
   sha: text(64),
+});
+export const botRepoInput = z.object({ owner: repoName, repo: repoName });
+export const botAskInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  number: z.number().int().positive().optional(),
+  title: text(256).optional(),
+  task: text(4000),
+});
+export const botSetupInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  provider: z.enum(["grok", "openai", "anthropic", "gemini", "deepseek"]),
 });
 export const githubMergeInput = z.object({
   token: githubToken,

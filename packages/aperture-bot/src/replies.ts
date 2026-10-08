@@ -3,6 +3,12 @@
  * replies on the thread. Pure, so every wording is tested without a network.
  */
 import { shownRows } from "../../agent-check/src/report.ts";
+import {
+  phaseLine,
+  summaryMarker,
+  type BotPhase,
+  type BotSummary,
+} from "../../../src/lib/bot/summary.ts";
 import type { Command } from "./event.ts";
 import type { BotResult } from "./run.ts";
 
@@ -11,6 +17,9 @@ const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
 const firstLine = (text: string) => text.split("\n")[0]!.trim();
 
 export const SITE = "https://aperturesais.grok.me";
+
+/** Which comment a reply answers, the run doing the work, and where its tests run. */
+export type ReplyContext = { asked: number; run: string; tests: string | null };
 
 /** A title for the commit and the pull request: the task's first line, or the issue's title. */
 export function titleFor(command: Command): string {
@@ -51,6 +60,33 @@ function footer(result: BotResult, runUrl: string, where: string | null): string
   return `${tests} Used ${result.usage}. [The run](${runUrl}) · [Aperture Bot](${SITE})`;
 }
 
+/** The hidden summary of a finished run, for the Bot page. */
+export function resultSummary(
+  result: BotResult,
+  ctx: ReplyContext,
+  link?: BotSummary["link"],
+): BotSummary {
+  return {
+    v: 1,
+    state: result.outcome,
+    asked: ctx.asked,
+    run: ctx.run,
+    plan: result.plan.map((s) => s.content),
+    checks: result.check
+      ? shownRows(result.check.rows).map((r) => ({
+          status: r.status,
+          label: r.label,
+          detail: r.detail,
+        }))
+      : [],
+    files: result.written,
+    link,
+    tests: ctx.tests,
+    usage: result.usage,
+    error: result.error,
+  };
+}
+
 const join = (...blocks: string[][]) =>
   blocks
     .filter((b) => b.length > 0)
@@ -85,15 +121,36 @@ export function pullBody(
   );
 }
 
+/** While the bot works: the comment it edits as it goes, and at the end into its reply. */
+export function workingReply(
+  progress: { phase: BotPhase; plan?: string[]; round?: number; rounds?: number },
+  ctx: Pick<ReplyContext, "asked" | "run">,
+): string {
+  return join(
+    [`**Aperture Bot is on it.** ${phaseLine(progress)}`],
+    progress.plan?.length ? ["**Plan**", ...progress.plan.map((s) => `- ${s}`)] : [],
+    [`[Follow the run](${ctx.run}) · [Aperture Bot](${SITE})`],
+    [summaryMarker({ v: 1, state: "working", asked: ctx.asked, run: ctx.run, ...progress })],
+  );
+}
+
 /** On the thread, after a pull request is opened or a commit pushed. */
 export function doneReply(
   result: BotResult,
   link: { url: string; what: "pull" | "commit" },
+  ctx: ReplyContext,
 ): string {
   const files = result.written.map((p) => `\`${p}\``).join(", ");
-  return link.what === "pull"
-    ? `Opened ${link.url}, changing ${files}. Aperture Agent Check found nothing red.`
-    : `Pushed ${link.url} to this pull request, changing ${files}. Aperture Agent Check found nothing red.`;
+  const text =
+    link.what === "pull"
+      ? `Opened ${link.url}, changing ${files}. Aperture Agent Check found nothing red.`
+      : `Pushed ${link.url} to this pull request, changing ${files}. Aperture Agent Check found nothing red.`;
+  return join(
+    [text],
+    plan(result),
+    [footer(result, ctx.run, ctx.tests)],
+    [summaryMarker(resultSummary(result, ctx, link))],
+  );
 }
 
 const OUTCOME: Record<"red" | "stopped" | "no-change", string> = {
@@ -103,12 +160,7 @@ const OUTCOME: Record<"red" | "stopped" | "no-change", string> = {
 };
 
 /** On the thread, when nothing was published. */
-export function notDoneReply(
-  result: BotResult,
-  diff: string,
-  runUrl: string,
-  where: string | null,
-): string {
+export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext): string {
   const outcome = result.outcome === "clear" ? "no-change" : result.outcome;
   return join(
     [OUTCOME[outcome]],
@@ -127,16 +179,26 @@ export function notDoneReply(
         ]
       : [],
     agentSaid(result),
-    [footer(result, runUrl, where)],
+    [footer(result, ctx.run, ctx.tests)],
+    [summaryMarker(resultSummary(result, ctx))],
   );
 }
 
-export const FORK_REPLY = [
-  "This pull request comes from a fork, so Aperture Bot will not check out its code, run it, or push to it.",
-  "",
-  "Ask on an issue instead, or push the branch to this repository and ask on that pull request.",
-].join("\n");
+export function forkReply(ctx: Pick<ReplyContext, "asked" | "run">): string {
+  return join(
+    [
+      "This pull request comes from a fork, so Aperture Bot will not check out its code, run it, or push to it.",
+      "",
+      "Ask on an issue instead, or push the branch to this repository and ask on that pull request.",
+    ],
+    [summaryMarker({ v: 1, state: "declined", asked: ctx.asked, run: ctx.run })],
+  );
+}
 
-export function errorReply(message: string, runUrl: string): string {
-  return `Aperture Bot stopped with an error and changed nothing:\n\n> ${message}\n\n[The run](${runUrl})`;
+export function errorReply(message: string, ctx: Pick<ReplyContext, "asked" | "run">): string {
+  return join(
+    ["Aperture Bot stopped with an error and changed nothing:", "", `> ${message}`],
+    [`[The run](${ctx.run})`],
+    [summaryMarker({ v: 1, state: "error", asked: ctx.asked, run: ctx.run, error: message })],
+  );
 }

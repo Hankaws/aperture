@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Command } from "./event.ts";
-import { notDoneReply, pullBody, titleFor } from "./replies.ts";
+import { readSummary } from "../../../src/lib/bot/summary.ts";
+import { doneReply, notDoneReply, pullBody, titleFor, workingReply } from "./replies.ts";
 import type { BotResult } from "./run.ts";
 
 const command: Command = {
@@ -89,8 +90,7 @@ test("a stopped run says it pushed nothing, and why", () => {
       check: null,
     }),
     "",
-    "https://run",
-    null,
+    { asked: 9, run: "https://github.com/acme/shop/actions/runs/1", tests: null },
   );
   assert.match(
     reply,
@@ -98,4 +98,51 @@ test("a stopped run says it pushed nothing, and why", () => {
   );
   assert.match(reply, /Tests were not run\./);
   assert.doesNotMatch(reply, /```diff/);
+});
+
+const ctx = { asked: 9, run: "https://github.com/acme/shop/actions/runs/1", tests: null };
+
+test("every reply ends with a hidden summary that reads back as what it says", () => {
+  const done = doneReply(
+    result(),
+    { url: "https://github.com/acme/shop/pull/3", what: "pull" },
+    ctx,
+  );
+  assert.match(
+    done,
+    /^Opened https:\/\/github\.com\/acme\/shop\/pull\/3, changing `src\/cart\.ts`/,
+  );
+  assert.match(done, /\n<!-- aperture-bot \{.*\} -->$/);
+  assert.deepEqual(readSummary(done), {
+    v: 1,
+    state: "clear",
+    asked: 9,
+    run: ctx.run,
+    plan: ["Read the cart"],
+    checks: [
+      { status: "pass", label: "Parses", detail: "1 file parses." },
+      { status: "pass", label: "Types", detail: "No errors | none." },
+    ],
+    files: ["src/cart.ts"],
+    link: { url: "https://github.com/acme/shop/pull/3", what: "pull" },
+    tests: null,
+    usage: "1,000 input and 50 output tokens in 2 model calls",
+  });
+});
+
+test("the working comment says the phase and round, and links the run", () => {
+  const body = workingReply({ phase: "fixing", round: 2, rounds: 2, plan: ["Read the cart"] }, ctx);
+  assert.match(
+    body,
+    /^\*\*Aperture Bot is on it\.\*\* Fixing what Agent Check found \(round 2 of 2\)\.\n\n\*\*Plan\*\*\n- Read the cart\n\n\[Follow the run\]/,
+  );
+  assert.equal(readSummary(body)?.phase, "fixing");
+});
+
+test("text in the summary cannot end the hidden comment early", () => {
+  const body = notDoneReply(result({ outcome: "red", error: "bad --> <script>" }), "", ctx);
+  const hidden = body.slice(body.lastIndexOf("<!-- aperture-bot "));
+  assert.equal(hidden.match(/-->/g)?.length, 1);
+  assert.ok(hidden.endsWith(" -->"));
+  assert.equal(readSummary(body)?.error, "bad --> <script>");
 });

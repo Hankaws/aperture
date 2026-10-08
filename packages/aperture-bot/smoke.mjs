@@ -186,7 +186,8 @@ const github = createServer((req, res) => {
   req.on("data", (chunk) => (raw += chunk));
   req.on("end", () => {
     const path = new URL(req.url, "http://x").pathname;
-    if (req.method === "POST") posted.push({ path, body: JSON.parse(raw || "{}") });
+    if (req.method === "POST" || req.method === "PATCH")
+      posted.push({ method: req.method, path, body: JSON.parse(raw || "{}") });
     res.setHeader("content-type", "application/json");
     if (path.endsWith("/permission")) return res.end(JSON.stringify({ role_name: "admin" }));
     if (req.method === "GET" && path.endsWith("/comments")) return res.end("[]");
@@ -194,7 +195,7 @@ const github = createServer((req, res) => {
       return res.end(
         JSON.stringify({ number: 8, html_url: "https://github.com/acme/shop/pull/8" }),
       );
-    res.end(JSON.stringify({ html_url: "https://github.com/acme/shop/issues/7#reply" }));
+    res.end(JSON.stringify({ id: 900, html_url: "https://github.com/acme/shop/issues/7#reply" }));
   });
 });
 await new Promise((done) => github.listen(0, "127.0.0.1", done));
@@ -235,10 +236,18 @@ const acted = await node([actionBundle], {
 github.close();
 modelForAction.close();
 const pr = posted.find((p) => p.path.endsWith("/pulls"));
+const lastWord = posted.filter((p) => /\/issues\/(7\/comments|comments\/900)$/.test(p.path)).at(-1);
 expect(
   acted.code === 0 && pr,
   "the Action opens a pull request for a clear change",
   acted.stdout + acted.stderr,
+);
+expect(
+  lastWord?.method === "PATCH" &&
+    /^Opened https:\/\/github\.com\/acme\/shop\/pull\/8/.test(lastWord.body.body) &&
+    /<!-- aperture-bot \{"v":1,"state":"clear","asked":5,/.test(lastWord.body.body),
+  "the bot's comment ends as the reply, with its summary for the Bot page",
+  JSON.stringify(lastWord),
 );
 expect(
   gitIn(

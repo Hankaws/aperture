@@ -20,6 +20,8 @@ export const LIMITS = {
   mcp: 30,
   agentChecks: 20,
   tokens: 10,
+  bot: 30,
+  botAsk: 6,
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -36,6 +38,8 @@ const WHAT: Record<LimitName, string> = {
   mcp: "MCP tool calls",
   agentChecks: "checks from an agent",
   tokens: "new agent tokens",
+  bot: "Bot page refreshes",
+  botAsk: "asks to Aperture Bot",
 };
 
 const WINDOW_MS = 60_000;

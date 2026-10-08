@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/site/site-nav";
 
-const NEXT_ROUTES = ["/app", "/pricing", "/settings"] as const;
+const NEXT_ROUTES = ["/app", "/bot", "/pricing", "/settings"] as const;
 type NextRoute = (typeof NEXT_ROUTES)[number];
 
 function parseNext(value: unknown): NextRoute {

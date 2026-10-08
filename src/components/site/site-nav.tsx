@@ -1,49 +1,54 @@
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ApertureMark } from "@/components/ide/logo";
-import { showPricing } from "@/lib/billing/pricing-visible";
+import { applyAppearance, readDensity, readTheme } from "@/lib/appearance";
 import { AuthSlot } from "./auth-slot";
+import { SiteSearch } from "./site-search";
+import { SiteLinks, SiteTabs } from "./site-tabs";
 
-export function SiteNav() {
+function ThemeToggle() {
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    setLight(readTheme() === "light" || document.documentElement.dataset.theme === "light");
+  }, []);
   return (
-    <header className="sticky top-0 z-30 border-b border-border/80 bg-bg/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:h-16 sm:gap-4 sm:px-6">
-        <Link to="/" className="tap flex items-center gap-2 text-fg">
-          <ApertureMark className="size-5" />
-          <span className="text-sm font-medium tracking-tight">Aperture</span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!light}
+      aria-label="Dark mode"
+      title="Dark mode"
+      className="flex shrink-0 items-center gap-2 text-sm text-muted hover:text-fg"
+      onClick={() => {
+        const next = light ? "cursor" : "light";
+        applyAppearance(next, readDensity());
+        setLight(next === "light");
+      }}
+    >
+      Dark
+      <span className="relative h-5 w-9 overflow-hidden rounded-full border border-border bg-surface">
+        <span
+          className={`absolute top-0.5 left-0.5 size-3.5 rounded-full bg-fg transition-transform duration-200 ${light ? "translate-x-0" : "translate-x-3.5"}`}
+        />
+      </span>
+    </button>
+  );
+}
+
+export function SiteNav({ overlay = false }: { overlay?: boolean }) {
+  return (
+    <header className={`${overlay ? "absolute inset-x-0 top-0" : "sticky top-0"} z-30 bg-bg`}>
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-5">
+        <Link to="/" className="shrink-0 text-sm font-medium tracking-tight text-fg">
+          Aperture
         </Link>
-        <nav className="flex items-center gap-4 text-sm text-muted">
-          <a href="/#how" className="hidden hover:text-fg sm:inline">
-            How
-          </a>
-          <a href="/#code" className="hidden hover:text-fg sm:inline">
-            Code
-          </a>
-          <a href="/#why" className="hidden hover:text-fg sm:inline">
-            Why
-          </a>
-          <Link to="/agents" className="hidden hover:text-fg sm:inline">
-            Agents
-          </Link>
-          <Link to="/agent-check" className="hidden hover:text-fg md:inline">
-            Agent Check
-          </Link>
-          <Link to="/privacy" className="tap hover:text-fg">
-            Privacy
-          </Link>
-          <Link to="/security" className="tap hidden hover:text-fg sm:inline">
-            Security
-          </Link>
-          {showPricing && (
-            <Link to="/pricing" className="hidden hover:text-fg sm:inline">
-              Pricing
-            </Link>
-          )}
-          <Link to="/app" className="hidden hover:text-fg sm:inline">
-            Editor
-          </Link>
-        </nav>
-        <div className="ml-auto min-w-0">
-          <AuthSlot />
+        <SiteTabs />
+        <SiteLinks />
+        <div className="ml-auto hidden md:block">
+          <SiteSearch />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-4 lg:ml-5">
+          <ThemeToggle />
+          <AuthSlot plain />
         </div>
       </div>
     </header>

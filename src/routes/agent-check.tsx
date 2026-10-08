@@ -82,7 +82,7 @@ function AgentCheckPage() {
       <SiteNav />
       <main className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
         <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">GitHub Action</p>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight text-balance sm:text-4xl">
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
           Aperture Agent Check
         </h1>
         <p className="mt-3 text-lg text-pretty text-fg">

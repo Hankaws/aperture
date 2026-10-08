@@ -60,6 +60,12 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The landing page, nav and footer are redesigned in Grok: the checks told as
+  three short stories, a site search and a menu on small screens. The newer
+  pages are part of it: two sections in the same style show a real
+  `check_change` answer and a real Agent Check run, and Agents and Agent Check
+  are in the menu, the search and the footer.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
 - Adding test paths to a test script that already names its own paths is
   no longer counted as tampering: more tests run, none fewer. A script that
   ran everything and gains a path filter still is.

@@ -57,7 +57,7 @@ function AgentsPage() {
         <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">
           For your agent
         </p>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight text-balance sm:text-4xl">
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
           Your agent writes the change. Aperture checks it first.
         </h1>
         <p className="mt-4 text-pretty text-muted">

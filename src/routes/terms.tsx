@@ -154,7 +154,7 @@ function TermsPage() {
           </Link>
           <span className="text-fg">Terms</span>
         </nav>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight">Terms</h1>
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">Terms</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           The rules for the hosted editor. Twelve short sections. The privacy page is the one that says what leaves
           the browser. The security page covers threat model, sandboxes, and disclosure.

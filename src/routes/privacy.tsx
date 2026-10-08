@@ -34,7 +34,7 @@ function PrivacyPage() {
             Terms
           </Link>
         </nav>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight">What leaves the browser</h1>
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">What leaves the browser</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           Aperture is not pure browser-only after you sign in. Two copies can leave this tab: the project is saved to
           your account as you edit, and each send uploads a snapshot through Aperture's server before the provider

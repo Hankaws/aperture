@@ -15,6 +15,8 @@ release notes are every line from there down to the previous version.
   fix waits for review), or does a task of yours each night or each Monday,
   on its own tracking issue. The Bot page shows a repository's jobs and opens
   a pull request that changes them, keeping the rest of the bot's settings.
+  The bot also has a face on the page: the Aperture lens, which turns while
+  it works, and an avatar image (`/bot/aperture-bot.png`) for a GitHub App.
   ([#50](https://github.com/Hankaws/aperture/pull/50))
 - A chat with Aperture Bot on the Bot page. Ask about a repository ("what's
   broken right now?") and the bot reads its open issues and pull requests,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUp, Bot, GitPullRequest, Loader2, Send, Trash2, X } from "lucide-react";
+import { ArrowUp, GitPullRequest, Loader2, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
@@ -9,6 +9,7 @@ import type { ChatTurn, Proposal } from "@/lib/bot/chat";
 import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
+import { BotAvatar } from "./bot-avatar";
 import { TaskCard } from "./bot-console";
 
 type Sent = { number: number; url: string; at: string };
@@ -161,7 +162,7 @@ export function BotChat({
     >
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-          <Bot className="size-4 shrink-0 text-accent" />
+          <BotAvatar size="sm" working={busy} />
           <span className="truncate">Aperture Bot · {repo}</span>
         </p>
         {entries.length > 0 && (
@@ -175,9 +176,7 @@ export function BotChat({
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5" aria-live="polite">
         {entries.length === 0 && !busy && (
           <div className="flex flex-col items-center px-2 py-8 text-center">
-            <span className="flex size-11 items-center justify-center rounded-full bg-accent/10">
-              <Bot className="size-5 text-accent" />
-            </span>
+            <BotAvatar size="lg" />
             <p className="mt-4 text-lg font-medium text-balance">
               What should we work on in {name}?
             </p>
@@ -209,9 +208,7 @@ export function BotChat({
             </div>
           ) : (
             <div key={entry.id} className="flex gap-3">
-              <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
-                <Bot className="size-3.5 text-accent" />
-              </span>
+              <BotAvatar size="sm" className="mt-0.5" />
               <div className="min-w-0 flex-1 space-y-3">
                 {entry.error ? (
                   <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -255,9 +252,7 @@ export function BotChat({
 
         {busy && (
           <div className="flex items-center gap-3 text-sm text-muted">
-            <span className="flex size-7 items-center justify-center rounded-full bg-accent/10">
-              <Loader2 className="size-3.5 animate-spin text-accent" />
-            </span>
+            <BotAvatar size="sm" working />
             Looking at GitHub…
           </div>
         )}

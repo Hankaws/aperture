@@ -60,6 +60,12 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The landing page, nav and footer are redesigned in Grok: the checks told as
+  three short stories, a site search and a menu on small screens. The newer
+  pages are part of it: two sections in the same style show a real
+  `check_change` answer and a real Agent Check run, and Agents and Agent Check
+  are in the menu, the search and the footer.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
 - Adding test paths to a test script that already names its own paths is
   no longer counted as tampering: more tests run, none fewer. A script that
   ran everything and gains a path filter still is.
@@ -81,6 +87,15 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Parses no longer reports a JSX comment, `{/* … */}`, or empty braces in JSX
+  as broken: the parser wanted an expression there, and its recovery could
+  mark the lines after as broken too.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
+- Aperture Bot no longer fails with "fetch failed" after a long wait, such as
+  pulling its sandbox image or running the tests: a request sent on a
+  connection the server had closed in the meantime is sent once more, the
+  image is pulled without blocking, and errors name fetch's hidden cause.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
 - Parses no longer reports `typeof import("./module")` as broken
   TypeScript. ([#44](https://github.com/Hankaws/aperture/pull/44))
 - Parses no longer reports valid TypeScript as broken when it declares a

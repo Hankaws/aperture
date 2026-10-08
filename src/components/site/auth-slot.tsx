@@ -4,21 +4,28 @@ import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function AuthSlot({ compact = false }: { compact?: boolean }) {
+export function AuthSlot({ compact = false, plain = false }: { compact?: boolean; plain?: boolean }) {
   const { user, isPending } = useHydratedUserState();
   if (isPending) {
     return <div className={cn("animate-pulse rounded-lg bg-elevated", compact ? "h-8 w-8 rounded-full" : "h-10 w-28")} />;
   }
   if (user) {
     return (
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-5">
         {!compact && (
-          <Link to="/app" className={cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}>
-            Open editor
+          <Link to="/app" className={plain ? "text-sm text-fg hover:text-muted" : cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}>
+            {plain ? "Open →" : "Open editor"}
           </Link>
         )}
         <UserButton compact={compact} />
       </div>
+    );
+  }
+  if (plain) {
+    return (
+      <Link to="/login" search={{ next: "/app" }} className="shrink-0 text-sm text-fg hover:text-muted">
+        Open →
+      </Link>
     );
   }
   if (compact) {
@@ -38,7 +45,7 @@ export function AuthSlot({ compact = false }: { compact?: boolean }) {
       <Link
         to="/login"
         search={{ next: "/app" }}
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "max-[359px]:hidden")}
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}
       >
         Sign in
       </Link>

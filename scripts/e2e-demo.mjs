@@ -58,7 +58,7 @@ try {
       if (res.url().endsWith(".js")) jsBytes += (await res.body().catch(() => Buffer.alloc(0))).length;
     });
     await page.goto(`${base}/`, { waitUntil: "networkidle" });
-    check(/checks its own work/i.test(await bodyText(page)), "landing page renders");
+    check(/Checked before you apply it\./.test(await bodyText(page)), "landing page renders");
     const kb = Math.round(jsBytes / 1024);
     check(kb < LANDING_JS_BUDGET_KB, `landing page JavaScript is ${kb} KB (budget ${LANDING_JS_BUDGET_KB} KB)`);
     check(errors.length === 0, `landing page console is clean${errors.length ? `: ${errors[0]}` : ""}`);

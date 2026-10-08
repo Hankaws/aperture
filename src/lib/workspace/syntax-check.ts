@@ -13,6 +13,10 @@
  */
 import { jsParserFor } from "../parser/lezer.ts";
 
+/** Lezer's own types, through the parser already imported rather than a package not in package.json. */
+type Tree = ReturnType<ReturnType<typeof jsParserFor>["parse"]>;
+type SyntaxNode = Tree["topNode"];
+
 /** Beyond this a parse stops being worth the latency on every staged edit. */
 const MAX_PARSE_CHARS = 400_000;
 const MAX_ISSUES = 4;
@@ -77,6 +81,45 @@ function withIdentifierNames(text: string): string {
 }
 
 /**
+ * In JSX children, braces holding nothing or only a comment are valid (an
+ * empty expression, the usual way to write a comment in JSX), but Lezer's
+ * grammar wants an expression there: it marks an error before the closing
+ * brace, and its recovery can carry the error into the lines after. True for
+ * an error node inside a JSXEscape with only whitespace or comments between
+ * the opening brace and it, and the closing brace next.
+ */
+function isEmptyJsxExpression(text: string, node: SyntaxNode): SyntaxNode | null {
+  const escape = node.parent;
+  if (escape?.name !== "JSXEscape") return null;
+  const inside = text.slice(escape.from + 1, node.from).replace(/\/\*[\s\S]*?\*\//g, "");
+  return inside.trim() === "" && /^\s*\}/.test(text.slice(node.from)) ? escape : null;
+}
+
+/** At most this many empty JSX expressions are filled in, each with a parse. */
+const MAX_EMPTY_JSX = 200;
+
+/**
+ * Parses `text`, filling each empty JSX expression with a `0` right after
+ * its opening brace (found in the tree, so never an object literal) and
+ * parsing again. No line break is added, so every line keeps its number.
+ */
+function parseFillingEmptyJsx(path: string, text: string): { tree: Tree; text: string } {
+  const parser = jsParserFor(path);
+  let source = text;
+  for (let round = 0; ; round += 1) {
+    const tree = parser.parse(source);
+    if (round >= MAX_EMPTY_JSX) return { tree, text: source };
+    let escape: SyntaxNode | null = null;
+    const cursor = tree.cursor();
+    do {
+      if (cursor.type.isError) escape = isEmptyJsxExpression(source, cursor.node);
+    } while (!escape && cursor.next());
+    if (!escape) return { tree, text: source };
+    source = `${source.slice(0, escape.from + 1)}0${source.slice(escape.from + 1)}`;
+  }
+}
+
+/**
  * Parse errors, one per line at most.
  *
  * Lezer recovers and carries on, so a single mistake often yields a run of
@@ -85,13 +128,15 @@ function withIdentifierNames(text: string): string {
 export function scriptIssues(path: string, text: string): string[] {
   if (!text.trim()) return [];
   if (text.length > MAX_PARSE_CHARS) return [];
-  let tree;
+  let parsed;
   try {
-    tree = jsParserFor(path).parse(TS_EXT.test(path) ? withIdentifierNames(text) : text);
+    parsed = parseFillingEmptyJsx(path, TS_EXT.test(path) ? withIdentifierNames(text) : text);
   } catch (error) {
     return [error instanceof Error ? error.message.slice(0, 160) : "parse error"];
   }
-  const starts = lineStarts(text);
+  const { tree } = parsed;
+  // Positions are in the parsed text: the same lines, a few characters longer.
+  const starts = lineStarts(parsed.text);
   const lines = new Set<number>();
   const cursor = tree.cursor();
   do {

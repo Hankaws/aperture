@@ -94,6 +94,10 @@ function Login() {
             (after sign-in the project is saved and each send goes through Aperture&apos;s server) and the{" "}
             <Link to="/security" className="text-fg underline-offset-2 hover:underline">
               security page
+            </Link>{" "}
+            and the{" "}
+            <Link to="/terms" className="text-fg underline-offset-2 hover:underline">
+              terms
             </Link>
             .
           </p>

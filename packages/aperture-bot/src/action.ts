@@ -7,7 +7,7 @@
  *
  * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.server.ts";
@@ -25,6 +25,7 @@ import {
   pullBody,
   titleFor,
 } from "./replies.ts";
+import { describeError } from "./retry.ts";
 import { runTask } from "./run.ts";
 import { DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
 
@@ -94,13 +95,25 @@ function install(cwd: string, mode: string, log: (line: string) => void): void {
     throw new Error(`npm ci failed: ${(run.stderr ?? "").trim().split("\n").at(-1)}`);
 }
 
-/** Docker with its image pulled first, so the pull never eats into a test's time. */
-function prepareDocker(image: string, log: (line: string) => void): Sandbox {
+/**
+ * Docker with its image pulled first, so the pull never eats into a test's
+ * time. Asynchronous, so the event loop keeps up with open connections while
+ * it waits.
+ */
+async function prepareDocker(image: string, log: (line: string) => void): Promise<Sandbox> {
   log(`Pulling the sandbox image ${image}`);
-  const pull = spawnSync("docker", ["pull", "--quiet", image], { encoding: "utf8" });
-  if (pull.status !== 0)
+  const { code, stderr } = await new Promise<{ code: number | null; stderr: string }>((done) => {
+    const child = spawn("docker", ["pull", "--quiet", image], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let err = "";
+    child.stderr.on("data", (chunk: Buffer) => (err += chunk.toString()));
+    child.on("error", (error) => done({ code: -1, stderr: error.message }));
+    child.on("close", (status) => done({ code: status, stderr: err }));
+  });
+  if (code !== 0)
     throw new Error(
-      `the sandbox image ${image} could not be pulled: ${(pull.stderr ?? "").trim().split("\n").at(-1)}`,
+      `the sandbox image ${image} could not be pulled: ${stderr.trim().split("\n").at(-1)}`,
     );
   return dockerSandbox(image);
 }
@@ -165,7 +178,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     const sandbox =
       deps.sandbox !== undefined
         ? deps.sandbox
-        : prepareDocker(input(env, "sandbox-image") ?? DEFAULT_IMAGE, log);
+        : await prepareDocker(input(env, "sandbox-image") ?? DEFAULT_IMAGE, log);
     const comments = await gh.comments(command.number);
 
     log(`Aperture Bot: working on #${command.number} for @${command.author}: ${command.task}`);
@@ -219,7 +232,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     setOutput(env, { outcome: result.outcome });
     return result.outcome === "no-change" ? 0 : 1;
   } catch (error) {
-    let message = error instanceof Error ? error.message : String(error);
+    let message = describeError(error);
     if (error instanceof GitHubError && error.status === 403 && /POST \S+\/pulls/.test(message))
       message +=
         ' Turn on "Allow GitHub Actions to create and approve pull requests" in the repository\'s Settings, under Actions, General, or pass a token that can.';

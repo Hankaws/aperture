@@ -1,34 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
-import { ApertureMark } from "@/components/ide/logo";
 import { showPricing } from "@/lib/billing/pricing-visible";
 import { version } from "../../../package.json";
 
 export function SiteFooter() {
-  const { user, isPending } = useHydratedUserState();
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <span className="inline-flex items-center gap-2 text-sm text-subtle">
-          <ApertureMark className="size-4" />
-          Aperture
-          <Link
-            to="/changelog"
-            className="font-mono text-xs hover:text-fg"
-            aria-label={`Version ${version}, changelog`}
-          >
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+        <span className="inline-flex items-center gap-2">
+          Aperture · MIT
+          <Link to="/changelog" className="font-mono text-xs hover:text-fg" aria-label={`Version ${version}, changelog`}>
             v{version}
           </Link>
         </span>
-        <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
-          <Link to="/" className="hover:text-fg">
-            Product
-          </Link>
-          {showPricing && (
-            <Link to="/pricing" className="hover:text-fg">
-              Pricing
-            </Link>
-          )}
+        <nav className="flex flex-wrap gap-x-5 gap-y-2">
           <Link to="/benchmark" className="hover:text-fg">
             Benchmark
           </Link>
@@ -47,15 +31,12 @@ export function SiteFooter() {
           <Link to="/changelog" className="hover:text-fg">
             Changelog
           </Link>
-          <Link to="/settings" search={{ tab: "models" }} className="hover:text-fg">
-            Models
+          <Link to="/terms" className="hover:text-fg">
+            Terms
           </Link>
-          <Link to="/app" className="hover:text-fg">
-            Editor
-          </Link>
-          {!isPending && !user && (
-            <Link to="/login" search={{ next: "/app" }} className="hover:text-fg">
-              Sign in
+          {showPricing && (
+            <Link to="/pricing" className="hover:text-fg">
+              Pricing
             </Link>
           )}
         </nav>

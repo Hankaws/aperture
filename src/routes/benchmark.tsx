@@ -80,7 +80,7 @@ function BenchmarkPage() {
       <SiteNav />
       <main className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
         <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">Benchmark</p>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight text-balance">How often the checks stop a bad edit</h1>
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">How often the checks stop a bad edit</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           Aperture checks every change an agent stages before you can apply it. This is what those checks do with{" "}
           {s.bad + s.good} edits an agent might stage: {s.bad} with a mistake in them and {s.good} correct ones. Every

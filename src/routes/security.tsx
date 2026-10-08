@@ -19,7 +19,7 @@ function SecurityPage() {
             Terms
           </Link>
         </nav>
-        <h1 className="mt-3 text-3xl font-medium tracking-tight">Security</h1>
+        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">Security</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           What we try to protect, where the walls are, and how to report a hole. The{" "}
           <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">

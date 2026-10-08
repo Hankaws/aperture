@@ -9,17 +9,17 @@ const ADD_LINE = "    return tasks.slice(start, start + pageSize);";
 const GUARD_LINE = "    if (!task) throw new NotFound(id);";
 const STEPS_MS = 900;
 
-type Phase = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Phase = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 function useDemoClock(reduced: boolean) {
-  const [phase, setPhase] = useState<Phase>(reduced ? 6 : 0);
+  const [phase, setPhase] = useState<Phase>(reduced ? 10 : 0);
   useEffect(() => {
     if (reduced) {
-      setPhase(6);
+      setPhase(10);
       return;
     }
     const id = window.setInterval(() => {
-      setPhase((p) => ((p + 1) % 7) as Phase);
+      setPhase((p) => ((p + 1) % 11) as Phase);
     }, STEPS_MS);
     return () => window.clearInterval(id);
   }, [reduced]);
@@ -71,6 +71,17 @@ export function ProductDemo() {
   const showAdd = phase >= 4;
   const showDel = phase >= 5;
   const staged = phase >= 6;
+  const checksClear = phase >= 10;
+  const scanning = phase >= 3 && phase < 6;
+  const checkNames = ["Parses", "Imports", "Types", "Preview", "Tests"] as const;
+  const checkAt = (i: number): "wait" | "run" | "pass" => {
+    if (phase < 6) return "wait";
+    if (phase >= 10) return "pass";
+    const cursor = phase - 6;
+    if (i < cursor) return "pass";
+    if (i === cursor) return "run";
+    return "wait";
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-float)]">
@@ -79,11 +90,14 @@ export function ProductDemo() {
         <span className="size-2 rounded-full bg-border" />
         <span className="size-2 rounded-full bg-border" />
         <span className="ml-2 truncate font-mono text-xs text-subtle">harbor-api / src/store.ts</span>
-        <span className={cn("ml-auto hidden font-mono text-xs sm:inline", staged ? "text-ok" : "text-subtle")}>
-          {staged ? "staged · 1 file" : phase >= 3 ? "Composer running" : "indexed · 34 chunks"}
+        <span className="ml-auto inline-flex items-center gap-2 font-mono text-xs text-subtle">
+          <span className={cn("size-1.5 rounded-full", scanning || (phase >= 6 && !checksClear) ? "demo-live bg-accent" : "bg-ok")} />
+          <span className="hidden sm:inline">
+            {checksClear ? "checks clear" : scanning ? "writing" : phase >= 6 ? "checking" : "indexed · 34 chunks"}
+          </span>
         </span>
       </div>
-      <div className="grid min-h-72 md:grid-cols-[9.5rem_1fr_15rem]">
+      <div className="grid md:min-h-72 md:grid-cols-[9.5rem_1fr_15rem]">
         <aside className="hidden border-r border-border p-3 font-mono text-xs text-muted md:block">
           <p className="mb-2 font-sans text-[0.65rem] tracking-[0.14em] text-subtle uppercase">Workspace</p>
           <p className="text-fg">.aperture.md</p>
@@ -93,7 +107,8 @@ export function ProductDemo() {
           <p className="pl-3">validate.ts</p>
           <p className="mt-3">package.json</p>
         </aside>
-        <pre className="overflow-hidden p-4 font-mono text-xs leading-6 text-muted">
+        <pre className="relative order-2 hidden overflow-x-auto border-t border-border p-4 font-mono text-[11px] leading-6 text-muted sm:block md:order-none md:border-t-0 md:text-xs">
+          {scanning ? <span className="code-scan pointer-events-none absolute inset-x-0 h-8" /> : null}
           <span className="text-subtle">24</span>  <span className="text-accent">export function</span> listTasks() {"{"}
           {"\n"}
           <span className="text-subtle">25</span>    const start = page * pageSize;{"\n"}
@@ -130,7 +145,7 @@ export function ProductDemo() {
             </>
           ) : null}
         </pre>
-        <aside className="border-t border-border p-3 md:border-t-0 md:border-l">
+        <aside className="order-1 border-border p-3 md:order-none md:border-t-0 md:border-l">
           <p className="text-[0.65rem] font-medium tracking-[0.14em] text-subtle uppercase">Composer</p>
           <p className="mt-2 min-h-10 text-sm leading-relaxed text-fg">
             {typed.text}
@@ -149,15 +164,33 @@ export function ProductDemo() {
               <PlanRow n="03" label="Guard getTask" state={plan3} />
             </div>
           </div>
+          <ul className="mt-3 grid grid-cols-3 gap-1" aria-label="Checks">
+            {checkNames.map((name, i) => {
+              const state = checkAt(i);
+              return (
+                <li
+                  key={name}
+                  className={cn(
+                    "rounded border px-1.5 py-0.5 text-[10px]",
+                    state === "pass" && "border-ok/40 text-ok",
+                    state === "run" && "demo-live border-accent/50 text-fg",
+                    state === "wait" && "border-border text-subtle",
+                  )}
+                >
+                  {name}
+                </li>
+              );
+            })}
+          </ul>
           <div className="mt-3 flex items-center justify-between">
             <p className="font-mono text-xs text-subtle">Edit · src/store.ts</p>
             <span
               className={cn(
                 "rounded-md px-2 py-0.5 text-xs font-medium transition-colors duration-300",
-                staged ? "bg-ok/15 text-ok" : "bg-elevated text-subtle",
+                checksClear ? "bg-ok/15 text-ok" : "bg-elevated text-subtle",
               )}
             >
-              {staged ? "Apply" : "Review"}
+              {checksClear ? "Apply" : staged ? "Checking" : "Review"}
             </span>
           </div>
         </aside>

@@ -19,7 +19,7 @@ function PricingPage() {
       <SiteNav />
       <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         <p className="text-center text-xs font-medium tracking-[0.16em] text-subtle uppercase">Pricing</p>
-        <h1 className="mt-3 text-center text-4xl font-medium tracking-tight">Plans</h1>
+        <h1 className="mt-4 text-center text-4xl font-medium tracking-tight sm:text-5xl">Plans</h1>
         <p className="mx-auto mt-3 max-w-lg text-center text-muted">
           Hobby is free today. Pro and Team are coming soon: there is no checkout yet, and nothing is charged.
         </p>

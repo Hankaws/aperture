@@ -154,6 +154,20 @@ The review strip shows five checks for whatever is staged: **Parses**,
 from `changeChecks` in `src/lib/workspace/checks.ts` (pure and tested). A check
 that did not run reads "not run" with the reason and never counts as a pass.
 
+- **Parses** is Lezer first (`scriptIssues` in `syntax-check.ts`): fast, and
+  in the browser where the compiler is not. Lezer lags TypeScript, so a few
+  valid forms are rewritten for it on the same line (string-named
+  `declare module`, `typeof import("x")`, an arrow function's `x is T`
+  predicate) and empty JSX expressions are filled. Whatever it still flags,
+  TypeScript's own parser decides wherever it is loaded (`ts-parse.ts`, a
+  `ParseCheck`): `staticChangeChecks` (Agent Check, the MCP check, the
+  benchmark) passes it; the agent loop's host loads it on the first edit
+  Lezer flags (`LoopHost.parser`, so the server only pays for the compiler
+  then); and a finished tsc run carries each file's parse errors (`parse` on
+  the done outcome, from `getSyntacticDiagnostics`) for the check strip and
+  the margin, which is why the editor now runs tsc on a file Lezer flags.
+  Only the editor's Apply gate (`previewNotesForEdit` in the store, which is
+  synchronous) is Lezer alone.
 - **Imports resolve** is `importIssues` in `module-graph.ts`. It reads
   `import`, `export … from`, dynamic `import()` and `require("…")` of a
   string. A require's names are never judged (what `module.exports` holds

@@ -5,13 +5,21 @@
  *
  * Browser only: this module starts a Worker.
  */
-import { isTsPath, tscIssue, type TscResult } from "./tsc-core";
+import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
 import type { TscReply, TscRequest, TscWarm } from "./tsc.worker";
 
 export { pathsToCheck } from "./tsc-paths";
 
 export type TscOutcome =
-  | { state: "done"; after: Record<string, string[]>; before: Record<string, string[]>; checked: number; ms: number }
+  | {
+      state: "done";
+      after: Record<string, string[]>;
+      before: Record<string, string[]>;
+      /** Each checked file's parse errors after the change, from TypeScript's parser. */
+      parse?: Record<string, string[]>;
+      checked: number;
+      ms: number;
+    }
   | { state: "unavailable"; reason: string };
 
 /** The first run downloads and starts the compiler; later runs reuse it. */
@@ -103,6 +111,7 @@ export function typecheckChange(
         state: "done",
         after: issues(reply.after),
         before: issues(reply.before),
+        parse: parseErrorsOf(reply.after),
         checked: reply.after.files,
         ms: reply.ms,
       });

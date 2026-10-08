@@ -1,6 +1,7 @@
 import { lineDiff } from "./apply-edit.ts";
 import type { PlanEntry, ProposedEdit } from "../workspace/types.ts";
 import { previewIssues } from "../workspace/preview-check.ts";
+import type { ParseCheck } from "../workspace/ts-parse.ts";
 
 const DECL =
   /(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_][\w]*)/;
@@ -67,7 +68,12 @@ function filesMentioning(files: Record<string, string>, symbol: string, skip: Se
  * nobody updated says nothing about what is left, and listing all of it would
  * claim the work just done was not.
  */
-export function verifyRecap(edits: ProposedEdit[], files: Record<string, string>, plan: PlanEntry[] = []): string {
+export function verifyRecap(
+  edits: ProposedEdit[],
+  files: Record<string, string>,
+  plan: PlanEntry[] = [],
+  parse?: ParseCheck,
+): string {
   if (edits.length === 0) return "";
   const paths = [...new Set(edits.map((e) => e.path))];
   const skip = new Set(paths);
@@ -89,7 +95,7 @@ export function verifyRecap(edits: ProposedEdit[], files: Record<string, string>
   const tracked = plan.some((e) => e.status !== "pending");
   const open = plan.filter((e) => e.status !== "completed").map((e) => e.content);
   const line3 = !tracked ? "" : open.length ? `Left: ${open.slice(0, 2).join("; ")}` : "Left: nothing on the plan.";
-  const preview = previewIssues(files, edits);
+  const preview = previewIssues(files, edits, parse);
   const line4 = preview.length
     ? `Preview: ${preview
         .map((row) => `${row.path} ${row.issues[0]}`)
@@ -104,9 +110,10 @@ export function appendVerify(
   edits: ProposedEdit[],
   files: Record<string, string>,
   plan: PlanEntry[] = [],
+  parse?: ParseCheck,
 ): string {
   if (edits.length === 0 || text.includes("Changed:")) return text;
-  const recap = verifyRecap(edits, files, plan);
+  const recap = verifyRecap(edits, files, plan, parse);
   if (!recap) return text;
   return `${text.trim()}\n\n${recap}`;
 }

@@ -12,6 +12,7 @@
  * the store on the client.
  */
 import { jsParserFor } from "../parser/lezer.ts";
+import type { ParseCheck } from "./ts-parse.ts";
 
 /** Lezer's own types, through the parser already imported rather than a package not in package.json. */
 type Tree = ReturnType<ReturnType<typeof jsParserFor>["parse"]>;
@@ -59,6 +60,8 @@ const BARE_STRING_MODULE =
   /^(\s*(?:export\s+)?declare\s+module\s+)((["'])[^"'\n]*\3)(?=\s*;|[ \t]*$)/gm;
 /** `typeof import("./main")`: a module's type, in a type position. */
 const TYPEOF_IMPORT = /\b(typeof\s+)(import\s*\(\s*(["'])[^"'\n]*\3\s*\))/g;
+/** `(x): x is T =>`: a type predicate as a return type (Lezer reads it only on a `function`). */
+const TYPE_PREDICATE = /(\)\s*:\s*)((?:asserts\s+)?(?:[A-Za-z_$][\w$]*|this)\s+is)(?=\s)/g;
 
 /**
  * Lezer's TypeScript grammar takes only an identifier after `module`, and
@@ -67,7 +70,8 @@ const TYPEOF_IMPORT = /\b(typeof\s+)(import\s*\(\s*(["'])[^"'\n]*\3\s*\))/g;
  * `declare module "*.svg";`) parse as errors; so does `typeof import("x")`.
  * Each is swapped for an identifier of the same length (and a bodiless module
  * gets `{}`), on the same line, so the lines reported stay exact and an error
- * anywhere else is still found.
+ * anywhere else is still found. An arrow function's type predicate,
+ * `(x): x is T =>`, keeps its type with `x is` blanked to spaces.
  */
 function withIdentifierNames(text: string): string {
   const name = (quoted: string) => "_".repeat(quoted.length);
@@ -77,7 +81,11 @@ function withIdentifierNames(text: string): string {
       BARE_STRING_MODULE,
       (_all, head: string, quoted: string) => `${head}${name(quoted)} {}`,
     )
-    .replace(TYPEOF_IMPORT, (_all, head: string, call: string) => `${head}${name(call)}`);
+    .replace(TYPEOF_IMPORT, (_all, head: string, call: string) => `${head}${name(call)}`)
+    .replace(
+      TYPE_PREDICATE,
+      (_all, head: string, subject: string) => `${head}${" ".repeat(subject.length)}`,
+    );
 }
 
 /**
@@ -124,8 +132,18 @@ function parseFillingEmptyJsx(path: string, text: string): { tree: Tree; text: s
  *
  * Lezer recovers and carries on, so a single mistake often yields a run of
  * adjacent error nodes; reporting each one would bury the real cause.
+ *
+ * Lezer does not know all of TypeScript. When it finds errors and `confirm`
+ * is given (TypeScript's own parser, see ts-parse.ts), that has the last
+ * word: its errors, or none, unless it has no opinion on the file.
  */
-export function scriptIssues(path: string, text: string): string[] {
+export function scriptIssues(path: string, text: string, confirm?: ParseCheck): string[] {
+  const found = lezerIssues(path, text);
+  if (found.length === 0 || !confirm) return found;
+  return confirm(path, text) ?? found;
+}
+
+function lezerIssues(path: string, text: string): string[] {
   if (!text.trim()) return [];
   if (text.length > MAX_PARSE_CHARS) return [];
   let parsed;

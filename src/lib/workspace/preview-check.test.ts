@@ -104,5 +104,6 @@ test("a page edit that fixes a broken page gets no notes", () => {
     status: "pending" as const,
   };
   assert.deepEqual(previewNotesForEdit(edit, files), []);
-  assert.equal(previewNotesForEdit.length, 2, "no live-error parameter to pass stale errors through");
+  // The edit, the files, and TypeScript's parser where it is loaded: no live-error parameter to pass stale errors through.
+  assert.equal(previewNotesForEdit.length, 3, "no live-error parameter to pass stale errors through");
 });

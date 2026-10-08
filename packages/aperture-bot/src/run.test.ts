@@ -121,6 +121,42 @@ test("the bot can add a file", async () => {
   );
 });
 
+test("valid TypeScript Lezer cannot read is staged without a parse note, and checks clear", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const text = [
+    "export interface Query {",
+    "  <T = unknown>(sql: string): Promise<T[]>;",
+    "}",
+    "export function swap(pair: number[]): number[] {",
+    "  const next = [...pair];",
+    "  [next[0], next[1]] = [next[1]!, next[0]!];",
+    "  return next;",
+    "}",
+    "",
+  ].join("\n");
+  const { model } = scripted([
+    [
+      {
+        path: "src/price.ts",
+        search: "export function formatPrice",
+        replace: `${text}export function formatPrice`,
+      },
+    ],
+  ]);
+  const replies: string[] = [];
+  const result = await run.runTask(options(dir), {
+    model: async (cfg, messages, ...rest) => {
+      for (const m of messages) if (m.role === "tool") replies.push(String(m.content ?? ""));
+      return model(cfg, messages, ...rest);
+    },
+  });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.ok(replies.some((r) => r.startsWith("Edit staged for src/price.ts")));
+  assert.ok(!replies.some((r) => /check failed/.test(r)), replies.join("\n"));
+  assert.equal(result.check?.rows.find((row) => row.id === "parse")?.status, "pass");
+});
+
 test("an answer with no plan changes nothing", async () => {
   const { run } = await bundled();
   const dir = repo(shop);

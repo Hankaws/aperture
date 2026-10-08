@@ -21,7 +21,7 @@ import {
 } from "@/lib/workspace/checks";
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
 import { pageErrorEvidence, type PageError } from "@/lib/runner/stack";
-import { issuesForText, mergeEdits } from "@/lib/workspace/preview-check";
+import { mergeEdits } from "@/lib/workspace/preview-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { TscCheck } from "@/lib/workspace/checks";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
@@ -171,8 +171,10 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
 }
 
 /**
- * Real `tsc` on the staged change, when it touches TypeScript that parses.
- * The compiler loads on first use, in a worker, and is reused after that.
+ * Real `tsc` on the staged change, when it touches TypeScript. It runs even
+ * when Lezer says a file does not parse: TypeScript's own parser then settles
+ * the Parses row (see `changeChecks`). The compiler loads on first use, in a
+ * worker, and is reused after that.
  */
 function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): TscCheck {
   const tsPaths = useMemo(
@@ -180,10 +182,9 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
     [edits],
   );
   const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
-  const parses = tsPaths.every((path) => issuesForText(path, merged[path] ?? "").length === 0);
   const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
   const key = `${versionOf(files)}:${editsKey}`;
-  const wanted = tsPaths.length > 0 && parses;
+  const wanted = tsPaths.length > 0;
   const [settled, setSettled] = useState<{ key: string; outcome: TscCheck } | null>(null);
 
   useEffect(() => {
@@ -196,7 +197,9 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
         // A newer change owns the margin now.
         if (controller.signal.aborted) return;
         setSettled({ key, outcome });
-        useIdeUi.getState().setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before } : null);
+        useIdeUi
+          .getState()
+          .setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before, parse: outcome.parse } : null);
       } catch {
         // Superseded by a newer change, or unmounted.
       }

@@ -23,6 +23,7 @@ import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify } from "./verify";
+import type { ParseCheck } from "@/lib/workspace/ts-parse";
 import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
 import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
 import {
@@ -258,6 +259,8 @@ export type LoopHost = {
   runScript?: (userId: string, files: Record<string, string>, script: string, signal?: AbortSignal) => Promise<ScriptOutcome>;
   /** The account's MCP tools. */
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
+  /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
+  parser?: () => Promise<ParseCheck>;
 };
 
 export async function runLoop(
@@ -318,6 +321,7 @@ export async function runLoop(
     plan: approved,
     requirePlan,
     newFiles: input.newFiles,
+    loadParse: host.parser,
     phase,
     mode: input.mode,
     role: input.role,
@@ -462,7 +466,7 @@ export async function runLoop(
     const text =
       body.awaitingBuild || phase === "plan" || !changed
         ? body.text
-        : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan);
+        : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan, ctx.parse);
     const line =
       verify?.script && verify.status === "passed"
         ? verifiedLine(verify.script)

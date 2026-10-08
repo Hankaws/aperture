@@ -6,6 +6,7 @@
 import { complete, completeStreaming, type CompletionCfg } from "./complete.server";
 import type { AgentStreamEvent } from "./events";
 import { runLoop, type LoopHost } from "./loop";
+import { tsParseCheck } from "@/lib/workspace/ts-parse";
 import type { AgentInput, AgentResult } from "./types";
 
 const SERVER_HOST: LoopHost = {
@@ -24,6 +25,11 @@ const SERVER_HOST: LoopHost = {
       note: mcp.note,
       call: mcp.servers.length > 0 ? (server, tool, args) => invokeMcp(mcp.servers, mcp.tools, server, tool, args) : null,
     };
+  },
+  // Loaded only once an edit looks like it does not parse: the compiler is large.
+  parser: async () => {
+    const mod = await import("typescript");
+    return tsParseCheck(mod.default ?? mod);
   },
 };
 

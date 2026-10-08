@@ -5,6 +5,7 @@ import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-
 import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
+import type { ParseCheck } from "@/lib/workspace/ts-parse";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 
@@ -212,6 +213,10 @@ export type ToolContext = {
   mcpCall?: (server: string, tool: string, args: string) => Promise<string>;
   /** When set, an edit with an empty search on a path that does not exist creates the file. */
   newFiles?: boolean;
+  /** TypeScript's parser, once loaded: it overrules a parse error Lezer gets wrong. */
+  parse?: ParseCheck;
+  /** Loads `parse`, where the host can; only asked once an edit looks like it does not parse. */
+  loadParse?: () => Promise<ParseCheck | undefined>;
 };
 
 function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
@@ -371,7 +376,11 @@ export async function executeTool(
       description,
       status: "pending",
     };
-    const notes = previewNotesForEdit(edit, ctx.files);
+    let notes = previewNotesForEdit(edit, ctx.files, ctx.parse);
+    if (notes.length && !ctx.parse && ctx.loadParse) {
+      ctx.parse = await ctx.loadParse();
+      if (ctx.parse) notes = previewNotesForEdit(edit, ctx.files, ctx.parse);
+    }
     if (notes.length) edit.notes = notes;
     ctx.edits.push(edit);
     if (notes.length) {

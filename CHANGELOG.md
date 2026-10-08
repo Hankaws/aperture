@@ -87,6 +87,10 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Parses no longer reports a JSX comment, `{/* … */}`, or empty braces in JSX
+  as broken: the parser wanted an expression there, and its recovery could
+  mark the lines after as broken too.
+  ([#46](https://github.com/Hankaws/aperture/pull/46))
 - Aperture Bot no longer fails with "fetch failed" after a long wait, such as
   pulling its sandbox image or running the tests: a request sent on a
   connection the server had closed in the meantime is sent once more, the

@@ -124,3 +124,25 @@ test("typeof import parses in TypeScript, and an error after it is still found",
     "parse error at line 2",
   ]);
 });
+
+test("an empty or comment-only JSX expression parses, and an unclosed one is still an error", () => {
+  const tsx = [
+    "export const A = () => (",
+    "  <div>",
+    "    {/* Same page as Start free; dropped on the narrowest phones. */}",
+    "    {}",
+    "    {/* one */ /* two */}",
+    "    <b a={/* note */ 1} />",
+    "  </div>",
+    ");",
+  ].join("\n");
+  assert.deepEqual(scriptIssues("a.tsx", tsx), []);
+  assert.deepEqual(scriptIssues("a.jsx", "export const A = () => <p>{/* x */}</p>;\n"), []);
+  assert.equal(
+    scriptIssues("a.tsx", "export const A = () => <p>{/* x */</p>;\n")[0],
+    "parse error at line 1",
+  );
+  assert.deepEqual(scriptIssues("a.tsx", "export const A = () => <p>{a b}</p>;\n"), [
+    "parse error at line 1",
+  ]);
+});

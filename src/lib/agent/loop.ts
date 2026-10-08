@@ -317,6 +317,7 @@ export async function runLoop(
     edits: (input.pendingEdits ?? []).map((edit) => ({ ...edit, notes: [...(edit.notes ?? [])] })),
     plan: approved,
     requirePlan,
+    newFiles: input.newFiles,
     phase,
     mode: input.mode,
     role: input.role,

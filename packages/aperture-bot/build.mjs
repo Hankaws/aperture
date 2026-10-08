@@ -1,0 +1,36 @@
+// Bundles Aperture Bot into one CommonJS file: dist/index.cjs, with the agent
+// loop, Aperture Agent Check and the TypeScript compiler inside it, and the
+// compiler's library files beside it in dist/lib.
+//
+//   npm run build:aperture-bot
+//
+// CommonJS for the same reason as Agent Check's bundle (see its build.mjs).
+import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { build } from "rolldown";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const dist = join(here, "dist");
+rmSync(dist, { recursive: true, force: true });
+
+await build({
+  input: join(here, "src/cli.ts"),
+  platform: "node",
+  // The agent loop uses the app's `@/` paths, which the root tsconfig maps.
+  cwd: join(here, "../.."),
+  // One file: the few dynamic imports (the custom endpoint's fetch) are inlined.
+  output: { file: join(dist, "index.cjs"), format: "cjs", codeSplitting: false },
+  logLevel: "warn",
+});
+
+const libDir = dirname(createRequire(import.meta.url).resolve("typescript/lib/lib.d.ts"));
+mkdirSync(join(dist, "lib"));
+let copied = 0;
+for (const name of readdirSync(libDir)) {
+  if (!/^lib\..*\.d\.ts$|^lib\.d\.ts$/.test(name)) continue;
+  copyFileSync(join(libDir, name), join(dist, "lib", name));
+  copied += 1;
+}
+console.log(`Built packages/aperture-bot/dist/index.cjs with ${copied} library files.`);

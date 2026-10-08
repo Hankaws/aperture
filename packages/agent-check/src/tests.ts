@@ -73,6 +73,18 @@ export function testEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...rest, CI: "true", FORCE_COLOR: "0", NO_COLOR: "1" };
 }
 
+/**
+ * Runs `script` for the project in `dir`, whose dependencies are installed in
+ * `modules`. The default runs it here, as a CI step does; Aperture Bot passes
+ * one that runs it in a container with no network and no secrets.
+ */
+export type TestRunner = (
+  dir: string,
+  script: string,
+  timeoutMs: number,
+  modules: string,
+) => TestRun;
+
 export function runTests(cwd: string, script: string, timeoutMs: number): TestRun {
   const why = testsRunnable(cwd, script);
   if (why) return { ran: false, reason: why };
@@ -110,6 +122,7 @@ export function runTestsAtBase(
   rev: string,
   script: string,
   timeoutMs: number,
+  runner?: TestRunner,
 ): TestRun | null {
   const dir = mkdtempSync(join(tmpdir(), "aperture-agent-check-"));
   try {
@@ -120,6 +133,7 @@ export function runTestsAtBase(
   }
   try {
     const modules = join(cwd, "node_modules");
+    if (runner) return runner(dir, script, timeoutMs, modules);
     if (existsSync(modules) && !existsSync(join(dir, "node_modules")))
       symlinkSync(modules, join(dir, "node_modules"), "dir");
     return runTests(dir, script, timeoutMs);

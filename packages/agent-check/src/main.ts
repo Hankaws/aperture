@@ -25,7 +25,7 @@ import {
   workflowCommands,
   type Meta,
 } from "./report.ts";
-import { runTests, runTestsAtBase } from "./tests.ts";
+import { runTests, runTestsAtBase, type TestRunner } from "./tests.ts";
 
 export type Options = {
   cwd: string;
@@ -35,6 +35,8 @@ export type Options = {
   testScript: string;
   timeoutMs: number;
   failOn: "red" | "never";
+  /** Where the tests run. Unset, on this machine. */
+  testRunner?: TestRunner;
 };
 
 /** The runner can afford a bigger project than a browser tab. */
@@ -125,11 +127,24 @@ export type Result = {
 
 function testsFor(options: Options, rev: string): BrowserTests {
   if (!options.runTests) return { state: "unsupported", reason: "turned off (run-tests: false)." };
-  const head = runTests(options.cwd, options.testScript, options.timeoutMs);
+  const head = options.testRunner
+    ? options.testRunner(
+        options.cwd,
+        options.testScript,
+        options.timeoutMs,
+        join(options.cwd, "node_modules"),
+      )
+    : runTests(options.cwd, options.testScript, options.timeoutMs);
   if (!head.ran) return { state: "unsupported", reason: head.reason };
   const done = { state: "done" as const, script: options.testScript, where: "on this runner" };
   if (head.passed) return { ...done, passed: true, detail: "" };
-  const base = runTestsAtBase(options.cwd, rev, options.testScript, options.timeoutMs);
+  const base = runTestsAtBase(
+    options.cwd,
+    rev,
+    options.testScript,
+    options.timeoutMs,
+    options.testRunner,
+  );
   const preexisting = base !== null && base.ran && !base.passed;
   return { ...done, passed: false, detail: head.detail, evidence: head.evidence, preexisting };
 }

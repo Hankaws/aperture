@@ -7,7 +7,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
-import { botAskInput, botRepoInput, botSetupInput } from "@/lib/security/inputs";
+import { botAskInput, botChatInput, botRepoInput, botSetupInput } from "@/lib/security/inputs";
+import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
+import { ciText, openText, tasksText, threadText } from "@/lib/bot/github-text";
 import {
   DEFAULT_TRIGGER,
   endedRun,
@@ -20,6 +22,7 @@ import {
   type RawComment,
   type Thread,
 } from "@/lib/bot/tasks";
+import { checksFromGithub } from "./ci";
 import { parseGithubUrl } from "./parse";
 
 /** The server-only half, loaded when a handler runs. */
@@ -175,6 +178,66 @@ const MAX_RUN_LOOKUPS = 4;
 const MAX_THREAD_LOOKUPS = 5;
 const MAX_TASKS = 30;
 
+/** The repository's bot tasks, newest first, with their threads and whether a working run has ended. */
+async function loadTasks(
+  base: string,
+  get: Get,
+): Promise<{ ok: true; tasks: BotTask[] } | Failure> {
+  const [comments, recent] = await Promise.all([
+    get(`${base}/issues/comments?sort=updated&direction=desc&per_page=100`),
+    get(`${base}/issues?state=all&sort=updated&direction=desc&per_page=50`),
+  ]);
+  if (comments.status === 401)
+    return { ok: false, error: "GitHub rejected the token on your account." };
+  if (comments.status !== 200 || !Array.isArray(comments.body))
+    return { ok: false, error: `GitHub returned ${comments.status}.` };
+  const threads = new Map<number, Thread>();
+  const addThread = (row: unknown) => {
+    const r = row as {
+      number?: number;
+      title?: string;
+      pull_request?: unknown;
+      state?: string;
+    };
+    if (typeof r.number === "number")
+      threads.set(r.number, {
+        title: oneLine(r.title ?? "", 200),
+        isPull: Boolean(r.pull_request),
+        open: r.state !== "closed",
+      });
+  };
+  if (recent.status === 200 && Array.isArray(recent.body)) recent.body.forEach(addThread);
+  let tasks = tasksFrom(comments.body as RawComment[], threads).slice(0, MAX_TASKS);
+  const missing = [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
+    0,
+    MAX_THREAD_LOOKUPS,
+  );
+  await Promise.all(
+    missing.map(async (n) => {
+      const got = await get(`${base}/issues/${n}`);
+      if (got.status === 200) addThread(got.body);
+    }),
+  );
+  const working = tasks
+    .filter((t) => t.state === "working" && t.summary?.run)
+    .slice(0, MAX_RUN_LOOKUPS);
+  const runs = new Map<number, { status?: string; conclusion?: string | null }>();
+  await Promise.all(
+    working.map(async (t) => {
+      const id = runId(t.summary!.run);
+      if (id === null) return;
+      const got = await get(`${base}/actions/runs/${id}`);
+      if (got.status === 200) runs.set(t.id, got.body as { status?: string });
+    }),
+  );
+  tasks = tasks.map((t) => {
+    const run = runs.get(t.id);
+    const ended = run ? endedRun(t, run) : t;
+    return { ...ended, thread: threads.get(t.number) ?? null };
+  });
+  return { ok: true, tasks };
+}
+
 export const botTasks = createServerFn({ method: "POST" })
   .validator(botRepoInput)
   .middleware([authMiddleware])
@@ -187,59 +250,7 @@ export const botTasks = createServerFn({ method: "POST" })
     const base = repoBase(data.owner, data.repo);
     if (!base) return { ok: false, error: "That repo name is not valid." };
     try {
-      const [comments, recent] = await Promise.all([
-        githubJson(`${base}/issues/comments?sort=updated&direction=desc&per_page=100`, token),
-        githubJson(`${base}/issues?state=all&sort=updated&direction=desc&per_page=50`, token),
-      ]);
-      if (comments.status === 401)
-        return { ok: false, error: "GitHub rejected the token on your account." };
-      if (comments.status !== 200 || !Array.isArray(comments.body))
-        return { ok: false, error: `GitHub returned ${comments.status}.` };
-      const threads = new Map<number, Thread>();
-      const addThread = (row: unknown) => {
-        const r = row as {
-          number?: number;
-          title?: string;
-          pull_request?: unknown;
-          state?: string;
-        };
-        if (typeof r.number === "number")
-          threads.set(r.number, {
-            title: oneLine(r.title ?? "", 200),
-            isPull: Boolean(r.pull_request),
-            open: r.state !== "closed",
-          });
-      };
-      if (recent.status === 200 && Array.isArray(recent.body)) recent.body.forEach(addThread);
-      let tasks = tasksFrom(comments.body as RawComment[], threads).slice(0, MAX_TASKS);
-      const missing = [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
-        0,
-        MAX_THREAD_LOOKUPS,
-      );
-      await Promise.all(
-        missing.map(async (n) => {
-          const got = await githubJson(`${base}/issues/${n}`, token);
-          if (got.status === 200) addThread(got.body);
-        }),
-      );
-      const working = tasks
-        .filter((t) => t.state === "working" && t.summary?.run)
-        .slice(0, MAX_RUN_LOOKUPS);
-      const runs = new Map<number, { status?: string; conclusion?: string | null }>();
-      await Promise.all(
-        working.map(async (t) => {
-          const id = runId(t.summary!.run);
-          if (id === null) return;
-          const got = await githubJson(`${base}/actions/runs/${id}`, token);
-          if (got.status === 200) runs.set(t.id, got.body as { status?: string });
-        }),
-      );
-      tasks = tasks.map((t) => {
-        const run = runs.get(t.id);
-        const ended = run ? endedRun(t, run) : t;
-        return { ...ended, thread: threads.get(t.number) ?? null };
-      });
-      return { ok: true, tasks };
+      return await loadTasks(base, (url) => githubJson(url, token));
     } catch (error) {
       return {
         ok: false,
@@ -410,6 +421,101 @@ export const setUpBot = createServerFn({ method: "POST" })
       return {
         ok: false,
         error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+export type BotChatReply =
+  { ok: true; reply: string; proposals: Proposal[]; looked: string[] } | Failure;
+
+/**
+ * One turn of the chat with Aperture Bot about a repository. The model is
+ * the person's own (their key or endpoint, never a recording: a replay cannot
+ * answer about a real repository), it reads GitHub with their token, and it
+ * can only propose tasks; sending one is `askBot`.
+ */
+export const botChat = createServerFn({ method: "POST" })
+  .validator(botChatInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<BotChatReply> => {
+    const busy = overLimit("botChat", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const base = repoBase(data.owner, data.repo);
+    if (!base) return { ok: false, error: "That repo name is not valid." };
+    const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
+    const resolved = await resolveModel(context.userId, null, { replay: false });
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    if (resolved.provider === "replay")
+      return { ok: false, error: "Add your own model key in Settings to talk to the bot." };
+    const { complete } = await import("@/lib/agent/complete.server");
+    const cfg = {
+      provider: resolved.provider,
+      apiKey: resolved.apiKey,
+      base: resolved.base,
+      model: resolved.model,
+    };
+    const get: Get = (url) => githubJson(url, token);
+    const must = async (url: string) => {
+      const got = await get(url);
+      if (got.status !== 200) throw new Error(`GitHub returned ${got.status}`);
+      return got.body;
+    };
+    const lookups: BotChatGithub = {
+      listOpen: async () => {
+        const items = await must(
+          `${base}/issues?state=open&sort=updated&direction=desc&per_page=40`,
+        );
+        return openText(Array.isArray(items) ? items : []);
+      },
+      readThread: async (n) => {
+        const [issue, comments] = await Promise.all([
+          get(`${base}/issues/${n}`),
+          get(`${base}/issues/${n}/comments?per_page=100`),
+        ]);
+        if (issue.status === 404) return `There is no issue or pull request #${n}.`;
+        if (issue.status !== 200) throw new Error(`GitHub returned ${issue.status}`);
+        return threadText(issue.body, Array.isArray(comments.body) ? comments.body : []);
+      },
+      ciStatus: async () => {
+        const repo = (await must(base)) as { default_branch?: string };
+        const branch = repo.default_branch ?? "main";
+        const head = (await must(`${base}/branches/${encodeURIComponent(branch)}`)) as {
+          commit?: { sha?: string };
+        };
+        const sha = head.commit?.sha ?? "";
+        if (!sha) return `Could not read the head of ${branch}.`;
+        const [runs, statuses] = await Promise.all([
+          get(`${base}/commits/${sha}/check-runs?per_page=50`),
+          get(`${base}/commits/${sha}/status`),
+        ]);
+        const { checks } = checksFromGithub(
+          runs.status === 200 ? runs.body : null,
+          statuses.status === 200 ? statuses.body : null,
+        );
+        return ciText(branch, sha, checks);
+      },
+      botTasks: async () => {
+        const out = await loadTasks(base, get);
+        if (!out.ok) throw new Error(out.error);
+        return tasksText(out.tasks);
+      },
+    };
+    try {
+      const out = await runBotChat(
+        `${data.owner}/${data.repo}`,
+        data.turns,
+        (messages, useTools, tools) => complete(cfg, messages, useTools, undefined, tools),
+        lookups,
+      );
+      await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
+      return { ok: true, reply: out.reply, proposals: out.proposals, looked: out.looked };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "The model could not answer.",
       };
     }
   });

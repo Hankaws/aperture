@@ -41,20 +41,39 @@ function BotPage() {
     };
   }, [user]);
 
+  // Signed in with GitHub: the chat comes first, on a wider page, under a short header.
+  const working = Boolean(user && github?.connected);
+
   return (
     <div className="min-h-dvh bg-bg text-fg">
       <SiteNav />
-      <main className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
-        <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">Aperture Bot</p>
-        <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
-          The coding bot that checks before it pushes.
-        </h1>
-        <p className="mt-4 text-lg text-pretty text-muted">
-          Give it a task on any of your repos and watch it work. It opens a pull request only when
-          Aperture Agent Check finds nothing red.
-        </p>
+      <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-6xl py-8" : "max-w-3xl py-14")}>
+        {working ? (
+          <div>
+            <h1 className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">
+              Aperture Bot
+            </h1>
+            <p className="mt-2 text-sm text-pretty text-muted">
+              Talk it through, send what it suggests, and watch each task. It opens a pull request
+              only when Aperture Agent Check finds nothing red.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">
+              Aperture Bot
+            </p>
+            <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
+              The coding bot that checks before it pushes.
+            </h1>
+            <p className="mt-4 text-lg text-pretty text-muted">
+              Give it a task on any of your repos and watch it work. It opens a pull request only
+              when Aperture Agent Check finds nothing red.
+            </p>
+          </>
+        )}
 
-        <div className="mt-10">
+        <div className={working ? "mt-6" : "mt-10"}>
           {isPending || (user && !github) ? (
             <div className="h-40 animate-pulse rounded-2xl bg-elevated" aria-label="Loading" />
           ) : !user ? (
@@ -73,7 +92,9 @@ function BotPage() {
           )}
         </div>
 
-        <HowItWorks />
+        <div className={working ? "mx-auto max-w-3xl" : undefined}>
+          <HowItWorks />
+        </div>
       </main>
       <SiteFooter />
     </div>

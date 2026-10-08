@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A chat with Aperture Bot on the Bot page. Ask about a repository ("what's
+  broken right now?") and the bot reads its open issues and pull requests,
+  any one thread, CI on the default branch and its own recent tasks, then
+  answers. When work is wanted it proposes a task as a card; you send it, it
+  is never sent for you, and the card then follows the task live. It uses
+  your own model key from Settings, and the conversation stays in your
+  browser.
+  ([#49](https://github.com/Hankaws/aperture/pull/49))
 - The Bot page, `/bot`: pick one of your repos, ask Aperture Bot for a
   change (on an open issue or pull request, or as a new issue), and follow
   every task as it plans, changes, checks and publishes, with its plan, its

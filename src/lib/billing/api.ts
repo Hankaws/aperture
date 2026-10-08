@@ -455,12 +455,20 @@ export type ResolvedModel =
     }
   | { ok: false; error: string };
 
-export async function resolveModel(userId: string, requested?: ModelSource | null): Promise<ResolvedModel> {
+/**
+ * `replay: false` is for what a recording cannot answer (Aperture Bot's chat,
+ * about a real repository): it always uses the person's own key or endpoint.
+ */
+export async function resolveModel(
+  userId: string,
+  requested?: ModelSource | null,
+  options: { replay?: boolean } = {},
+): Promise<ResolvedModel> {
   // A replay deployment answers every Composer run from recordings: no key,
   // no quota and no cost, and the UI labels it so nobody mistakes it for a model.
   const { replayEnabled } = await import("@/lib/agent/replay");
   const { requestIsPublicDemo } = await import("@/lib/agent/public-demo.server");
-  if (replayEnabled() || requestIsPublicDemo()) {
+  if (options.replay !== false && (replayEnabled() || requestIsPublicDemo())) {
     const source: ModelSource = requested && isModelSource(requested) ? requested : "hosted";
     return { ok: true, provider: "replay", apiKey: "", hosted: false, source, cents: 0 };
   }

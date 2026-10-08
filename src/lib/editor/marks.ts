@@ -34,8 +34,10 @@ function issuesIn(
   text: string,
   files: Record<string, string>,
   types?: string[],
+  parseErrors?: string[],
 ): { parse: boolean; messages: string[] } {
-  const parse = issuesForText(path, text);
+  // tsc read the file with TypeScript's own parser: its parse errors overrule Lezer's.
+  const parse = issuesForText(path, text, parseErrors ? () => parseErrors : undefined);
   if (parse.length > 0) return { parse: true, messages: parse };
   if (!isScriptPath(path)) return { parse: false, messages: [] };
   const typed = types ?? (isTypePath(path) ? typeIssues(path, text, files) : []);
@@ -53,9 +55,9 @@ export function collectMarks(
   text: string,
   files: Record<string, string>,
   applied?: Record<string, string>,
-  tsc?: { after: string[]; before: string[] },
+  tsc?: { after: string[]; before: string[]; parse?: string[] },
 ): LineMark[] {
-  const { parse, messages } = issuesIn(path, text, files, tsc?.after);
+  const { parse, messages } = issuesIn(path, text, files, tsc?.after, tsc?.parse);
   const before =
     !parse && applied?.[path] !== undefined ? issuesIn(path, applied[path], applied, tsc?.before).messages : null;
   const fresh = new Map<string, number>();

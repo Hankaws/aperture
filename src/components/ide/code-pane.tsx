@@ -242,7 +242,11 @@ export function CodePane() {
     // While a change is staged, real tsc has the last word on its types once it has run.
     const types =
       staging && tscFindings?.after[activePath]
-        ? { after: tscFindings.after[activePath], before: tscFindings.before[activePath] ?? [] }
+        ? {
+            after: tscFindings.after[activePath],
+            before: tscFindings.before[activePath] ?? [],
+            parse: tscFindings.parse?.[activePath],
+          }
         : undefined;
     return collectMarks(activePath, staged, { ...files, [activePath]: staged }, staging ? files : undefined, types);
   }, [activePath, pendingEdit, value, files, tscFindings]);

@@ -16,6 +16,7 @@ import {
   checkProject,
   compilerOptions,
   libFilesFor,
+  parseErrorsOf,
   tscIssue,
   type InstalledFiles,
   type TscCache,
@@ -23,6 +24,7 @@ import {
   type TscResult,
 } from "./tsc-core.ts";
 import { pathsToCheck } from "./tsc-paths.ts";
+import { tsParseCheck } from "./ts-parse.ts";
 import type { ProposedEdit } from "./types.ts";
 
 type Ts = typeof ts;
@@ -79,6 +81,7 @@ export function typecheckChange(
     state: "done",
     after: issues(afterResult),
     before: issues(beforeResult),
+    parse: parseErrorsOf(afterResult),
     checked: afterResult.files,
     ms: Date.now() - started,
   };
@@ -219,6 +222,7 @@ export function staticChangeChecks(input: {
     render: null,
     browser: input.tests,
     tsc: tscCheck,
+    parse: tsParseCheck(input.tsc),
   });
   return withDeletedImports(rows, importers, input.before, after);
 }

@@ -101,6 +101,62 @@ test("deleting a file something still imports is red", () => {
   );
 });
 
+test("imports of files it does not read resolve: assets, ?raw text, and one the change adds", () => {
+  const base = {
+    ...shop,
+    "src/logo.svg": "<svg/>",
+    "NOTES.md": "# Notes\n",
+    "src/vite-env.d.ts": 'declare module "*.svg";\ndeclare module "*?raw";\n',
+  };
+  const dir = repo(base, {
+    "src/banner.png": "png",
+    "src/cart.ts": [
+      'import { formatPrice } from "./price";',
+      'import logo from "./logo.svg";',
+      'import notes from "../NOTES.md?raw";',
+      'import banner from "./banner.png?url";',
+      "",
+      "export const label = formatPrice(100) + logo + notes + banner;",
+      "",
+    ].join("\n"),
+  });
+  const result = check(options(dir));
+  assert.equal(result.rows.find((row) => row.id === "imports")!.status, "pass", result.text);
+  const gone = repo(base, {
+    "src/logo.svg": null,
+    "src/cart.ts": 'import logo from "./logo.svg";\n\nexport const label = logo;\n',
+  });
+  assert.match(
+    check(options(gone)).rows.find((row) => row.id === "imports")!.detail,
+    /src\/cart\.ts: imports "\.\/logo\.svg" at line 1, which does not exist/,
+  );
+});
+
+test("valid TypeScript its fast parser misreads passes Parses", () => {
+  const dir = repo(shop, {
+    "src/query.ts": [
+      "export interface Query {",
+      "  <T = unknown>(sql: string): Promise<T[]>;",
+      "}",
+      "export const isText = (value: unknown): value is string => typeof value === 'string';",
+      "export function swap(pair: number[]): number[] {",
+      "  const next = [...pair];",
+      "  [next[0], next[1]] = [next[1]!, next[0]!];",
+      "  return next;",
+      "}",
+      "",
+    ].join("\n"),
+  });
+  const result = check(options(dir));
+  assert.equal(result.rows.find((row) => row.id === "parse")!.status, "pass", result.text);
+  assert.equal(result.verdict, "clear", result.text);
+  const broken = repo(shop, { "src/query.ts": "export const a = (;\n" });
+  assert.match(
+    check(options(broken)).rows.find((row) => row.id === "parse")!.detail,
+    /^src\/query\.ts: parse error at line 1: Expression expected\./,
+  );
+});
+
 test("a project in a subfolder of its repository is checked there (working-directory)", () => {
   const nested = Object.fromEntries(
     Object.entries(shop).map(([path, text]) => [`apps/web/${path}`, text]),

@@ -98,6 +98,15 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Parses no longer fails valid TypeScript it could not read: arrow
+  functions with a type predicate (`(x): x is T =>`) now parse everywhere,
+  and anything else it flags is settled by TypeScript's own parser wherever
+  it is loaded: in Aperture Agent Check, Aperture Bot, the agent on the
+  server and the editor's check results. Real parse errors now say what
+  TypeScript says is wrong. Agent Check also stops calling an import of a
+  file it does not read missing, such as `./logo.svg` or
+  `../CHANGELOG.md?raw`.
+  ([#48](https://github.com/Hankaws/aperture/pull/48))
 - Parses no longer reports a JSX comment, `{/* … */}`, or empty braces in JSX
   as broken: the parser wanted an expression there, and its recovery could
   mark the lines after as broken too.

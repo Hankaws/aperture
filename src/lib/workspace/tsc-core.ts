@@ -12,10 +12,12 @@
  * is what `tsc` says about the project's own code.
  */
 import type ts from "typescript";
+import { parseErrorLines } from "./ts-parse.ts";
 
 type Ts = typeof ts;
 
-export type TscDiagnostic = { line: number; code: number; message: string };
+/** `syntax`: reported by TypeScript's parser, not its type checker. */
+export type TscDiagnostic = { line: number; code: number; message: string; syntax?: true };
 
 export type TscResult =
   | { ok: true; diagnostics: Record<string, TscDiagnostic[]>; files: number }
@@ -236,13 +238,15 @@ export function checkProject(
   for (const path of paths) {
     const file = program.getSourceFile(`/${path}`);
     if (!file) continue;
-    const found = [...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file)];
+    const syntactic = program.getSyntacticDiagnostics(file);
+    const found = [...syntactic, ...program.getSemanticDiagnostics(file)];
     const rows: TscDiagnostic[] = [];
     for (const diagnostic of found) {
       const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, " ");
       if (missingPackageTypes(diagnostic, message)) continue;
       const line = diagnostic.start === undefined ? 1 : file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
-      rows.push({ line, code: diagnostic.code, message: message.slice(0, 300) });
+      const syntax = syntactic.includes(diagnostic as ts.DiagnosticWithLocation) ? { syntax: true as const } : {};
+      rows.push({ line, code: diagnostic.code, message: message.slice(0, 300), ...syntax });
     }
     diagnostics[path] = rows;
   }
@@ -253,6 +257,14 @@ export function checkProject(
  * One diagnostic as the check strip, the margin and the agent read it. "at
  * line N" lets the margin place it; the code and message are what tsc says.
  */
+/** Each checked file's parse errors, as TypeScript's parser found them (none: it parses). */
+export function parseErrorsOf(result: TscResult): Record<string, string[]> {
+  if (!result.ok) return {};
+  return Object.fromEntries(
+    Object.entries(result.diagnostics).map(([path, rows]) => [path, parseErrorLines(rows.filter((row) => row.syntax))]),
+  );
+}
+
 export function tscIssue(diagnostic: TscDiagnostic): string {
   return `TS${diagnostic.code} at line ${diagnostic.line}: ${diagnostic.message}`;
 }

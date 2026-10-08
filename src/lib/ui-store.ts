@@ -11,6 +11,13 @@ import {
   type PreviewDock,
 } from "@/lib/layout-prefs";
 
+/** Real tsc on the staged change, for the margin: issues after and before, and parse errors after. */
+export type TscFindings = {
+  after: Record<string, string[]>;
+  before: Record<string, string[]>;
+  parse?: Record<string, string[]>;
+};
+
 const CREW_KEY = "aperture-crew";
 
 function elementLabel(capture: DesignCapture): string {
@@ -64,7 +71,7 @@ type IdeUiState = {
   inlineOpen: boolean;
   historyOpen: boolean;
   /** Real `tsc` on the staged change, per file: with the change, and as the files are now. For the margin. */
-  tscFindings: { after: Record<string, string[]>; before: Record<string, string[]> } | null;
+  tscFindings: TscFindings | null;
   /** The agent board: every run in this workspace, by stage. */
   boardOpen: boolean;
   /** Background jobs as the Composer panel last loaded them, so the board can show them too. */
@@ -107,7 +114,7 @@ type IdeUiState = {
   setInlineOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
   setBoardOpen: (open: boolean) => void;
-  setTscFindings: (findings: { after: Record<string, string[]>; before: Record<string, string[]> } | null) => void;
+  setTscFindings: (findings: TscFindings | null) => void;
   setBoardJobs: (jobs: JobRecord[]) => void;
   setDebug: (on: boolean) => void;
   setDesignOpen: (open: boolean) => void;

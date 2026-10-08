@@ -2,6 +2,8 @@
  * The files the checks read, before and after the change: every JavaScript,
  * TypeScript, JSON, HTML and CSS file in the project, so an import, a caller
  * or a test that a change breaks is in view, not only the changed files.
+ * Every other file is there too, unread and empty, so that an import of
+ * `./logo.svg` or `./notes.md?raw` finds it.
  */
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +15,7 @@ const RELEVANT = /\.(?:[cm]?[jt]sx?|json|html?|css)$/i;
 const SKIPPED_DIR = /(^|\/)(node_modules|\.git)\//;
 
 export type Project = {
-  /** The project's files at the base. */
+  /** The project's files at the base; files the checks do not read are present and empty. */
   before: Record<string, string>;
   /** Changed and added files: their text now. */
   changes: Record<string, string>;
@@ -35,7 +37,8 @@ export function loadProject(cwd: string, rev: string): Project {
   const notChecked: string[] = [];
   const changed = changedFiles(rev, cwd);
 
-  const listed = filesAt(rev, cwd).filter(
+  const tracked = filesAt(rev, cwd);
+  const listed = tracked.filter(
     (file) => isRelevant(file.path) && file.bytes <= LOAD_LIMITS.fileBytes,
   );
   const total = listed.reduce((n, file) => n + file.bytes, 0);
@@ -53,10 +56,17 @@ export function loadProject(cwd: string, rev: string): Project {
     listed.map((file) => file.path),
     cwd,
   );
+  // Code over the size limit stays out: empty, it would read as a file with no exports.
+  for (const file of tracked) {
+    if (!RELEVANT.test(file.path) && !SKIPPED_DIR.test(file.path)) before[file.path] = "";
+  }
 
   for (const change of changed) {
     if (!isRelevant(change.path)) {
       notChecked.push(change.path);
+      // Present after the change or not, for the imports that name it.
+      if (change.status === "D") delete before[change.path];
+      else if (!SKIPPED_DIR.test(change.path)) before[change.path] ??= "";
       continue;
     }
     if (change.status === "D") {

@@ -9,6 +9,7 @@
 import type { ProposedEdit, VerifyReport } from "./types";
 import { importIssues } from "./module-graph.ts";
 import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./preview-check.ts";
+import type { ParseCheck } from "./ts-parse.ts";
 import { isScriptPath } from "./syntax-check.ts";
 import { isTypePath, typeIssues } from "./type-check.ts";
 import type { TscOutcome } from "./tsc";
@@ -209,6 +210,14 @@ export function renderEntry(
   return edited ?? pages.find((p) => /(^|\/)index\.html?$/i.test(p)) ?? pages[0]!;
 }
 
+/**
+ * A finished tsc run as a parse check: it read every file it was asked about
+ * with TypeScript's own parser. No opinion on a file it was not asked about.
+ */
+function tscParseCheck(tsc: Extract<TscCheck, { state: "done" }>): ParseCheck {
+  return (path) => tsc.parse?.[path] ?? null;
+}
+
 export function changeChecks(input: {
   files: Record<string, string>;
   edits: ProposedEdit[];
@@ -221,16 +230,19 @@ export function changeChecks(input: {
   tsc?: TscCheck;
   /** The project's stage hooks for this change, run in the browser. */
   hooks?: HookRun[];
+  /** TypeScript's parser, where it is loaded: it overrules a parse error Lezer gets wrong. */
+  parse?: ParseCheck;
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
   const checkable = [...new Set(edits.map((e) => e.path).filter(isCheckablePath))];
   const scripts = checkable.filter(isScriptPath);
+  const parse = input.parse ?? (input.tsc?.state === "done" ? tscParseCheck(input.tsc) : undefined);
 
   const broken = checkable
-    .map((path) => ({ path, issues: issuesForText(path, snapshot[path] ?? "") }))
+    .map((path) => ({ path, issues: issuesForText(path, snapshot[path] ?? "", parse) }))
     .filter((r) => r.issues.length > 0);
-  const parse: CheckRow =
+  const parsesRow: CheckRow =
     checkable.length === 0
       ? { id: "parse", label: "Parses", status: "skip", detail: "No code, markup or JSON in this change." }
       : broken.length > 0
@@ -309,7 +321,7 @@ export function changeChecks(input: {
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
   const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testTampering(files, edits));
-  return [parse, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow)];
+  return [parsesRow, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow)];
 }
 
 /**

@@ -79,7 +79,7 @@
         "parse",
         "tests"
       ],
-      "detail": "src/store.ts: parse error at line 66",
+      "detail": "src/store.ts: parse error at line 66: '}' expected.",
       "checks": {
         "parse": "fail",
         "imports": "skip",
@@ -102,7 +102,7 @@
         "parse",
         "tests"
       ],
-      "detail": "src/lib/validate.ts: parse error at line 15",
+      "detail": "src/lib/validate.ts: parse error at line 14: Unterminated string literal. (+1 more)",
       "checks": {
         "parse": "fail",
         "imports": "skip",
@@ -123,7 +123,7 @@
       "lightCaughtBy": [
         "parse"
       ],
-      "detail": "src/badge.tsx: parse error at line 8",
+      "detail": "src/badge.tsx: parse error at line 6: JSX element 'b' has no corresponding closing tag.",
       "checks": {
         "parse": "fail",
         "imports": "skip",

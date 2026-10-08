@@ -1,6 +1,7 @@
 import type { DiffNote, ProposedEdit } from "./types";
 import { isJsonPath, isScriptPath, jsonIssues, scriptIssues } from "./syntax-check.ts";
 import { importIssues } from "./module-graph.ts";
+import type { ParseCheck } from "./ts-parse.ts";
 
 const VOID = new Set([
   "area",
@@ -87,11 +88,12 @@ export function cssIssues(css: string): string[] {
   return [];
 }
 
-export function issuesForText(path: string, text: string): string[] {
+/** `parse`: TypeScript's parser, where it is loaded, to overrule a parse error Lezer gets wrong. */
+export function issuesForText(path: string, text: string, parse?: ParseCheck): string[] {
   if (/\.html?$/i.test(path)) return htmlIssues(text);
   if (/\.css$/i.test(path)) return cssIssues(text);
   if (isJsonPath(path)) return jsonIssues(text);
-  if (isScriptPath(path)) return scriptIssues(path, text);
+  if (isScriptPath(path)) return scriptIssues(path, text, parse);
   return [];
 }
 
@@ -104,12 +106,13 @@ export function mergeEdits(files: Record<string, string>, edits: ProposedEdit[])
 export function previewIssues(
   files: Record<string, string>,
   edits: ProposedEdit[],
+  parse?: ParseCheck,
 ): Array<{ path: string; issues: string[] }> {
   const snapshot = mergeEdits(files, edits);
   const out: Array<{ path: string; issues: string[] }> = [];
   const paths = new Set(edits.filter((e) => isCheckablePath(e.path)).map((e) => e.path));
   for (const path of paths) {
-    const issues = issuesForText(path, snapshot[path] ?? "");
+    const issues = issuesForText(path, snapshot[path] ?? "", parse);
     // Only worth resolving imports once the file itself parses: a broken parse
     // yields a partial import list, and reporting both at once buries the cause.
     if (issues.length === 0 && isScriptPath(path)) issues.push(...importIssues(path, snapshot));
@@ -133,9 +136,13 @@ export function notesFromPreviewIssues(path: string, issues: string[]): DiffNote
  * staged page renders is a check result (`checks.ts`), not a gate, and the
  * live preview's errors are the applied page's, never the edit's.
  */
-export function previewNotesForEdit(edit: ProposedEdit, files: Record<string, string>): DiffNote[] {
+export function previewNotesForEdit(
+  edit: ProposedEdit,
+  files: Record<string, string>,
+  parse?: ParseCheck,
+): DiffNote[] {
   if (!isCheckablePath(edit.path)) return [];
-  const rows = previewIssues(files, [edit]);
+  const rows = previewIssues(files, [edit], parse);
   const hit = rows.find((r) => r.path === edit.path) ?? rows[0];
   if (!hit) return [];
   return notesFromPreviewIssues(edit.path, hit.issues);

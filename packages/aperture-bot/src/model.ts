@@ -11,6 +11,7 @@ import {
 } from "../../../src/lib/agent/complete.server.ts";
 import type { LoopHost, ScriptOutcome } from "../../../src/lib/agent/loop.ts";
 import type { AgentToolDef } from "../../../src/lib/agent/tools.ts";
+import { tsParseCheck } from "../../../src/lib/workspace/ts-parse.ts";
 import { retryStale } from "./retry.ts";
 
 export type Model = (
@@ -79,5 +80,9 @@ export function runnerHost(
       return completion;
     },
     runScript: runScript ? async (_owner, files, script) => runScript(files, script) : undefined,
+    parser: async () => {
+      const mod = await import("typescript");
+      return tsParseCheck(mod.default ?? mod);
+    },
   };
 }

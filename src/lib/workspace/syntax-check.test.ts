@@ -146,3 +146,42 @@ test("an empty or comment-only JSX expression parses, and an unclosed one is sti
     "parse error at line 1",
   ]);
 });
+
+test("an arrow function's type predicate parses, and an error after it is still found", () => {
+  const ok = [
+    "const isString = (value: unknown): value is string => typeof value === 'string';",
+    "const strings = ['a', 1].filter((x): x is string => typeof x === 'string');",
+    "const rows = list.filter((row): row is { hit: number; score: number } => row !== null);",
+    "class A { isB = (): this is B => true; }",
+    "const check = (x: unknown): asserts x is string => {};",
+  ].join("\n");
+  assert.deepEqual(scriptIssues("a.ts", ok), []);
+  const broken = `${ok}\nconst y = (;`;
+  assert.deepEqual(scriptIssues("a.ts", broken), ["parse error at line 6"]);
+});
+
+test("a second opinion settles what Lezer flags, and is not asked about a file that parses", () => {
+  // A generic call signature in an interface: valid TypeScript Lezer does not read.
+  const text =
+    "export interface Sql {\n  <T = unknown>(strings: TemplateStringsArray): Promise<T[]>;\n}\n";
+  assert.notDeepEqual(scriptIssues("db.ts", text), []);
+  assert.deepEqual(
+    scriptIssues("db.ts", text, () => []),
+    [],
+  );
+  assert.deepEqual(
+    scriptIssues("db.ts", text, () => ["parse error at line 2: ';' expected."]),
+    ["parse error at line 2: ';' expected."],
+  );
+  // No opinion: Lezer's answer stands.
+  assert.deepEqual(
+    scriptIssues("db.ts", text, () => null),
+    scriptIssues("db.ts", text),
+  );
+  let asked = 0;
+  scriptIssues("ok.ts", "export const a = 1;\n", () => {
+    asked += 1;
+    return [];
+  });
+  assert.equal(asked, 0);
+});

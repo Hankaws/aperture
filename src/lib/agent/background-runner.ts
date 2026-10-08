@@ -12,7 +12,6 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { runIdFor } from "@/lib/workspace/board";
 import { mergeEdits } from "@/lib/workspace/preview-check";
-import { issuesForText } from "@/lib/workspace/preview-check";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import { HOOKS_PATH, hooksFor, parseHooks } from "@/lib/workspace/hooks";
@@ -194,10 +193,8 @@ export async function checkInBackground(
     ...new Set(edits.filter((e) => isTsPath(e.path) && e.newText !== "").map((e) => e.path)),
   ];
   let tsc: TscCheck = null;
-  if (
-    tsPaths.length > 0 &&
-    tsPaths.every((path) => issuesForText(path, merged[path] ?? "").length === 0)
-  ) {
+  // Even when Lezer says a file does not parse: TypeScript's parser settles that (see changeChecks).
+  if (tsPaths.length > 0) {
     const { pathsToCheck, typecheckChange } = await import("@/lib/workspace/tsc");
     tsc = await typecheckChange(merged, snapshot, pathsToCheck(merged, tsPaths), signal);
   }

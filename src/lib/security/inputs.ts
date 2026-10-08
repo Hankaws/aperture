@@ -17,8 +17,9 @@ import type { GithubReviewComment } from "../github/review.ts";
 import type { Spot } from "../workspace/lessons.ts";
 import type { PlanEntry, ProposedEdit } from "../workspace/types.ts";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /** A list of objects the handler normalises itself. */
 function objects<T>() {

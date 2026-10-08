@@ -79,8 +79,12 @@ const STATES = new Set<string>([
   "error",
 ]);
 
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
 const strings = (value: unknown): string[] | undefined =>
-  Array.isArray(value) ? value.filter((s): s is string => typeof s === "string") : undefined;
+  Array.isArray(value) ? value.filter(isString) : undefined;
 
 /**
  * The summary a comment carries, or null when it has none. Comments are

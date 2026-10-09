@@ -17,7 +17,7 @@ release notes are every line from there down to the previous version.
   a pull request that changes them, keeping the rest of the bot's settings.
   The bot also has a face on the page: the Aperture lens, which turns while
   it works, and an avatar image (`/bot/aperture-bot.png`) for a GitHub App.
-  ([#50](https://github.com/Hankaws/aperture/pull/50))
+  ([#51](https://github.com/Hankaws/aperture/pull/51))
 - A chat with Aperture Bot on the Bot page. Ask about a repository ("what's
   broken right now?") and the bot reads its open issues and pull requests,
   any one thread, CI on the default branch and its own recent tasks, then

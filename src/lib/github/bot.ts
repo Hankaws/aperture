@@ -15,6 +15,7 @@ import {
   botRepoInput,
   botSetupInput,
 } from "@/lib/security/inputs";
+import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import { ciText, openText, tasksText, threadText } from "@/lib/bot/github-text";
 import {
@@ -223,19 +224,26 @@ const MAX_RUN_LOOKUPS = 4;
 const MAX_THREAD_LOOKUPS = 5;
 const MAX_TASKS = 30;
 
-/** The repository's bot tasks, newest first, with their threads and whether a working run has ended. */
+/**
+ * The repository's bot tasks, newest first, with their threads and whether a
+ * working run has ended. `quick`: read the threads only when there are tasks,
+ * so a repository without the bot costs one request.
+ */
 async function loadTasks(
   base: string,
   get: Get,
+  { quick = false }: { quick?: boolean } = {},
 ): Promise<{ ok: true; tasks: BotTask[] } | Failure> {
-  const [comments, recent] = await Promise.all([
-    get(`${base}/issues/comments?sort=updated&direction=desc&per_page=100`),
-    get(`${base}/issues?state=all&sort=updated&direction=desc&per_page=50`),
-  ]);
+  const recentUrl = `${base}/issues?state=all&sort=updated&direction=desc&per_page=50`;
+  const early = quick ? null : get(recentUrl);
+  const comments = await get(`${base}/issues/comments?sort=updated&direction=desc&per_page=100`);
   if (comments.status === 401)
     return { ok: false, error: "GitHub rejected the token on your account." };
   if (comments.status !== 200 || !Array.isArray(comments.body))
     return { ok: false, error: `GitHub returned ${comments.status}.` };
+  if (quick && tasksFrom(comments.body as RawComment[], new Map()).length === 0)
+    return { ok: true, tasks: [] };
+  const recent = await (early ?? get(recentUrl));
   const threads = new Map<number, Thread>();
   const addThread = (row: unknown) => {
     const r = row as {
@@ -296,6 +304,58 @@ export const botTasks = createServerFn({ method: "POST" })
     if (!base) return { ok: false, error: "That repo name is not valid." };
     try {
       return await loadTasks(base, (url) => githubJson(url, token));
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/** The activity feed reads this many of the person's most recently pushed repositories, */
+const ACTIVITY_REPOS = 15;
+/** this many at a time. */
+const ACTIVITY_PARALLEL = 5;
+
+export type BotActivity = { ok: true; activity: Activity[]; repos: number } | Failure;
+
+/** What the bot did across the person's recent repositories, newest first. */
+export const botActivity = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<BotActivity> => {
+    const busy = overLimit("bot", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const get: Get = (url) => githubJson(url, token);
+    try {
+      const listed = await get(
+        `${API}/user/repos?per_page=${ACTIVITY_REPOS}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+      );
+      if (listed.status === 401)
+        return { ok: false, error: "GitHub rejected the token on your account." };
+      if (listed.status !== 200 || !Array.isArray(listed.body))
+        return { ok: false, error: `GitHub returned ${listed.status}.` };
+      const names = (listed.body as Array<{ full_name?: unknown }>)
+        .map((r) => (typeof r.full_name === "string" ? r.full_name : ""))
+        .filter(Boolean)
+        .slice(0, ACTIVITY_REPOS);
+      const lists: Activity[][] = [];
+      for (let i = 0; i < names.length; i += ACTIVITY_PARALLEL) {
+        const batch = await Promise.all(
+          names.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
+            const [owner = "", repo = ""] = fullName.split("/");
+            const base = repoBase(owner, repo);
+            if (!base) return [];
+            // One repository GitHub will not show is left out, not the whole feed.
+            const out = await loadTasks(base, get, { quick: true }).catch(() => null);
+            return out?.ok ? activityFrom(fullName, out.tasks) : [];
+          }),
+        );
+        lists.push(...batch);
+      }
+      return { ok: true, activity: feedOf(lists), repos: names.length };
     } catch (error) {
       return {
         ok: false,

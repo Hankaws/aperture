@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- An activity feed on the Bot page: what Aperture Bot did across your most
+  recently pushed repositories, newest first and by day. Each ask, and what
+  came of it (a pull request opened, a commit pushed, stopped red, working
+  now), with its checks and files, and a link to it on GitHub. Before there
+  is any, and for visitors, a sample week shows what it will look like,
+  marked as an example. ([#56](https://github.com/Hankaws/aperture/pull/56))
 - Aperture Bot can post as a GitHub App of your own, with its own name and
   avatar, and the pull requests it opens then start your CI. The Bot page
   prefills the app on GitHub, links the avatar to upload, checks for its ID

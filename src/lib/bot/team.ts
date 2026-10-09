@@ -15,9 +15,29 @@ export type BotProfile = {
   mascot: Mascot;
   /** How it works, in the person's words; empty until they pick a focus. */
   personality: string;
+  /** The model its chat runs on; empty: the account's choice in Settings. */
+  model: BotModel;
+  /** The last line of its conversation, kept on the account, for the roster. */
+  lastLine: string;
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * What a bot's chat can run on: a provider key of the person's, their custom
+ * endpoint, or "" for whatever Settings chooses. Never a model in the
+ * browser: the chat runs on the server.
+ */
+export const BOT_MODELS = [
+  "",
+  "grok",
+  "openai",
+  "anthropic",
+  "gemini",
+  "deepseek",
+  "custom",
+] as const;
+export type BotModel = (typeof BOT_MODELS)[number];
 
 export const MAX_BOTS = 12;
 export const NAME_MAX = 40;
@@ -102,6 +122,8 @@ export function profileFrom(row: Record<string, unknown>): BotProfile | null {
     repo,
     mascot: mascotFrom(mascot),
     personality: cleanPersonality(typeof row.personality === "string" ? row.personality : ""),
+    model: (BOT_MODELS as readonly unknown[]).includes(row.model) ? (row.model as BotModel) : "",
+    lastLine: cleanName(typeof row.last_line === "string" ? row.last_line : "", 160),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   };

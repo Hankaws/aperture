@@ -65,6 +65,28 @@ export function savedEntries(parsed: unknown): Entry[] {
   return out.slice(-KEEP);
 }
 
+/** The last thing said in a conversation, as one plain line, for the roster. */
+export function lastLineOf(entries: Entry[]): string {
+  const last = entries.at(-1);
+  if (!last) return "";
+  const text = last.text
+    .replace(/[`*_#>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+  return last.role === "user" ? `You: ${text}` : text;
+}
+
+/** A conversation kept on the account is at most this big; the oldest entries go first. */
+export const MAX_SAVED_CHARS = 200_000;
+
+/** The newest entries whose JSON fits in `max` characters. */
+export function fitEntries(entries: Entry[], max = MAX_SAVED_CHARS): Entry[] {
+  let kept = entries.slice(-KEEP);
+  while (kept.length > 0 && JSON.stringify(kept).length > max) kept = kept.slice(1);
+  return kept;
+}
+
 const key = (repo: string) => `aperture-bot-chat:${repo}`;
 
 /** Where a team bot's conversation is kept: by its id, not its repository. */

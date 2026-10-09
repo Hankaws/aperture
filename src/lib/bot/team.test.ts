@@ -17,6 +17,8 @@ const row = (over: Record<string, unknown> = {}) => ({
   repo: "acme/shop",
   mascot: '{"color":"teal","body":"iris","face":"wink"}',
   personality: "Keep CI green.",
+  model: "anthropic",
+  last_line: "You: what's\nred?",
   created_at: new Date("2026-10-01T10:00:00Z"),
   updated_at: "2026-10-02T10:00:00Z",
   ...over,
@@ -29,10 +31,15 @@ test("a stored row reads back as a profile, its mascot parsed", () => {
     repo: "acme/shop",
     mascot: { color: "teal", body: "iris", face: "wink" },
     personality: "Keep CI green.",
+    model: "anthropic",
+    lastLine: "You: what's red?",
     createdAt: "2026-10-01T10:00:00.000Z",
     updatedAt: "2026-10-02T10:00:00.000Z",
   });
   assert.deepEqual(profileFrom(row({ mascot: "{broken" }))!.mascot, DEFAULT_MASCOT);
+  // A model it cannot run on (the browser's local one, or anything unknown) is the account's choice.
+  assert.equal(profileFrom(row({ model: "local" }))!.model, "");
+  assert.equal(profileFrom(row({ model: undefined, last_line: undefined }))!.lastLine, "");
 });
 
 test("a row that is not a profile is dropped", () => {

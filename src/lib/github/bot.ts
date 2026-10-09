@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
 import {
+  botActivityInput,
   botAskInput,
   botChatInput,
   botAppInput,
@@ -319,10 +320,11 @@ const ACTIVITY_PARALLEL = 5;
 
 export type BotActivity = { ok: true; activity: Activity[]; repos: number } | Failure;
 
-/** What the bot did across the person's recent repositories, newest first. */
+/** What the bot did across the team's repositories, or the person's most recently pushed, newest first. */
 export const botActivity = createServerFn({ method: "POST" })
+  .validator(botActivityInput)
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<BotActivity> => {
+  .handler(async ({ data, context }): Promise<BotActivity> => {
     const busy = overLimit("bot", context.userId);
     if (busy) return { ok: false, error: busy };
     const { accountToken, githubJson } = await github();
@@ -330,17 +332,29 @@ export const botActivity = createServerFn({ method: "POST" })
     if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
     const get: Get = (url) => githubJson(url, token);
     try {
-      const listed = await get(
-        `${API}/user/repos?per_page=${ACTIVITY_REPOS}&sort=pushed&affiliation=owner,collaborator,organization_member`,
-      );
-      if (listed.status === 401)
-        return { ok: false, error: "GitHub rejected the token on your account." };
-      if (listed.status !== 200 || !Array.isArray(listed.body))
-        return { ok: false, error: `GitHub returned ${listed.status}.` };
-      const names = (listed.body as Array<{ full_name?: unknown }>)
-        .map((r) => (typeof r.full_name === "string" ? r.full_name : ""))
-        .filter(Boolean)
-        .slice(0, ACTIVITY_REPOS);
+      let names: string[];
+      if (data.repos?.length) {
+        // The team's repositories, each once.
+        const seen = new Set<string>();
+        names = data.repos.filter((r) => {
+          const key = r.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      } else {
+        const listed = await get(
+          `${API}/user/repos?per_page=${ACTIVITY_REPOS}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+        );
+        if (listed.status === 401)
+          return { ok: false, error: "GitHub rejected the token on your account." };
+        if (listed.status !== 200 || !Array.isArray(listed.body))
+          return { ok: false, error: `GitHub returned ${listed.status}.` };
+        names = (listed.body as Array<{ full_name?: unknown }>)
+          .map((r) => (typeof r.full_name === "string" ? r.full_name : ""))
+          .filter(Boolean);
+      }
+      names = names.slice(0, ACTIVITY_REPOS);
       const lists: Activity[][] = [];
       for (let i = 0; i < names.length; i += ACTIVITY_PARALLEL) {
         const batch = await Promise.all(
@@ -718,8 +732,13 @@ export const botChat = createServerFn({ method: "POST" })
     if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
     const base = repoBase(data.owner, data.repo);
     if (!base) return { ok: false, error: "That repo name is not valid." };
+    const repo = `${data.owner}/${data.repo}`;
+    // A bot of the person's own team brings its name, how they asked it to work, and its model.
+    const bot = data.botId
+      ? await (await import("@/lib/bot/team.server")).botFor(context.userId, data.botId, repo)
+      : null;
     const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
-    const resolved = await resolveModel(context.userId, null, { replay: false });
+    const resolved = await resolveModel(context.userId, bot?.model || null, { replay: false });
     if (!resolved.ok) return { ok: false, error: resolved.error };
     if (resolved.provider === "replay")
       return { ok: false, error: "Add your own model key in Settings to talk to the bot." };
@@ -776,11 +795,6 @@ export const botChat = createServerFn({ method: "POST" })
         return tasksText(out.tasks);
       },
     };
-    const repo = `${data.owner}/${data.repo}`;
-    // A bot of the person's own team brings its name and how they asked it to work.
-    const bot = data.botId
-      ? await (await import("@/lib/bot/team.server")).botFor(context.userId, data.botId, repo)
-      : null;
     try {
       const out = await runBotChat(
         repo,

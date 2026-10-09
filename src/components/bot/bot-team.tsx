@@ -16,9 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
-import { chatKey, clearSavedChat, loadChat, type Entry } from "@/lib/bot/chat-saved";
+import { chatKey, clearSavedChat, lastLineOf, loadChat, type Entry } from "@/lib/bot/chat-saved";
 import { mascotFor, suggestName, type Mascot, type MascotMood } from "@/lib/bot/mascot";
+import { activityFrom, statusOf, type BotStatus } from "@/lib/bot/activity";
 import { listBots } from "@/lib/bot/team.api";
+import { modelChoices, type ModelChoice } from "@/lib/bot/team-models";
+import { getAccount } from "@/lib/billing/api";
 import type { BotProfile } from "@/lib/bot/team";
 import { cn } from "@/lib/utils";
 import { BotActivity } from "./activity-feed";
@@ -28,7 +31,9 @@ import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
 import { IdentityCard } from "./identity-card";
 import { JobsCard } from "./jobs-card";
 import { MascotAvatar } from "./mascot";
+import { ModelPicker } from "./model-picker";
 import { useRepoBot } from "./use-repo-bot";
+import { useTeamActivity } from "./use-team-activity";
 
 const SELECTED_KEY = "aperture-bot-selected";
 
@@ -51,18 +56,15 @@ function keepSelected(id: string) {
 type View = { kind: "bot"; id: string } | { kind: "activity" } | { kind: "new" };
 type Panel = "profile" | "tasks" | "setup";
 
-/** The last thing said in a bot's conversation, for the roster. */
-function lastLine(entries: Entry[]): string {
-  const last = entries.at(-1);
-  if (!last) return "";
-  const text = last.text
-    .replace(/[`*_#>]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return last.role === "user" ? `You: ${text}` : text;
-}
-
 const PANEL_CARD = "rounded-2xl border border-border bg-surface";
+
+const TONE: Record<BotStatus["tone"], string> = {
+  accent: "text-accent",
+  ok: "text-ok",
+  danger: "text-danger",
+  warn: "text-warn",
+  muted: "text-muted",
+};
 
 /**
  * The person's team of bots, as a messaging app: the roster on the left, the
@@ -78,19 +80,35 @@ export function BotTeam() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [query, setQuery] = useState("");
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [choices, setChoices] = useState<ModelChoice[]>([]);
+  const repoKey = useMemo(
+    () => [...new Set((bots ?? []).map((b) => b.repo))].slice(0, 15).join(","),
+    [bots],
+  );
+  const team = useTeamActivity(repoKey);
 
   useEffect(() => {
     let cancel = false;
-    void Promise.all([listGithubRepos({ data: {} }), listBots()])
-      .then(([listed, team]) => {
+    void Promise.all([
+      listGithubRepos({ data: {} }),
+      listBots(),
+      // Without the account, the picker just offers the default.
+      getAccount().catch(() => null),
+    ])
+      .then(([listed, team, account]) => {
         if (cancel) return;
+        setChoices(account ? modelChoices(account) : [{ id: "", label: "Default" }]);
         if (!listed.ok) {
           setError(listed.error);
           return;
         }
         setRepos(listed.repos);
         setBots(team);
-        setPreviews(Object.fromEntries(team.map((b) => [b.id, lastLine(loadChat(chatKey(b)))])));
+        setPreviews(
+          Object.fromEntries(
+            team.map((b) => [b.id, b.lastLine || lastLineOf(loadChat(chatKey(b)))]),
+          ),
+        );
         const kept = readSelected();
         const first = team.find((b) => b.id === kept) ?? team[0];
         setView(first ? { kind: "bot", id: first.id } : { kind: "new" });
@@ -193,6 +211,9 @@ export function BotTeam() {
         <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
           {shown.map((bot) => {
             const selected = view.kind === "bot" && view.id === bot.id;
+            const status = statusOf(team.items, bot.repo, team.now);
+            // News that is still news comes before the last thing said.
+            const news = status && status.mood !== "idle" ? status : null;
             return (
               <li key={bot.id}>
                 <button
@@ -204,7 +225,7 @@ export function BotTeam() {
                     selected && "bg-elevated",
                   )}
                 >
-                  <MascotAvatar mascot={bot.mascot} size={44} />
+                  <MascotAvatar mascot={bot.mascot} mood={status?.mood ?? "idle"} size={44} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-medium">{bot.name}</span>
@@ -212,8 +233,13 @@ export function BotTeam() {
                         {bot.repo.split("/")[1]}
                       </span>
                     </span>
-                    <span className="block truncate text-sm text-muted">
-                      {previews[bot.id] || "Say hello"}
+                    <span
+                      className={cn(
+                        "block truncate text-sm",
+                        news ? TONE[news.tone] : "text-muted",
+                      )}
+                    >
+                      {news?.line || previews[bot.id] || status?.line || "Say hello"}
                     </span>
                   </span>
                 </button>
@@ -260,7 +286,7 @@ export function BotTeam() {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
               <PanelBoundary name="The activity feed" className={PANEL_CARD}>
-                <BotActivity />
+                <BotActivity repos={repoKey ? repoKey.split(",") : undefined} />
               </PanelBoundary>
             </div>
           </>
@@ -269,6 +295,7 @@ export function BotTeam() {
             key={current.id}
             bot={current}
             repos={repos}
+            choices={choices}
             back={back}
             panel={panel}
             setPanel={setPanel}
@@ -279,7 +306,7 @@ export function BotTeam() {
               setMobileMain(false);
               setView(next[0] ? { kind: "bot", id: next[0].id } : { kind: "new" });
             }}
-            onChat={(entries) => setPreviews((p) => ({ ...p, [current.id]: lastLine(entries) }))}
+            onChat={(entries) => setPreviews((p) => ({ ...p, [current.id]: lastLineOf(entries) }))}
           />
         ) : (
           <>
@@ -317,6 +344,7 @@ const TABS: Array<{ id: Panel; label: string }> = [
 function BotRoom({
   bot,
   repos,
+  choices,
   back,
   panel,
   setPanel,
@@ -326,6 +354,7 @@ function BotRoom({
 }: {
   bot: BotProfile;
   repos: GithubRepoSummary[];
+  choices: ModelChoice[];
   back: React.ReactNode;
   panel: Panel | null;
   setPanel: (panel: Panel | null) => void;
@@ -335,7 +364,8 @@ function BotRoom({
 }) {
   const r = useRepoBot(bot.repo);
   const working = (r.tasks ?? []).filter((t) => t.state === "working" || t.state === "waiting");
-  const mood: MascotMood = working.length > 0 ? "working" : "idle";
+  const news = statusOf(activityFrom(bot.repo, r.tasks ?? []), bot.repo, r.now);
+  const mood: MascotMood = news?.mood ?? "idle";
   const notReady =
     r.setup !== null &&
     (!r.setup.workflow || r.setup.secret === false || r.setup.pullsAllowed === false);
@@ -343,11 +373,21 @@ function BotRoom({
     ? "Cannot read this repository"
     : !r.setup
       ? bot.repo
-      : working.length > 0
-        ? `Working on ${working.length === 1 ? "a task" : `${working.length} tasks`}`
+      : working.length > 1
+        ? `Working on ${working.length} tasks`
+        : news && news.mood !== "idle"
+          ? news.line
+          : notReady
+            ? "Not set up on GitHub yet"
+            : bot.repo;
+  const statusTone =
+    working.length > 1
+      ? TONE.accent
+      : news && news.mood !== "idle"
+        ? TONE[news.tone]
         : notReady
-          ? "Not set up on GitHub yet"
-          : bot.repo;
+          ? "text-warn"
+          : "text-subtle";
 
   const lead = (
     <>
@@ -361,14 +401,7 @@ function BotRoom({
         <MascotAvatar mascot={bot.mascot} mood={mood} size={34} />
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{bot.name}</span>
-          <span
-            className={cn(
-              "block truncate text-xs",
-              working.length > 0 ? "text-accent" : notReady ? "text-warn" : "text-subtle",
-            )}
-          >
-            {status}
-          </span>
+          <span className={cn("block truncate text-xs", statusTone)}>{status}</span>
         </span>
       </button>
     </>
@@ -377,6 +410,7 @@ function BotRoom({
   const toggle = (next: Panel) => setPanel(panel === next ? null : next);
   const actions = (
     <>
+      <ModelPicker bot={bot} choices={choices} onSaved={onSaved} className="mr-1 hidden md:block" />
       <Button
         variant="ghost"
         size="sm"
@@ -492,6 +526,7 @@ function BotRoom({
                   key={bot.updatedAt}
                   bot={bot}
                   repos={repos}
+                  choices={choices}
                   onSaved={onSaved}
                   onDeleted={onDeleted}
                 />

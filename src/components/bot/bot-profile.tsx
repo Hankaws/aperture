@@ -14,9 +14,11 @@ import {
 } from "@/lib/bot/mascot";
 import { deleteBot, saveBot } from "@/lib/bot/team.api";
 import { FOCUSES, NAME_MAX, PERSONALITY_MAX, type BotProfile } from "@/lib/bot/team";
+import type { ModelChoice } from "@/lib/bot/team-models";
 import { cn } from "@/lib/utils";
 import { downloadMascot } from "@/lib/bot/mascot-png";
 import { MascotAvatar } from "./mascot";
+import { ModelPicker } from "./model-picker";
 
 type Draft = { name: string; repo: string; mascot: Mascot; personality: string };
 
@@ -251,11 +253,13 @@ function Fields({
 export function ProfilePanel({
   bot,
   repos,
+  choices,
   onSaved,
   onDeleted,
 }: {
   bot: BotProfile;
   repos: GithubRepoSummary[];
+  choices: ModelChoice[];
   onSaved: (bots: BotProfile[]) => void;
   onDeleted: (bots: BotProfile[]) => void;
 }) {
@@ -297,6 +301,13 @@ export function ProfilePanel({
 
   return (
     <div className="space-y-5">
+      <div>
+        <p className={label}>Talks on</p>
+        <ModelPicker bot={bot} choices={choices} onSaved={onSaved} className="mt-1 w-fit" />
+        <p className="mt-1 text-xs text-subtle">
+          Saved at once. Add keys for more models in Settings.
+        </p>
+      </div>
       <Fields draft={draft} setDraft={setDraft} repos={repos} />
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">

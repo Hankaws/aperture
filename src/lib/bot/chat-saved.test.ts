@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { KEEP, savedEntries } from "./chat-saved.ts";
+import { KEEP, fitEntries, lastLineOf, savedEntries, type Entry } from "./chat-saved.ts";
 
 test("a well-formed chat reads back as it was saved", () => {
   const chat = [
@@ -71,4 +71,25 @@ test("only the newest entries are kept", () => {
   const kept = savedEntries(many);
   assert.equal(kept.length, KEEP);
   assert.equal(kept[0]!.id, "5");
+});
+
+test("the roster's line is the last thing said, and a kept chat fits its size", () => {
+  assert.equal(lastLineOf([]), "");
+  assert.equal(
+    lastLineOf([{ id: "a", role: "user", text: "What's   **broken**\nright now?" }]),
+    "You: What's broken right now?",
+  );
+  assert.equal(
+    lastLineOf([{ id: "b", role: "assistant", text: "`main` is green" }]),
+    "main is green",
+  );
+  const big: Entry[] = Array.from({ length: 10 }, (_, i) => ({
+    id: String(i),
+    role: "user",
+    text: "x".repeat(1000),
+  }));
+  const kept = fitEntries(big, 3500);
+  assert.ok(JSON.stringify(kept).length <= 3500);
+  assert.equal(kept.at(-1)!.id, "9");
+  assert.ok(kept.length >= 2 && kept.length < 10);
 });

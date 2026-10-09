@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import type { BrowserRuns } from "../agent/browser-handoff.ts";
+import { MASCOT_BODIES, MASCOT_COLORS, MASCOT_FACES, type MascotColor } from "../bot/mascot.ts";
 import type { WorkerSpec } from "../agent/crew.ts";
 import type { AgentInput } from "../agent/types.ts";
 import type { GithubChange } from "../github/roundtrip.ts";
@@ -101,14 +102,29 @@ export const botAskInput = z.object({
   title: text(256).optional(),
   task: text(4000),
 });
+const botId = z.string().regex(/^[a-z0-9]{12,32}$/);
 export const botChatInput = z.object({
   owner: repoName,
   repo: repoName,
+  /** The bot of the person's team being talked to: its name and instructions shape the chat. */
+  botId: botId.optional(),
   turns: z
     .array(z.object({ role: z.enum(["user", "assistant"]), text: text(20_000) }))
     .min(1)
     .max(60),
 });
+export const botProfileInput = z.object({
+  id: botId.optional(),
+  name: text(40).min(1),
+  repo: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/),
+  mascot: z.object({
+    color: z.enum(Object.keys(MASCOT_COLORS) as [MascotColor, ...MascotColor[]]),
+    body: z.enum(MASCOT_BODIES),
+    face: z.enum(MASCOT_FACES),
+  }),
+  personality: text(800),
+});
+export const botIdInput = z.object({ id: botId });
 export const botJobsInput = z.object({
   owner: repoName,
   repo: repoName,

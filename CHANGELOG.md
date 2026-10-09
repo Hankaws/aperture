@@ -9,6 +9,15 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A team of Aperture Bots on the Bot page, laid out like a messaging app.
+  Make bots of your own, each looking after one repository with its own name,
+  mascot and way of working. Pick them from a roster with their last message,
+  talk each one through in its own conversation, and open its profile, tasks
+  and setup beside the chat. Each has a new mascot: a lens with a face, in
+  five shapes, ten faces and ten colours, that looks busy while the bot works
+  and can be saved as a PNG for a GitHub App's logo. A new bot asks first what
+  to focus on; the answer becomes how its chat works. Bots are kept on your
+  account. ([#57](https://github.com/Hankaws/aperture/pull/57))
 - An activity feed on the Bot page: what Aperture Bot did across your most
   recently pushed repositories, newest first and by day. Each ask, and what
   came of it (a pull request opened, a commit pushed, stopped red, working

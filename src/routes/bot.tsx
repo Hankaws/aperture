@@ -4,9 +4,9 @@ import { ArrowRight } from "lucide-react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { GithubAccountCard } from "@/components/site/github-account";
-import { BotActivity, SampleFeed } from "@/components/bot/activity-feed";
+import { SampleFeed } from "@/components/bot/activity-feed";
 import { BotAvatar } from "@/components/bot/bot-avatar";
-import { BotConsole } from "@/components/bot/bot-console";
+import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
 import { buttonVariants } from "@/components/ui/button";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -44,22 +44,23 @@ function BotPage() {
     };
   }, [user]);
 
-  // Signed in with GitHub: the chat comes first, on a wider page, under a short header.
+  // Signed in with GitHub: the team fills the page, under a short header.
   const working = Boolean(user && github?.connected);
 
   return (
     <div className="min-h-dvh bg-bg text-fg">
       <SiteNav />
-      <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-6xl py-8" : "max-w-3xl py-14")}>
+      <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-7xl py-6" : "max-w-3xl py-14")}>
         {working ? (
           <div>
             <h1 className="flex items-center gap-2.5 text-xs font-medium tracking-[0.18em] text-subtle uppercase">
               <BotAvatar size="sm" />
               Aperture Bot
             </h1>
-            <p className="mt-2 text-sm text-pretty text-muted">
-              Talk it through, send what it suggests, and watch each task. It opens a pull request
-              only when Aperture Agent Check finds nothing red.
+            <p className="mt-2 hidden text-sm text-pretty text-muted sm:block">
+              Your team of bots, one per repository. Talk each one through, send what it suggests,
+              and watch it work. It opens a pull request only when Aperture Agent Check finds
+              nothing red.
             </p>
           </div>
         ) : (
@@ -77,7 +78,7 @@ function BotPage() {
           </>
         )}
 
-        <div className={working ? "mt-6" : "mt-10"}>
+        <div className={working ? "mt-4" : "mt-10"}>
           {isPending || (user && !github) ? (
             <div className="h-40 animate-pulse rounded-2xl bg-elevated" aria-label="Loading" />
           ) : !user ? (
@@ -96,31 +97,19 @@ function BotPage() {
               name="Aperture Bot"
               className="rounded-2xl border border-border bg-surface"
             >
-              <BotConsole />
+              <BotTeam />
             </PanelBoundary>
           )}
         </div>
 
-        {!isPending && (
-          <div className={cn("mt-14", working && "mx-auto max-w-3xl")}>
-            {working ? (
-              <PanelBoundary
-                name="The activity feed"
-                className="rounded-2xl border border-border bg-surface"
-              >
-                <BotActivity />
-              </PanelBoundary>
-            ) : (
-              <section aria-labelledby="bot-activity-sample">
-                <h2 id="bot-activity-sample" className="text-xl font-medium tracking-tight">
-                  What you will see
-                </h2>
-                <div className="mt-5">
-                  <SampleFeed note="A week of the bot's work on two repositories: each ask, and what came of it." />
-                </div>
-              </section>
-            )}
-          </div>
+        {!isPending && !working && (
+          <section className="mt-14 space-y-6" aria-labelledby="bot-team-sample">
+            <h2 id="bot-team-sample" className="text-xl font-medium tracking-tight">
+              What you will see
+            </h2>
+            <TeamPreview />
+            <SampleFeed note="A week of the bots' work on two repositories: each ask, and what came of it." />
+          </section>
         )}
 
         <div className={working ? "mx-auto max-w-3xl" : undefined}>

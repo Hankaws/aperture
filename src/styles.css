@@ -1142,3 +1142,45 @@ html[data-theme="light"] {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Aperture Bot's mascot (src/lib/bot/mascot.ts): it blinks, turns its blades while it works, and bobs while it thinks. */
+.mascot-blink {
+  animation: mascot-blink 5.5s infinite;
+}
+.mascot-turn {
+  animation: mascot-turn 4s linear infinite;
+}
+.mascot-bob {
+  animation: mascot-bob 1.8s ease-in-out infinite;
+}
+@keyframes mascot-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes mascot-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mascot-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-blink,
+  .mascot-turn,
+  .mascot-bob {
+    animation: none;
+  }
+}

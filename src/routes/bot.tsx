@@ -7,6 +7,7 @@ import { GithubAccountCard } from "@/components/site/github-account";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotConsole } from "@/components/bot/bot-console";
 import { buttonVariants } from "@/components/ui/button";
+import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { githubStatus, type GithubAccount } from "@/lib/github/api";
 import { cn } from "@/lib/utils";
@@ -90,7 +91,12 @@ function BotPage() {
               <GithubAccountCard onAccount={setGithub} />
             </div>
           ) : (
-            <BotConsole />
+            <PanelBoundary
+              name="Aperture Bot"
+              className="rounded-2xl border border-border bg-surface"
+            >
+              <BotConsole />
+            </PanelBoundary>
           )}
         </div>
 

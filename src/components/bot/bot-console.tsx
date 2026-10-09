@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { Textarea } from "@/components/ui/textarea";
 import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
 import { askBot, botSetup, botTasks, setUpBot, type BotSetup } from "@/lib/github/bot";
+import { clearSavedChat } from "@/lib/bot/chat-saved";
 import { phaseLine, type BotPhase } from "@/lib/bot/summary";
 import {
   isSettled,
@@ -132,6 +134,8 @@ export function BotConsole() {
 
 type Setup = { ok: true } & BotSetup;
 
+const PANEL = "rounded-2xl border border-border bg-surface";
+
 function RepoBot({ fullName }: { fullName: string }) {
   const [owner, name] = fullName.split("/") as [string, string];
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -194,14 +198,20 @@ function RepoBot({ fullName }: { fullName: string }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
       <div className="min-w-0 space-y-4 lg:sticky lg:top-20">
         {setup ? (
-          <BotChat
-            owner={owner}
-            name={name}
-            setup={setup}
-            tasks={tasks ?? []}
-            now={now}
-            onSent={asked}
-          />
+          <PanelBoundary
+            name="The chat"
+            className={PANEL}
+            reset={{ label: "Clear the saved chat", run: () => clearSavedChat(fullName) }}
+          >
+            <BotChat
+              owner={owner}
+              name={name}
+              setup={setup}
+              tasks={tasks ?? []}
+              now={now}
+              onSent={asked}
+            />
+          </PanelBoundary>
         ) : setupError ? null : (
           <div className="h-[32rem] animate-pulse rounded-2xl bg-elevated" />
         )}
@@ -222,7 +232,7 @@ function RepoBot({ fullName }: { fullName: string }) {
             {setupError}
           </p>
         ) : setup ? (
-          <>
+          <PanelBoundary name="The bot's setup" className={PANEL}>
             <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
             {setup.workflow && (
               <JobsCard
@@ -233,7 +243,7 @@ function RepoBot({ fullName }: { fullName: string }) {
               />
             )}
             {setup.workflow && <IdentityCard setup={setup} owner={owner} name={name} />}
-          </>
+          </PanelBoundary>
         ) : (
           <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
         )}
@@ -257,7 +267,9 @@ function RepoBot({ fullName }: { fullName: string }) {
           {tasks === null ? (
             <div className="mt-3 h-32 animate-pulse rounded-2xl bg-elevated" />
           ) : (
-            <TaskList tasks={tasks} now={now} />
+            <PanelBoundary name="The task list" className={cn(PANEL, "mt-3")}>
+              <TaskList tasks={tasks} now={now} />
+            </PanelBoundary>
           )}
         </section>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, Component, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Code2, FolderTree, Keyboard, LogOut, Search, Settings, Sparkles } from "lucide-react";
@@ -19,6 +19,7 @@ import { PreviewToggle } from "./tab-bar";
 import { LayoutMenu, PanelToggles } from "./layout-controls";
 import { AuthSlot } from "@/components/site/auth-slot";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { getAiStatus } from "@/lib/agent/api";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
@@ -149,36 +150,6 @@ function MobileAccount() {
       )}
     </div>
   );
-}
-
-type BoundaryProps = { name: string; children: ReactNode };
-type BoundaryState = { error: string | null };
-
-/** One panel can fail without taking the files, the code, and Composer down with it. */
-class PanelBoundary extends Component<BoundaryProps, BoundaryState> {
-  state: BoundaryState = { error: null };
-
-  static getDerivedStateFromError(error: unknown): BoundaryState {
-    const message = error instanceof Error && error.message ? error.message : "This panel stopped.";
-    return { error: message };
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children;
-    return (
-      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 px-4 text-center">
-        <p className="text-sm text-fg">{this.props.name} hit a problem</p>
-        <p className="max-w-xs text-xs break-words text-muted">{this.state.error}</p>
-        <button
-          type="button"
-          className="mt-1 rounded-md border border-border px-2.5 py-1 text-xs text-fg hover:bg-elevated"
-          onClick={() => this.setState({ error: null })}
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
 }
 
 function TitleBar() {
@@ -448,19 +419,19 @@ export function IdeShell() {
               const panel =
                 id === "files" ? (
                   <Panel key="files" id="files" defaultSize={workspace.size("files")} minSize="12%" maxSize="35%" className="min-h-0 overflow-hidden">
-                    <PanelBoundary name="Files">
+                    <PanelBoundary name="Files" className="h-full min-h-0 py-0">
                       <FileTree />
                     </PanelBoundary>
                   </Panel>
                 ) : id === "agent" ? (
                   <Panel key="agent" id="agent" defaultSize={workspace.size("agent")} minSize="20%" maxSize="45%" className="min-h-0 overflow-hidden">
-                    <PanelBoundary name="Composer">
+                    <PanelBoundary name="Composer" className="h-full min-h-0 py-0">
                       <AgentPanel composerRef={composerRef} />
                     </PanelBoundary>
                   </Panel>
                 ) : (
                   <Panel key="editor" id="editor" defaultSize={workspace.size("editor")} minSize="30%" className="min-h-0 overflow-hidden">
-                    <PanelBoundary name="Code">
+                    <PanelBoundary name="Code" className="h-full min-h-0 py-0">
                       <EditorColumn desktop={desktop} />
                     </PanelBoundary>
                   </Panel>

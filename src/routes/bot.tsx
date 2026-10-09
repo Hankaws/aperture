@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { GithubAccountCard } from "@/components/site/github-account";
+import { BotActivity, SampleFeed } from "@/components/bot/activity-feed";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotConsole } from "@/components/bot/bot-console";
 import { buttonVariants } from "@/components/ui/button";
@@ -99,6 +100,28 @@ function BotPage() {
             </PanelBoundary>
           )}
         </div>
+
+        {!isPending && (
+          <div className={cn("mt-14", working && "mx-auto max-w-3xl")}>
+            {working ? (
+              <PanelBoundary
+                name="The activity feed"
+                className="rounded-2xl border border-border bg-surface"
+              >
+                <BotActivity />
+              </PanelBoundary>
+            ) : (
+              <section aria-labelledby="bot-activity-sample">
+                <h2 id="bot-activity-sample" className="text-xl font-medium tracking-tight">
+                  What you will see
+                </h2>
+                <div className="mt-5">
+                  <SampleFeed note="A week of the bot's work on two repositories: each ask, and what came of it." />
+                </div>
+              </section>
+            )}
+          </div>
+        )}
 
         <div className={working ? "mx-auto max-w-3xl" : undefined}>
           <HowItWorks />

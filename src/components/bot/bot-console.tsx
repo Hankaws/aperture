@@ -16,6 +16,7 @@ import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { Textarea } from "@/components/ui/textarea";
 import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
 import { askBot, botSetup, botTasks, setUpBot, type BotSetup } from "@/lib/github/bot";
+import { ago } from "@/lib/bot/activity";
 import { clearSavedChat } from "@/lib/bot/chat-saved";
 import { phaseLine, type BotPhase } from "@/lib/bot/summary";
 import {
@@ -46,17 +47,6 @@ function remember(fullName: string) {
   } catch {
     // Private windows: the choice is just not kept.
   }
-}
-
-function ago(iso: string, now: number): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
-  if (!Number.isFinite(seconds)) return "";
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} days ago`;
 }
 
 /** The repo picker, then Set up, Ask and the tasks for the chosen repo. */

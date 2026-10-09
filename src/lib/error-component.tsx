@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
+import { errorPlace } from "./error-place";
 
 const FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
 const RELOAD_KEY = "aperture-chunk-reload";
@@ -39,6 +40,7 @@ function hardReload() {
 export function AppErrorComponent({ error }: ErrorComponentProps) {
   const message = errorMessage(error);
   const stale = isStaleChunk(message);
+  const place = stale ? [] : errorPlace(error);
 
   useEffect(() => {
     if (!stale || typeof window === "undefined") return;
@@ -64,6 +66,16 @@ export function AppErrorComponent({ error }: ErrorComponentProps) {
           ? "The editor failed to load a cached file. Reload to pick up the latest version."
           : message}
       </p>
+      {place.length > 0 && (
+        <ul
+          className="max-w-md font-mono text-[11px] break-all text-subtle"
+          aria-label="Where it happened"
+        >
+          {place.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
       <button
         type="button"
         className="mt-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:opacity-90"

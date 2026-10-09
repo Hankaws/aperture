@@ -121,6 +121,9 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- The error screen shows where an error happened (the built file, line and
+  column), so a bare message such as "l is not a function" can be traced to
+  its source. ([#54](https://github.com/Hankaws/aperture/pull/54))
 - The site's top bar fits when you are signed in. It ran off the screen on
   laptops and hid Pricing under the search box; your name and Sign out are
   now in the menu under your avatar, and Privacy and Changelog are in the

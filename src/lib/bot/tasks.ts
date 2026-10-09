@@ -219,6 +219,8 @@ export function workflowUse(text: string): {
   trigger: string;
   version: string | null;
   jobs: Jobs;
+  /** It posts as a GitHub App of its own, with the token APP_TOKEN_STEP makes. */
+  app: boolean;
 } {
   const step = botStep(text);
   const setting = (name: string) => {
@@ -237,8 +239,13 @@ export function workflowUse(text: string): {
       scheduled: setting("scheduled") || null,
       cron: /cron:\s*["']([^"']+)["']/.exec(text)?.[1] ?? null,
     },
+    app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
 }
+
+/** Where the workflow finds the bot's GitHub App: a repository variable, and a secret. */
+export const APP_ID_VARIABLE = "APERTURE_BOT_APP_ID";
+export const APP_KEY_SECRET = "APERTURE_BOT_PRIVATE_KEY";
 
 export type Provider = "grok" | "openai" | "anthropic" | "gemini" | "deepseek";
 
@@ -274,10 +281,13 @@ export function workflowFile(
   version: string,
   jobs: Jobs = NO_JOBS,
   settings?: string[],
+  app = false,
 ): string {
   const scheduled = jobs.scheduled ? cleanScheduled(jobs.scheduled) : "";
   const kept = settings
-    ? settings.filter((l) => !/^(scheduled|label):/.test(l))
+    ? settings.filter(
+        (l) => !/^(scheduled|label):/.test(l) && !/^github-token:.*steps\.app\./.test(l),
+      )
     : [
         `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
         ...(provider === "grok" ? [] : [`provider: ${provider}`]),
@@ -325,21 +335,37 @@ export function workflowFile(
       ? "      group: aperture-bot-${{ github.event.issue.number || 'scheduled' }}"
       : "      group: aperture-bot-${{ github.event.issue.number }}",
     "    steps:",
-    "      - uses: actions/checkout@v4",
+    ...(app
+      ? [
+          "      # The bot posts, commits and opens pull requests as its own GitHub App.",
+          "      - uses: actions/create-github-app-token@v1",
+          "        id: app",
+          "        with:",
+          `          app-id: \${{ vars.${APP_ID_VARIABLE} }}`,
+          `          private-key: \${{ secrets.${APP_KEY_SECRET} }}`,
+          "      - uses: actions/checkout@v4",
+          "        with:",
+          "          token: ${{ steps.app.outputs.token }}",
+        ]
+      : ["      - uses: actions/checkout@v4"]),
     "      - uses: actions/setup-node@v4",
     "        with:",
     "          node-version: 22",
     `      - uses: hankaws/aperture-bot@${version}`,
     "        with:",
     ...kept.map((l) => `          ${l}`),
+    ...(app ? ["          github-token: ${{ steps.app.outputs.token }}"] : []),
     ...(scheduled ? [`          scheduled: ${JSON.stringify(scheduled)}`] : []),
     "",
   ].join("\n");
 }
 
-/** The workflow with its jobs changed, everything else of the bot's step kept. */
-export function withJobs(text: string, jobs: Jobs): string | null {
+/**
+ * The workflow with its jobs (and, given, whether it posts as an App)
+ * changed, everything else of the bot's step kept.
+ */
+export function withJobs(text: string, jobs: Jobs, app?: boolean): string | null {
   const use = workflowUse(text);
   if (!use.uses || !use.version) return null;
-  return workflowFile("grok", use.version, jobs, botStep(text).with);
+  return workflowFile("grok", use.version, jobs, botStep(text).with, app ?? use.app);
 }

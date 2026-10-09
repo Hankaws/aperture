@@ -41,6 +41,8 @@ function fakeGitHub(
     red?: boolean;
     openIssues?: Array<{ number: number; title: string }>;
     openPulls?: Array<{ ref: string; url: string }>;
+    /** Who comments post as: a GitHub App's bot instead of the workflow's. */
+    poster?: { login: string; id: number };
   } = {},
 ) {
   const calls: Call[] = [];
@@ -99,7 +101,14 @@ function fakeGitHub(
         { id: 2, body: "an earlier bot reply", user: { login: "aperture", type: "Bot" } },
       ]);
     if (method === "POST" && /\/issues\/\d+\/comments$/.test(path))
-      return json({ id: 900, html_url: "https://github.com/acme/shop/issues/7#comment" }, 201);
+      return json(
+        {
+          id: 900,
+          html_url: "https://github.com/acme/shop/issues/7#comment",
+          user: options.poster ?? { login: "github-actions[bot]", id: 41898282 },
+        },
+        201,
+      );
     if (method === "PATCH" && /\/issues\/comments\/900$/.test(path)) return json({ id: 900 });
     if (method === "GET" && /\/pulls\/\d+$/.test(path)) {
       const accept = new Headers(init?.headers).get("accept") ?? "";
@@ -181,6 +190,7 @@ async function act(
     red?: boolean;
     openIssues?: Array<{ number: number; title: string }>;
     openPulls?: Array<{ ref: string; url: string }>;
+    poster?: { login: string; id: number };
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
     payload?: unknown;
@@ -195,6 +205,7 @@ async function act(
     red: options.red,
     openIssues: options.openIssues,
     openPulls: options.openPulls,
+    poster: options.poster,
   });
   const eventPath =
     options.payload === undefined
@@ -537,4 +548,20 @@ test("a scheduled task is done on its own issue, found again on the next run", a
   assert.ok(run.posted(/\/issues\/7\/comments$/).length > 0);
   const [opened] = run.posted(/\/pulls$/);
   assert.equal((opened!.body as { title: string }).title, "Show prices in dollars");
+});
+
+test("with a GitHub App's token, the bot's commits are the app's, with its name and avatar", async () => {
+  const run = await act({ poster: { login: "acme-aperture-bot[bot]", id: 1234 } });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const author = git(
+    run.origin,
+    "log",
+    "-1",
+    "--format=%an <%ae>",
+    "aperture/7-show-prices-in-dollars",
+  );
+  assert.equal(
+    author.trim(),
+    "Aperture Bot <1234+acme-aperture-bot[bot]@users.noreply.github.com>",
+  );
 });

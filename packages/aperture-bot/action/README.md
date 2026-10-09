@@ -90,6 +90,33 @@ jobs:
 
 The [Bot page](https://aperturesais.grok.me/bot) writes this for you.
 
+## Its own name and avatar
+
+With the workflow's token the bot posts as `github-actions[bot]`, and the pull requests it opens do not start your CI. Give it a GitHub App of yours and it posts, commits and opens pull requests as that app, with its avatar, and its pull requests run CI like anyone's.
+
+1. Create a GitHub App (the [Bot page](https://aperturesais.grok.me/bot) prefills one): no webhook; Contents, Issues and Pull requests read and write; Checks, Commit statuses and Actions read. Upload [the avatar](https://aperturesais.grok.me/bot/aperture-bot.png) as its logo.
+2. Generate a private key on the app's page, and install the app on the repository.
+3. Add the app's ID as the variable `APERTURE_BOT_APP_ID` and the private key as the secret `APERTURE_BOT_PRIVATE_KEY`, then use them in the workflow:
+
+```yaml
+steps:
+  - uses: actions/create-github-app-token@v1
+    id: app
+    with:
+      app-id: ${{ vars.APERTURE_BOT_APP_ID }}
+      private-key: ${{ secrets.APERTURE_BOT_PRIVATE_KEY }}
+  - uses: actions/checkout@v4
+    with:
+      token: ${{ steps.app.outputs.token }}
+  # … setup-node as above
+  - uses: hankaws/aperture-bot@v1
+    with:
+      model-key: ${{ secrets.XAI_API_KEY }}
+      github-token: ${{ steps.app.outputs.token }}
+```
+
+The bot names its commits after whoever its comments post as, so they show the app too.
+
 ## What it will not do
 
 - **Run code next to a secret.** Your tests run on a copy of the project without `.git`, in a container with no network and none of the runner's environment: no model key, no GitHub token.

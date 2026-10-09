@@ -17,7 +17,7 @@ import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
 import type { Model } from "./model.ts";
-import { checkoutPullHead, commitFiles, diffOf, freeBranch, push } from "./publish.ts";
+import { authorFor, checkoutPullHead, commitFiles, diffOf, freeBranch, push } from "./publish.ts";
 import {
   commitMessage,
   doneReply,
@@ -195,6 +195,8 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   // One comment for the whole run: posted when work starts, edited as it goes,
   // and edited into the reply at the end. Until it exists, replies are new comments.
   let status: number | null = null;
+  /** Who the token posts as: a GitHub App's bot, or the workflow's. */
+  let poster: { login: string; id: number } | null = null;
   let edits: Promise<void> = Promise.resolve();
   const reply = async (body: string) => {
     await edits;
@@ -224,7 +226,10 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     }
     status = await gh
       .comment(command.number, workingReply({ phase: "starting" }, asked))
-      .then((posted) => (Number.isSafeInteger(posted.id) ? posted.id : null))
+      .then((posted) => {
+        poster = posted.by;
+        return Number.isSafeInteger(posted.id) ? posted.id : null;
+      })
       .catch(() => null);
     if (pull) {
       checkoutPullHead(cwd, pull.headRef);
@@ -262,7 +267,12 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
 
     if (result.outcome === "clear") {
       await report({ phase: "publishing", plan: result.plan.map((s) => s.content) });
-      const sha = commitFiles(cwd, result.written, commitMessage(command, result));
+      const sha = commitFiles(
+        cwd,
+        result.written,
+        commitMessage(command, result),
+        authorFor(poster),
+      );
       if (pull) {
         push(cwd, pull.headRef);
         const url = `${repoUrl}/commit/${sha}`;

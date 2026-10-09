@@ -162,6 +162,7 @@ test("Set up's workflow file is one the Bot page recognises, with the provider's
     trigger: "/aperture",
     version: "v1",
     jobs: NO_JOBS,
+    app: false,
   });
   assert.doesNotMatch(grok, /provider:|^ {2}issues:$|schedule:/m);
   const openai = workflowFile("openai", "main");
@@ -274,4 +275,28 @@ test("a task the label or the schedule asked for is read from the bot's own comm
     [scheduled!.via, scheduled!.state, scheduled!.number],
     ["schedule", "working", 12],
   );
+});
+
+test("posting as a GitHub App adds the token step, uses it everywhere, and comes off again", () => {
+  const plain = workflowFile("grok", "v1");
+  const app = withJobs(plain, NO_JOBS, true)!;
+  assert.match(
+    app,
+    /- uses: actions\/create-github-app-token@v1\n {8}id: app\n {8}with:\n {10}app-id: \$\{\{ vars\.APERTURE_BOT_APP_ID \}\}\n {10}private-key: \$\{\{ secrets\.APERTURE_BOT_PRIVATE_KEY \}\}\n {6}- uses: actions\/checkout@v4\n {8}with:\n {10}token: \$\{\{ steps\.app\.outputs\.token \}\}\n/,
+  );
+  assert.match(app, / {10}github-token: \$\{\{ steps\.app\.outputs\.token \}\}\n/);
+  assert.equal(workflowUse(app).app, true);
+  // Changing the jobs keeps the app; turning the app off takes its token with it.
+  const jobs = withJobs(app, { label: true, scheduled: null, cron: null })!;
+  assert.equal(workflowUse(jobs).app, true);
+  assert.equal(jobs.match(/github-token:/g)?.length, 1);
+  const off = withJobs(jobs, { label: true, scheduled: null, cron: null }, false)!;
+  assert.equal(workflowUse(off).app, false);
+  assert.doesNotMatch(off, /github-token|create-github-app-token/);
+  // A token of the person's own is theirs: it stays.
+  const pat = plain.replace(
+    "model-key: ${{ secrets.XAI_API_KEY }}",
+    "model-key: ${{ secrets.XAI_API_KEY }}\n          github-token: ${{ secrets.BOT_PAT }}",
+  );
+  assert.match(withJobs(pat, NO_JOBS)!, /github-token: \$\{\{ secrets\.BOT_PAT \}\}/);
 });

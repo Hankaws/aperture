@@ -17,7 +17,8 @@ export function AuthSlot({ compact = false, plain = false }: { compact?: boolean
             {plain ? "Open →" : "Open editor"}
           </Link>
         )}
-        <UserButton compact={compact} />
+        {/* The site's bar has no room for a name and Sign out: they are in the avatar's menu. */}
+        <UserButton compact={compact || plain} />
       </div>
     );
   }

@@ -40,14 +40,17 @@ jobs:
       - name: Check the bundle on a clear change and a red one
         run: node aperture/packages/aperture-bot/smoke.mjs aperture/packages/aperture-bot/dist/index.cjs
 
-      - name: Commit dist/
+      # action.yml and the README come along, so the inputs the bundle reads are the ones declared.
+      - name: Commit dist/, action.yml and README.md
         run: |
           rm -rf dist
           cp -r aperture/packages/aperture-bot/dist dist
+          cp aperture/packages/aperture-bot/action/action.yml action.yml
+          cp aperture/packages/aperture-bot/action/README.md README.md
           rm -rf aperture
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist
-          if git diff --cached --quiet; then echo "dist/ is unchanged."; exit 0; fi
+          git add dist action.yml README.md
+          if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
           git commit -m "Build dist from Hankaws/aperture@${{ inputs.aperture-ref }}"
           git push

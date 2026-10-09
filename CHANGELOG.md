@@ -121,6 +121,14 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- The site's top bar fits when you are signed in. It ran off the screen on
+  laptops and hid Pricing under the search box; your name and Sign out are
+  now in the menu under your avatar, and Privacy and Changelog are in the
+  footer, search and phone menu rather than the bar.
+  ([#53](https://github.com/Hankaws/aperture/pull/53))
+- Aperture Bot's own repository keeps its `action.yml` and README in step
+  with the bundle: its build now copies them from Aperture with `dist/`.
+  ([#53](https://github.com/Hankaws/aperture/pull/53))
 - Parses no longer fails valid TypeScript it could not read: arrow
   functions with a type predicate (`(x): x is T =>`) now parse everywhere,
   and anything else it flags is settled by TypeScript's own parser wherever

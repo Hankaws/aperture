@@ -1,8 +1,10 @@
 /**
  * A repository's Aperture Bot tasks, read from its issue comments: each
  * comment that starts with the trigger is a task, and the bot's comment whose
- * hidden summary names it (see summary.ts) says how it is going. Pure, so the
- * Bot page's whole reading of GitHub is tested on plain data.
+ * hidden summary names it (see summary.ts) says how it is going. A task the
+ * label or the schedule asked for has no asking comment: the bot's comment is
+ * the whole of it. Pure, so the Bot page's whole reading of GitHub is tested
+ * on plain data.
  */
 import { DEFAULT_TRIGGER, taskFrom } from "../../../packages/aperture-bot/src/event.ts";
 import { readSummary, unpushedDiff, type BotState, type BotSummary } from "./summary.ts";
@@ -31,8 +33,9 @@ export type Thread = { title: string; isPull: boolean; open: boolean };
 export type TaskState = BotState | "waiting" | "silent" | "replied" | "ended";
 
 export type BotTask = {
-  /** The asking comment's id. */
+  /** The asking comment's id; for a label or the schedule, the bot's comment's. */
   id: number;
+  via: "comment" | "label" | "schedule";
   number: number;
   thread: Thread | null;
   task: string;
@@ -68,6 +71,7 @@ export function tasksFrom(
   const trigger = options.trigger ?? DEFAULT_TRIGGER;
   const replies = new Map<number, { comment: RawComment; summary: BotSummary }>();
   const plainBotReplies: RawComment[] = [];
+  const tasks: BotTask[] = [];
   for (const comment of comments) {
     if (!isBot(comment)) continue;
     const summary = readSummary(comment.body ?? "");
@@ -75,12 +79,30 @@ export function tasksFrom(
       plainBotReplies.push(comment);
       continue;
     }
+    const number = issueNumber(comment);
+    if (summary.via && typeof comment.id === "number" && number !== null) {
+      tasks.push({
+        id: comment.id,
+        via: summary.via,
+        number,
+        thread: threads.get(number) ?? null,
+        task: summary.task ?? "",
+        author: summary.by ?? summary.via,
+        askedAt: comment.created_at ?? "",
+        askedUrl: comment.html_url ?? "",
+        state: summary.state,
+        summary,
+        replyUrl: comment.html_url ?? null,
+        updatedAt: comment.updated_at ?? comment.created_at ?? "",
+        diff: unpushedDiff(comment.body ?? ""),
+      });
+      continue;
+    }
     const seen = replies.get(summary.asked);
     if (!seen || (comment.updated_at ?? "") > (seen.comment.updated_at ?? ""))
       replies.set(summary.asked, { comment, summary });
   }
 
-  const tasks: BotTask[] = [];
   for (const comment of comments) {
     if (isBot(comment) || typeof comment.id !== "number") continue;
     const asked = taskFrom(comment.body ?? "", trigger);
@@ -106,6 +128,7 @@ export function tasksFrom(
     }
     tasks.push({
       id: comment.id,
+      via: "comment",
       number,
       thread: threads.get(number) ?? null,
       task: asked,
@@ -143,17 +166,78 @@ export function isSettled(state: TaskState): boolean {
   return state !== "working" && state !== "waiting";
 }
 
-/** What a workflow file says about the bot: whether it uses it, and the secret it passes as the key. */
+/** Standing jobs, as the workflow sets them: the label, and what to do on its schedule. */
+export type Jobs = { label: boolean; scheduled: string | null; cron: string | null };
+
+export const NO_JOBS: Jobs = { label: false, scheduled: null, cron: null };
+/** Off the hour, when GitHub's schedules are busiest. UTC. */
+export const NIGHTLY = "17 3 * * *";
+export const WEEKLY = "17 3 * * 1";
+
+const BOT_STEP = /^(\s*)- uses:\s*["']?hankaws\/aperture-bot@([\w.\-/]+)["']?\s*$/im;
+
+/** The bot step's `with:` lines, as written, and the version it uses. */
+function botStep(text: string): { version: string | null; with: string[] } {
+  const lines = text.split("\n");
+  const at = lines.findIndex((line) => BOT_STEP.test(line));
+  if (at < 0) return { version: null, with: [] };
+  const step = BOT_STEP.exec(lines[at]!)!;
+  const indent = step[1]!.length;
+  const out: string[] = [];
+  let inWith = false;
+  for (const line of lines.slice(at + 1)) {
+    if (!line.trim()) continue;
+    const depth = line.length - line.trimStart().length;
+    if (depth <= indent) break;
+    if (/^\s*with:\s*$/.test(line)) {
+      inWith = true;
+      continue;
+    }
+    if (inWith && depth > indent + 2) out.push(line.trim());
+    else inWith = false;
+  }
+  return { version: step[2]!, with: out };
+}
+
+function yamlValue(raw: string): string {
+  const value = raw.replace(/\s+#.*$/, "").trim();
+  if (value.startsWith('"')) {
+    try {
+      return JSON.parse(value) as string;
+    } catch {
+      return value.slice(1, -1);
+    }
+  }
+  if (value.startsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
+  return value;
+}
+
+/** What a workflow file says about the bot: whether it uses it, its key's secret, and its jobs. */
 export function workflowUse(text: string): {
   uses: boolean;
   secret: string | null;
   trigger: string;
+  version: string | null;
+  jobs: Jobs;
 } {
-  const uses = /uses:\s*["']?hankaws\/aperture-bot@/i.test(text);
+  const step = botStep(text);
+  const setting = (name: string) => {
+    const line = step.with.find((l) => l.startsWith(`${name}:`));
+    return line === undefined ? null : yamlValue(line.slice(name.length + 1));
+  };
   const secret =
     /model-key:\s*\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/.exec(text)?.[1] ?? null;
-  const trigger = /^\s*trigger:\s*["']?([^"'\s#]+)/m.exec(text)?.[1] ?? DEFAULT_TRIGGER;
-  return { uses, secret, trigger };
+  return {
+    uses: step.version !== null,
+    secret,
+    trigger: setting("trigger") ?? DEFAULT_TRIGGER,
+    version: step.version,
+    jobs: {
+      label: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\blabeled\b/m.test(text),
+      scheduled: setting("scheduled") || null,
+      cron: /cron:\s*["']([^"']+)["']/.exec(text)?.[1] ?? null,
+    },
+  };
 }
 
 export type Provider = "grok" | "openai" | "anthropic" | "gemini" | "deepseek";
@@ -169,14 +253,45 @@ export const PROVIDER_SECRET: Record<Provider, string> = {
 
 export const WORKFLOW_PATH = ".github/workflows/aperture-bot.yml";
 
-/** The workflow Set up adds: the README's, with the provider and version filled in. */
-export function workflowFile(provider: Provider, version: string): string {
-  const secret = PROVIDER_SECRET[provider];
+/**
+ * A scheduled task as a YAML string. `${{` would be read by Actions as an
+ * expression, so it never reaches the file.
+ */
+export function cleanScheduled(task: string): string {
+  return task
+    .replace(/\$\{\{/g, "")
+    .replace(/\s+$/g, "")
+    .slice(0, 2_000);
+}
+
+/**
+ * The bot's workflow: the README's, with the provider, version and jobs
+ * filled in. `settings` are the bot step's existing `with:` lines, kept as
+ * they are (but for the jobs' own) when the page changes the jobs.
+ */
+export function workflowFile(
+  provider: Provider,
+  version: string,
+  jobs: Jobs = NO_JOBS,
+  settings?: string[],
+): string {
+  const scheduled = jobs.scheduled ? cleanScheduled(jobs.scheduled) : "";
+  const kept = settings
+    ? settings.filter((l) => !/^(scheduled|label):/.test(l))
+    : [
+        `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
+        ...(provider === "grok" ? [] : [`provider: ${provider}`]),
+      ];
+  const any = jobs.label || Boolean(scheduled);
   return [
     "name: Aperture Bot",
     "on:",
     "  issue_comment:",
     "    types: [created]",
+    ...(jobs.label ? ["  issues:", "    types: [labeled]"] : []),
+    ...(scheduled
+      ? ["  schedule:", `    - cron: "${jobs.cron ?? NIGHTLY}"`, "  workflow_dispatch:"]
+      : []),
     "",
     "permissions:",
     "  contents: write",
@@ -185,12 +300,30 @@ export function workflowFile(provider: Provider, version: string): string {
     "",
     "jobs:",
     "  bot:",
-    "    # Starts a runner only for comments that ask the bot.",
-    "    if: startsWith(github.event.comment.body, '/aperture')",
+    ...(any
+      ? [
+          "    # Starts a runner only when the bot is asked: a comment, its label, or its schedule.",
+          "    if: >-",
+          "      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture'))",
+          ...(jobs.label
+            ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
+            : []),
+          ...(scheduled
+            ? [
+                "      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+              ]
+            : []),
+        ]
+      : [
+          "    # Starts a runner only for comments that ask the bot.",
+          "    if: startsWith(github.event.comment.body, '/aperture')",
+        ]),
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 45",
     "    concurrency:",
-    "      group: aperture-bot-${{ github.event.issue.number }}",
+    any
+      ? "      group: aperture-bot-${{ github.event.issue.number || 'scheduled' }}"
+      : "      group: aperture-bot-${{ github.event.issue.number }}",
     "    steps:",
     "      - uses: actions/checkout@v4",
     "      - uses: actions/setup-node@v4",
@@ -198,8 +331,15 @@ export function workflowFile(provider: Provider, version: string): string {
     "          node-version: 22",
     `      - uses: hankaws/aperture-bot@${version}`,
     "        with:",
-    `          model-key: \${{ secrets.${secret} }}`,
-    ...(provider === "grok" ? [] : [`          provider: ${provider}`]),
+    ...kept.map((l) => `          ${l}`),
+    ...(scheduled ? [`          scheduled: ${JSON.stringify(scheduled)}`] : []),
     "",
   ].join("\n");
+}
+
+/** The workflow with its jobs changed, everything else of the bot's step kept. */
+export function withJobs(text: string, jobs: Jobs): string | null {
+  const use = workflowUse(text);
+  if (!use.uses || !use.version) return null;
+  return workflowFile("grok", use.version, jobs, botStep(text).with);
 }

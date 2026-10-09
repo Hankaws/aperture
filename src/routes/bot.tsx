@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { GithubAccountCard } from "@/components/site/github-account";
+import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotConsole } from "@/components/bot/bot-console";
 import { buttonVariants } from "@/components/ui/button";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -50,7 +51,8 @@ function BotPage() {
       <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-6xl py-8" : "max-w-3xl py-14")}>
         {working ? (
           <div>
-            <h1 className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">
+            <h1 className="flex items-center gap-2.5 text-xs font-medium tracking-[0.18em] text-subtle uppercase">
+              <BotAvatar size="sm" />
               Aperture Bot
             </h1>
             <p className="mt-2 text-sm text-pretty text-muted">

@@ -1,9 +1,11 @@
 /**
- * Aperture Bot as a GitHub Action, on `issue_comment`. A comment that starts
- * with `/aperture` from someone with write access becomes a task; the bot runs
- * it on the checkout and, only when Aperture Agent Check is clear, opens a pull
- * request (asked on an issue) or pushes to the pull request (asked on one).
- * Otherwise it replies with what it tried and why it stopped.
+ * Aperture Bot as a GitHub Action. A comment that starts with `/aperture`, or
+ * the `aperture` label on an issue, from someone with write access becomes a
+ * task; so does the workflow's schedule, with its `scheduled` job (jobs.ts).
+ * The bot runs it on the checkout and, only when Aperture Agent Check is
+ * clear, opens a pull request (asked on an issue) or pushes to the pull
+ * request (asked on one). Otherwise it replies with what it tried and why it
+ * stopped.
  *
  * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
  */
@@ -12,7 +14,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.server.ts";
 import { threadContext } from "./context.ts";
-import { DEFAULT_TRIGGER, parseEvent } from "./event.ts";
+import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
 import type { Model } from "./model.ts";
 import { checkoutPullHead, commitFiles, diffOf, freeBranch, push } from "./publish.ts";
@@ -25,7 +27,9 @@ import {
   pullBody,
   titleFor,
   workingReply,
+  type Asked,
 } from "./replies.ts";
+import { jobFrom, planJob } from "./jobs.ts";
 import { describeError } from "./retry.ts";
 import { runTask, type BotProgress } from "./run.ts";
 import { DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
@@ -131,36 +135,62 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     env.GITHUB_EVENT_NAME ?? "",
     payload,
     input(env, "trigger") ?? DEFAULT_TRIGGER,
+    input(env, "label") ?? DEFAULT_LABEL,
   );
-  if ("ignored" in parsed) {
-    log(`Aperture Bot: nothing to do: ${parsed.ignored}`);
+  const ignore = (why: string) => {
+    log(`Aperture Bot: nothing to do: ${why}`);
     setOutput(env, { outcome: "ignored" });
     return 0;
-  }
-  const command = parsed.command;
+  };
+  if ("ignored" in parsed) return ignore(parsed.ignored);
+  const job = "scheduled" in parsed ? jobFrom(input(env, "scheduled")) : null;
+  if ("scheduled" in parsed && !job)
+    return ignore("the workflow ran on its schedule, but its scheduled input is empty.");
+  const [owner, name] =
+    "command" in parsed
+      ? [parsed.command.owner, parsed.command.repo]
+      : (env.GITHUB_REPOSITORY ?? "").split("/");
+  if (!owner || !name) throw new Error("GITHUB_REPOSITORY is not owner/repo.");
   const token = input(env, "github-token") ?? env.GITHUB_TOKEN;
   if (!token) throw new Error("github-token is empty.");
   const gh = new GitHub(
-    { owner: command.owner, repo: command.repo },
+    { owner, repo: name },
     token,
     env.GITHUB_API_URL ?? "https://api.github.com",
     deps.fetch,
   );
-  const permission = await gh.permission(command.author);
-  if (!canWrite(permission)) {
-    log(
-      `Aperture Bot: @${command.author} has ${permission} access; only people who can write may ask.`,
-    );
-    setOutput(env, { outcome: "ignored" });
-    return 0;
+
+  let command: Command;
+  if ("command" in parsed) {
+    command = parsed.command;
+    const permission = await gh.permission(command.author);
+    if (!canWrite(permission)) {
+      log(
+        `Aperture Bot: @${command.author} has ${permission} access; only people who can write may ask.`,
+      );
+      setOutput(env, { outcome: "ignored" });
+      return 0;
+    }
+    if (command.commentId !== null)
+      await gh.react(command.commentId, "eyes").catch(() => undefined);
+  } else {
+    // The schedule: the workflow file says what to do, and whoever can change it can write.
+    const planned = await planJob(gh, job!, { owner, repo: name });
+    if ("skip" in planned) return ignore(planned.skip);
+    command = planned.command;
   }
-  await gh.react(command.commentId, "eyes").catch(() => undefined);
 
   const server = env.GITHUB_SERVER_URL ?? "https://github.com";
   const repoUrl = `${server}/${command.owner}/${command.repo}`;
   const runUrl = env.GITHUB_RUN_ID ? `${repoUrl}/actions/runs/${env.GITHUB_RUN_ID}` : repoUrl;
   const cwd = resolve(input(env, "working-directory") ?? env.GITHUB_WORKSPACE ?? process.cwd());
-  const asked = { asked: command.commentId, run: runUrl };
+  const asked: Asked = {
+    asked: command.commentId ?? 0,
+    run: runUrl,
+    ...(command.via === "comment"
+      ? {}
+      : { via: command.via, by: command.author, task: command.task }),
+  };
 
   // One comment for the whole run: posted when work starts, edited as it goes,
   // and edited into the reply at the end. Until it exists, replies are new comments.

@@ -9,6 +9,15 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Standing jobs for Aperture Bot. Add the `aperture` label to an issue and
+  the bot does what it says. Give it a schedule and it fixes whatever is red
+  on the default branch each night (quiet when it is green, or while its last
+  fix waits for review), or does a task of yours each night or each Monday,
+  on its own tracking issue. The Bot page shows a repository's jobs and opens
+  a pull request that changes them, keeping the rest of the bot's settings.
+  The bot also has a face on the page: the Aperture lens, which turns while
+  it works, and an avatar image (`/bot/aperture-bot.png`) for a GitHub App.
+  ([#51](https://github.com/Hankaws/aperture/pull/51))
 - A chat with Aperture Bot on the Bot page. Ask about a repository ("what's
   broken right now?") and the bot reads its open issues and pull requests,
   any one thread, CI on the default branch and its own recent tasks, then

@@ -7,7 +7,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
-import { botAskInput, botChatInput, botRepoInput, botSetupInput } from "@/lib/security/inputs";
+import {
+  botAskInput,
+  botChatInput,
+  botJobsInput,
+  botRepoInput,
+  botSetupInput,
+} from "@/lib/security/inputs";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import { ciText, openText, tasksText, threadText } from "@/lib/bot/github-text";
 import {
@@ -15,9 +21,15 @@ import {
   endedRun,
   runId,
   tasksFrom,
+  cleanScheduled,
+  NIGHTLY,
+  PROVIDER_SECRET,
+  WEEKLY,
+  withJobs,
   workflowFile,
   workflowUse,
   WORKFLOW_PATH,
+  type Jobs,
   type BotTask,
   type RawComment,
   type Thread,
@@ -39,7 +51,8 @@ export type BotSetup = {
   canWrite: boolean;
   /** The person administers the repository, so the secret and setting below could be read. */
   isAdmin: boolean;
-  workflow: { path: string; secret: string | null; trigger: string } | null;
+  /** `jobs`: its standing jobs; the page can change them only at WORKFLOW_PATH. */
+  workflow: { path: string; secret: string | null; trigger: string; jobs: Jobs } | null;
   /** The secret the workflow reads exists. Null: this token cannot tell. */
   secret: boolean | null;
   /** "Allow GitHub Actions to create and approve pull requests" is on. Null: this token cannot tell. */
@@ -90,7 +103,8 @@ async function findWorkflow(base: string, get: Get): Promise<BotSetup["workflow"
     const content = (got.body as { content?: string; encoding?: string }).content;
     if (got.status !== 200 || typeof content !== "string") continue;
     const use = workflowUse(fromBase64(content));
-    if (use.uses) return { path: file.path!, secret: use.secret, trigger: use.trigger };
+    if (use.uses)
+      return { path: file.path!, secret: use.secret, trigger: use.trigger, jobs: use.jobs };
   }
   return null;
 }
@@ -323,6 +337,94 @@ async function botVersion(get: Get): Promise<string> {
   return tag.status === 200 ? "v1" : "main";
 }
 
+type Call = (
+  url: string,
+  init?: { method?: string; body?: string },
+) => Promise<{ status: number; body: unknown }>;
+
+/**
+ * Writes the bot's workflow on a new branch and opens a pull request for it;
+ * merging is left to people. `sha` is the file's current blob, to replace it.
+ */
+async function proposeWorkflow(
+  call: Call,
+  base: string,
+  change: {
+    content: string;
+    sha?: string;
+    branch: string;
+    message: string;
+    title: string;
+    body: string;
+  },
+): Promise<{ ok: true; url: string } | Failure> {
+  const repo = await call(base);
+  if (repo.status !== 200)
+    return { ok: false, error: "Repo not found, or the token cannot see it." };
+  const defaultBranch = String((repo.body as { default_branch?: string }).default_branch ?? "main");
+  const head = await call(`${base}/git/ref/heads/${encodeURIComponent(defaultBranch)}`);
+  const sha = (head.body as { object?: { sha?: string } }).object?.sha;
+  if (head.status !== 200 || !sha) return { ok: false, error: `Could not read ${defaultBranch}.` };
+
+  let branch = change.branch;
+  let made = await call(`${base}/git/refs`, {
+    method: "POST",
+    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+  });
+  if (made.status === 422) {
+    branch = `${change.branch}-${Date.now().toString(36)}`;
+    made = await call(`${base}/git/refs`, {
+      method: "POST",
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+    });
+  }
+  if (made.status === 403 || made.status === 404)
+    return { ok: false, error: "This token cannot push to that repo." };
+  if (made.status !== 201)
+    return { ok: false, error: `GitHub would not make a branch (${made.status}).` };
+
+  const dropBranch = () =>
+    call(`${base}/git/refs/heads/${encodeURIComponent(branch)}`, { method: "DELETE" }).catch(
+      () => undefined,
+    );
+  const file = await call(`${base}/contents/${WORKFLOW_PATH}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      message: change.message,
+      content: Buffer.from(change.content).toString("base64"),
+      branch,
+      ...(change.sha ? { sha: change.sha } : {}),
+    }),
+  });
+  if (file.status === 403 || file.status === 404) {
+    await dropBranch();
+    return { ok: false, error: NO_WORKFLOW_SCOPE };
+  }
+  if (file.status === 409 || (file.status === 422 && !change.sha)) {
+    await dropBranch();
+    return { ok: false, error: `${WORKFLOW_PATH} changed or is already there. Check again.` };
+  }
+  if (file.status !== 201 && file.status !== 200) {
+    await dropBranch();
+    return { ok: false, error: `GitHub would not write the workflow (${file.status}).` };
+  }
+  const pull = await call(`${base}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title: change.title,
+      head: branch,
+      base: defaultBranch,
+      body: change.body,
+    }),
+  });
+  if (pull.status !== 201)
+    return {
+      ok: false,
+      error: `The workflow is on ${branch}, but GitHub would not open the pull request (${pull.status}).`,
+    };
+  return { ok: true, url: String((pull.body as { html_url?: string }).html_url ?? "") };
+}
+
 /** Adds the workflow on a branch and opens a pull request for it. Merging it is left to people. */
 export const setUpBot = createServerFn({ method: "POST" })
   .validator(botSetupInput)
@@ -335,88 +437,95 @@ export const setUpBot = createServerFn({ method: "POST" })
     if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
     const base = repoBase(data.owner, data.repo);
     if (!base) return { ok: false, error: "That repo name is not valid." };
+    const call: Call = (url, init) => githubJson(url, token, init);
     try {
-      const repo = await githubJson(base, token);
-      if (repo.status !== 200)
-        return { ok: false, error: "Repo not found, or the token cannot see it." };
-      const defaultBranch = String(
-        (repo.body as { default_branch?: string }).default_branch ?? "main",
-      );
-      const head = await githubJson(
-        `${base}/git/ref/heads/${encodeURIComponent(defaultBranch)}`,
-        token,
-      );
-      const sha = (head.body as { object?: { sha?: string } }).object?.sha;
-      if (head.status !== 200 || !sha)
-        return { ok: false, error: `Could not read ${defaultBranch}.` };
+      return await proposeWorkflow(call, base, {
+        content: workflowFile(data.provider, await botVersion((url) => call(url))),
+        branch: "aperture-bot-setup",
+        message: "Add Aperture Bot",
+        title: "Add Aperture Bot",
+        body: [
+          "Adds the [Aperture Bot](https://aperturesais.grok.me/bot) workflow: comment `/aperture` and a task on an issue or a pull request, and it opens a pull request only when Aperture Agent Check finds nothing red.",
+          "",
+          "Before it can work, in this repository's Settings:",
+          "",
+          `- [ ] Secrets and variables, Actions: add the model key as \`${PROVIDER_SECRET[data.provider]}\`.`,
+          '- [ ] Actions, General, Workflow permissions: tick "Allow GitHub Actions to create and approve pull requests".',
+          "",
+          "Opened from Aperture's Bot page.",
+        ].join("\n"),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
 
-      let branch = "aperture-bot-setup";
-      let made = await githubJson(`${base}/git/refs`, token, {
-        method: "POST",
-        body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
-      });
-      if (made.status === 422) {
-        branch = `aperture-bot-setup-${Date.now().toString(36)}`;
-        made = await githubJson(`${base}/git/refs`, token, {
-          method: "POST",
-          body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
-        });
-      }
-      if (made.status === 403 || made.status === 404)
-        return { ok: false, error: "This token cannot push to that repo." };
-      if (made.status !== 201)
-        return { ok: false, error: `GitHub would not make a branch (${made.status}).` };
+/** What a set of jobs does, in words, for the pull request that sets them. */
+function jobsText(jobs: Jobs): string[] {
+  const lines: string[] = [];
+  if (jobs.label)
+    lines.push(
+      "- **The `aperture` label**: added to an issue by someone who can write, the bot does what the issue says.",
+    );
+  if (jobs.scheduled === "fix-ci")
+    lines.push(
+      `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): fix whatever is red on the default branch. Nothing when it is green, or while the last fix waits for review.`,
+    );
+  else if (jobs.scheduled)
+    lines.push(
+      `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): ${jobs.scheduled.split("\n")[0]}`,
+    );
+  return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
+}
 
-      const dropBranch = () =>
-        githubJson(`${base}/git/refs/heads/${encodeURIComponent(branch)}`, token, {
-          method: "DELETE",
-        }).catch(() => undefined);
-      const file = await githubJson(`${base}/contents/${WORKFLOW_PATH}`, token, {
-        method: "PUT",
-        body: JSON.stringify({
-          message: "Add Aperture Bot",
-          content: Buffer.from(
-            workflowFile(data.provider, await botVersion((url) => githubJson(url, token))),
-          ).toString("base64"),
-          branch,
-        }),
-      });
-      if (file.status === 403 || file.status === 404) {
-        await dropBranch();
-        return { ok: false, error: NO_WORKFLOW_SCOPE };
-      }
-      if (file.status === 422) {
-        await dropBranch();
-        return { ok: false, error: `${WORKFLOW_PATH} is already there.` };
-      }
-      if (file.status !== 201 && file.status !== 200) {
-        await dropBranch();
-        return { ok: false, error: `GitHub would not add the workflow (${file.status}).` };
-      }
-      const pull = await githubJson(`${base}/pulls`, token, {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Add Aperture Bot",
-          head: branch,
-          base: defaultBranch,
-          body: [
-            "Adds the [Aperture Bot](https://aperturesais.grok.me/bot) workflow: comment `/aperture` and a task on an issue or a pull request, and it opens a pull request only when Aperture Agent Check finds nothing red.",
-            "",
-            "Before it can work, in this repository's Settings:",
-            "",
-            `- [ ] Secrets and variables, Actions: add the model key as \`${workflowUse(workflowFile(data.provider, "v1")).secret}\`.`,
-            '- [ ] Actions, General, Workflow permissions: tick "Allow GitHub Actions to create and approve pull requests".',
-            "",
-            "Opened from Aperture's Bot page.",
-          ].join("\n"),
-        }),
-      });
-      if (pull.status !== 201)
+/** Opens a pull request that sets the bot's standing jobs, keeping the rest of its workflow. */
+export const setBotJobs = createServerFn({ method: "POST" })
+  .validator(botJobsInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true; url: string } | Failure> => {
+    const busy = overLimit("botAsk", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const base = repoBase(data.owner, data.repo);
+    if (!base) return { ok: false, error: "That repo name is not valid." };
+    const call: Call = (url, init) => githubJson(url, token, init);
+    const scheduled = data.scheduled ? cleanScheduled(data.scheduled).trim() : "";
+    const jobs: Jobs = {
+      label: data.label,
+      scheduled: scheduled || null,
+      cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
+    };
+    try {
+      const current = await call(`${base}/contents/${WORKFLOW_PATH}`);
+      const file = current.body as { content?: string; sha?: string };
+      if (current.status === 404 || typeof file.content !== "string")
         return {
           ok: false,
-          error: `The workflow is on ${branch}, but GitHub would not open the pull request (${pull.status}).`,
+          error: `The bot's workflow is not at ${WORKFLOW_PATH}, so the page cannot change it. Add the jobs by hand: see the bot's README.`,
         };
-      return { ok: true, url: String((pull.body as { html_url?: string }).html_url ?? "") };
+      const text = fromBase64(file.content);
+      const next = withJobs(text, jobs);
+      if (!next) return { ok: false, error: `${WORKFLOW_PATH} does not use Aperture Bot.` };
+      if (next === text) return { ok: false, error: "The workflow already has these jobs." };
+      return await proposeWorkflow(call, base, {
+        content: next,
+        sha: file.sha,
+        branch: "aperture-bot-jobs",
+        message: "Aperture Bot: set its standing jobs",
+        title: "Aperture Bot: standing jobs",
+        body: [
+          "Sets [Aperture Bot](https://aperturesais.grok.me/bot)'s standing jobs. Each runs on this repository's runner with its model key, and opens a pull request only when Aperture Agent Check finds nothing red.",
+          "",
+          ...jobsText(jobs),
+          "",
+          "The rest of the bot's settings are kept. Opened from Aperture's Bot page.",
+        ].join("\n"),
+      });
     } catch (error) {
       return {
         ok: false,

@@ -31,6 +31,7 @@ test("an issue comment becomes a command with everything the run needs", () => {
     task: "add a currency",
     commentId: 9,
     author: "ada",
+    via: "comment",
     owner: "acme",
     repo: "shop",
     defaultBranch: "trunk",
@@ -49,7 +50,7 @@ test("everything else is ignored, with the reason", () => {
     assert.ok("ignored" in parsed, JSON.stringify(p));
     return parsed.ignored;
   };
-  assert.match(ignored("pull_request", payload()), /answers issue comments/);
+  assert.match(ignored("pull_request", payload()), /answers comments, its label and its schedule/);
   assert.match(ignored("issue_comment", payload({ action: "edited" })), /not edits/);
   assert.match(
     ignored(
@@ -59,6 +60,54 @@ test("everything else is ignored, with the reason", () => {
     /from bots/,
   );
   assert.match(ignored("issue_comment", payload({ repository: {} })), /missing/);
+});
+
+const labelled = (more: Record<string, unknown> = {}) => ({
+  action: "labeled",
+  label: { name: "aperture" },
+  sender: { login: "grace", type: "User" },
+  issue: { number: 4, title: "Add a currency", body: "Let the shop pick one." },
+  repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+  ...more,
+});
+
+test("the bot's label on an issue asks for what the issue says, for whoever added it", () => {
+  const parsed = parseEvent("issues", labelled());
+  assert.ok("command" in parsed);
+  assert.deepEqual(parsed.command, {
+    number: 4,
+    isPull: false,
+    title: "Add a currency",
+    body: "Let the shop pick one.",
+    task: "Do what this issue asks: Add a currency",
+    commentId: null,
+    author: "grace",
+    via: "label",
+    owner: "acme",
+    repo: "shop",
+    defaultBranch: "main",
+  });
+  assert.ok("command" in parseEvent("issues", labelled({ label: { name: "Aperture" } })));
+  assert.ok(
+    "command" in parseEvent("issues", labelled({ label: { name: "bot" } }), "/aperture", "bot"),
+  );
+  const why = (p: unknown) => {
+    const out = parseEvent("issues", p);
+    assert.ok("ignored" in out);
+    return out.ignored;
+  };
+  assert.match(why(labelled({ label: { name: "bug" } })), /the label bug is not aperture/);
+  assert.match(why(labelled({ action: "unlabeled" })), /only an added label/);
+  assert.match(why(labelled({ sender: { login: "x[bot]", type: "Bot" } })), /added by bots/);
+  assert.match(
+    why(labelled({ issue: { number: 4, title: "t", pull_request: {} } })),
+    /only asks on issues/,
+  );
+});
+
+test("the schedule and a manual run are standing jobs", () => {
+  assert.deepEqual(parseEvent("schedule", {}), { scheduled: true });
+  assert.deepEqual(parseEvent("workflow_dispatch", {}), { scheduled: true });
 });
 
 test("the thread is the issue and its recent comments, not the bot's or the asking one", () => {

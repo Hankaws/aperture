@@ -614,6 +614,16 @@ page (`/bot`).
   Anything else: a reply with what is red and the diff, nothing pushed. On a
   fork's pull request it runs nothing and says why. Every wording is in
   `replies.ts`, tested as text.
+- **Three ways to ask** (`event.ts`): a comment starting with the trigger,
+  the `label` input's label added to an issue (whoever added it must be able
+  to write; there is no comment to react to), and the workflow's schedule or
+  a manual run, which does the `scheduled` input's job (`jobs.ts`). `fix-ci`
+  reads the default branch's failed checks and statuses (a run still going,
+  like the bot's own, is not a failure) and turns them into the task; any
+  other text is the task. A job reports on its own tracking issue, found
+  again by title, and does nothing when the branch is green or a pull
+  request for that issue (`aperture/<n>-…`) is still open. There is no
+  permission gate on the schedule: whoever can change the workflow can write.
 - **One comment per run.** Once work starts the Action posts "on it" with the
   run's link and edits that comment at each step (`onProgress` in `runTask`,
   awaited so the edit is out before Agent Check blocks the event loop), then
@@ -634,6 +644,14 @@ page (`/bot`).
   approve pull requests" (the last two only for admins), and can open a pull
   request adding `.github/workflows/aperture-bot.yml`, pinned to `v1` once
   that tag exists and to `main` until then.
+- **Standing jobs on the page** (`jobs-card.tsx`, `setBotJobs`): the setup
+  reads the jobs back from the workflow (`workflowUse`), and a change opens a
+  pull request that rewrites `.github/workflows/aperture-bot.yml` with
+  `withJobs`, which keeps every other line of the bot step's `with:` as it
+  was. A workflow elsewhere is shown, not edited. `${{` is stripped from a
+  scheduled task, since Actions would read it as an expression. Tasks a label
+  or the schedule started have no asking comment: the bot's summary carries
+  `via`, `by` and `task`, and `tasksFrom` reads them from its comment alone.
 - **The chat** (`src/components/bot/bot-chat.tsx`, `botChat` in
   `src/lib/github/bot.ts`, the turn itself in `src/lib/bot/chat.ts`, pure and
   tested) is the page's front: the person talks about the repo, the model

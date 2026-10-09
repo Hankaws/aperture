@@ -17,8 +17,14 @@ export type BotCheckRow = { status: string; label: string; detail: string };
 export type BotSummary = {
   v: 1;
   state: BotState;
-  /** The id of the comment that asked. */
+  /** The id of the comment that asked; 0 when a label or the schedule did. */
   asked: number;
+  /** How the bot was asked, when it was not a comment. */
+  via?: "label" | "schedule";
+  /** Who asked, when it was not a comment: whoever added the label, or "schedule". */
+  by?: string;
+  /** What was asked, when it was not a comment. */
+  task?: string;
   /** The Actions run, as a github.com URL. */
   run: string;
   /** While working: what the bot is doing. */
@@ -56,6 +62,7 @@ function bounded(summary: BotSummary): BotSummary {
       detail: clip(row.detail, LIMITS.text),
     })),
     files: summary.files?.slice(0, LIMITS.files),
+    task: summary.task === undefined ? undefined : clip(summary.task, LIMITS.error),
     error: summary.error === undefined ? undefined : clip(summary.error, LIMITS.error),
   };
 }
@@ -112,6 +119,9 @@ export function readSummary(body: string): BotSummary | null {
     asked: r.asked,
     run: isGithubUrl(r.run) ? r.run : "",
   };
+  if (r.via === "label" || r.via === "schedule") out.via = r.via;
+  if (typeof r.by === "string") out.by = r.by.slice(0, 100);
+  if (typeof r.task === "string") out.task = r.task;
   if (typeof r.phase === "string" && r.phase in PHASE_TEXT) out.phase = r.phase as BotPhase;
   if (typeof r.round === "number") out.round = r.round;
   if (typeof r.rounds === "number") out.rounds = r.rounds;

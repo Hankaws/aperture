@@ -19,6 +19,9 @@ export type Pull = {
 
 export type ThreadComment = { id: number; author: string; authorType: string; body: string };
 
+/** A check or status that finished red, with what it reported. */
+export type CheckFailure = { name: string; detail: string; annotations: string[] };
+
 export class GitHubError extends Error {
   constructor(
     message: string,
@@ -145,6 +148,78 @@ export class GitHub {
       { body },
     );
     return { id: out.id, url: out.html_url };
+  }
+
+  async defaultBranch(): Promise<string> {
+    const out = await this.call<{ default_branch?: string }>("GET", this.base);
+    return out.default_branch ?? "main";
+  }
+
+  /** The commit a branch points at. */
+  async head(branch: string): Promise<string> {
+    const out = await this.call<{ commit?: { sha?: string } }>(
+      "GET",
+      `${this.base}/branches/${encodeURIComponent(branch)}`,
+    );
+    return out.commit?.sha ?? "";
+  }
+
+  /** The checks and statuses on a commit that finished red, with what they said. */
+  async failures(sha: string): Promise<CheckFailure[]> {
+    const [runs, status] = await Promise.all([
+      this.call<{
+        check_runs?: Array<{
+          id: number;
+          name: string;
+          status?: string;
+          conclusion?: string | null;
+          output?: { title?: string | null; summary?: string | null };
+        }>;
+      }>("GET", `${this.base}/commits/${sha}/check-runs?per_page=100`),
+      this.call<{
+        statuses?: Array<{ context: string; state: string; description?: string | null }>;
+      }>("GET", `${this.base}/commits/${sha}/status`),
+    ]);
+    const out: CheckFailure[] = [];
+    for (const run of runs.check_runs ?? []) {
+      if (run.status !== "completed" || !["failure", "timed_out"].includes(run.conclusion ?? ""))
+        continue;
+      const notes = await this.call<Array<{ path: string; start_line?: number; message?: string }>>(
+        "GET",
+        `${this.base}/check-runs/${run.id}/annotations?per_page=20`,
+      ).catch(() => []);
+      out.push({
+        name: run.name,
+        detail: [run.output?.title, run.output?.summary].filter(Boolean).join("\n"),
+        annotations: notes.map((n) => `${n.path}:${n.start_line ?? 1}: ${n.message ?? ""}`),
+      });
+    }
+    for (const s of status.statuses ?? [])
+      if (s.state === "failure" || s.state === "error")
+        out.push({ name: s.context, detail: s.description ?? "", annotations: [] });
+    return out;
+  }
+
+  async openIssues(): Promise<Array<{ number: number; title: string; isPull: boolean }>> {
+    const out = await this.call<Array<{ number: number; title: string; pull_request?: unknown }>>(
+      "GET",
+      `${this.base}/issues?state=open&per_page=100`,
+    );
+    return out.map((i) => ({ number: i.number, title: i.title, isPull: Boolean(i.pull_request) }));
+  }
+
+  async createIssue(title: string, body: string): Promise<number> {
+    const out = await this.call<{ number: number }>("POST", `${this.base}/issues`, { title, body });
+    return out.number;
+  }
+
+  /** Open pull requests from this repository's branches: their branch and page. */
+  async openPulls(): Promise<Array<{ headRef: string; url: string }>> {
+    const out = await this.call<Array<{ head: { ref: string }; html_url: string }>>(
+      "GET",
+      `${this.base}/pulls?state=open&per_page=100`,
+    );
+    return out.map((p) => ({ headRef: p.head.ref, url: p.html_url }));
   }
 
   async editComment(id: number, body: string): Promise<void> {

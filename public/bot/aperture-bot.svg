@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Aperture Bot</title>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="42%" r="65%">
+      <stop offset="0" stop-color="#1b2a44"/>
+      <stop offset="1" stop-color="#0a0d14"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <g transform="translate(96 96) scale(13.333)" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M7.2 3.4 16.8 3.4 21.6 12 16.8 20.6 7.2 20.6 2.4 12Z"/>
+    <circle cx="12" cy="12" r="5.1"/>
+    <circle cx="14.6" cy="9.4" r="0.85" fill="#93c5fd" stroke="none"/>
+    <circle cx="12" cy="12" r="2.1" fill="#93c5fd" stroke="none"/>
+  </g>
+</svg>

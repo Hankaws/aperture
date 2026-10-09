@@ -5,54 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
-import type { ChatTurn, Proposal } from "@/lib/bot/chat";
+import type { ChatTurn } from "@/lib/bot/chat";
+import { loadChat, saveChat, type Card, type Entry, type Sent } from "@/lib/bot/chat-saved";
 import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 import { TaskCard } from "./bot-console";
 
-type Sent = { number: number; url: string; at: string };
-type Card = Proposal & { sent?: Sent; dismissed?: boolean };
-type Entry =
-  | { id: string; role: "user"; text: string }
-  | {
-      id: string;
-      role: "assistant";
-      text: string;
-      looked?: string[];
-      cards?: Card[];
-      error?: boolean;
-    };
-
-const KEEP = 40;
 const SUGGESTIONS = [
   "What's broken right now?",
   "Summarise the open issues",
   "How did your recent tasks go?",
   "Fix the newest bug report",
 ];
-
-const key = (repo: string) => `aperture-bot-chat:${repo}`;
-
-/** The conversation, per repository and per browser: a convenience, so a failed read is an empty chat. */
-function loadChat(repo: string): Entry[] {
-  try {
-    const raw = window.localStorage.getItem(key(repo));
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    return Array.isArray(parsed) ? (parsed as Entry[]).slice(-KEEP) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveChat(repo: string, entries: Entry[]) {
-  try {
-    window.localStorage.setItem(key(repo), JSON.stringify(entries.slice(-KEEP)));
-  } catch {
-    // Full or blocked storage: the chat just is not kept.
-  }
-}
 
 /** What the model reads back of an answer: its text, and what became of each task it proposed. */
 function turnText(entry: Entry): string {

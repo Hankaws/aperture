@@ -121,6 +121,11 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- A part of the Bot page that fails no longer takes the whole page down: the
+  chat, the setup and the task list each show what went wrong, where, and
+  Try again; the chat can also clear the conversation this browser saved. A
+  saved chat is checked when it is read back, and what does not fit is left
+  out. ([#55](https://github.com/Hankaws/aperture/pull/55))
 - The error screen shows where an error happened (the built file, line and
   column), so a bare message such as "l is not a function" can be traced to
   its source. ([#54](https://github.com/Hankaws/aperture/pull/54))

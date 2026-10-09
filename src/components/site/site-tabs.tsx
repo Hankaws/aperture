@@ -3,8 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { ChevronDown, Search } from "lucide-react";
 import { showPricing } from "@/lib/billing/pricing-visible";
 
-/** `wide`: in the bar only on wide screens, `widest` only on the widest; always in the menu. */
-type Item = { label: string; href?: string; to?: string; wide?: boolean; widest?: boolean };
+/**
+ * `wide`: in the bar only on wide screens. `menu`: never in the bar, which
+ * stops at 1152 px however wide the screen, so the footer and search carry
+ * it. Everything is always in the narrow-screen menu.
+ */
+type Item = { label: string; href?: string; to?: string; wide?: boolean; menu?: boolean };
 
 const ITEMS: Item[] = [
   { label: "How", href: "/#how" },
@@ -12,9 +16,9 @@ const ITEMS: Item[] = [
   { label: "Benchmark", to: "/benchmark" },
   { label: "Agents", to: "/agents", wide: true },
   { label: "Agent Check", to: "/agent-check", wide: true },
-  { label: "Bot", to: "/bot", widest: true },
-  { label: "Privacy", to: "/privacy" },
-  { label: "Changelog", to: "/changelog" },
+  { label: "Bot", to: "/bot", wide: true },
+  { label: "Privacy", to: "/privacy", menu: true },
+  { label: "Changelog", to: "/changelog", menu: true },
   ...(showPricing ? [{ label: "Pricing", to: "/pricing" } satisfies Item] : []),
 ];
 
@@ -22,12 +26,8 @@ export function SiteLinks() {
   const base = "shrink-0 text-sm text-muted hover:text-fg";
   return (
     <nav className="hidden items-center gap-5 lg:flex" aria-label="Sections">
-      {ITEMS.map((item) => {
-        const className = item.widest
-          ? `${base} hidden 2xl:inline`
-          : item.wide
-            ? `${base} hidden xl:inline`
-            : base;
+      {ITEMS.filter((item) => !item.menu).map((item) => {
+        const className = item.wide ? `${base} hidden xl:inline` : base;
         return item.to ? (
           <Link key={item.label} to={item.to} className={className}>
             {item.label}

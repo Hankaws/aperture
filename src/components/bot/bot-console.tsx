@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -7,17 +7,13 @@ import {
   CircleDashed,
   GitPullRequest,
   Loader2,
-  RefreshCw,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { Textarea } from "@/components/ui/textarea";
-import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
-import { askBot, botSetup, botTasks, setUpBot, type BotSetup } from "@/lib/github/bot";
+import { askBot, setUpBot } from "@/lib/github/bot";
 import { ago } from "@/lib/bot/activity";
-import { clearSavedChat } from "@/lib/bot/chat-saved";
 import { phaseLine, type BotPhase } from "@/lib/bot/summary";
 import {
   isSettled,
@@ -27,245 +23,7 @@ import {
   type TaskState,
 } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
-import { BotChat } from "./bot-chat";
-import { IdentityCard } from "./identity-card";
-import { JobsCard } from "./jobs-card";
-
-const REPO_KEY = "aperture-bot-repo";
-
-function remembered(): string {
-  try {
-    return window.localStorage.getItem(REPO_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function remember(fullName: string) {
-  try {
-    window.localStorage.setItem(REPO_KEY, fullName);
-  } catch {
-    // Private windows: the choice is just not kept.
-  }
-}
-
-/** The repo picker, then Set up, Ask and the tasks for the chosen repo. */
-export function BotConsole() {
-  const [repos, setRepos] = useState<GithubRepoSummary[] | null>(null);
-  const [repoError, setRepoError] = useState<string | null>(null);
-  const [repo, setRepo] = useState("");
-
-  useEffect(() => {
-    let cancel = false;
-    void listGithubRepos({ data: {} })
-      .then((out) => {
-        if (cancel) return;
-        if (!out.ok) {
-          setRepoError(out.error);
-          return;
-        }
-        setRepos(out.repos);
-        const kept = remembered();
-        setRepo(out.repos.some((r) => r.fullName === kept) ? kept : (out.repos[0]?.fullName ?? ""));
-      })
-      .catch(
-        (err) =>
-          !cancel && setRepoError(err instanceof Error ? err.message : "Could not list repos."),
-      );
-    return () => {
-      cancel = true;
-    };
-  }, []);
-
-  if (repoError)
-    return (
-      <p className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
-        {repoError}
-      </p>
-    );
-  if (!repos)
-    return (
-      <div className="h-40 animate-pulse rounded-2xl bg-elevated" aria-label="Loading your repos" />
-    );
-  if (repos.length === 0)
-    return (
-      <p className="text-sm text-muted">
-        The token on your account cannot see any repo. Give it repo access in Settings.
-      </p>
-    );
-
-  return (
-    <div className="space-y-6">
-      <label className="block">
-        <span className="text-xs font-medium text-muted">Repository</span>
-        <span className="relative mt-1 block">
-          <select
-            value={repo}
-            onChange={(event) => {
-              setRepo(event.target.value);
-              remember(event.target.value);
-            }}
-            className="h-11 w-full appearance-none rounded-lg border border-border bg-elevated pr-10 pl-3 font-mono text-sm text-fg focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none"
-          >
-            {repos.map((r) => (
-              <option key={r.fullName} value={r.fullName}>
-                {r.fullName}
-                {r.private ? " (private)" : ""}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-subtle" />
-        </span>
-      </label>
-      {repo && <RepoBot key={repo} fullName={repo} />}
-    </div>
-  );
-}
-
-type Setup = { ok: true } & BotSetup;
-
-const PANEL = "rounded-2xl border border-border bg-surface";
-
-function RepoBot({ fullName }: { fullName: string }) {
-  const [owner, name] = fullName.split("/") as [string, string];
-  const [setup, setSetup] = useState<Setup | null>(null);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<BotTask[] | null>(null);
-  const [tasksError, setTasksError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  /** Until this time, poll fast: a task was just asked and has no answer yet. */
-  const eager = useRef(0);
-
-  const loadSetup = useCallback(async () => {
-    setSetupError(null);
-    try {
-      const out = await botSetup({ data: { owner, repo: name } });
-      if (out.ok) setSetup(out);
-      else setSetupError(out.error);
-    } catch (err) {
-      setSetupError(err instanceof Error ? err.message : "Could not read the repo.");
-    }
-  }, [owner, name]);
-
-  const loadTasks = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const out = await botTasks({ data: { owner, repo: name } });
-      if (out.ok) {
-        setTasks(out.tasks);
-        setTasksError(null);
-      } else setTasksError(out.error);
-    } catch (err) {
-      setTasksError(err instanceof Error ? err.message : "Could not read the tasks.");
-    } finally {
-      setRefreshing(false);
-      setNow(Date.now());
-    }
-  }, [owner, name]);
-
-  useEffect(() => {
-    void loadSetup();
-    void loadTasks();
-  }, [loadSetup, loadTasks]);
-
-  const active = (tasks ?? []).some((t) => !isSettled(t.state));
-  useEffect(() => {
-    // Every 10 seconds while something is moving, every minute otherwise; never in a hidden tab.
-    const every = active || Date.now() < eager.current ? 10_000 : 60_000;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadTasks();
-    }, every);
-    return () => window.clearInterval(timer);
-  }, [active, loadTasks, tasks]);
-
-  const asked = () => {
-    eager.current = Date.now() + 5 * 60_000;
-    void loadTasks();
-  };
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-      <div className="min-w-0 space-y-4 lg:sticky lg:top-20">
-        {setup ? (
-          <PanelBoundary
-            name="The chat"
-            className={PANEL}
-            reset={{ label: "Clear the saved chat", run: () => clearSavedChat(fullName) }}
-          >
-            <BotChat
-              owner={owner}
-              name={name}
-              setup={setup}
-              tasks={tasks ?? []}
-              now={now}
-              onSent={asked}
-            />
-          </PanelBoundary>
-        ) : setupError ? null : (
-          <div className="h-[32rem] animate-pulse rounded-2xl bg-elevated" />
-        )}
-        {setup && (
-          <details className="group rounded-2xl border border-border bg-surface">
-            <summary className="cursor-pointer list-none px-5 py-4 text-sm text-muted hover:text-fg">
-              Or write the task yourself
-            </summary>
-            <div className="border-t border-border">
-              <AskCard setup={setup} owner={owner} name={name} onAsked={asked} />
-            </div>
-          </details>
-        )}
-      </div>
-      <div className="min-w-0 space-y-6">
-        {setupError ? (
-          <p className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
-            {setupError}
-          </p>
-        ) : setup ? (
-          <PanelBoundary name="The bot's setup" className={PANEL}>
-            <SetupCard setup={setup} owner={owner} name={name} onRecheck={loadSetup} />
-            {setup.workflow && (
-              <JobsCard
-                key={JSON.stringify(setup.workflow.jobs)}
-                setup={setup}
-                owner={owner}
-                name={name}
-              />
-            )}
-            {setup.workflow && <IdentityCard setup={setup} owner={owner} name={name} />}
-          </PanelBoundary>
-        ) : (
-          <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
-        )}
-        <section aria-labelledby="bot-tasks">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="bot-tasks" className="text-lg font-medium">
-              Tasks
-            </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void loadTasks()}
-              disabled={refreshing}
-              aria-label="Refresh tasks"
-            >
-              <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-          {tasksError && <p className="mt-3 text-sm text-danger">{tasksError}</p>}
-          {tasks === null ? (
-            <div className="mt-3 h-32 animate-pulse rounded-2xl bg-elevated" />
-          ) : (
-            <PanelBoundary name="The task list" className={cn(PANEL, "mt-3")}>
-              <TaskList tasks={tasks} now={now} />
-            </PanelBoundary>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
+import type { Setup } from "./use-repo-bot";
 
 function Mark({ value }: { value: boolean | null }) {
   if (value === true) return <Check className="size-4 shrink-0 text-ok" aria-label="Done" />;
@@ -281,7 +39,7 @@ const PROVIDERS: Array<{ id: Provider; label: string }> = [
   { id: "deepseek", label: "DeepSeek" },
 ];
 
-function SetupCard({
+export function SetupCard({
   setup,
   owner,
   name,
@@ -441,7 +199,7 @@ function SetupCard({
 
 const NEW = "new";
 
-function AskCard({
+export function AskCard({
   setup,
   owner,
   name,
@@ -592,7 +350,7 @@ const FILTERS: Array<{ id: Filter; label: string; match: (s: TaskState) => boole
   },
 ];
 
-function TaskList({ tasks, now }: { tasks: BotTask[]; now: number }) {
+export function TaskList({ tasks, now }: { tasks: BotTask[]; now: number }) {
   const [filter, setFilter] = useState<Filter>("all");
   const shown = useMemo(
     () => tasks.filter((t) => FILTERS.find((f) => f.id === filter)!.match(t.state)),

@@ -776,12 +776,19 @@ export const botChat = createServerFn({ method: "POST" })
         return tasksText(out.tasks);
       },
     };
+    const repo = `${data.owner}/${data.repo}`;
+    // A bot of the person's own team brings its name and how they asked it to work.
+    const bot = data.botId
+      ? await (await import("@/lib/bot/team.server")).botFor(context.userId, data.botId, repo)
+      : null;
     try {
       const out = await runBotChat(
-        `${data.owner}/${data.repo}`,
+        repo,
         data.turns,
         (messages, useTools, tools) => complete(cfg, messages, useTools, undefined, tools),
         lookups,
+        undefined,
+        bot ? { name: bot.name, instructions: bot.personality } : null,
       );
       await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
       return { ok: true, reply: out.reply, proposals: out.proposals, looked: out.looked };

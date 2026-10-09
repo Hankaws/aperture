@@ -67,6 +67,9 @@ export function savedEntries(parsed: unknown): Entry[] {
 
 const key = (repo: string) => `aperture-bot-chat:${repo}`;
 
+/** Where a team bot's conversation is kept: by its id, not its repository. */
+export const chatKey = (bot: { id: string }) => `bot:${bot.id}`;
+
 /** The conversation, per repository and per browser: a convenience, so a failed read is an empty chat. */
 export function loadChat(repo: string): Entry[] {
   try {

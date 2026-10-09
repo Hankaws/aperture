@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowUp, GitPullRequest, Loader2, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,12 +6,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
 import type { ChatTurn } from "@/lib/bot/chat";
-import { loadChat, saveChat, type Card, type Entry, type Sent } from "@/lib/bot/chat-saved";
+import {
+  chatKey,
+  loadChat,
+  saveChat,
+  type Card,
+  type Entry,
+  type Sent,
+} from "@/lib/bot/chat-saved";
+import type { MascotMood } from "@/lib/bot/mascot";
+import type { BotProfile } from "@/lib/bot/team";
 import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
-import { BotAvatar } from "./bot-avatar";
 import { TaskCard } from "./bot-console";
+import { MascotAvatar } from "./mascot";
 
 const SUGGESTIONS = [
   "What's broken right now?",
@@ -44,33 +53,54 @@ function taskFor(card: Card, tasks: BotTask[]): BotTask | null {
   return since.find((t) => t.task === card.task) ?? since.at(-1) ?? null;
 }
 
+/**
+ * The conversation with one bot of the team about its repository: the room's
+ * header (`lead` on the left, `actions` on the right), the thread, and the
+ * composer. `intro` sits under the greeting until the conversation starts.
+ */
 export function BotChat({
-  owner,
-  name,
+  bot,
   setup,
   tasks,
   now,
+  mood,
+  lead,
+  actions,
+  intro,
   onSent,
+  onChange,
 }: {
-  owner: string;
-  name: string;
+  bot: BotProfile;
   setup: BotSetup;
   tasks: BotTask[];
   now: number;
+  /** What the bot is doing on GitHub; thinking while it answers here. */
+  mood: MascotMood;
+  lead: ReactNode;
+  actions?: ReactNode;
+  intro?: ReactNode;
   onSent: () => void;
+  /** The conversation changed: for the roster's last line. */
+  onChange?: (entries: Entry[]) => void;
 }) {
-  const repo = `${owner}/${name}`;
+  const repo = bot.repo;
+  const [owner = "", name = ""] = repo.split("/");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setEntries(loadChat(repo)), [repo]);
+  useEffect(() => {
+    const own = loadChat(chatKey(bot));
+    // A conversation kept per repository, before bots had names, carries over once.
+    setEntries(own.length > 0 ? own : loadChat(repo));
+  }, [bot, repo]);
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [entries.length, busy]);
 
   const update = (next: Entry[]) => {
     setEntries(next);
-    saveChat(repo, next);
+    saveChat(chatKey(bot), next);
+    onChange?.(next);
   };
 
   async function send(text: string) {
@@ -84,7 +114,7 @@ export function BotChat({
       const turns: ChatTurn[] = asked
         .filter((e) => !(e.role === "assistant" && e.error))
         .map((e) => ({ role: e.role, text: turnText(e) }));
-      const out = await botChat({ data: { owner, repo: name, turns } });
+      const out = await botChat({ data: { owner, repo: name, botId: bot.id, turns } });
       update([
         ...asked,
         out.ok
@@ -122,46 +152,48 @@ export function BotChat({
     );
 
   return (
-    <section
-      className="flex min-h-[32rem] flex-col rounded-2xl border border-border bg-surface lg:h-[calc(100dvh-11rem)]"
-      aria-label={`Chat with Aperture Bot about ${repo}`}
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-          <BotAvatar size="sm" working={busy} />
-          <span className="truncate">Aperture Bot · {repo}</span>
-        </p>
-        {entries.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => update([])} aria-label="Clear the chat">
-            <Trash2 className="size-4" />
-            Clear
-          </Button>
-        )}
+    <section className="flex h-full min-h-0 flex-col" aria-label={`Chat with ${bot.name}`}>
+      <div className="flex min-h-14 items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2.5">{lead}</div>
+        <div className="flex shrink-0 items-center gap-1">
+          {entries.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => update([])}
+              aria-label="Clear the chat"
+              title="Clear the chat"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
+          {actions}
+        </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5" aria-live="polite">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5" aria-live="polite">
         {entries.length === 0 && !busy && (
-          <div className="flex flex-col items-center px-2 py-8 text-center">
-            <BotAvatar size="lg" />
-            <p className="mt-4 text-lg font-medium text-balance">
-              What should we work on in {name}?
-            </p>
+          <div className="flex flex-col items-center px-2 py-6 text-center">
+            <MascotAvatar mascot={bot.mascot} mood={mood} size={72} />
+            <p className="mt-4 text-lg font-medium text-balance">Hi, I&apos;m {bot.name}.</p>
             <p className="mt-1 max-w-md text-sm text-pretty text-muted">
-              I read the issues, pull requests and CI, and suggest tasks. Nothing reaches GitHub
-              until you send it.
+              I look after <span className="font-mono text-xs">{repo}</span>: I read its issues,
+              pull requests and CI, and suggest tasks. Nothing reaches GitHub until you send it.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void send(s)}
-                  className="h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            {intro ?? (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void send(s)}
+                    className="h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -174,7 +206,7 @@ export function BotChat({
             </div>
           ) : (
             <div key={entry.id} className="flex gap-3">
-              <BotAvatar size="sm" className="mt-0.5" />
+              <MascotAvatar mascot={bot.mascot} size={28} className="mt-0.5" />
               <div className="min-w-0 flex-1 space-y-3">
                 {entry.error ? (
                   <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -218,8 +250,8 @@ export function BotChat({
 
         {busy && (
           <div className="flex items-center gap-3 text-sm text-muted">
-            <BotAvatar size="sm" working />
-            Looking at GitHub…
+            <MascotAvatar mascot={bot.mascot} mood="thinking" size={28} />
+            {bot.name} is looking at GitHub…
           </div>
         )}
         <div ref={end} />
@@ -232,7 +264,7 @@ export function BotChat({
           void send(draft);
         }}
       >
-        <div className="flex items-end gap-2 rounded-xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
           <Textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -244,8 +276,8 @@ export function BotChat({
             }}
             rows={1}
             maxLength={6000}
-            placeholder={`Ask about ${name}, or say what to change…`}
-            aria-label="Message to Aperture Bot"
+            placeholder={`Message ${bot.name}`}
+            aria-label={`Message to ${bot.name}`}
             className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
           />
           <Button
@@ -367,7 +399,7 @@ function ProposalCard({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => void send()} disabled={busy || !setup.workflow}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Send to Aperture Bot
+            Send the task
           </Button>
           <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss this task">
             <X className="size-4" />

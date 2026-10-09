@@ -26,6 +26,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
     await sql`delete from user_jobs where user_id = ${userId}`;
     await sql`delete from user_agents where user_id = ${userId}`;
     await sql`delete from agent_tokens where user_id = ${userId}`;
+    await sql`delete from user_bots where user_id = ${userId}`;
     await sql`delete from user_workspaces where user_id = ${userId}`;
     await sql`delete from user_settings where user_id = ${userId}`;
     if (email) await sql`delete from "verification" where "identifier" = ${email}`;

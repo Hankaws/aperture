@@ -12,7 +12,10 @@ import { Button } from "@/components/ui/button";
 import { setBotApp, type BotSetup } from "@/lib/github/bot";
 import { appManifest, newAppUrl } from "@/lib/bot/app-manifest";
 import { APP_ID_VARIABLE, APP_KEY_SECRET, WORKFLOW_PATH } from "@/lib/bot/tasks";
+import type { Mascot } from "@/lib/bot/mascot";
 import { BotAvatar } from "./bot-avatar";
+import { downloadMascot } from "@/lib/bot/mascot-png";
+import { MascotAvatar } from "./mascot";
 
 const AVATAR = "/bot/aperture-bot.png";
 
@@ -48,10 +51,15 @@ export function IdentityCard({
   setup,
   owner,
   name,
+  mascot,
+  botName,
 }: {
   setup: BotSetup;
   owner: string;
   name: string;
+  /** The team bot's own face: offered as the logo instead of the Aperture lens. */
+  mascot?: Mascot;
+  botName?: string;
 }) {
   const workflow = setup.workflow!;
   const [busy, setBusy] = useState(false);
@@ -85,7 +93,7 @@ export function IdentityCard({
       aria-labelledby="bot-identity"
     >
       <div className="flex items-center gap-3">
-        <BotAvatar size="md" />
+        {mascot ? <MascotAvatar mascot={mascot} size={36} /> : <BotAvatar size="md" />}
         <div className="min-w-0">
           <h2 id="bot-identity" className="text-sm font-medium">
             On GitHub
@@ -125,14 +133,25 @@ export function IdentityCard({
               <p className="font-medium">2. On the app's page</p>
               <p className="mt-0.5 text-pretty text-muted">
                 Generate a private key, upload{" "}
-                <a
-                  href={AVATAR}
-                  download="aperture-bot.png"
-                  className="inline-flex items-center gap-1 text-accent hover:underline"
-                >
-                  <Download className="size-3.5" />
-                  the avatar
-                </a>{" "}
+                {mascot ? (
+                  <button
+                    type="button"
+                    onClick={() => void downloadMascot(mascot, botName ?? "aperture-bot")}
+                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                  >
+                    <Download className="size-3.5" />
+                    {botName ? `${botName}'s avatar` : "the avatar"}
+                  </button>
+                ) : (
+                  <a
+                    href={AVATAR}
+                    download="aperture-bot.png"
+                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                  >
+                    <Download className="size-3.5" />
+                    the avatar
+                  </a>
+                )}{" "}
                 as its logo, and install it on {setup.fullName}.
               </p>
             </li>

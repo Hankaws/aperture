@@ -169,6 +169,11 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- A Gemini key works again: the bot, its chat, the editor's agent and Tab
+  ask for Gemini 3.8 Flash, since Google turns new keys away from Gemini
+  2.5 Flash. When a model provider refuses a request, the error now says
+  what the provider said, not just its status code.
+  ([#62](https://github.com/Hankaws/aperture/pull/62))
 - From the bot's first run on a real repository: `/aperture check` counts
   when "check" is the first line, so a signature under it no longer turns it
   into a task; the error for a missing model key says where to add it; and

@@ -26,7 +26,7 @@ const { complete, completeStreaming } = await load();
 type Sent = { url: string; headers: Record<string, string>; body: Record<string, unknown> };
 
 /** Anthropic's Messages API, in memory: answers with `reply` and records each request. */
-function anthropic(reply: Record<string, unknown> | string) {
+function anthropic(reply: Record<string, unknown> | unknown[] | string, status = 200) {
   const sent: Sent[] = [];
   const real = globalThis.fetch;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -37,7 +37,10 @@ function anthropic(reply: Record<string, unknown> | string) {
     });
     return typeof reply === "string"
       ? new Response(reply, { headers: { "content-type": "text/event-stream" } })
-      : new Response(JSON.stringify(reply), { headers: { "content-type": "application/json" } });
+      : new Response(JSON.stringify(reply), {
+          status,
+          headers: { "content-type": "application/json" },
+        });
   }) as typeof fetch;
   return { sent, restore: () => (globalThis.fetch = real) };
 }
@@ -106,5 +109,41 @@ test("a request Claude declines says so, instead of an empty answer", async () =
     assert.equal(stream.sent[0]!.body.stream, true);
   } finally {
     stream.restore();
+  }
+});
+
+test("a provider's refusal says what it said, never the key", async () => {
+  const gemini = { provider: "gemini" as const, apiKey: "AIza-secret" };
+  const api = anthropic(
+    [
+      {
+        error: {
+          code: 404,
+          message: "models/x is not found for key AIza-secret.\n Call ListModels.",
+        },
+      },
+    ],
+    404,
+  );
+  try {
+    await assert.rejects(
+      complete(gemini, ask, false),
+      /^Error: gemini refused the request \(404\): models\/x is not found for key \[key\]\. Call ListModels\.$/,
+    );
+    assert.equal(api.sent[0]!.body.model, "gemini-3.8-flash");
+  } finally {
+    api.restore();
+  }
+  const claude = anthropic(
+    { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } },
+    401,
+  );
+  try {
+    await assert.rejects(
+      complete(cfg, ask, false),
+      /^Error: anthropic refused the request \(401\): invalid x-api-key$/,
+    );
+  } finally {
+    claude.restore();
   }
 });

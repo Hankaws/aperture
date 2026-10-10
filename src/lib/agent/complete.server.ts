@@ -39,6 +39,35 @@ function endpointOf(cfg: CompletionCfg): { base: string; model: string } {
   return { base: openaiCompatBase(cfg.provider), model: modelOf(cfg.provider) };
 }
 
+/**
+ * A provider's refusal, with what it said: "gemini refused the request (404):
+ * models/x is not found" says which setting to change, where a bare status
+ * does not. The key never appears, even if a provider echoes it.
+ */
+async function refused(name: string, res: Response, apiKey: string): Promise<Error> {
+  let said = "";
+  try {
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Not JSON: the text itself is what it said.
+    }
+    const first = Array.isArray(parsed) ? parsed[0] : parsed;
+    const error = (first as { error?: { message?: unknown } | string } | null)?.error;
+    const message = typeof error === "string" ? error : error?.message;
+    said = (typeof message === "string" ? message : parsed === null ? text : "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (apiKey) said = said.split(apiKey).join("[key]");
+  } catch {
+    // An unreadable body: the status is all there is.
+  }
+  const detail = said ? `: ${said.length > 240 ? `${said.slice(0, 239)}…` : said}` : ".";
+  return new Error(`${name} refused the request (${res.status})${detail}`);
+}
+
 async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   const { base, model } = endpointOf(cfg);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -53,8 +82,9 @@ async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signa
   // A redirect could send the request (and the key) to an address the check refused.
   const res = pinned?.response ?? (await fetch(`${base}/chat/completions`, { ...init, redirect: "manual" }));
   if (!res.ok) {
+    const error = await refused(cfg.provider === "custom" ? "Endpoint" : cfg.provider, res, cfg.apiKey);
     await pinned?.close();
-    throw new Error(`${cfg.provider === "custom" ? "Endpoint" : cfg.provider} refused the request (${res.status}).`);
+    throw error;
   }
   return res;
 }
@@ -68,7 +98,7 @@ function replayDelayMs(): number {
 function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o";
   if (provider === "anthropic") return ANTHROPIC_MODEL;
-  if (provider === "gemini") return "gemini-2.5-flash";
+  if (provider === "gemini") return "gemini-3.8-flash";
   if (provider === "deepseek") return "deepseek-chat";
   return "grok-4.5";
 }
@@ -201,7 +231,7 @@ async function completeAnthropic(
     signal,
   });
   if (!res.ok) {
-    throw new Error(`anthropic refused the request (${res.status}).`);
+    throw await refused("anthropic", res, apiKey);
   }
   const data = (await res.json()) as {
     content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
@@ -249,7 +279,7 @@ async function streamAnthropic(
     signal,
   });
   if (!res.ok) {
-    throw new Error(`anthropic refused the request (${res.status}).`);
+    throw await refused("anthropic", res, apiKey);
   }
   const acc: Completion = { content: "" };
   const calls: NonNullable<ChatMessage["tool_calls"]> = [];

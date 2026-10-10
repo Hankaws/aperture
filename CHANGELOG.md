@@ -134,6 +134,9 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The Agent Check workflow shown on the Bot page's Check tab and in the
+  action's README uses `hankaws/aperture-agent-check@v1.1`, the release with
+  the current checks. ([#60](https://github.com/Hankaws/aperture/pull/60))
 - The landing page, nav and footer are redesigned in Grok: the checks told as
   three short stories, a site search and a menu on small screens. The newer
   pages are part of it: two sections in the same style show a real

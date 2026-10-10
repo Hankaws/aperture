@@ -142,7 +142,7 @@ release notes are every line from there down to the previous version.
   an expired check offers "Always allow checks". A file the bot names
   (`src/cart.ts`) links to that line on GitHub. The mascots' eyes are a little
   larger, and the roster's buttons are round. A reply that failed can be tried
-  again.
+  again. ([#66](https://github.com/Hankaws/aperture/pull/66))
 
 - The Agent Check workflow shown on the Bot page's Check tab and in the
   action's README uses `hankaws/aperture-agent-check@v1.1`, the release with

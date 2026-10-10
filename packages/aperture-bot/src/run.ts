@@ -18,6 +18,7 @@ import type { BotPhase } from "../../../src/lib/bot/summary.ts";
 import type { PlanEntry } from "../../../src/lib/workspace/types.ts";
 import { finalTexts, loadWorkingFiles, writeTexts } from "./files.ts";
 import { Budget, providerModel, runnerHost, type Model } from "./model.ts";
+import { nextMessages, parseNext } from "./next.ts";
 import { asTestRunner, type Sandbox } from "./sandbox.ts";
 
 export type BotOptions = {
@@ -56,6 +57,8 @@ export type BotResult = {
   usage: string;
   /** Set when the run stopped early. */
   error?: string;
+  /** What the bot would suggest doing next: for the maintainer to send or not. */
+  next: string[];
   /** The whole report, as plain text. */
   text: string;
 };
@@ -132,6 +135,31 @@ export async function runTask(
     checks: 0,
     usage: "",
     text: "",
+    next: [],
+  };
+  /**
+   * A finished change (clear or still red) ends with suggestions for next
+   * time. A failed or refused suggestion call costs the run nothing more.
+   */
+  const suggest = async (outcome: BotOutcome): Promise<BotResult> => {
+    try {
+      const out = await host.complete(
+        cfg,
+        nextMessages({
+          task: options.task,
+          outcome,
+          plan: result.plan.map((s) => s.content),
+          written: result.written,
+          check: result.check?.text ?? null,
+          summary: result.summary,
+        }),
+        false,
+      );
+      result.next = parseNext(out.content ?? "");
+    } catch {
+      result.next = [];
+    }
+    return finish(outcome);
   };
   const finish = (outcome: BotOutcome, error?: string): BotResult => {
     result.outcome = outcome;
@@ -201,8 +229,8 @@ export async function runTask(
       testsWhere: sandbox?.where,
     });
     result.checks += 1;
-    if (result.check.verdict === "clear") return finish("clear");
-    if (round >= options.rounds) return finish("red");
+    if (result.check.verdict === "clear") return suggest("clear");
+    if (round >= options.rounds) return suggest("red");
     await progress({ phase: "fixing", round: round + 1 });
     history.push({ role: "user", content: ask }, { role: "assistant", content: built.out.text });
     ask = fixInstruction(result.check.text);
@@ -240,6 +268,10 @@ export function reportText(result: BotResult, sandbox: Sandbox | null): string {
       : "Tests were not run: there is no sandbox to run them in.",
   );
   if (result.summary) lines.push("", "The agent:", result.summary);
+  if (result.next.length > 0) {
+    lines.push("", "Next, I would suggest:");
+    for (const task of result.next) lines.push(`- ${task}`);
+  }
   lines.push("", `Used ${result.usage}.`);
   return lines.join("\n");
 }

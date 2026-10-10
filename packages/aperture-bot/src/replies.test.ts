@@ -38,6 +38,7 @@ const result = (more: Partial<BotResult> = {}): BotResult => ({
   checks: 1,
   usage: "1,000 input and 50 output tokens in 2 model calls",
   text: "",
+  next: [],
   ...more,
 });
 
@@ -146,4 +147,25 @@ test("text in the summary cannot end the hidden comment early", () => {
   assert.equal(hidden.match(/-->/g)?.length, 1);
   assert.ok(hidden.endsWith(" -->"));
   assert.equal(readSummary(body)?.error, "bad --> <script>");
+});
+
+test("a finished run lists what it would do next, and the Bot page reads them back", () => {
+  const next = ["Add a test for an empty cart", "Round half cents up"];
+  const body = doneReply(
+    result({ next }),
+    { url: "https://github.com/acme/shop/pull/13", what: "pull" },
+    { asked: 1, run: "https://github.com/acme/shop/actions/runs/1", tests: null },
+  );
+  assert.match(
+    body,
+    /\*\*Next, I would suggest\*\*\n- Add a test for an empty cart\n- Round half cents up\n\nAsk for one with `\/aperture`/,
+  );
+  assert.deepEqual(readSummary(body)?.next, next);
+  const quiet = doneReply(
+    result(),
+    { url: "https://github.com/acme/shop/pull/13", what: "pull" },
+    { asked: 1, run: "https://github.com/acme/shop/actions/runs/1", tests: null },
+  );
+  assert.doesNotMatch(quiet, /Next, I would suggest/);
+  assert.equal(readSummary(quiet)?.next, undefined);
 });

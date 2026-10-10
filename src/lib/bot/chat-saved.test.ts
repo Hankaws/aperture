@@ -127,3 +127,14 @@ test("the account's copy wins, and what was said since opening is kept after it"
   // A cleared account copy stays cleared: the old local entries do not come back.
   assert.deepEqual(mergeChats([], [e("a"), e("x")], new Set(["a", "x"])), []);
 });
+
+test("a report keeps the id of the task it reports, and nothing else passes for one", () => {
+  const read = savedEntries([
+    { id: "r", role: "assistant", text: "Done.", report: 101 },
+    { id: "s", role: "assistant", text: "x", report: "101" },
+  ]);
+  assert.deepEqual(read, [
+    { id: "r", role: "assistant", text: "Done.", report: 101 },
+    { id: "s", role: "assistant", text: "x" },
+  ]);
+});

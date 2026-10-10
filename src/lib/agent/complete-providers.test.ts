@@ -128,7 +128,10 @@ test("a provider's refusal says what it said, never the key", async () => {
   try {
     await assert.rejects(
       complete(gemini, ask, false),
-      /^Error: gemini refused the request \(404\): models\/x is not found for key \[key\]\. Call ListModels\.$/,
+      (error: Error & { status?: number }) =>
+        /^gemini refused the request \(404\): models\/x is not found for key \[key\]\. Call ListModels\.$/.test(
+          error.message,
+        ) && error.status === 404,
     );
     assert.equal(api.sent[0]!.body.model, "gemini-3.8-flash");
   } finally {

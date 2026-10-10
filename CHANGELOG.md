@@ -169,6 +169,10 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- When the model is busy (rate limited or overloaded, as Gemini's free tier
+  often is), the bot waits and tries again, three times over about a
+  minute and a half, instead of stopping on the first busy answer.
+  ([#63](https://github.com/Hankaws/aperture/pull/63))
 - A Gemini key works again: the bot, its chat, the editor's agent and Tab
   ask for Gemini 3.8 Flash, since Google turns new keys away from Gemini
   2.5 Flash. When a model provider refuses a request, the error now says

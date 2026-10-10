@@ -65,7 +65,10 @@ async function refused(name: string, res: Response, apiKey: string): Promise<Err
     // An unreadable body: the status is all there is.
   }
   const detail = said ? `: ${said.length > 240 ? `${said.slice(0, 239)}…` : said}` : ".";
-  return new Error(`${name} refused the request (${res.status})${detail}`);
+  // The status stays on the error, so a caller can tell "busy, try again" from "wrong".
+  return Object.assign(new Error(`${name} refused the request (${res.status})${detail}`), {
+    status: res.status,
+  });
 }
 
 async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {

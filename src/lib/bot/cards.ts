@@ -63,3 +63,40 @@ export function withRefs(text: string, open: Thread[]): Array<string | Thread> {
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
+
+export type FileRef = { path: string; line?: number };
+
+/**
+ * A file the reply names (`src/cart.ts` or `src/cart.ts:12`), so the page can
+ * link it on GitHub. A bare name, a version (`1.2/3.4`) and a path inside a
+ * URL stay text.
+ */
+const FILE_RE =
+  /(^|[\s`"'(])((?:\.\.?\/)?(?:[\w.@+-]+\/)+[\w.@+-]+\.[A-Za-z][A-Za-z0-9]{0,7})(?::(\d{1,5})(?!\d))?/g;
+
+export function withFiles(text: string): Array<string | FileRef> {
+  const out: Array<string | FileRef> = [];
+  let last = 0;
+  for (const m of text.matchAll(FILE_RE)) {
+    const path = m[2]!;
+    const start = m.index! + (m[1]?.length ?? 0);
+    const end = start + path.length + (m[3] ? m[3].length + 1 : 0);
+    if (start > last) out.push(text.slice(last, start));
+    out.push(m[3] ? { path, line: Number(m[3]) } : { path });
+    last = end;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** Selected chat text, as a markdown quote for the next message. */
+export function quoteSelection(draft: string, selected: string): string {
+  const raw = selected.trim().slice(0, 2000);
+  if (!raw) return draft;
+  const quote = raw
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  if (!draft.trim()) return `${quote}\n`;
+  return `${draft.replace(/\s*$/, "")}\n\n${quote}\n`;
+}

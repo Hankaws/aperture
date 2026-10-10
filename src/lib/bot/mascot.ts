@@ -158,11 +158,11 @@ function eye(kind: Eye, cx: number, cy: number): string {
     case "half":
       return `<path d="M${cx - 4.4} ${cy - 0.6}H${cx + 4.4}A4.4 4.6 0 0 1 ${cx - 4.4} ${cy - 0.6}Z" fill="#fff"/><circle cx="${cx + 0.4}" cy="${cy + 1.4}" r="2" fill="${INK}"/>`;
     case "wide":
-      return `<ellipse cx="${cx}" cy="${cy}" rx="5" ry="6" fill="#fff"/><circle cx="${cx}" cy="${cy}" r="2.1" fill="${INK}"/>`;
+      return `<ellipse cx="${cx}" cy="${cy}" rx="5.5" ry="6.4" fill="#fff"/><circle cx="${cx}" cy="${cy}" r="2.4" fill="${INK}"/>`;
     case "up":
-      return `<ellipse cx="${cx}" cy="${cy}" rx="4.3" ry="5.1" fill="#fff"/><circle cx="${cx + 1.1}" cy="${cy - 1.8}" r="2.2" fill="${INK}"/><circle cx="${cx + 1.8}" cy="${cy - 2.6}" r="0.7" fill="#fff"/>`;
+      return `<ellipse cx="${cx}" cy="${cy}" rx="5" ry="5.7" fill="#fff"/><circle cx="${cx + 1.2}" cy="${cy - 1.9}" r="2.45" fill="${INK}"/><circle cx="${cx + 2}" cy="${cy - 2.8}" r="0.8" fill="#fff"/>`;
     default:
-      return `<ellipse cx="${cx}" cy="${cy}" rx="4.3" ry="5.1" fill="#fff"/><circle cx="${cx + 0.6}" cy="${cy + 0.9}" r="2.3" fill="${INK}"/><circle cx="${cx + 1.3}" cy="${cy + 0.1}" r="0.75" fill="#fff"/>`;
+      return `<ellipse cx="${cx}" cy="${cy}" rx="5" ry="5.7" fill="#fff"/><circle cx="${cx + 0.6}" cy="${cy + 1}" r="2.55" fill="${INK}"/><circle cx="${cx + 1.4}" cy="${cy + 0.1}" r="0.85" fill="#fff"/>`;
   }
 }
 

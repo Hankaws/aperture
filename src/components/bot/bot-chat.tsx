@@ -16,7 +16,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
-import { cardAsk, expired, isCheckCard, sendsItself, withRefs, type Thread } from "@/lib/bot/cards";
+import {
+  cardAsk,
+  expired,
+  isCheckCard,
+  quoteSelection,
+  sendsItself,
+  withFiles,
+  withRefs,
+  type FileRef,
+  type Thread,
+} from "@/lib/bot/cards";
 import {
   KEEP,
   chatKey,
@@ -28,7 +38,7 @@ import {
   type Entry,
   type Sent,
 } from "@/lib/bot/chat-saved";
-import type { MascotMood } from "@/lib/bot/mascot";
+import { MASCOT_COLORS, type MascotMood } from "@/lib/bot/mascot";
 import type { BotProfile } from "@/lib/bot/team";
 import { loadBotChat, saveBotChat } from "@/lib/bot/team.api";
 import type { BotTask } from "@/lib/bot/tasks";
@@ -42,6 +52,14 @@ const SUGGESTIONS = [
   "Summarise the open issues",
   "How did your recent tasks go?",
   "Fix the newest bug report",
+];
+
+/** What the status says while a bot answers. The name stays on the header. */
+const THINKING = [
+  "Thinking it through",
+  "Reading the repository",
+  "Looking at open pull requests",
+  "Checking what changed",
 ];
 
 /** The person's last message before entry `at`: what a suggestion answers. */
@@ -113,9 +131,13 @@ export function BotChat({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const thread = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const draftNow = useRef("");
   /** The conversation as it is now, for code that runs after an await. */
   const latest = useRef<Entry[]>([]);
   const botId = bot.id;
+  draftNow.current = draft;
 
   const show = (next: Entry[]) => {
     latest.current = next;
@@ -162,7 +184,31 @@ export function BotChat({
       cancel = true;
     };
   }, [botId, repo]);
-  useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [entries.length, busy]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "nearest" });
+  }, [entries.length, busy]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "l" || event.altKey || event.shiftKey) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const sel = window.getSelection();
+      const text = sel?.toString() ?? "";
+      const node = sel?.anchorNode;
+      if (!text.trim() || !node || !thread.current?.contains(node)) return;
+      event.preventDefault();
+      const next = quoteSelection(draftNow.current, text);
+      setDraft(next);
+      requestAnimationFrame(() => {
+        const el = box.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(next.length, next.length);
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const update = (next: Entry[]) => {
     show(next);
@@ -268,7 +314,8 @@ export function BotChat({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5" aria-live="polite">
+      <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
+        <div ref={thread} className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
         {entries.length === 0 && !busy && (
           <div className="flex flex-col items-center px-2 py-6 text-center">
             <MascotAvatar mascot={bot.mascot} mood={mood} size={72} />
@@ -297,7 +344,12 @@ export function BotChat({
         {entries.map((entry, at) =>
           entry.role === "user" ? (
             <div key={entry.id} className="flex justify-end">
-              <p className="max-w-[85%] rounded-2xl rounded-br-md bg-elevated px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+              <p
+                className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+                style={{
+                  background: `color-mix(in srgb, ${MASCOT_COLORS[bot.mascot.color]} 36%, var(--color-elevated))`,
+                }}
+              >
                 {entry.text}
               </p>
             </div>
@@ -306,16 +358,35 @@ export function BotChat({
               <MascotAvatar mascot={bot.mascot} size={28} className="mt-0.5" />
               <div className="min-w-0 flex-1 space-y-3">
                 {entry.error ? (
-                  <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                    {entry.text}{" "}
-                    {/key|endpoint|Settings/i.test(entry.text) && (
-                      <Link to="/settings" search={{ tab: "models" }} className="underline">
-                        Open Settings
-                      </Link>
+                  <div className="space-y-2">
+                    <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {entry.text}{" "}
+                      {/key|endpoint|Settings/i.test(entry.text) && (
+                        <Link to="/settings" search={{ tab: "models" }} className="underline">
+                          Open Settings
+                        </Link>
+                      )}
+                    </p>
+                    {askedBefore(entries, at) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const again = askedBefore(entries, at);
+                          if (again) void send(again);
+                        }}
+                        className="text-xs font-medium text-accent hover:underline"
+                      >
+                        Try again
+                      </button>
                     )}
-                  </p>
+                  </div>
                 ) : (
-                  <Reply text={entry.text} open={setup.open} repo={repo} />
+                  <Reply
+                    text={entry.text}
+                    open={setup.open}
+                    repo={repo}
+                    branch={setup.defaultBranch}
+                  />
                 )}
                 {entry.looked && entry.looked.length > 0 && (
                   <p className="text-xs text-subtle">
@@ -328,6 +399,7 @@ export function BotChat({
                       key={i}
                       card={card}
                       bot={bot.name}
+                      allow={bot.allow}
                       asked={askedBefore(entries, at)}
                       onEditRule={onEditRule}
                       owner={owner}
@@ -348,24 +420,22 @@ export function BotChat({
           ),
         )}
 
-        {busy && (
-          <div className="flex items-center gap-3 text-sm text-muted">
-            <MascotAvatar mascot={bot.mascot} mood="thinking" size={28} />
-            {bot.name} is looking at GitHub…
-          </div>
-        )}
+        {busy && <Thinking mascot={bot.mascot} />}
         <div ref={end} />
+        </div>
       </div>
 
       <form
-        className="border-t border-border p-3"
+        className="border-t border-border px-3 py-3"
         onSubmit={(event) => {
           event.preventDefault();
           void send(draft);
         }}
       >
+        <div className="mx-auto w-full max-w-3xl">
         <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
           <Textarea
+            ref={box}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -385,31 +455,85 @@ export function BotChat({
             size="icon"
             disabled={busy || !draft.trim()}
             aria-label="Send"
-            className="shrink-0 rounded-lg"
+            className="shrink-0 rounded-full"
           >
             <ArrowUp className="size-4" />
           </Button>
         </div>
         <p className="mt-2 px-1 text-xs text-subtle">
           Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
+          ⌘/Ctrl+L quotes selected text.
         </p>
+        </div>
       </form>
     </section>
   );
 }
 
-/** Text, with the open issues and pull requests it names as links that preview them. */
-function Linked({ text, open, repo }: { text: string; open: Thread[]; repo: string }) {
+/** Text, with the open threads and files it names as links. */
+function Linked({
+  text,
+  open,
+  repo,
+  branch,
+}: {
+  text: string;
+  open: Thread[];
+  repo: string;
+  branch: string;
+}) {
   return (
     <>
       {withRefs(text, open).map((part, i) =>
         typeof part === "string" ? (
-          <Inline key={i} text={part} />
+          <FileBits key={i} text={part} repo={repo} branch={branch} />
         ) : (
           <RefLink key={i} thread={part} repo={repo} />
         ),
       )}
     </>
+  );
+}
+
+function FileBits({ text, repo, branch }: { text: string; repo: string; branch: string }) {
+  return (
+    <>
+      {withFiles(text).map((part, i) =>
+        typeof part === "string" ? (
+          <Inline key={i} text={part} />
+        ) : (
+          <FileLink key={i} repo={repo} branch={branch} file={part} />
+        ),
+      )}
+    </>
+  );
+}
+
+function FileLink({
+  repo,
+  branch,
+  file,
+}: {
+  repo: string;
+  branch: string;
+  file: FileRef;
+}) {
+  const clean = file.path.replace(/^\.\//, "");
+  const safeBranch = branch.split("/").map(encodeURIComponent).join("/");
+  const path = clean
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  const href = `https://github.com/${repo}/blob/${safeBranch}/${path}${file.line ? `#L${file.line}` : ""}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono text-[0.92em] text-accent hover:underline"
+    >
+      {file.line ? `${file.path}:${file.line}` : file.path}
+    </a>
   );
 }
 
@@ -445,7 +569,17 @@ function RefLink({ thread, repo }: { thread: Thread; repo: string }) {
   );
 }
 
-function Reply({ text, open, repo }: { text: string; open: Thread[]; repo: string }) {
+function Reply({
+  text,
+  open,
+  repo,
+  branch,
+}: {
+  text: string;
+  open: Thread[];
+  repo: string;
+  branch: string;
+}) {
   return (
     <div className="space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
       {parseMarkdown(text).map((block, i) =>
@@ -453,7 +587,7 @@ function Reply({ text, open, repo }: { text: string; open: Thread[]; repo: strin
           <ul key={i} className="list-disc space-y-1 pl-5">
             {block.items.map((item, j) => (
               <li key={j}>
-                <Linked text={item} open={open} repo={repo} />
+                <Linked text={item} open={open} repo={repo} branch={branch} />
               </li>
             ))}
           </ul>
@@ -466,7 +600,7 @@ function Reply({ text, open, repo }: { text: string; open: Thread[]; repo: strin
           </pre>
         ) : (
           <p key={i} className={block.type === "h" ? "font-medium" : undefined}>
-            <Linked text={block.text} open={open} repo={repo} />
+            <Linked text={block.text} open={open} repo={repo} branch={branch} />
           </p>
         ),
       )}
@@ -474,9 +608,26 @@ function Reply({ text, open, repo }: { text: string; open: Thread[]; repo: strin
   );
 }
 
+function Thinking({ mascot }: { mascot: BotProfile["mascot"] }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setI((n) => (n + 1) % THINKING.length), 2800);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <div className="flex items-center gap-3 text-sm text-muted">
+      <MascotAvatar mascot={mascot} mood="thinking" size={28} />
+      <span key={i} className="thinking-phrase">
+        {THINKING[i]}
+      </span>
+    </div>
+  );
+}
+
 function ProposalCard({
   card,
   bot,
+  allow,
   asked,
   onEditRule,
   owner,
@@ -490,6 +641,7 @@ function ProposalCard({
   card: Card;
   /** The bot's name, so the card says who wants to act. */
   bot: string;
+  allow: BotProfile["allow"];
   /** What the person said that led to this suggestion, quoted on the card. */
   asked: string | null;
   onEditRule?: () => void;
@@ -503,7 +655,12 @@ function ProposalCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [full, setFull] = useState(false);
   const thread = card.number ? setup.open.find((o) => o.number === card.number) : null;
+  const request = isCheckCard(card)
+    ? "Run Aperture Agent Check on it and report. Nothing is changed."
+    : card.task;
+  const long = !isCheckCard(card) && (request.length > 220 || request.split("\n").length > 4);
 
   if (card.sent && task) return <TaskCard task={task} now={now} />;
   const stale = expired(card, now);
@@ -554,11 +711,23 @@ function ProposalCard({
           You asked: {asked}
         </p>
       )}
-      <p className="mt-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {isCheckCard(card)
-          ? "Run Aperture Agent Check on it and report. Nothing is changed."
-          : card.task}
+      <p
+        className={cn(
+          "mt-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]",
+          long && !full && "line-clamp-4",
+        )}
+      >
+        {request}
       </p>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setFull((open) => !open)}
+          className="mt-1 text-xs font-medium text-accent hover:underline"
+        >
+          {full ? "Show less" : "View full request"}
+        </button>
+      )}
       {card.sent && card.auto && (
         <p className="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-muted">
           <ShieldCheck className="size-3.5 text-ok" />
@@ -587,8 +756,13 @@ function ProposalCard({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <p className="flex items-center gap-1.5 text-sm text-muted">
             <Clock className="size-3.5" />
-            Expired unsent after a day: the repository may have moved on. Ask {bot} again.
+            Expired unsent after a day. The repository may have moved on.
           </p>
+          {isCheckCard(card) && allow !== "checks" && onEditRule && (
+            <Button size="sm" variant="outline" onClick={onEditRule} className="rounded-full">
+              Always allow checks
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss this task">
             <X className="size-4" />
             Dismiss

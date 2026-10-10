@@ -1177,10 +1177,24 @@ html[data-theme="light"] {
     transform: translateY(-2px);
   }
 }
+.thinking-phrase {
+  animation: thinking-in 0.35s ease;
+}
+@keyframes thinking-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .mascot-blink,
   .mascot-turn,
-  .mascot-bob {
+  .mascot-bob,
+  .thinking-phrase {
     animation: none;
   }
 }

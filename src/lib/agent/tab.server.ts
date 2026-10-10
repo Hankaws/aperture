@@ -7,14 +7,14 @@ type Cfg = { provider: EngineId; apiKey: string; base?: string; model?: string }
 function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o-mini";
   if (provider === "anthropic") return "claude-haiku-4-5";
-  if (provider === "gemini") return "gemini-2.5-flash";
+  if (provider === "gemini") return "gemini-3.8-flash";
   if (provider === "deepseek") return "deepseek-chat";
   return "grok-4-1-fast-non-reasoning";
 }
 
 function tabModels(provider: ProviderId): string[] {
   if (provider === "openai") return ["gpt-4o-mini"];
-  if (provider === "gemini") return ["gemini-2.5-flash"];
+  if (provider === "gemini") return ["gemini-3.8-flash"];
   if (provider === "deepseek") return ["deepseek-chat"];
   return ["grok-4-1-fast-non-reasoning", "grok-4.1-fast-non-reasoning"];
 }

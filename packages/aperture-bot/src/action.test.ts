@@ -453,7 +453,7 @@ test("a missing model key is said on the thread, and nothing changes", async () 
   const body = run.replied();
   assert.match(
     body,
-    /^Aperture Bot stopped with an error and changed nothing:\n\n> model-key is empty\./,
+    /^Aperture Bot stopped with an error and changed nothing:\n\n> model-key is empty: the secret the workflow passes as model-key is not set\. Add it under the repository's Settings, Secrets and variables, Actions/,
   );
   assert.match(run.output, /^outcome=error\n$/);
 });

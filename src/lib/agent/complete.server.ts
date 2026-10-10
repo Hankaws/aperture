@@ -39,6 +39,35 @@ function endpointOf(cfg: CompletionCfg): { base: string; model: string } {
   return { base: openaiCompatBase(cfg.provider), model: modelOf(cfg.provider) };
 }
 
+/**
+ * A provider's refusal, with what it said: "gemini refused the request (404):
+ * models/x is not found" says which setting to change, where a bare status
+ * does not. The key never appears, even if a provider echoes it.
+ */
+async function refused(name: string, res: Response, apiKey: string): Promise<Error> {
+  let said = "";
+  try {
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Not JSON: the text itself is what it said.
+    }
+    const first = Array.isArray(parsed) ? parsed[0] : parsed;
+    const error = (first as { error?: { message?: unknown } | string } | null)?.error;
+    const message = typeof error === "string" ? error : error?.message;
+    said = (typeof message === "string" ? message : parsed === null ? text : "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (apiKey) said = said.split(apiKey).join("[key]");
+  } catch {
+    // An unreadable body: the status is all there is.
+  }
+  const detail = said ? `: ${said.length > 240 ? `${said.slice(0, 239)}…` : said}` : ".";
+  return new Error(`${name} refused the request (${res.status})${detail}`);
+}
+
 async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   const { base, model } = endpointOf(cfg);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -53,8 +82,9 @@ async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signa
   // A redirect could send the request (and the key) to an address the check refused.
   const res = pinned?.response ?? (await fetch(`${base}/chat/completions`, { ...init, redirect: "manual" }));
   if (!res.ok) {
+    const error = await refused(cfg.provider === "custom" ? "Endpoint" : cfg.provider, res, cfg.apiKey);
     await pinned?.close();
-    throw new Error(`${cfg.provider === "custom" ? "Endpoint" : cfg.provider} refused the request (${res.status}).`);
+    throw error;
   }
   return res;
 }
@@ -67,8 +97,8 @@ function replayDelayMs(): number {
 
 function modelOf(provider: ProviderId) {
   if (provider === "openai") return "gpt-4o";
-  if (provider === "anthropic") return "claude-sonnet-4-5";
-  if (provider === "gemini") return "gemini-2.5-flash";
+  if (provider === "anthropic") return ANTHROPIC_MODEL;
+  if (provider === "gemini") return "gemini-3.8-flash";
   if (provider === "deepseek") return "deepseek-chat";
   return "grok-4.5";
 }
@@ -78,6 +108,26 @@ export function openaiCompatBase(provider: ProviderId) {
   if (provider === "gemini") return "https://generativelanguage.googleapis.com/v1beta/openai";
   if (provider === "deepseek") return "https://api.deepseek.com/v1";
   return "https://api.x.ai/v1";
+}
+
+/**
+ * Claude Opus 5.5. Its thinking is always on and counts toward `max_tokens`,
+ * so the limits leave room for it; effort is set rather than left to the
+ * model's default. A request the model declines is retried on the model
+ * Anthropic picks for that kind of decline (`fallbacks: "default"`).
+ */
+const ANTHROPIC_MODEL = "claude-opus-5-5";
+const ANTHROPIC_HEADERS = (apiKey: string) => ({
+  "Content-Type": "application/json",
+  "x-api-key": apiKey,
+  "anthropic-version": "2023-06-01",
+  "anthropic-beta": "server-side-fallback-2026-07-01",
+});
+
+/** A request every model declined: say so, rather than answer with nothing. */
+function anthropicRefusal(details: { category?: string | null } | null | undefined): Error {
+  const why = details?.category ? ` (${details.category})` : "";
+  return new Error(`Claude declined this request${why}. Rephrase the task, or pick another model.`);
 }
 
 function asAnthropicTools(tools: AgentToolDef[]) {
@@ -164,8 +214,10 @@ async function completeAnthropic(
 ): Promise<Completion> {
   const { system, converted } = toAnthropic(messages);
   const body: Record<string, unknown> = {
-    model: "claude-sonnet-4-5",
-    max_tokens: 1800,
+    model: ANTHROPIC_MODEL,
+    max_tokens: 16000,
+    output_config: { effort: "medium" },
+    fallbacks: "default",
     system,
     messages: converted,
   };
@@ -174,21 +226,20 @@ async function completeAnthropic(
   }
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: ANTHROPIC_HEADERS(apiKey),
     body: JSON.stringify(body),
     signal,
   });
   if (!res.ok) {
-    throw new Error(`anthropic refused the request (${res.status}).`);
+    throw await refused("anthropic", res, apiKey);
   }
   const data = (await res.json()) as {
     content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
     usage?: Parameters<typeof anthropicUsage>[0]["usage"];
+    stop_reason?: string;
+    stop_details?: { category?: string | null } | null;
   };
+  if (data.stop_reason === "refusal") throw anthropicRefusal(data.stop_details);
   const text = data.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
   const tool_calls = data.content
     .filter((b) => b.type === "tool_use")
@@ -210,8 +261,10 @@ async function streamAnthropic(
 ): Promise<Completion> {
   const { system, converted } = toAnthropic(messages);
   const body: Record<string, unknown> = {
-    model: "claude-sonnet-4-5",
-    max_tokens: 1800,
+    model: ANTHROPIC_MODEL,
+    max_tokens: 32000,
+    output_config: { effort: "medium" },
+    fallbacks: "default",
     system,
     messages: converted,
     stream: true,
@@ -221,16 +274,12 @@ async function streamAnthropic(
   }
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: ANTHROPIC_HEADERS(apiKey),
     body: JSON.stringify(body),
     signal,
   });
   if (!res.ok) {
-    throw new Error(`anthropic refused the request (${res.status}).`);
+    throw await refused("anthropic", res, apiKey);
   }
   const acc: Completion = { content: "" };
   const calls: NonNullable<ChatMessage["tool_calls"]> = [];
@@ -240,7 +289,13 @@ async function streamAnthropic(
       type?: string;
       index?: number;
       content_block?: { type?: string; id?: string; name?: string; text?: string };
-      delta?: { type?: string; text?: string; partial_json?: string };
+      delta?: {
+        type?: string;
+        text?: string;
+        partial_json?: string;
+        stop_reason?: string;
+        stop_details?: { category?: string | null } | null;
+      };
     };
     try {
       event = JSON.parse(payload) as typeof event;
@@ -258,6 +313,8 @@ async function streamAnthropic(
         };
         jsonByIndex.set(index, "");
       }
+    } else if (event.type === "message_delta" && event.delta?.stop_reason === "refusal") {
+      throw anthropicRefusal(event.delta.stop_details);
     } else if (event.type === "content_block_delta") {
       if (event.delta?.type === "text_delta" && event.delta.text) {
         acc.content += event.delta.text;

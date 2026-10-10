@@ -134,6 +134,11 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- With an Anthropic key, the editor's agent, the bot and its chat use
+  Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
+  and medium effort. A request Claude declines is retried on the model
+  Anthropic picks for it, and otherwise says it was declined instead of
+  answering with nothing. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - The Agent Check workflow shown on the Bot page's Check tab and in the
   action's README uses `hankaws/aperture-agent-check@v1.1`, the release with
   the current checks. ([#60](https://github.com/Hankaws/aperture/pull/60))
@@ -164,6 +169,16 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- A Gemini key works again: the bot, its chat, the editor's agent and Tab
+  ask for Gemini 3.8 Flash, since Google turns new keys away from Gemini
+  2.5 Flash. When a model provider refuses a request, the error now says
+  what the provider said, not just its status code.
+  ([#62](https://github.com/Hankaws/aperture/pull/62))
+- From the bot's first run on a real repository: `/aperture check` counts
+  when "check" is the first line, so a signature under it no longer turns it
+  into a task; the error for a missing model key says where to add it; and
+  the workflow the Bot page writes says every way it starts the bot,
+  pull requests included. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - A line starting with `#` and a number, such as "#12 is fixed", no longer
   hangs and crashes a Markdown preview: the bot's chat replies and the
   editor's preview read it as text.

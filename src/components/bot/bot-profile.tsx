@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { downloadMascot } from "@/lib/bot/mascot-png";
 import { MascotAvatar } from "./mascot";
 import { ModelPicker } from "./model-picker";
+import { RulePicker } from "./rule-picker";
 
 type Draft = { name: string; repo: string; mascot: Mascot; personality: string };
 
@@ -307,6 +308,10 @@ export function ProfilePanel({
         <p className="mt-1 text-xs text-subtle">
           Saved at once. Add keys for more models in Settings.
         </p>
+      </div>
+      <div id="bot-rule">
+        <p className={label}>Rule</p>
+        <RulePicker bot={bot} onSaved={onSaved} />
       </div>
       <Fields draft={draft} setDraft={setDraft} repos={repos} />
       {error && <p className="text-sm text-danger">{error}</p>}

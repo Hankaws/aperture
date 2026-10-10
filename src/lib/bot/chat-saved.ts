@@ -7,7 +7,8 @@ import type { Proposal } from "./chat.ts";
  */
 
 export type Sent = { number: number; url: string; at: string };
-export type Card = Proposal & { sent?: Sent; dismissed?: boolean };
+/** `at`: when the bot suggested it. `auto`: sent by the bot's rule, not a click. */
+export type Card = Proposal & { sent?: Sent; dismissed?: boolean; at?: string; auto?: boolean };
 export type Entry =
   | { id: string; role: "user"; text: string }
   | {
@@ -37,6 +38,8 @@ function savedCard(v: unknown): Card | null {
   if (isObject(sent) && isCount(sent.number) && isString(sent.url) && isString(sent.at))
     card.sent = { number: sent.number, url: sent.url, at: sent.at };
   if (v.dismissed === true) card.dismissed = true;
+  if (isString(v.at) && Number.isFinite(Date.parse(v.at))) card.at = v.at;
+  if (v.auto === true && card.sent) card.auto = true;
   return card;
 }
 

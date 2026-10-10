@@ -9,3 +9,14 @@ test("parseMarkdown splits headings, lists, and fences", () => {
   assert.equal(blocks[2]?.type, "code");
   assert.equal(blocks[3]?.type, "p");
 });
+
+test("a line starting with # that is not a heading is text, not a hang", () => {
+  assert.deepEqual(parseMarkdown("#8 changes price.ts.\nIt fixes #7."), [
+    { type: "p", text: "#8 changes price.ts. It fixes #7." },
+  ]);
+  assert.deepEqual(parseMarkdown("Done.\n#12 is next\n## Then"), [
+    { type: "p", text: "Done. #12 is next" },
+    { type: "h", level: 2, text: "Then" },
+  ]);
+  assert.deepEqual(parseMarkdown("#\n####"), [{ type: "p", text: "# ####" }]);
+});

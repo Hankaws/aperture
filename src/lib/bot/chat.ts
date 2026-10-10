@@ -26,6 +26,8 @@ export type BotChatGithub = {
   readThread: (number: number) => Promise<string>;
   ciStatus: () => Promise<string>;
   botTasks: () => Promise<string>;
+  pullFiles: (number: number) => Promise<string>;
+  releases: () => Promise<string>;
 };
 
 export type BotChatModel = (
@@ -71,7 +73,14 @@ export const BOT_CHAT_TOOLS = [
     { number: { type: "integer", description: "The issue or pull request number." } },
     ["number"],
   ),
+  fn(
+    "pull_files",
+    "The files a pull request changes: each file's status and lines added and removed.",
+    { number: { type: "integer", description: "The pull request number." } },
+    ["number"],
+  ),
   fn("ci_status", "CI on the default branch's latest commit: each check and whether it passed."),
+  fn("releases", "The latest releases and tags: what shipped, and when."),
   fn("bot_tasks", "Aperture Bot's recent tasks on this repository and how each ended."),
   fn(
     "propose_task",
@@ -206,7 +215,14 @@ async function runTool(
       return "read_thread needs an issue or pull request number.";
     return wrap(await github.readThread(number));
   }
+  if (name === "pull_files") {
+    const number = Number(a.number);
+    if (!Number.isSafeInteger(number) || number < 1)
+      return "pull_files needs a pull request number.";
+    return wrap(await github.pullFiles(number));
+  }
   if (name === "ci_status") return wrap(await github.ciStatus());
+  if (name === "releases") return wrap(await github.releases());
   if (name === "bot_tasks") return wrap(await github.botTasks());
   if (name === "propose_task") {
     if (proposals.length >= CHAT_LIMITS.proposals)
@@ -224,5 +240,7 @@ function lookedLabel(name: string, a: Record<string, unknown>): string {
   if (name === "list_open") return "open issues";
   if (name === "ci_status") return "CI";
   if (name === "bot_tasks") return "bot tasks";
+  if (name === "pull_files") return `#${Number(a.number)} files`;
+  if (name === "releases") return "releases";
   return name;
 }

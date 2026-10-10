@@ -11,7 +11,7 @@
 import { z } from "zod";
 import type { BrowserRuns } from "../agent/browser-handoff.ts";
 import { MASCOT_BODIES, MASCOT_COLORS, MASCOT_FACES, type MascotColor } from "../bot/mascot.ts";
-import { BOT_ID, BOT_MODELS, REPO_FULL_NAME } from "../bot/team.ts";
+import { BOT_ALLOW, BOT_ID, BOT_MODELS, REPO_FULL_NAME } from "../bot/team.ts";
 import type { WorkerSpec } from "../agent/crew.ts";
 import type { AgentInput } from "../agent/types.ts";
 import type { GithubChange } from "../github/roundtrip.ts";
@@ -126,6 +126,8 @@ export const botProfileInput = z.object({
   personality: text(800),
   /** Left out: the bot keeps the model it has. */
   model: z.enum(BOT_MODELS).optional(),
+  /** Left out: the bot keeps its rule. */
+  allow: z.enum(BOT_ALLOW).optional(),
 });
 export const botIdInput = z.object({ id: botId });
 /** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */

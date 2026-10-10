@@ -17,6 +17,8 @@ export type BotProfile = {
   personality: string;
   /** The model its chat runs on; empty: the account's choice in Settings. */
   model: BotModel;
+  /** What it may send without asking: nothing, or checks on pull requests. */
+  allow: BotAllow;
   /** The last line of its conversation, kept on the account, for the roster. */
   lastLine: string;
   createdAt: string;
@@ -38,6 +40,14 @@ export const BOT_MODELS = [
   "custom",
 ] as const;
 export type BotModel = (typeof BOT_MODELS)[number];
+
+/**
+ * A bot's rule for its suggestions: `ask` first for everything, or always
+ * allow a check on a pull request, which changes nothing. Work that changes
+ * code always waits for a click.
+ */
+export const BOT_ALLOW = ["ask", "checks"] as const;
+export type BotAllow = (typeof BOT_ALLOW)[number];
 
 export const MAX_BOTS = 12;
 export const NAME_MAX = 40;
@@ -123,6 +133,7 @@ export function profileFrom(row: Record<string, unknown>): BotProfile | null {
     mascot: mascotFrom(mascot),
     personality: cleanPersonality(typeof row.personality === "string" ? row.personality : ""),
     model: (BOT_MODELS as readonly unknown[]).includes(row.model) ? (row.model as BotModel) : "",
+    allow: row.allow === "checks" ? "checks" : "ask",
     lastLine: cleanName(typeof row.last_line === "string" ? row.last_line : "", 160),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

@@ -493,6 +493,7 @@ function BotRoom({
               intro={bot.personality ? undefined : <FocusCard bot={bot} onSaved={onSaved} />}
               onSent={r.asked}
               onChange={onChat}
+              onEditRule={() => setPanel("profile")}
             />
           </PanelBoundary>
         ) : (

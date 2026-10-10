@@ -18,7 +18,14 @@ import {
 } from "@/lib/security/inputs";
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
-import { ciText, openText, tasksText, threadText } from "@/lib/bot/github-text";
+import {
+  ciText,
+  filesText,
+  openText,
+  releasesText,
+  tasksText,
+  threadText,
+} from "@/lib/bot/github-text";
 import {
   DEFAULT_TRIGGER,
   endedRun,
@@ -812,6 +819,22 @@ export const botChat = createServerFn({ method: "POST" })
         const out = await loadTasks(base, get);
         if (!out.ok) throw new Error(out.error);
         return tasksText(out.tasks);
+      },
+      pullFiles: async (n) => {
+        const files = await get(`${base}/pulls/${n}/files?per_page=100`);
+        if (files.status === 404) return `There is no pull request #${n}.`;
+        if (files.status !== 200) throw new Error(`GitHub returned ${files.status}`);
+        return filesText(n, Array.isArray(files.body) ? files.body : []);
+      },
+      releases: async () => {
+        const [releases, tags] = await Promise.all([
+          get(`${base}/releases?per_page=10`),
+          get(`${base}/tags?per_page=20`),
+        ]);
+        return releasesText(
+          releases.status === 200 && Array.isArray(releases.body) ? releases.body : [],
+          tags.status === 200 && Array.isArray(tags.body) ? tags.body : [],
+        );
       },
     };
     try {

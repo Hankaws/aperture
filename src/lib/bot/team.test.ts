@@ -32,6 +32,7 @@ test("a stored row reads back as a profile, its mascot parsed", () => {
     mascot: { color: "teal", body: "iris", face: "wink" },
     personality: "Keep CI green.",
     model: "anthropic",
+    allow: "ask",
     lastLine: "You: what's red?",
     createdAt: "2026-10-01T10:00:00.000Z",
     updatedAt: "2026-10-02T10:00:00.000Z",
@@ -40,6 +41,9 @@ test("a stored row reads back as a profile, its mascot parsed", () => {
   // A model it cannot run on (the browser's local one, or anything unknown) is the account's choice.
   assert.equal(profileFrom(row({ model: "local" }))!.model, "");
   assert.equal(profileFrom(row({ model: undefined, last_line: undefined }))!.lastLine, "");
+  // Its rule: checks may send themselves; anything else, or none, asks first.
+  assert.equal(profileFrom(row({ allow: "checks" }))!.allow, "checks");
+  assert.equal(profileFrom(row({ allow: "everything" }))!.allow, "ask");
 });
 
 test("a row that is not a profile is dropped", () => {

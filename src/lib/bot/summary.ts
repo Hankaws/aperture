@@ -43,12 +43,14 @@ export type BotSummary = {
   tests?: string | null;
   usage?: string;
   error?: string;
+  /** What the bot would suggest doing next, for the maintainer to send or not. */
+  next?: string[];
 };
 
 const OPEN = "<!-- aperture-bot ";
 const CLOSE = " -->";
 
-const LIMITS = { plan: 7, checks: 30, files: 100, text: 300, error: 1_000 };
+const LIMITS = { plan: 7, checks: 30, files: 100, text: 300, error: 1_000, next: 3 };
 
 const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`;
@@ -64,6 +66,7 @@ function bounded(summary: BotSummary): BotSummary {
       detail: clip(row.detail, LIMITS.text),
     })),
     files: summary.files?.slice(0, LIMITS.files),
+    next: summary.next?.slice(0, LIMITS.next).map((task) => clip(task, LIMITS.text)),
     task: summary.task === undefined ? undefined : clip(summary.task, LIMITS.error),
     error: summary.error === undefined ? undefined : clip(summary.error, LIMITS.error),
   };
@@ -130,6 +133,10 @@ export function readSummary(body: string): BotSummary | null {
   if (typeof r.rounds === "number") out.rounds = r.rounds;
   out.plan = strings(r.plan);
   out.files = strings(r.files);
+  const next = strings(r.next)
+    ?.slice(0, LIMITS.next)
+    .map((task) => clip(task, LIMITS.text));
+  if (next?.length) out.next = next;
   if (Array.isArray(r.checks))
     out.checks = r.checks.flatMap((row) => {
       const c = row as Record<string, unknown>;

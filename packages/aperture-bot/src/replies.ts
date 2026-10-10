@@ -112,7 +112,19 @@ export function resultSummary(
     tests: ctx.tests,
     usage: result.usage,
     error: result.error,
+    ...(result.next.length ? { next: result.next } : {}),
   };
+}
+
+/** What the bot would do next, as a list the maintainer can ask for. */
+function nextList(result: BotResult): string[] {
+  if (result.next.length === 0) return [];
+  return [
+    "**Next, I would suggest**",
+    ...result.next.map((task) => `- ${task}`),
+    "",
+    "Ask for one with `/aperture` and the task, or send it from the Bot page. Nothing is done until you do.",
+  ];
 }
 
 const join = (...blocks: string[][]) =>
@@ -185,6 +197,7 @@ export function doneReply(
   return join(
     [text],
     plan(result),
+    nextList(result),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx, link))],
   );
@@ -216,6 +229,7 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
         ]
       : [],
     agentSaid(result),
+    nextList(result),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx))],
   );

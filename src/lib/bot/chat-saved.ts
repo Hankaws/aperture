@@ -18,6 +18,8 @@ export type Entry =
       looked?: string[];
       cards?: Card[];
       error?: boolean;
+      /** A report on a task the chat sent: that task's id, so it is reported once. */
+      report?: number;
     };
 
 /** How many entries are kept per repository. */
@@ -62,6 +64,7 @@ export function savedEntries(parsed: unknown): Entry[] {
         entry.cards = cards;
       }
       if (v.error === true) entry.error = true;
+      if (isCount(v.report)) entry.report = v.report;
       out.push(entry);
     }
   }

@@ -12,7 +12,7 @@ import {
 import type { LoopHost, ScriptOutcome } from "../../../src/lib/agent/loop.ts";
 import type { AgentToolDef } from "../../../src/lib/agent/tools.ts";
 import { tsParseCheck } from "../../../src/lib/workspace/ts-parse.ts";
-import { retryStale } from "./retry.ts";
+import { retryBusy, retryStale } from "./retry.ts";
 
 export type Model = (
   cfg: CompletionCfg,
@@ -68,7 +68,10 @@ export function runnerHost(
       throw new BudgetSpent(
         `Stopped at the token budget: ${budget.total.toLocaleString("en-US")} of ${budget.maxTokens.toLocaleString("en-US")} tokens used.`,
       );
-    const completion = await retryStale(() => model(cfg, messages, useTools, signal, tools));
+    const completion = await retryBusy(
+      () => retryStale(() => model(cfg, messages, useTools, signal, tools)),
+      { log: (line) => console.log(line) },
+    );
     budget.add(completion);
     return completion;
   };

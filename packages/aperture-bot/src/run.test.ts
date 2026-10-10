@@ -237,3 +237,63 @@ test(
     await sandboxed(dockerSandbox(), true);
   },
 );
+
+test("a plan with no words from the agent is not quoted as the editor's button text", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const { model: base } = scripted([[dollars]]);
+  // A model that plans without a word, as Gemini did on the sandbox.
+  const model: Model = async (...args) => {
+    const out = await base(...args);
+    return out.content === "Plan ready." ? { ...out, content: "" } : out;
+  };
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.doesNotMatch(result.text, /Click Build it/);
+});
+
+test("stopped after planning, the reply has the plan and no editor wording", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const { model: base } = scripted([[dollars]]);
+  // Plans without a word, then the provider stops answering once it is time to build.
+  const model: Model = async (cfg, messages, useTools, signal, tools) => {
+    if ((tools ?? []).some((t) => t.function.name === "propose_edit"))
+      throw new Error("gemini refused the request (400): no more");
+    const out = await base(cfg, messages, useTools, signal, tools);
+    return out.content === "Plan ready." ? { ...out, content: "" } : out;
+  };
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "stopped", result.text);
+  assert.equal(result.plan.length, 3);
+  assert.equal(result.summary, "");
+  assert.doesNotMatch(result.text, /Click Build it/);
+});
+
+test("a finished change ends with what the bot would suggest next; a failed suggestion costs nothing", async () => {
+  const { run } = await bundled();
+  const { model: base } = scripted([[dollars]]);
+  const suggesting: Model = async (cfg, messages, useTools, signal, tools) =>
+    /Suggest what the maintainer/.test(String(messages[0]?.content))
+      ? {
+          content: "- Add a test for an empty cart\n- Show prices in the checkout too",
+          usage: { input: 50, output: 10 },
+        }
+      : base(cfg, messages, useTools, signal, tools);
+  const result = await run.runTask(options(repo(shop)), { model: suggesting });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.deepEqual(result.next, [
+    "Add a test for an empty cart",
+    "Show prices in the checkout too",
+  ]);
+  assert.match(result.text, /Next, I would suggest:\n- Add a test for an empty cart\n/);
+
+  const { model: base2 } = scripted([[dollars]]);
+  const failing: Model = async (cfg, messages, useTools, signal, tools) => {
+    if (/Suggest what the maintainer/.test(String(messages[0]?.content))) throw new Error("no");
+    return base2(cfg, messages, useTools, signal, tools);
+  };
+  const quiet = await run.runTask(options(repo(shop)), { model: failing });
+  assert.equal(quiet.outcome, "clear");
+  assert.deepEqual(quiet.next, []);
+});

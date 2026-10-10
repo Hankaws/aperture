@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { threadContext } from "./context.ts";
-import { parseEvent, taskFrom } from "./event.ts";
+import { isCheck, parseEvent, taskFrom } from "./event.ts";
 
 test("only a comment that starts with the trigger is a task", () => {
   assert.equal(taskFrom("/aperture fix the cart"), "fix the cart");
@@ -192,4 +192,11 @@ test("a push to a pull request is a check for whoever pushed, but not a draft's 
     "ignored" in parseEvent("pull_request", pull({ sender: { login: "x[bot]", type: "Bot" } })),
   );
   assert.ok("command" in parseEvent("pull_request", pull({ action: "ready_for_review" })));
+});
+
+test("a check is the first line alone: a signature under it is fine, more words make a task", () => {
+  assert.equal(isCheck("check\n\n---\n_Sent from my phone_"), true);
+  assert.equal(isCheck("  Check!  \nthanks"), true);
+  assert.equal(isCheck("check the login flow\nplease"), false);
+  assert.equal(isCheck("please\ncheck"), false);
 });

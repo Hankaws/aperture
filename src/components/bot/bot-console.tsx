@@ -459,7 +459,16 @@ const CHECKED: Partial<Record<TaskState, { label: string; tone: string }>> = {
   red: { label: "Checked: red", tone: "border-danger/30 bg-danger/10 text-danger" },
 };
 
-export function TaskCard({ task, now }: { task: BotTask; now: number }) {
+/** `next` false leaves out the suggestions, for the chat, where they come as cards. */
+export function TaskCard({
+  task,
+  now,
+  next = true,
+}: {
+  task: BotTask;
+  now: number;
+  next?: boolean;
+}) {
   const s = task.summary;
   const checking = isCheck(task);
   const state = (checking && CHECKED[task.state]) || STATE[task.state];
@@ -578,6 +587,17 @@ export function TaskCard({ task, now }: { task: BotTask; now: number }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {next && s?.next && s.next.length > 0 && (
+        <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5">
+          <p className="text-xs font-medium text-accent">Suggested next</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm text-pretty text-muted">
+            {s.next.map((next, i) => (
+              <li key={i}>{next}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {task.diff && (

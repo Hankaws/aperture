@@ -87,7 +87,7 @@ export function modelConfig(env: NodeJS.ProcessEnv): CompletionCfg {
   const cfg: CompletionCfg = { provider, apiKey: input(env, "model-key") ?? "" };
   if (!cfg.apiKey && provider !== "custom")
     throw new Error(
-      "model-key is empty. Add the model provider's key as a repository secret and pass it as model-key.",
+      "model-key is empty: the secret the workflow passes as model-key is not set. Add it under the repository's Settings, Secrets and variables, Actions, as a repository secret with the name the workflow's model-key line uses (XAI_API_KEY for Grok).",
     );
   if (provider === "custom") {
     cfg.base = input(env, "base-url");

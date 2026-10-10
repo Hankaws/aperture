@@ -310,6 +310,13 @@ export function workflowFile(
         ...(provider === "grok" ? [] : [`provider: ${provider}`]),
       ];
   const any = jobs.label || Boolean(scheduled) || jobs.pulls;
+  const asks = [
+    "a comment",
+    ...(jobs.label ? ["its label"] : []),
+    ...(scheduled ? ["its schedule"] : []),
+    ...(jobs.pulls ? ["a pull request"] : []),
+  ];
+  const asked = `${asks.slice(0, -1).join(", ")}${asks.length > 2 ? "," : ""} or ${asks.at(-1)}`;
   return [
     "name: Aperture Bot",
     "on:",
@@ -330,7 +337,7 @@ export function workflowFile(
     "  bot:",
     ...(any
       ? [
-          "    # Starts a runner only when the bot is asked: a comment, its label, or its schedule.",
+          `    # Starts a runner only when the bot is asked: ${asked}.`,
           "    if: >-",
           "      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture'))",
           ...(jobs.label

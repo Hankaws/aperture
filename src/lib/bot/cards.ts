@@ -38,7 +38,9 @@ export function cardAsk(
     return `${bot} wants to check pull request #${card.number}${title}`;
   if (card.number)
     return `${bot} wants to work on ${thread?.isPull ? "pull request " : ""}#${card.number}${title}`;
-  return `${bot} wants to open an issue${card.title ? `: ${card.title}` : ""}`;
+  // A title the card's words already start with would say the same thing twice.
+  const named = card.title && !card.task.startsWith(card.title.replace(/…$/, ""));
+  return `${bot} wants to open an issue${named ? `: ${card.title}` : ""}`;
 }
 
 export type Thread = { number: number; title: string; isPull: boolean };

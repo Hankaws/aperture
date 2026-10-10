@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Bots come back with suggestions. When a task you sent from a bot's chat
+  finishes, the bot says so in the chat: the pull request it opened, a check
+  that came back red, or where it stopped. Every finished run ends with up
+  to three things the bot would do next, in its reply on GitHub, on the
+  task's card as "Suggested next", and in the chat as cards you can send or
+  dismiss. Nothing is done until you send one.
+  ([#65](https://github.com/Hankaws/aperture/pull/65))
 - Three in one: Aperture Bot now does Agent Check's job too. Comment
   `/aperture check` on a pull request and the bot runs Aperture Agent Check
   on it and replies with the report, changing nothing and using no model key.
@@ -143,7 +150,11 @@ release notes are every line from there down to the previous version.
   (`src/cart.ts`) links to that line on GitHub. The mascots' eyes are a little
   larger, and the roster's buttons are round. A reply that failed can be tried
   again. ([#66](https://github.com/Hankaws/aperture/pull/66))
-
+- With an Anthropic key, the editor's agent, the bot and its chat use
+  Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
+  and medium effort. A request Claude declines is retried on the model
+  Anthropic picks for it, and otherwise says it was declined instead of
+  answering with nothing. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - The Agent Check workflow shown on the Bot page's Check tab and in the
   action's README uses `hankaws/aperture-agent-check@v1.1`, the release with
   the current checks. ([#60](https://github.com/Hankaws/aperture/pull/60))
@@ -174,6 +185,27 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- When the model plans without a word, the bot's reply no longer quotes the
+  editor's "Click Build it" as what the agent said.
+  ([#64](https://github.com/Hankaws/aperture/pull/64))
+- A model address that answers with something other than a model's reply
+  (a parked address saying "OK", an error page) now says what came back and
+  to check the address and model name, instead of "Unexpected token … is
+  not valid JSON". ([#64](https://github.com/Hankaws/aperture/pull/64))
+- When the model is busy (rate limited or overloaded, as Gemini's free tier
+  often is), the bot waits and tries again, three times over about a
+  minute and a half, instead of stopping on the first busy answer.
+  ([#63](https://github.com/Hankaws/aperture/pull/63))
+- A Gemini key works again: the bot, its chat, the editor's agent and Tab
+  ask for Gemini 3.8 Flash, since Google turns new keys away from Gemini
+  2.5 Flash. When a model provider refuses a request, the error now says
+  what the provider said, not just its status code.
+  ([#62](https://github.com/Hankaws/aperture/pull/62))
+- From the bot's first run on a real repository: `/aperture check` counts
+  when "check" is the first line, so a signature under it no longer turns it
+  into a task; the error for a missing model key says where to add it; and
+  the workflow the Bot page writes says every way it starts the bot,
+  pull requests included. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - A line starting with `#` and a number, such as "#12 is fixed", no longer
   hangs and crashes a Markdown preview: the bot's chat replies and the
   editor's preview read it as text.

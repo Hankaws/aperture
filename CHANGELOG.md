@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The bot team comes alive. The roster shows what each bot is doing on
+  GitHub (queued, working on #12, opened a pull request, stuck on red
+  checks), and its mascot's face follows. Each bot can talk on a model of
+  its own: the Settings default, any provider key you saved, or your custom
+  endpoint, picked in its chat header or profile. Conversations are kept on
+  your account, so your phone and laptop show the same ones.
+  ([#58](https://github.com/Hankaws/aperture/pull/58))
 - A team of Aperture Bots on the Bot page, laid out like a messaging app.
   Make bots of your own, each looking after one repository with its own name,
   mascot and way of working. Pick them from a roster with their last message,

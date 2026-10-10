@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { activityFrom, byDay, dayLabel, feedOf, headline, type Activity } from "./activity.ts";
+import {
+  activityFrom,
+  byDay,
+  dayLabel,
+  feedOf,
+  headline,
+  statusOf,
+  type Activity,
+} from "./activity.ts";
 import { sampleActivity } from "./activity-sample.ts";
 import type { BotSummary } from "./summary.ts";
 import type { BotTask } from "./tasks.ts";
@@ -184,4 +192,29 @@ test("the sample is a believable week: every kind of entry, newest first, links 
     sample.some((a) => a.who === "A standing job") &&
       sample.some((a) => a.who === "@grace's label"),
   );
+});
+
+test("a bot's status is the newest news on its repository, and fades after a day", () => {
+  const entry = (kind: Activity["kind"], minutesAgo: number, repo = "acme/shop") =>
+    ({
+      id: `${kind}${minutesAgo}`,
+      repo,
+      at: at(minutesAgo),
+      kind,
+      number: 7,
+      pull: kind === "opened" ? 8 : null,
+    }) as Activity;
+  const items = [entry("working", 1, "acme/docs"), entry("opened", 30), entry("asked", 40)];
+  assert.deepEqual(statusOf(items, "acme/shop", NOW), {
+    mood: "done",
+    line: "Opened pull request #8",
+    tone: "ok",
+    at: at(30),
+  });
+  assert.equal(statusOf(items, "ACME/Docs", NOW)!.line, "Working on #7");
+  assert.equal(statusOf(items, "acme/api", NOW), null);
+  const old = statusOf([entry("red", 26 * 60)], "acme/shop", NOW)!;
+  assert.deepEqual([old.mood, old.tone, old.line], ["idle", "muted", "Stuck: checks red on #7"]);
+  assert.equal(statusOf([entry("asked", 2)], "acme/shop", NOW)!.line, "Queued on #7");
+  assert.equal(statusOf([entry("silent", 2)], "acme/shop", NOW)!.mood, "stuck");
 });

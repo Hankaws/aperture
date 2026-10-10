@@ -7,6 +7,7 @@ import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
 import type { ChatTurn } from "@/lib/bot/chat";
 import {
+  KEEP,
   chatKey,
   loadChat,
   saveChat,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/bot/chat-saved";
 import type { MascotMood } from "@/lib/bot/mascot";
 import type { BotProfile } from "@/lib/bot/team";
+import { loadBotChat, saveBotChat } from "@/lib/bot/team.api";
 import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
@@ -89,17 +91,43 @@ export function BotChat({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  /** Said something here since opening: the account's copy must not overwrite it. */
+  const touched = useRef(false);
+  const botId = bot.id;
 
   useEffect(() => {
-    const own = loadChat(chatKey(bot));
+    let cancel = false;
+    touched.current = false;
+    const key = chatKey({ id: botId });
+    const own = loadChat(key);
     // A conversation kept per repository, before bots had names, carries over once.
-    setEntries(own.length > 0 ? own : loadChat(repo));
-  }, [bot, repo]);
+    const local = own.length > 0 ? own : loadChat(repo);
+    setEntries(local);
+    // The account's copy is the one every device shares; this browser's goes up if it has none.
+    void loadBotChat({ data: { id: botId } })
+      .then(({ entries: kept }) => {
+        if (cancel || touched.current) return;
+        if (kept.length > 0) {
+          setEntries(kept);
+          saveChat(key, kept);
+        } else if (local.length > 0) {
+          void saveBotChat({ data: { id: botId, entries: local } }).catch(() => {});
+        }
+      })
+      .catch(() => {
+        // Offline or signed out: this browser's copy stands.
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [botId, repo]);
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [entries.length, busy]);
 
   const update = (next: Entry[]) => {
+    touched.current = true;
     setEntries(next);
     saveChat(chatKey(bot), next);
+    void saveBotChat({ data: { id: bot.id, entries: next.slice(-KEEP) } }).catch(() => {});
     onChange?.(next);
   };
 

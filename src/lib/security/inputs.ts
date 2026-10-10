@@ -11,6 +11,7 @@
 import { z } from "zod";
 import type { BrowserRuns } from "../agent/browser-handoff.ts";
 import { MASCOT_BODIES, MASCOT_COLORS, MASCOT_FACES, type MascotColor } from "../bot/mascot.ts";
+import { BOT_MODELS } from "../bot/team.ts";
 import type { WorkerSpec } from "../agent/crew.ts";
 import type { AgentInput } from "../agent/types.ts";
 import type { GithubChange } from "../github/roundtrip.ts";
@@ -123,8 +124,18 @@ export const botProfileInput = z.object({
     face: z.enum(MASCOT_FACES),
   }),
   personality: text(800),
+  /** Left out: the bot keeps the model it has. */
+  model: z.enum(BOT_MODELS).optional(),
 });
 export const botIdInput = z.object({ id: botId });
+/** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
+export const botChatSaveInput = z.object({
+  id: botId,
+  entries: z.array(z.custom<Record<string, unknown>>(isRecord)).max(40),
+});
+const repoFull = z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/);
+/** `repos`: the team's repositories; without them, the most recently pushed. */
+export const botActivityInput = z.object({ repos: z.array(repoFull).max(15).optional() });
 export const botJobsInput = z.object({
   owner: repoName,
   repo: repoName,

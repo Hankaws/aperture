@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { botIdInput, botProfileInput } from "@/lib/security/inputs";
+import { botChatSaveInput, botIdInput, botProfileInput } from "@/lib/security/inputs";
 
 /** A team needs an account: a sign-in-off visitor has nowhere to keep one. */
 async function refusal(userId: string): Promise<string | null> {
@@ -36,4 +36,30 @@ export const deleteBot = createServerFn({ method: "POST" })
     if (await refusal(context.userId)) return [];
     const { deleteBotFor } = await import("./team.server");
     return deleteBotFor(context.userId, data.id);
+  });
+
+/** A bot's conversation, as the account keeps it. */
+export const loadBotChat = createServerFn({ method: "POST" })
+  .validator(botIdInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    if (await refusal(context.userId)) return { entries: [], updatedAt: null };
+    const { overLimit } = await import("@/lib/security/rate-limit");
+    if (overLimit("bot", context.userId)) return { entries: [], updatedAt: null };
+    const { chatFor } = await import("./team.server");
+    return chatFor(context.userId, data.id);
+  });
+
+/** Keeps a bot's conversation on the account, so every device shows the same. */
+export const saveBotChat = createServerFn({ method: "POST" })
+  .validator(botChatSaveInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const refused = await refusal(context.userId);
+    if (refused) return { ok: false as const, error: refused };
+    const { overLimit } = await import("@/lib/security/rate-limit");
+    const busy = overLimit("save", context.userId);
+    if (busy) return { ok: false as const, error: busy };
+    const { saveChatFor } = await import("./team.server");
+    return saveChatFor(context.userId, data.id, data.entries);
   });

@@ -147,8 +147,10 @@ export function SampleFeed({ note }: { note: string }) {
 /** Refreshes every two minutes while the tab is visible. */
 const EVERY_MS = 120_000;
 
-/** What the bot did across the person's recent repositories. */
-export function BotActivity() {
+/** What the bot did across the team's repositories, or the person's recent ones. */
+export function BotActivity({ repos }: { repos?: string[] }) {
+  // A key, not the array: a new array with the same names must not reload.
+  const key = (repos ?? []).join(",");
   const [feed, setFeed] = useState<{ items: Activity[]; repos: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -157,7 +159,7 @@ export function BotActivity() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const out = await botActivity();
+      const out = await botActivity({ data: key ? { repos: key.split(",") } : {} });
       if (out.ok) {
         setFeed({ items: out.activity, repos: out.repos });
         setError(null);
@@ -168,7 +170,7 @@ export function BotActivity() {
       setBusy(false);
       setNow(Date.now());
     }
-  }, []);
+  }, [key]);
 
   useEffect(() => {
     void load();
@@ -186,8 +188,9 @@ export function BotActivity() {
             Activity
           </h2>
           <p className="mt-1 text-sm text-pretty text-muted">
-            What Aperture Bot did across your
-            {feed ? ` ${feed.repos}` : ""} most recently pushed repositories.
+            {repos?.length
+              ? "What your bots did on their repositories."
+              : `What Aperture Bot did across your${feed ? ` ${feed.repos}` : ""} most recently pushed repositories.`}
           </p>
         </div>
         <Button

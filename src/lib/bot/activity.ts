@@ -4,6 +4,7 @@
  * it. Built from the same tasks the task list shows, so the feed says nothing
  * the bot's own comments do not. Pure, for tests on plain data.
  */
+import type { MascotMood } from "./mascot.ts";
 import { phaseLine } from "./summary.ts";
 import type { BotTask, TaskState } from "./tasks.ts";
 
@@ -190,4 +191,60 @@ export function ago(iso: string, now: number): string {
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `${hours} h ago`;
   return `${Math.round(hours / 24)} days ago`;
+}
+
+/** How fresh news stays news: a pull request opened yesterday is still "done". */
+const FRESH_MS = 24 * 60 * 60_000;
+
+export type BotStatus = {
+  mood: MascotMood;
+  /** One line for the roster and the room's header. */
+  line: string;
+  tone: "accent" | "ok" | "danger" | "warn" | "muted";
+  at: string;
+};
+
+/**
+ * What a bot is up to, from the newest feed entry on its repository: working
+ * or queued, done, stuck, or quiet. Done and stuck fade back to its own face
+ * after a day; the line stays.
+ */
+export function statusOf(items: Activity[], repo: string, now: number): BotStatus | null {
+  const name = repo.toLowerCase();
+  const a = items.find((item) => item.repo.toLowerCase() === name);
+  if (!a) return null;
+  const fresh = now - (Date.parse(a.at) || 0) < FRESH_MS;
+  const n = `#${a.number}`;
+  const was = (mood: MascotMood, line: string, tone: BotStatus["tone"]): BotStatus => ({
+    mood: fresh ? mood : "idle",
+    line,
+    tone: fresh ? tone : "muted",
+    at: a.at,
+  });
+  switch (a.kind) {
+    case "asked":
+      // The newest entry is an ask: nothing has come of it yet.
+      return { mood: "working", line: `Queued on ${n}`, tone: "accent", at: a.at };
+    case "working":
+      return { mood: "working", line: `Working on ${n}`, tone: "accent", at: a.at };
+    case "opened":
+      return was("done", `Opened pull request #${a.pull ?? a.number}`, "ok");
+    case "pushed":
+      return was("done", `Pushed to ${n}`, "ok");
+    case "red":
+      return was("stuck", `Stuck: checks red on ${n}`, "danger");
+    case "error":
+      return was("stuck", `Hit an error on ${n}`, "danger");
+    case "stopped":
+    case "ended":
+      return was("stuck", `Stopped on ${n}`, "warn");
+    case "silent":
+      return was("stuck", `No answer on ${n}`, "warn");
+    case "no-change":
+      return was("idle", `Nothing to change on ${n}`, "muted");
+    case "declined":
+      return was("idle", `Declined ${n}`, "muted");
+    case "replied":
+      return was("idle", `Answered on ${n}`, "muted");
+  }
 }

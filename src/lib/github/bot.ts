@@ -262,19 +262,22 @@ async function loadTasks(
   };
   if (recent.status === 200 && Array.isArray(recent.body)) recent.body.forEach(addThread);
   let tasks = tasksFrom(comments.body as RawComment[], threads).slice(0, MAX_TASKS);
-  const missing = [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
-    0,
-    MAX_THREAD_LOOKUPS,
-  );
+  // Quick: no lookups one by one (thread titles, whether a run ended); the room does those.
+  const missing = quick
+    ? []
+    : [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
+        0,
+        MAX_THREAD_LOOKUPS,
+      );
   await Promise.all(
     missing.map(async (n) => {
       const got = await get(`${base}/issues/${n}`);
       if (got.status === 200) addThread(got.body);
     }),
   );
-  const working = tasks
-    .filter((t) => t.state === "working" && t.summary?.run)
-    .slice(0, MAX_RUN_LOOKUPS);
+  const working = quick
+    ? []
+    : tasks.filter((t) => t.state === "working" && t.summary?.run).slice(0, MAX_RUN_LOOKUPS);
   const runs = new Map<number, { status?: string; conclusion?: string | null }>();
   await Promise.all(
     working.map(async (t) => {
@@ -369,7 +372,12 @@ export const botActivity = createServerFn({ method: "POST" })
         );
         lists.push(...batch);
       }
-      return { ok: true, activity: feedOf(lists), repos: names.length };
+      // A team's feed keeps each repository's newest: one busy one must not hide the rest.
+      return {
+        ok: true,
+        activity: data.repos?.length ? feedOf(lists, 150, 10) : feedOf(lists),
+        repos: names.length,
+      };
     } catch (error) {
       return {
         ok: false,
@@ -763,13 +771,19 @@ export const botChat = createServerFn({ method: "POST" })
         return openText(Array.isArray(items) ? items : []);
       },
       readThread: async (n) => {
-        const [issue, comments] = await Promise.all([
-          get(`${base}/issues/${n}`),
-          get(`${base}/issues/${n}/comments?per_page=100`),
-        ]);
+        const issue = await get(`${base}/issues/${n}`);
         if (issue.status === 404) return `There is no issue or pull request #${n}.`;
         if (issue.status !== 200) throw new Error(`GitHub returned ${issue.status}`);
-        return threadText(issue.body, Array.isArray(comments.body) ? comments.body : []);
+        // GitHub lists comments oldest first: the newest are on the last page.
+        const total = Number((issue.body as { comments?: unknown }).comments) || 0;
+        const last = Math.max(1, Math.ceil(total / 100));
+        const pages = await Promise.all(
+          (last > 1 ? [last - 1, last] : [1]).map((page) =>
+            get(`${base}/issues/${n}/comments?per_page=100&page=${page}`),
+          ),
+        );
+        const comments = pages.flatMap((p) => (Array.isArray(p.body) ? p.body : []));
+        return threadText(issue.body, comments);
       },
       ciStatus: async () => {
         const repo = (await must(base)) as { default_branch?: string };

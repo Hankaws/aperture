@@ -181,22 +181,51 @@ export function BotActivity({ repos }: { repos?: string[] }) {
   }, [load]);
 
   return (
+    <ActivityPanel
+      feed={feed?.items ?? null}
+      now={now}
+      busy={busy}
+      error={error}
+      onRefresh={() => void load()}
+      note={
+        repos?.length
+          ? "What your bots did on their repositories."
+          : `What Aperture Bot did across your${feed ? ` ${feed.repos}` : ""} most recently pushed repositories.`
+      }
+    />
+  );
+}
+
+/** The feed with its heading and Refresh, for data loaded elsewhere (the team's roster loads it too). */
+export function ActivityPanel({
+  feed,
+  now,
+  busy,
+  error,
+  note,
+  onRefresh,
+}: {
+  /** Null while it loads. */
+  feed: Activity[] | null;
+  now: number;
+  busy: boolean;
+  error: string | null;
+  note: string;
+  onRefresh: () => void;
+}) {
+  return (
     <section aria-labelledby="bot-activity">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="bot-activity" className="text-lg font-medium">
             Activity
           </h2>
-          <p className="mt-1 text-sm text-pretty text-muted">
-            {repos?.length
-              ? "What your bots did on their repositories."
-              : `What Aperture Bot did across your${feed ? ` ${feed.repos}` : ""} most recently pushed repositories.`}
-          </p>
+          <p className="mt-1 text-sm text-pretty text-muted">{note}</p>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => void load()}
+          onClick={onRefresh}
           disabled={busy}
           aria-label="Refresh activity"
         >
@@ -208,10 +237,10 @@ export function BotActivity({ repos }: { repos?: string[] }) {
       <div className="mt-5">
         {feed === null ? (
           !error && <div className="h-48 animate-pulse rounded-2xl bg-elevated" />
-        ) : feed.items.length === 0 ? (
-          <SampleFeed note="Nothing yet in your recent repositories. Ask the bot something, and it will show here like this." />
+        ) : feed.length === 0 ? (
+          <SampleFeed note="Nothing yet on these repositories. Ask a bot something, and it will show here like this." />
         ) : (
-          <ActivityFeed items={feed.items} now={now} />
+          <ActivityFeed items={feed} now={now} />
         )}
       </div>
     </section>

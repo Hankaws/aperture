@@ -175,6 +175,13 @@ test("GitHub's answers read as short text", () => {
   );
   assert.match(thread, /\(2 earlier comments not shown\)/);
   assert.doesNotMatch(thread, /comment 1\n/);
+  // A long thread: only its newest page was fetched, and GitHub's count says how many came before.
+  const long = threadText(
+    { number: 9, title: "Long", state: "open", body: "", comments: 150, user: { login: "ada" } },
+    Array.from({ length: 50 }, (_, i) => ({ body: `late ${i + 100}`, user: { login: "grace" } })),
+  );
+  assert.match(long, /\(142 earlier comments not shown\)/);
+  assert.match(long, /late 149$/);
   assert.equal(
     ciText("main", "abc1234def", [
       { id: "1", name: "test", state: "failure", url: null, summary: "", annotations: [], log: "" },

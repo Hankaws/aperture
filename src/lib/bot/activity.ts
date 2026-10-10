@@ -109,10 +109,18 @@ export function activityFrom(repo: string, tasks: BotTask[]): Activity[] {
   return out;
 }
 
-/** Every repository's entries, newest first, at most `limit`. */
-export function feedOf(lists: Activity[][], limit = 60): Activity[] {
-  const all = lists.flat();
+/** Every repository's entries, newest first, at most `limit`, and at most `perList` from each. */
+export function feedOf(lists: Activity[][], limit = 60, perList = Infinity): Activity[] {
   const time = (a: Activity) => Date.parse(a.at) || 0;
+  const all = lists.flatMap((list) =>
+    perList === Infinity
+      ? list
+      : list
+          .map((a, i) => ({ a, i }))
+          .sort((x, y) => time(y.a) - time(x.a) || y.i - x.i)
+          .slice(0, perList)
+          .map(({ a }) => a),
+  );
   // Newest first; at the same moment, the outcome before its ask.
   return all
     .map((a, i) => ({ a, i }))

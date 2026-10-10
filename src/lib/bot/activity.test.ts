@@ -153,6 +153,14 @@ test("the feed merges repositories newest first, an outcome before its ask, up t
     ["acme/docs#9:asked", "acme/shop#1:no-change", "acme/shop#1:asked"],
   );
   assert.equal(feedOf([shop, docs], 2).length, 2);
+  // A busy repository keeps only its newest few, so the others still show.
+  const busy = activityFrom(
+    "acme/busy",
+    Array.from({ length: 8 }, (_, i) => make({ id: 100 + i, askedAt: at(i), updatedAt: at(i) })),
+  );
+  const fair = feedOf([busy, shop], 4, 3);
+  assert.equal(fair.filter((a) => a.repo === "acme/busy").length, 3);
+  assert.ok(fair.some((a) => a.repo === "acme/shop"));
 });
 
 test("days read as Today, Yesterday, then the date, and entries group under them", () => {

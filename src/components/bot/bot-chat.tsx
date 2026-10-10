@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
-import type { ChatTurn } from "@/lib/bot/chat";
+import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import {
   KEEP,
   chatKey,
+  clearSavedChat,
   loadChat,
+  mergeChats,
   saveChat,
   type Card,
   type Entry,
@@ -91,31 +93,50 @@ export function BotChat({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  /** Said something here since opening: the account's copy must not overwrite it. */
-  const touched = useRef(false);
+  /** The conversation as it is now, for code that runs after an await. */
+  const latest = useRef<Entry[]>([]);
   const botId = bot.id;
+
+  const show = (next: Entry[]) => {
+    latest.current = next;
+    setEntries(next);
+  };
 
   useEffect(() => {
     let cancel = false;
-    touched.current = false;
     const key = chatKey({ id: botId });
-    const own = loadChat(key);
-    // A conversation kept per repository, before bots had names, carries over once.
-    const local = own.length > 0 ? own : loadChat(repo);
-    setEntries(local);
-    // The account's copy is the one every device shares; this browser's goes up if it has none.
+    let local = loadChat(key);
+    if (local.length === 0) {
+      // A conversation kept per repository, before bots had names, carries over once, here.
+      local = loadChat(repo);
+      if (local.length > 0) {
+        saveChat(key, local);
+        clearSavedChat(repo);
+      }
+    }
+    const opened = new Set(local.map((e) => e.id));
+    show(local);
+    // The account's copy is the one every device shares.
     void loadBotChat({ data: { id: botId } })
-      .then(({ entries: kept }) => {
-        if (cancel || touched.current) return;
-        if (kept.length > 0) {
-          setEntries(kept);
-          saveChat(key, kept);
-        } else if (local.length > 0) {
-          void saveBotChat({ data: { id: botId, entries: local } }).catch(() => {});
+      .then((kept) => {
+        if (cancel || !kept.ok) return;
+        if (kept.updatedAt === null) {
+          // Never kept on the account: this browser's copy goes up.
+          if (latest.current.length > 0)
+            void saveBotChat({ data: { id: botId, entries: latest.current.slice(-KEEP) } }).catch(
+              () => {},
+            );
+          return;
         }
+        // The account's copy wins (even an empty, cleared one); what was just said is kept.
+        const merged = mergeChats(kept.entries, latest.current, opened);
+        show(merged);
+        saveChat(key, merged);
+        if (merged.length > kept.entries.length)
+          void saveBotChat({ data: { id: botId, entries: merged } }).catch(() => {});
       })
       .catch(() => {
-        // Offline or signed out: this browser's copy stands.
+        // Offline or signed out: this browser's copy stands, and nothing goes up.
       });
     return () => {
       cancel = true;
@@ -124,8 +145,7 @@ export function BotChat({
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [entries.length, busy]);
 
   const update = (next: Entry[]) => {
-    touched.current = true;
-    setEntries(next);
+    show(next);
     saveChat(chatKey(bot), next);
     void saveBotChat({ data: { id: bot.id, entries: next.slice(-KEEP) } }).catch(() => {});
     onChange?.(next);
@@ -134,45 +154,38 @@ export function BotChat({
   async function send(text: string) {
     const said = text.trim();
     if (!said || busy) return;
-    const asked: Entry[] = [...entries, { id: id(), role: "user", text: said }];
+    const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
     update(asked);
     setDraft("");
     setBusy(true);
+    // The server reads the newest turns, each clipped: send no more than it takes.
+    const turns: ChatTurn[] = asked
+      .filter((e) => !(e.role === "assistant" && e.error))
+      .slice(-CHAT_LIMITS.turns)
+      .map((e) => ({ role: e.role, text: turnText(e).slice(0, CHAT_LIMITS.turnChars) }));
+    let reply: Entry;
     try {
-      const turns: ChatTurn[] = asked
-        .filter((e) => !(e.role === "assistant" && e.error))
-        .map((e) => ({ role: e.role, text: turnText(e) }));
       const out = await botChat({ data: { owner, repo: name, botId: bot.id, turns } });
-      update([
-        ...asked,
-        out.ok
-          ? {
-              id: id(),
-              role: "assistant",
-              text: out.reply,
-              looked: out.looked,
-              cards: out.proposals,
-            }
-          : { id: id(), role: "assistant", text: out.error, error: true },
-      ]);
+      reply = out.ok
+        ? { id: id(), role: "assistant", text: out.reply, looked: out.looked, cards: out.proposals }
+        : { id: id(), role: "assistant", text: out.error, error: true };
     } catch (err) {
-      update([
-        ...asked,
-        {
-          id: id(),
-          role: "assistant",
-          text: err instanceof Error ? err.message : "The bot could not answer.",
-          error: true,
-        },
-      ]);
+      reply = {
+        id: id(),
+        role: "assistant",
+        text: err instanceof Error ? err.message : "The bot could not answer.",
+        error: true,
+      };
     } finally {
       setBusy(false);
     }
+    // After the conversation as it is now: a card sent or dismissed meanwhile stays so.
+    update([...latest.current, reply]);
   }
 
   const setCard = (entryId: string, index: number, patch: Partial<Card>) =>
     update(
-      entries.map((e) =>
+      latest.current.map((e) =>
         e.id === entryId && e.role === "assistant"
           ? { ...e, cards: e.cards?.map((c, i) => (i === index ? { ...c, ...patch } : c)) }
           : e,

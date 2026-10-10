@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { KEEP, fitEntries, lastLineOf, savedEntries, type Entry } from "./chat-saved.ts";
+import {
+  KEEP,
+  fitEntries,
+  lastLineOf,
+  mergeChats,
+  savedEntries,
+  type Entry,
+} from "./chat-saved.ts";
 
 test("a well-formed chat reads back as it was saved", () => {
   const chat = [
@@ -92,4 +99,31 @@ test("the roster's line is the last thing said, and a kept chat fits its size", 
   assert.ok(JSON.stringify(kept).length <= 3500);
   assert.equal(kept.at(-1)!.id, "9");
   assert.ok(kept.length >= 2 && kept.length < 10);
+});
+
+test("a fitted chat's JSON is within the limit exactly as measured", () => {
+  const big: Entry[] = Array.from({ length: 5 }, (_, i) => ({
+    id: String(i),
+    role: "user",
+    text: "y".repeat(100),
+  }));
+  for (const max of [0, 50, 200, 300, 600, 10_000]) {
+    const kept = fitEntries(big, max);
+    assert.ok(JSON.stringify(kept).length <= max || kept.length === 0, `max ${max}`);
+    // The next older entry would not have fitted.
+    const one = fitEntries(big, max).length;
+    if (one < 5) assert.ok(JSON.stringify(big.slice(-(one + 1))).length > max);
+  }
+});
+
+test("the account's copy wins, and what was said since opening is kept after it", () => {
+  const e = (id: string): Entry => ({ id, role: "user", text: id });
+  const kept = [e("a"), e("b"), e("c")];
+  // Opened with an old local copy (a, x); said "n" before the account's copy came.
+  assert.deepEqual(
+    mergeChats(kept, [e("a"), e("x"), e("n")], new Set(["a", "x"])).map((x) => x.id),
+    ["a", "b", "c", "n"],
+  );
+  // A cleared account copy stays cleared: the old local entries do not come back.
+  assert.deepEqual(mergeChats([], [e("a"), e("x")], new Set(["a", "x"])), []);
 });

@@ -143,6 +143,15 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Bot page fixes. A cleared conversation stays cleared on every device, a
+  busy moment no longer lets an old copy overwrite a newer one, and nothing
+  said while a conversation loads is lost. Long chats keep working, and a
+  card sent while a reply is coming stays sent. Changing a bot's model keeps
+  unsaved profile edits. The roster polls GitHub less, one busy repository no
+  longer hides the other bots' news, and a local model is no longer offered
+  as a bot's default. The bot reads the newest comments on long threads, and
+  a standing job finds its tracking issue in a repository with many open
+  ones. ([#59](https://github.com/Hankaws/aperture/pull/59))
 - A part of the Bot page that fails no longer takes the whole page down: the
   chat, the setup and the task list each show what went wrong, where, and
   Try again; the chat can also clear the conversation this browser saved. A

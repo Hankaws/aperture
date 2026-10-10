@@ -17,7 +17,8 @@ export type ModelChoice = { id: BotModel; label: string };
 
 function sourceLabel(account: ModelAccount, source: ModelSource): string {
   if (source === "hosted") return "Grok";
-  if (source === "local") return "a local model";
+  // The chat runs on the server, which cannot reach a model in the browser.
+  if (source === "local") return "a local model, not for bots: pick one";
   if (source === "custom") return account.custom.model || "your endpoint";
   return providerShort(source);
 }

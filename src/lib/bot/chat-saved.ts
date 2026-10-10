@@ -80,11 +80,25 @@ export function lastLineOf(entries: Entry[]): string {
 /** A conversation kept on the account is at most this big; the oldest entries go first. */
 export const MAX_SAVED_CHARS = 200_000;
 
-/** The newest entries whose JSON fits in `max` characters. */
+/** The newest entries whose JSON fits in `max` characters: each entry measured once. */
 export function fitEntries(entries: Entry[], max = MAX_SAVED_CHARS): Entry[] {
-  let kept = entries.slice(-KEEP);
-  while (kept.length > 0 && JSON.stringify(kept).length > max) kept = kept.slice(1);
-  return kept;
+  const kept = entries.slice(-KEEP);
+  const sizes = kept.map((e) => JSON.stringify(e).length + 1);
+  let total = 2 + sizes.reduce((a, b) => a + b, 0) - (kept.length > 0 ? 1 : 0);
+  let start = 0;
+  while (start < kept.length && total > max) total -= sizes[start++]!;
+  return kept.slice(start);
+}
+
+/**
+ * The account's copy of a conversation, then whatever was said in this
+ * browser since it was opened (entries not in `opened`) that the account
+ * does not have yet: the account's copy wins, and nothing just said is lost.
+ */
+export function mergeChats(kept: Entry[], local: Entry[], opened: Set<string>): Entry[] {
+  const have = new Set(kept.map((e) => e.id));
+  const fresh = local.filter((e) => !opened.has(e.id) && !have.has(e.id));
+  return [...kept, ...fresh].slice(-KEEP);
 }
 
 const key = (repo: string) => `aperture-bot-chat:${repo}`;

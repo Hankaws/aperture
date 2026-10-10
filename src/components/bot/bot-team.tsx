@@ -19,12 +19,12 @@ import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
 import { chatKey, clearSavedChat, lastLineOf, loadChat, type Entry } from "@/lib/bot/chat-saved";
 import { mascotFor, suggestName, type Mascot, type MascotMood } from "@/lib/bot/mascot";
 import { activityFrom, statusOf, type BotStatus } from "@/lib/bot/activity";
-import { listBots } from "@/lib/bot/team.api";
+import { listBots, saveBotChat } from "@/lib/bot/team.api";
 import { modelChoices, type ModelChoice } from "@/lib/bot/team-models";
 import { getAccount } from "@/lib/billing/api";
 import type { BotProfile } from "@/lib/bot/team";
 import { cn } from "@/lib/utils";
-import { BotActivity } from "./activity-feed";
+import { ActivityPanel } from "./activity-feed";
 import { AskCard, SetupCard, TaskList } from "./bot-console";
 import { BotChat } from "./bot-chat";
 import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
@@ -286,7 +286,14 @@ export function BotTeam() {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
               <PanelBoundary name="The activity feed" className={PANEL_CARD}>
-                <BotActivity repos={repoKey ? repoKey.split(",") : undefined} />
+                <ActivityPanel
+                  feed={team.loaded ? team.items : null}
+                  now={team.now}
+                  busy={team.busy}
+                  error={team.error}
+                  onRefresh={() => void team.reload()}
+                  note="What your bots did on their repositories."
+                />
               </PanelBoundary>
             </div>
           </>
@@ -467,7 +474,13 @@ function BotRoom({
           <PanelBoundary
             name="The chat"
             className="flex-1"
-            reset={{ label: "Clear the saved chat", run: () => clearSavedChat(chatKey(bot)) }}
+            reset={{
+              label: "Clear the saved chat",
+              run: () => {
+                clearSavedChat(chatKey(bot));
+                void saveBotChat({ data: { id: bot.id, entries: [] } }).catch(() => {});
+              },
+            }}
           >
             <BotChat
               bot={bot}
@@ -523,7 +536,7 @@ function BotRoom({
             {panel === "profile" && (
               <PanelBoundary name="The profile" className={PANEL_CARD}>
                 <ProfilePanel
-                  key={bot.updatedAt}
+                  key={bot.id}
                   bot={bot}
                   repos={repos}
                   choices={choices}

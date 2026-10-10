@@ -41,10 +41,9 @@ export function threadText(issue: unknown, comments: unknown[]): string {
     const r = c as Raw;
     return `@${login(r.user)}: ${str(r.body).trim().slice(0, COMMENT_CHARS)}`;
   });
-  const more =
-    comments.length > COMMENTS
-      ? [`(${comments.length - COMMENTS} earlier comments not shown)`]
-      : [];
+  // The thread may have more comments than were fetched: GitHub's count says how many.
+  const total = Math.max(comments.length, typeof i.comments === "number" ? i.comments : 0);
+  const more = total > shown.length ? [`(${total - shown.length} earlier comments not shown)`] : [];
   return [head, body, ...(shown.length ? ["Comments, oldest first:", ...more, ...shown] : [])].join(
     "\n\n",
   );

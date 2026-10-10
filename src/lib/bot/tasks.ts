@@ -35,7 +35,7 @@ export type TaskState = BotState | "waiting" | "silent" | "replied" | "ended";
 export type BotTask = {
   /** The asking comment's id; for a label or the schedule, the bot's comment's. */
   id: number;
-  via: "comment" | "label" | "schedule";
+  via: "comment" | "label" | "schedule" | "pull";
   number: number;
   thread: Thread | null;
   task: string;
@@ -161,15 +161,31 @@ export function endedRun(task: BotTask, run: { status?: string; conclusion?: str
     : task;
 }
 
+/** Aperture Agent Check on a pull request, asked with `/aperture check` or by a push. */
+export function isCheck(task: BotTask): boolean {
+  return task.summary?.kind === "check";
+}
+
 /** Finished, one way or the other: nothing more will change without a new ask. */
 export function isSettled(state: TaskState): boolean {
   return state !== "working" && state !== "waiting";
 }
 
-/** Standing jobs, as the workflow sets them: the label, and what to do on its schedule. */
-export type Jobs = { label: boolean; scheduled: string | null; cron: string | null };
+/**
+ * Standing jobs, as the workflow sets them: the label, what to do on its
+ * schedule, and Agent Check on every pull request.
+ */
+export type Jobs = {
+  label: boolean;
+  scheduled: string | null;
+  cron: string | null;
+  pulls: boolean;
+};
 
-export const NO_JOBS: Jobs = { label: false, scheduled: null, cron: null };
+export const NO_JOBS: Jobs = { label: false, scheduled: null, cron: null, pulls: false };
+
+/** The pull request events the bot checks: new code to look at. */
+const PULL_TYPES = "[opened, synchronize, reopened, ready_for_review]";
 /** Off the hour, when GitHub's schedules are busiest. UTC. */
 export const NIGHTLY = "17 3 * * *";
 export const WEEKLY = "17 3 * * 1";
@@ -238,6 +254,7 @@ export function workflowUse(text: string): {
       label: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\blabeled\b/m.test(text),
       scheduled: setting("scheduled") || null,
       cron: /cron:\s*["']([^"']+)["']/.exec(text)?.[1] ?? null,
+      pulls: /^\s{2}pull_request:\s*$/m.test(text),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -292,13 +309,14 @@ export function workflowFile(
         `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
         ...(provider === "grok" ? [] : [`provider: ${provider}`]),
       ];
-  const any = jobs.label || Boolean(scheduled);
+  const any = jobs.label || Boolean(scheduled) || jobs.pulls;
   return [
     "name: Aperture Bot",
     "on:",
     "  issue_comment:",
     "    types: [created]",
     ...(jobs.label ? ["  issues:", "    types: [labeled]"] : []),
+    ...(jobs.pulls ? ["  pull_request:", `    types: ${PULL_TYPES}`] : []),
     ...(scheduled
       ? ["  schedule:", `    - cron: "${jobs.cron ?? NIGHTLY}"`, "  workflow_dispatch:"]
       : []),
@@ -318,6 +336,11 @@ export function workflowFile(
           ...(jobs.label
             ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
             : []),
+          ...(jobs.pulls
+            ? [
+                "      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)",
+              ]
+            : []),
           ...(scheduled
             ? [
                 "      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
@@ -332,7 +355,7 @@ export function workflowFile(
     "    timeout-minutes: 45",
     "    concurrency:",
     any
-      ? "      group: aperture-bot-${{ github.event.issue.number || 'scheduled' }}"
+      ? "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || 'scheduled' }}"
       : "      group: aperture-bot-${{ github.event.issue.number }}",
     "    steps:",
     ...(app

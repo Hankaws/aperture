@@ -591,6 +591,10 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): ${jobs.scheduled.split("\n")[0]}`,
     );
+  if (jobs.pulls)
+    lines.push(
+      "- **Every pull request**: on each push to a pull request from this repository, Aperture Agent Check runs and its report is kept in one comment, updated on each push. It changes nothing, and needs no model key.",
+    );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
 
@@ -627,6 +631,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
       label: data.label,
       scheduled: scheduled || null,
       cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
+      pulls: data.pulls ?? false,
     };
     try {
       const read = await readWorkflow(call, base);
@@ -642,7 +647,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         message: "Aperture Bot: set its standing jobs",
         title: "Aperture Bot: standing jobs",
         body: [
-          "Sets [Aperture Bot](https://aperturesais.grok.me/bot)'s standing jobs. Each runs on this repository's runner with its model key, and opens a pull request only when Aperture Agent Check finds nothing red.",
+          "Sets [Aperture Bot](https://aperturesais.grok.me/bot)'s standing jobs. Each runs on this repository's runner; a job that changes code uses its model key, and opens a pull request only when Aperture Agent Check finds nothing red.",
           "",
           ...jobsText(jobs),
           "",

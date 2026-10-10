@@ -57,12 +57,12 @@ test("the setup line on the site is the one in the action's README, and the page
   const names = [...inputs.matchAll(/^ {2}([a-z-]+):$/gm)].map((match) => match[1]!);
   assert.ok(names.length >= 6, names.join(", "));
   const page = readFileSync(
-    new URL("../../../src/routes/agent-check.tsx", import.meta.url),
+    new URL("../../../src/components/bot/check-guide.tsx", import.meta.url),
     "utf8",
   );
   for (const name of names)
     assert.ok(
       page.includes(`"${name}"`),
-      `src/routes/agent-check.tsx should list the input "${name}"`,
+      `src/components/bot/check-guide.tsx should list the input "${name}"`,
     );
 });

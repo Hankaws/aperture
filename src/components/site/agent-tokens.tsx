@@ -20,8 +20,12 @@ function when(iso: string | null): string {
   return `used ${new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-/** Settings → Agents: tokens that let an agent call Aperture's MCP server. */
-export function AgentTokens() {
+/**
+ * Settings → Agents, and the Bot page's Agents tab: tokens that let an agent
+ * call Aperture's MCP server. `guide`: the page explaining it is a link away
+ * (in Settings), not around it already (on the Bot page).
+ */
+export function AgentTokens({ guide = true }: { guide?: boolean }) {
   const [tokens, setTokens] = useState<AgentTokenView[]>([]);
   const [name, setName] = useState("");
   const [made, setMade] = useState<string | null>(null);
@@ -72,9 +76,15 @@ export function AgentTokens() {
           before it applies them: Parses, Imports resolve and Types, the same checks as the editor,
           plus tests skipped or cut short. Nothing the agent sends is run or kept. Free on every
           plan.{" "}
-          <Link to="/agents" className="text-fg underline-offset-2 hover:underline">
-            How it works
-          </Link>
+          {guide && (
+            <Link
+              to="/bot"
+              search={{ tab: "agents" }}
+              className="text-fg underline-offset-2 hover:underline"
+            >
+              How it works
+            </Link>
+          )}
         </p>
       </div>
 

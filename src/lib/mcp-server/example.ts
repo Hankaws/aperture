@@ -1,5 +1,5 @@
 /**
- * The worked example on /agents: a change an agent might make, and what
+ * The worked example on the Bot page's Agents tab: a change an agent might make, and what
  * `check_change` answers. `example.test.ts` runs the real checks on it and
  * requires `answer` word for word, so the page cannot drift from the server.
  */

@@ -16,6 +16,7 @@ import { askBot, setUpBot } from "@/lib/github/bot";
 import { ago } from "@/lib/bot/activity";
 import { phaseLine, type BotPhase } from "@/lib/bot/summary";
 import {
+  isCheck,
   isSettled,
   PROVIDER_SECRET,
   type BotTask,
@@ -448,12 +449,20 @@ const MARK_TONE: Record<string, string> = {
 function whoAsked(task: BotTask): string {
   if (task.via === "schedule") return "Standing job";
   if (task.via === "label") return `Labelled by @${task.author}`;
+  if (task.via === "pull") return `Pushed by @${task.author}`;
   return `@${task.author}`;
 }
 
+/** A check's result reads as a review, not as a change that was or was not pushed. */
+const CHECKED: Partial<Record<TaskState, { label: string; tone: string }>> = {
+  clear: { label: "Checked: clear", tone: "border-ok/30 bg-ok/10 text-ok" },
+  red: { label: "Checked: red", tone: "border-danger/30 bg-danger/10 text-danger" },
+};
+
 export function TaskCard({ task, now }: { task: BotTask; now: number }) {
   const s = task.summary;
-  const state = STATE[task.state];
+  const checking = isCheck(task);
+  const state = (checking && CHECKED[task.state]) || STATE[task.state];
   const [showDiff, setShowDiff] = useState(false);
   return (
     <article className="rounded-2xl border border-border bg-surface p-4 sm:p-5">
@@ -490,7 +499,7 @@ export function TaskCard({ task, now }: { task: BotTask; now: number }) {
 
       {task.state === "working" && s && (
         <div className="mt-4 space-y-2">
-          <Steps phase={s.phase ?? "starting"} />
+          {!checking && <Steps phase={s.phase ?? "starting"} />}
           <p className="text-sm text-muted">{phaseLine(s)}</p>
         </div>
       )}

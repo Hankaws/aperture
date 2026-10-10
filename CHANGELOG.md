@@ -9,6 +9,15 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Three in one: Aperture Bot now does Agent Check's job too. Comment
+  `/aperture check` on a pull request and the bot runs Aperture Agent Check
+  on it and replies with the report, changing nothing and using no model key.
+  A new standing job, "Check every pull request", does that on each push,
+  keeping one report per pull request up to date. The Bot page has three
+  tabs: Team, Check (check a pull request now, and Agent Check on its own)
+  and Agents (connect an agent with a token). The menu's Agents, Agent Check
+  and Bot are one item, Bot, and the old pages lead to its tabs.
+  ([#59](https://github.com/Hankaws/aperture/pull/59))
 - The bot team comes alive. The roster shows what each bot is doing on
   GitHub (queued, working on #12, opened a pull request, stuck on red
   checks), and its mascot's face follows. Each bot can talk on a model of

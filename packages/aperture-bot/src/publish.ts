@@ -49,6 +49,18 @@ export function checkoutPullHead(cwd: string, ref: string): void {
   git(["checkout", "-B", ref, `refs/remotes/origin/${ref}`], cwd);
 }
 
+/**
+ * Fetches a pull request's base branch, with the history Agent Check needs to
+ * find where the two meet: actions/checkout clones one commit deep, so a
+ * shallow checkout is deepened first. Returns the ref to compare against.
+ */
+export function fetchBase(cwd: string, ref: string): string {
+  const spec = `+refs/heads/${ref}:refs/remotes/origin/${ref}`;
+  const shallow = git(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
+  git(["fetch", "--no-tags", ...(shallow ? ["--unshallow"] : []), "origin", spec], cwd);
+  return `refs/remotes/origin/${ref}`;
+}
+
 /** Commits exactly `paths` (relative to `cwd`) and returns the commit. */
 export function commitFiles(
   cwd: string,

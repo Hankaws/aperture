@@ -178,7 +178,7 @@ export function BotTeam() {
   const saved = (next: BotProfile[]) => setBots(next);
 
   return (
-    <div className="relative flex h-[calc(100dvh-7.5rem)] min-h-[32rem] sm:h-[calc(100dvh-11rem)] sm:min-h-[36rem] overflow-hidden rounded-2xl border border-border bg-surface">
+    <div className="relative flex h-[calc(100dvh-9rem)] min-h-[32rem] sm:h-[calc(100dvh-12rem)] sm:min-h-[36rem] overflow-hidden rounded-2xl border border-border bg-surface">
       <aside
         className={cn(
           "w-full flex-col border-border lg:flex lg:w-72 lg:shrink-0 lg:border-r",

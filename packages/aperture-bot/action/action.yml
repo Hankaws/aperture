@@ -1,12 +1,12 @@
 name: Aperture Bot
-description: A coding bot for issues and pull requests that checks before it pushes. Comment /aperture and a task; it opens a pull request only when Aperture Agent Check is clear.
+description: A coding bot for issues and pull requests that checks before it pushes. Comment /aperture and a task; it opens a pull request only when Aperture Agent Check is clear. Comment /aperture check on a pull request, or run it on pull_request, for the check alone.
 author: Hankaws
 branding:
   icon: aperture
   color: purple
 inputs:
   model-key:
-    description: The model provider's API key, from a repository secret. It never reaches the code the bot runs.
+    description: The model provider's API key, from a repository secret. It never reaches the code the bot runs. Checks (/aperture check, and pull_request runs) do not use it.
     required: true
   provider:
     description: grok, openai, anthropic, gemini, deepseek or custom.
@@ -67,6 +67,8 @@ outputs:
     description: The pull request the bot opened, if it opened one.
   commit:
     description: The commit the bot pushed, if it pushed one.
+  verdict:
+    description: After a check, red or clear.
 runs:
   using: node24
   main: dist/action.cjs

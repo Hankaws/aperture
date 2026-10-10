@@ -142,6 +142,7 @@ export const botJobsInput = z.object({
   label: z.boolean(),
   scheduled: text(2_000).optional(),
   weekly: z.boolean().optional(),
+  pulls: z.boolean().optional(),
 });
 export const botAppInput = z.object({ owner: repoName, repo: repoName, on: z.boolean() });
 export const botSetupInput = z.object({

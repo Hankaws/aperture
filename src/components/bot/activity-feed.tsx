@@ -10,6 +10,8 @@ import {
   Loader2,
   MessageSquare,
   RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
   ShieldX,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +27,8 @@ const MARK: Record<ActivityKind, { icon: LucideIcon; tone: string }> = {
   opened: { icon: GitPullRequest, tone: "border-ok/30 bg-ok/10 text-ok" },
   pushed: { icon: GitCommitHorizontal, tone: "border-ok/30 bg-ok/10 text-ok" },
   red: { icon: ShieldX, tone: "border-danger/30 bg-danger/10 text-danger" },
+  checked: { icon: ShieldCheck, tone: "border-ok/30 bg-ok/10 text-ok" },
+  flagged: { icon: ShieldAlert, tone: "border-danger/30 bg-danger/10 text-danger" },
   error: { icon: CircleAlert, tone: "border-danger/30 bg-danger/10 text-danger" },
   stopped: { icon: CircleSlash, tone: "border-warn/30 bg-warn/10 text-warn" },
   ended: { icon: CircleSlash, tone: "border-warn/30 bg-warn/10 text-warn" },

@@ -272,4 +272,80 @@ expect(
   readFileSync(join(root, "output.txt"), "utf8"),
 );
 
+// A push to the bot's pull request, with the "check every pull request" job:
+// Agent Check alone, on a one-commit-deep checkout as actions/checkout makes,
+// with the tests in the sandbox and no model key at all.
+const checked = [];
+const github2 = createServer((req, res) => {
+  let raw = "";
+  req.on("data", (chunk) => (raw += chunk));
+  req.on("end", () => {
+    const path = new URL(req.url, "http://x").pathname;
+    if (req.method === "POST" || req.method === "PATCH")
+      checked.push({ method: req.method, path, body: JSON.parse(raw || "{}") });
+    res.setHeader("content-type", "application/json");
+    if (path.endsWith("/permission")) return res.end(JSON.stringify({ role_name: "admin" }));
+    if (req.method === "GET" && path.endsWith("/comments")) return res.end("[]");
+    if (req.method === "GET" && path.endsWith("/pulls/8"))
+      return res.end(
+        JSON.stringify({
+          number: 8,
+          head: {
+            ref: "aperture/7-show-prices-in-dollars",
+            sha: "x",
+            repo: { full_name: "acme/shop" },
+          },
+          base: { ref: "main" },
+        }),
+      );
+    res.end(JSON.stringify({ id: 901, html_url: "https://github.com/acme/shop/pull/8#check" }));
+  });
+});
+await new Promise((done) => github2.listen(0, "127.0.0.1", done));
+gitIn(root, "clone", "-q", "--depth", "1", `file://${join(root, "origin.git")}`, "ws2");
+writeFileSync(
+  join(root, "push.json"),
+  JSON.stringify({
+    action: "synchronize",
+    sender: { login: "owner", type: "User" },
+    pull_request: { number: 8, title: "Show prices in dollars", body: "", draft: false },
+    repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+  }),
+);
+writeFileSync(join(root, "output2.txt"), "");
+const check = await node([actionBundle], {
+  PATH: process.env.PATH,
+  HOME: process.env.HOME,
+  GITHUB_EVENT_NAME: "pull_request",
+  GITHUB_EVENT_PATH: join(root, "push.json"),
+  GITHUB_WORKSPACE: join(root, "ws2"),
+  GITHUB_OUTPUT: join(root, "output2.txt"),
+  GITHUB_API_URL: `http://127.0.0.1:${github2.address().port}`,
+  "INPUT_GITHUB-TOKEN": "smoke-github-token",
+  INPUT_INSTALL: "none",
+});
+github2.close();
+const report = checked.filter((p) => /\/issues\/(8\/comments|comments\/901)$/.test(p.path)).at(-1);
+expect(
+  check.code === 0 &&
+    /^### Aperture Agent Check\n\nNothing red on 1 changed file\./.test(report?.body.body ?? "") &&
+    /<!-- aperture-bot \{"v":1,"state":"clear","kind":"check","asked":0,"run":"[^"]*","via":"pull"/.test(
+      report?.body.body ?? "",
+    ),
+  "a push to a pull request is checked against its base, from a shallow checkout",
+  check.stdout + check.stderr + JSON.stringify(report),
+);
+expect(
+  /\| ✓ \| Tests pass \| npm run test passed in a container with no network\. \|/.test(
+    report.body.body,
+  ) && !checked.some((p) => p.path.endsWith("/pulls")),
+  "the check ran the tests in the sandbox, with no model key, and changed nothing",
+  report.body.body,
+);
+expect(
+  readFileSync(join(root, "output2.txt"), "utf8") === "outcome=clear\nverdict=clear\n",
+  "the check's verdict is an output",
+  readFileSync(join(root, "output2.txt"), "utf8"),
+);
+
 console.log("\nThe bundle works.");

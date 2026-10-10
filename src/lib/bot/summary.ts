@@ -19,9 +19,11 @@ export type BotSummary = {
   state: BotState;
   /** The id of the comment that asked; 0 when a label or the schedule did. */
   asked: number;
-  /** How the bot was asked, when it was not a comment. */
-  via?: "label" | "schedule";
-  /** Who asked, when it was not a comment: whoever added the label, or "schedule". */
+  /** What the bot did: a change (unset), or Aperture Agent Check on a pull request. */
+  kind?: "check";
+  /** How the bot was asked, when it was not a comment: a push to a pull request is a check. */
+  via?: "label" | "schedule" | "pull";
+  /** Who asked, when it was not a comment: whoever added the label or pushed, or "schedule". */
   by?: string;
   /** What was asked, when it was not a comment. */
   task?: string;
@@ -119,7 +121,8 @@ export function readSummary(body: string): BotSummary | null {
     asked: r.asked,
     run: isGithubUrl(r.run) ? r.run : "",
   };
-  if (r.via === "label" || r.via === "schedule") out.via = r.via;
+  if (r.kind === "check") out.kind = "check";
+  if (r.via === "label" || r.via === "schedule" || r.via === "pull") out.via = r.via;
   if (typeof r.by === "string") out.by = r.by.slice(0, 100);
   if (typeof r.task === "string") out.task = r.task;
   if (typeof r.phase === "string" && r.phase in PHASE_TEXT) out.phase = r.phase as BotPhase;

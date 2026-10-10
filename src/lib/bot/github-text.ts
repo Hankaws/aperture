@@ -83,8 +83,14 @@ export function tasksText(tasks: BotTask[]): string {
           ? "a standing job"
           : t.via === "label"
             ? `the label, added by @${t.author}`
-            : `@${t.author}`;
-      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${TASK_STATE[t.state] ?? t.state}${link}`;
+            : t.via === "pull"
+              ? `a push by @${t.author}`
+              : `@${t.author}`;
+      const state =
+        t.summary?.kind === "check" && (t.state === "clear" || t.state === "red")
+          ? `Agent Check ${t.state === "red" ? "red: not ready to merge" : "clear"}`
+          : (TASK_STATE[t.state] ?? t.state);
+      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${state}${link}`;
     })
     .join("\n");
 }

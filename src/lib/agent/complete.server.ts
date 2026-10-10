@@ -71,6 +71,23 @@ async function refused(name: string, res: Response, apiKey: string): Promise<Err
   });
 }
 
+/**
+ * A provider's reply, read as JSON. An answer that is not JSON (a parked
+ * address saying "OK", an HTML error page) says what it was, not "Unexpected
+ * token".
+ */
+async function replyJson(name: string, res: Response): Promise<unknown> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const said = text.replace(/\s+/g, " ").trim().slice(0, 120);
+    throw new Error(
+      `${name} answered with something that is not a model's reply${said ? `: "${said}"` : ""}. Check the address and the model name.`,
+    );
+  }
+}
+
 async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   const { base, model } = endpointOf(cfg);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -165,7 +182,7 @@ export async function complete(
     body.tool_choice = "auto";
   }
   const res = await postChat(cfg, body, signal);
-  const data = (await res.json()) as {
+  const data = (await replyJson(cfg.provider === "custom" ? "The endpoint" : cfg.provider, res)) as {
     choices: Array<{ message: ChatMessage }>;
     usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
   };
@@ -236,7 +253,7 @@ async function completeAnthropic(
   if (!res.ok) {
     throw await refused("anthropic", res, apiKey);
   }
-  const data = (await res.json()) as {
+  const data = (await replyJson("anthropic", res)) as {
     content: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
     usage?: Parameters<typeof anthropicUsage>[0]["usage"];
     stop_reason?: string;

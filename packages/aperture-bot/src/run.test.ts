@@ -237,3 +237,35 @@ test(
     await sandboxed(dockerSandbox(), true);
   },
 );
+
+test("a plan with no words from the agent is not quoted as the editor's button text", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const { model: base } = scripted([[dollars]]);
+  // A model that plans without a word, as Gemini did on the sandbox.
+  const model: Model = async (...args) => {
+    const out = await base(...args);
+    return out.content === "Plan ready." ? { ...out, content: "" } : out;
+  };
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.doesNotMatch(result.text, /Click Build it/);
+});
+
+test("stopped after planning, the reply has the plan and no editor wording", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const { model: base } = scripted([[dollars]]);
+  // Plans without a word, then the provider stops answering once it is time to build.
+  const model: Model = async (cfg, messages, useTools, signal, tools) => {
+    if ((tools ?? []).some((t) => t.function.name === "propose_edit"))
+      throw new Error("gemini refused the request (400): no more");
+    const out = await base(cfg, messages, useTools, signal, tools);
+    return out.content === "Plan ready." ? { ...out, content: "" } : out;
+  };
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "stopped", result.text);
+  assert.equal(result.plan.length, 3);
+  assert.equal(result.summary, "");
+  assert.doesNotMatch(result.text, /Click Build it/);
+});

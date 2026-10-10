@@ -7,6 +7,7 @@ import {
   cleanPersonality,
   profileFrom,
   rosterOrder,
+  type BotAllow,
   type BotModel,
   type BotProfile,
 } from "./team.ts";
@@ -21,7 +22,7 @@ async function sql() {
 export async function listBotsFor(userId: string): Promise<BotProfile[]> {
   const db = await sql();
   const rows = await db<Record<string, unknown>>`
-    select b.id, b.name, b.repo, b.mascot, b.personality, b.model, b.created_at, b.updated_at,
+    select b.id, b.name, b.repo, b.mascot, b.personality, b.model, b.allow, b.created_at, b.updated_at,
       coalesce(c.last_line, '') as last_line
     from user_bots b left join user_bot_chats c on c.bot_id = b.id and c.user_id = b.user_id
     where b.user_id = ${userId}
@@ -39,6 +40,8 @@ export async function saveBotFor(
     personality: string;
     /** Left out: the bot keeps the model it has. */
     model?: BotModel;
+    /** Left out: the bot keeps its rule. */
+    allow?: BotAllow;
   },
 ): Promise<Saved> {
   const name = cleanName(input.name);
@@ -49,9 +52,11 @@ export async function saveBotFor(
   let id = input.id;
   if (id) {
     const model = input.model ?? null;
+    const allow = input.allow ?? null;
     const rows = await db<{ id: string }>`
       update user_bots set name = ${name}, repo = ${input.repo}, mascot = ${mascot},
-        personality = ${personality}, model = coalesce(${model}::text, model), updated_at = now()
+        personality = ${personality}, model = coalesce(${model}::text, model),
+        allow = coalesce(${allow}::text, allow), updated_at = now()
       where id = ${id} and user_id = ${userId}
       returning id
     `;
@@ -64,8 +69,8 @@ export async function saveBotFor(
       return { ok: false, error: `A team holds ${MAX_BOTS} bots. Remove one first.` };
     id = randomBytes(9).toString("hex");
     await db`
-      insert into user_bots (id, user_id, name, repo, mascot, personality, model)
-      values (${id}, ${userId}, ${name}, ${input.repo}, ${mascot}, ${personality}, ${input.model ?? ""})
+      insert into user_bots (id, user_id, name, repo, mascot, personality, model, allow)
+      values (${id}, ${userId}, ${name}, ${input.repo}, ${mascot}, ${personality}, ${input.model ?? ""}, ${input.allow ?? "ask"})
     `;
   }
   const bots = await listBotsFor(userId);
@@ -84,7 +89,7 @@ export async function deleteBotFor(userId: string, id: string): Promise<BotProfi
 export async function botFor(userId: string, id: string, repo: string): Promise<BotProfile | null> {
   const db = await sql();
   const rows = await db<Record<string, unknown>>`
-    select id, name, repo, mascot, personality, model, created_at, updated_at, '' as last_line
+    select id, name, repo, mascot, personality, model, allow, created_at, updated_at, '' as last_line
     from user_bots where id = ${id} and user_id = ${userId}
   `;
   const bot = rows[0] ? profileFrom(rows[0]) : null;

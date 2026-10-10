@@ -50,7 +50,7 @@ test("everything else is ignored, with the reason", () => {
     assert.ok("ignored" in parsed, JSON.stringify(p));
     return parsed.ignored;
   };
-  assert.match(ignored("pull_request", payload()), /answers comments, its label and its schedule/);
+  assert.match(ignored("push", payload()), /answers comments, its label, its schedule and pull/);
   assert.match(ignored("issue_comment", payload({ action: "edited" })), /not edits/);
   assert.match(
     ignored(
@@ -126,4 +126,70 @@ test("the thread is the issue and its recent comments, not the bot's or the aski
     text,
     "Issue #3: Prices\n\nThey show cents.\n\nComments, oldest first:\n\n@bo: Use the locale's currency.\n\nThe pull request's diff:\ndiff --git a/x b/x",
   );
+});
+
+test("/aperture check asks for Agent Check alone; with more words it is a task", () => {
+  const onPull = parseEvent(
+    "issue_comment",
+    payload({
+      comment: { id: 9, body: "/aperture Check.", user: { login: "ada", type: "User" } },
+      issue: { number: 3, title: "Prices", body: "", pull_request: {} },
+    }),
+  );
+  assert.ok("command" in onPull);
+  assert.equal(onPull.command.check, true);
+  assert.equal(onPull.command.task, "Check this pull request");
+  const onIssue = parseEvent(
+    "issue_comment",
+    payload({ comment: { id: 9, body: "/aperture check", user: { login: "ada", type: "User" } } }),
+  );
+  assert.ok("command" in onIssue);
+  assert.equal(onIssue.command.check, true);
+  assert.equal(onIssue.command.isPull, false);
+  const more = parseEvent(
+    "issue_comment",
+    payload({
+      comment: { id: 9, body: "/aperture check the login flow", user: { login: "ada" } },
+      issue: { number: 3, title: "Prices", body: "", pull_request: {} },
+    }),
+  );
+  assert.ok("command" in more);
+  assert.equal(more.command.check, undefined);
+  assert.equal(more.command.task, "check the login flow");
+});
+
+test("a push to a pull request is a check for whoever pushed, but not a draft's or a bot's", () => {
+  const pull = (more: Record<string, unknown> = {}) => ({
+    action: "synchronize",
+    sender: { login: "grace", type: "User" },
+    pull_request: { number: 12, title: "Dollars", body: null, draft: false },
+    repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+    ...more,
+  });
+  const parsed = parseEvent("pull_request", pull());
+  assert.ok("command" in parsed);
+  assert.deepEqual(parsed.command, {
+    number: 12,
+    isPull: true,
+    title: "Dollars",
+    body: "",
+    task: "Check this pull request",
+    commentId: null,
+    author: "grace",
+    via: "pull",
+    check: true,
+    owner: "acme",
+    repo: "shop",
+    defaultBranch: "main",
+  });
+  assert.ok("ignored" in parseEvent("pull_request", pull({ action: "closed" })));
+  assert.ok("ignored" in parseEvent("pull_request", pull({ action: "labeled" })));
+  assert.ok(
+    "ignored" in
+      parseEvent("pull_request", pull({ pull_request: { number: 12, title: "WIP", draft: true } })),
+  );
+  assert.ok(
+    "ignored" in parseEvent("pull_request", pull({ sender: { login: "x[bot]", type: "Bot" } })),
+  );
+  assert.ok("command" in parseEvent("pull_request", pull({ action: "ready_for_review" })));
 });

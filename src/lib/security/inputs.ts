@@ -11,7 +11,7 @@
 import { z } from "zod";
 import type { BrowserRuns } from "../agent/browser-handoff.ts";
 import { MASCOT_BODIES, MASCOT_COLORS, MASCOT_FACES, type MascotColor } from "../bot/mascot.ts";
-import { BOT_MODELS } from "../bot/team.ts";
+import { BOT_ALLOW, BOT_ID, BOT_MODELS, REPO_FULL_NAME } from "../bot/team.ts";
 import type { WorkerSpec } from "../agent/crew.ts";
 import type { AgentInput } from "../agent/types.ts";
 import type { GithubChange } from "../github/roundtrip.ts";
@@ -103,7 +103,7 @@ export const botAskInput = z.object({
   title: text(256).optional(),
   task: text(4000),
 });
-const botId = z.string().regex(/^[a-z0-9]{12,32}$/);
+const botId = z.string().regex(BOT_ID);
 export const botChatInput = z.object({
   owner: repoName,
   repo: repoName,
@@ -117,7 +117,7 @@ export const botChatInput = z.object({
 export const botProfileInput = z.object({
   id: botId.optional(),
   name: text(40).min(1),
-  repo: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/),
+  repo: z.string().regex(REPO_FULL_NAME),
   mascot: z.object({
     color: z.enum(Object.keys(MASCOT_COLORS) as [MascotColor, ...MascotColor[]]),
     body: z.enum(MASCOT_BODIES),
@@ -126,6 +126,8 @@ export const botProfileInput = z.object({
   personality: text(800),
   /** Left out: the bot keeps the model it has. */
   model: z.enum(BOT_MODELS).optional(),
+  /** Left out: the bot keeps its rule. */
+  allow: z.enum(BOT_ALLOW).optional(),
 });
 export const botIdInput = z.object({ id: botId });
 /** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
@@ -133,7 +135,7 @@ export const botChatSaveInput = z.object({
   id: botId,
   entries: z.array(z.custom<Record<string, unknown>>(isRecord)).max(40),
 });
-const repoFull = z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/);
+const repoFull = z.string().regex(REPO_FULL_NAME);
 /** `repos`: the team's repositories; without them, the most recently pushed. */
 export const botActivityInput = z.object({ repos: z.array(repoFull).max(15).optional() });
 export const botJobsInput = z.object({
@@ -142,6 +144,7 @@ export const botJobsInput = z.object({
   label: z.boolean(),
   scheduled: text(2_000).optional(),
   weekly: z.boolean().optional(),
+  pulls: z.boolean().optional(),
 });
 export const botAppInput = z.object({ owner: repoName, repo: repoName, on: z.boolean() });
 export const botSetupInput = z.object({

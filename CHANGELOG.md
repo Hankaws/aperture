@@ -9,6 +9,24 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Three in one: Aperture Bot now does Agent Check's job too. Comment
+  `/aperture check` on a pull request and the bot runs Aperture Agent Check
+  on it and replies with the report, changing nothing and using no model key.
+  A new standing job, "Check every pull request", does that on each push,
+  keeping one report per pull request up to date. The Bot page has three
+  tabs: Team, Check (check a pull request now, and Agent Check on its own)
+  and Agents (connect an agent with a token). The menu's Agents, Agent Check
+  and Bot are one item, Bot, and the old pages lead to its tabs.
+  ([#59](https://github.com/Hankaws/aperture/pull/59))
+- Ideas from Grok Bot's changelog for the bot team. A suggestion card names
+  the bot and what it wants to do, and quotes what you asked. Each bot has a
+  rule in its profile: ask first, or always allow checks, so a check on a
+  pull request sends itself and says so, with a link to edit the rule. Work
+  that changes code always waits for a click. A card left unsent for a day
+  closes, since the repository has likely moved on. Issues and pull requests
+  a bot names (#12) link to GitHub and preview their title on hover. The
+  chat can also read a pull request's changed files, and the latest releases
+  and tags. ([#59](https://github.com/Hankaws/aperture/pull/59))
 - The bot team comes alive. The roster shows what each bot is doing on
   GitHub (queued, working on #12, opened a pull request, stuck on red
   checks), and its mascot's face follows. Each bot can talk on a model of
@@ -143,6 +161,19 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- A line starting with `#` and a number, such as "#12 is fixed", no longer
+  hangs and crashes a Markdown preview: the bot's chat replies and the
+  editor's preview read it as text.
+  ([#59](https://github.com/Hankaws/aperture/pull/59))
+- Bot page fixes. A cleared conversation stays cleared on every device, a
+  busy moment no longer lets an old copy overwrite a newer one, and nothing
+  said while a conversation loads is lost. Long chats keep working, and a
+  card sent while a reply is coming stays sent. Changing a bot's model keeps
+  unsaved profile edits. The roster polls GitHub less, one busy repository no
+  longer hides the other bots' news, and a local model is no longer offered
+  as a bot's default. The bot reads the newest comments on long threads, and
+  a standing job finds its tracking issue in a repository with many open
+  ones. ([#59](https://github.com/Hankaws/aperture/pull/59))
 - A part of the Bot page that fails no longer takes the whole page down: the
   chat, the setup and the task list each show what went wrong, where, and
   Try again; the chat can also clear the conversation this browser saved. A

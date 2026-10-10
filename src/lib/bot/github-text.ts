@@ -1,6 +1,6 @@
 /**
  * GitHub's answers as the short text Aperture Bot's chat reads: open issues,
- * one thread, CI, and its own tasks. Pure, so each shape is tested on plain
+ * one thread, a pull request's files, CI, releases, and its own tasks. Pure, so each shape is tested on plain
  * data; the server only fetches.
  */
 import type { CiCheck } from "../github/ci.ts";
@@ -41,13 +41,65 @@ export function threadText(issue: unknown, comments: unknown[]): string {
     const r = c as Raw;
     return `@${login(r.user)}: ${str(r.body).trim().slice(0, COMMENT_CHARS)}`;
   });
-  const more =
-    comments.length > COMMENTS
-      ? [`(${comments.length - COMMENTS} earlier comments not shown)`]
-      : [];
+  // The thread may have more comments than were fetched: GitHub's count says how many.
+  const total = Math.max(comments.length, typeof i.comments === "number" ? i.comments : 0);
+  const more = total > shown.length ? [`(${total - shown.length} earlier comments not shown)`] : [];
   return [head, body, ...(shown.length ? ["Comments, oldest first:", ...more, ...shown] : [])].join(
     "\n\n",
   );
+}
+
+const FILES = 60;
+
+/** A pull request's changed files: status and lines, the biggest first after GitHub's order. */
+export function filesText(number: number, files: unknown[]): string {
+  if (files.length === 0)
+    return `Pull request #${number} changes no files, or is not a pull request.`;
+  let added = 0;
+  let removed = 0;
+  const rows = files.flatMap((f) => {
+    const r = f as Raw;
+    const name = str(r.filename);
+    if (!name) return [];
+    const plus = typeof r.additions === "number" ? r.additions : 0;
+    const minus = typeof r.deletions === "number" ? r.deletions : 0;
+    added += plus;
+    removed += minus;
+    const from = str(r.previous_filename);
+    return [
+      `${str(r.status) || "modified"} ${from ? `${from} → ` : ""}${name} (+${plus} −${minus})`,
+    ];
+  });
+  const more = rows.length > FILES ? [`… and ${rows.length - FILES} more files`] : [];
+  return [
+    `Pull request #${number}: ${rows.length} file${rows.length === 1 ? "" : "s"}, +${added} −${removed}`,
+    ...rows.slice(0, FILES),
+    ...more,
+  ].join("\n");
+}
+
+/** The latest releases, then tags no release names: what shipped, and when. */
+export function releasesText(releases: unknown[], tags: unknown[]): string {
+  const named = new Set<string>();
+  const rows = releases.slice(0, 10).flatMap((rel) => {
+    const r = rel as Raw;
+    const tag = str(r.tag_name);
+    if (!tag) return [];
+    named.add(tag);
+    const when = str(r.published_at).slice(0, 10) || "unpublished";
+    const kind = r.draft ? " (draft)" : r.prerelease ? " (pre-release)" : "";
+    const notes = oneLine(str(r.body), 160);
+    return [`${tag}${kind}, ${when}: ${oneLine(str(r.name)) || tag}${notes ? ` · ${notes}` : ""}`];
+  });
+  const loose = tags
+    .map((t) => str((t as Raw).name))
+    .filter((name) => name && !named.has(name))
+    .slice(0, 10);
+  const out = [
+    ...(rows.length ? ["Releases, newest first:", ...rows] : ["No releases."]),
+    ...(loose.length ? [`Other tags: ${loose.join(", ")}`] : []),
+  ];
+  return out.join("\n");
 }
 
 export function ciText(branch: string, sha: string, checks: CiCheck[]): string {
@@ -84,8 +136,14 @@ export function tasksText(tasks: BotTask[]): string {
           ? "a standing job"
           : t.via === "label"
             ? `the label, added by @${t.author}`
-            : `@${t.author}`;
-      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${TASK_STATE[t.state] ?? t.state}${link}`;
+            : t.via === "pull"
+              ? `a push by @${t.author}`
+              : `@${t.author}`;
+      const state =
+        t.summary?.kind === "check" && (t.state === "clear" || t.state === "red")
+          ? `Agent Check ${t.state === "red" ? "red: not ready to merge" : "clear"}`
+          : (TASK_STATE[t.state] ?? t.state);
+      return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${state}${link}`;
     })
     .join("\n");
 }

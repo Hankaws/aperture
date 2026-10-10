@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Bot, PlugZap, ShieldCheck, type LucideIcon } from "lucide-react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { GithubAccountCard } from "@/components/site/github-account";
+import { AgentTokens } from "@/components/site/agent-tokens";
 import { SampleFeed } from "@/components/bot/activity-feed";
+import { AgentsGuide } from "@/components/bot/agents-guide";
+import { CheckGuide } from "@/components/bot/check-guide";
+import { CheckPull } from "@/components/bot/check-pull";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,7 +17,20 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { githubStatus, type GithubAccount } from "@/lib/github/api";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/bot")({ component: BotPage });
+/** One page, three jobs: the bot team, Agent Check on pull requests, and agents that check themselves. */
+type BotTab = "team" | "check" | "agents";
+
+export const Route = createFileRoute("/bot")({
+  validateSearch: (s: Record<string, unknown>): { tab?: "check" | "agents" } =>
+    s.tab === "check" || s.tab === "agents" ? { tab: s.tab } : {},
+  component: BotPage,
+});
+
+const TABS: Array<{ id: BotTab; label: string; icon: LucideIcon }> = [
+  { id: "team", label: "Team", icon: Bot },
+  { id: "check", label: "Check", icon: ShieldCheck },
+  { id: "agents", label: "Agents", icon: PlugZap },
+];
 
 const BOT_REPO = "https://github.com/Hankaws/aperture-bot";
 
@@ -30,6 +47,7 @@ const STEPS = [
 ] as const;
 
 function BotPage() {
+  const tab: BotTab = Route.useSearch().tab ?? "team";
   const { user, isPending } = useCurrentUserState();
   const [github, setGithub] = useState<GithubAccount | null>(null);
 
@@ -44,8 +62,50 @@ function BotPage() {
     };
   }, [user]);
 
-  // Signed in with GitHub: the team fills the page, under a short header.
-  const working = Boolean(user && github?.connected);
+  // Signed in with GitHub, on the Team tab: the team fills the page, under a short header.
+  const working = tab === "team" && Boolean(user && github?.connected);
+  if (tab !== "team")
+    return (
+      <div className="min-h-dvh bg-bg text-fg">
+        <SiteNav />
+        <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+          <BotHeader tab={tab} />
+          <div className="mt-8">
+            {tab === "check" ? (
+              <CheckGuide>
+                {user && github?.connected && (
+                  <PanelBoundary name="Check a pull request" className="rounded-2xl">
+                    <CheckPull />
+                  </PanelBoundary>
+                )}
+              </CheckGuide>
+            ) : (
+              <AgentsGuide>
+                <div className="mt-8">
+                  {isPending ? (
+                    <div className="h-40 animate-pulse rounded-2xl bg-elevated" />
+                  ) : user ? (
+                    <AgentTokens guide={false} />
+                  ) : (
+                    <p className="rounded-2xl border border-border bg-surface p-5 text-sm text-muted">
+                      <Link
+                        to="/login"
+                        search={{ next: "/settings" }}
+                        className="text-accent hover:underline"
+                      >
+                        Sign in
+                      </Link>{" "}
+                      to make a token for your agent.
+                    </p>
+                  )}
+                </div>
+              </AgentsGuide>
+            )}
+          </div>
+        </main>
+        <SiteFooter />
+      </div>
+    );
 
   return (
     <div className="min-h-dvh bg-bg text-fg">
@@ -53,11 +113,8 @@ function BotPage() {
       <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-7xl py-6" : "max-w-3xl py-14")}>
         {working ? (
           <div>
-            <h1 className="flex items-center gap-2.5 text-xs font-medium tracking-[0.18em] text-subtle uppercase">
-              <BotAvatar size="sm" />
-              Aperture Bot
-            </h1>
-            <p className="mt-2 hidden text-sm text-pretty text-muted sm:block">
+            <BotHeader tab={tab} />
+            <p className="mt-3 hidden text-sm text-pretty text-muted sm:block">
               Your team of bots, one per repository. Talk each one through, send what it suggests,
               and watch it work. It opens a pull request only when Aperture Agent Check finds
               nothing red.
@@ -65,12 +122,10 @@ function BotPage() {
           </div>
         ) : (
           <>
-            <p className="text-xs font-medium tracking-[0.18em] text-subtle uppercase">
-              Aperture Bot
-            </p>
-            <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
+            <BotHeader tab={tab} />
+            <h2 className="mt-8 text-4xl font-medium tracking-tight text-balance sm:text-5xl">
               The coding bot that checks before it pushes.
-            </h1>
+            </h2>
             <p className="mt-4 text-lg text-pretty text-muted">
               Give it a task on any of your repos and watch it work. It opens a pull request only
               when Aperture Agent Check finds nothing red.
@@ -121,12 +176,43 @@ function BotPage() {
   );
 }
 
+/** The page's name, and its three tabs: the bot team, Agent Check, and agents. */
+function BotHeader({ tab }: { tab: BotTab }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h1 className="flex items-center gap-2.5 text-xs font-medium tracking-[0.18em] text-subtle uppercase">
+        <BotAvatar size="sm" />
+        {/* On a phone the tabs need the row: the mascot stands for the name. */}
+        <span className="sr-only sm:not-sr-only">Aperture Bot</span>
+      </h1>
+      <nav aria-label="Aperture Bot" className="flex rounded-lg border border-border p-0.5">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <Link
+            key={id}
+            to="/bot"
+            search={id === "team" ? {} : { tab: id }}
+            aria-current={tab === id ? "page" : undefined}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm",
+              tab === id ? "bg-elevated text-fg" : "text-muted hover:text-fg",
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 function SignedOut() {
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-sm text-pretty text-muted">
         Sign in and connect GitHub to ask the bot, follow each run as it goes, and see every
-        task&apos;s plan, checks and pull request in one place.
+        task&apos;s plan, checks and pull request in one place. The same bot checks pull requests
+        with Aperture Agent Check, and the Agents tab lets any agent check its own changes.
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link to="/login" search={{ next: "/bot" }} className={cn(buttonVariants({ size: "md" }))}>
@@ -165,7 +251,7 @@ function HowItWorks() {
           The action on GitHub
         </a>{" "}
         ·{" "}
-        <Link to="/agent-check" className="text-accent hover:underline">
+        <Link to="/bot" search={{ tab: "check" }} className="text-accent hover:underline">
           Aperture Agent Check
         </Link>
       </p>

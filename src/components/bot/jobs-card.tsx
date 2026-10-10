@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarClock, GitPullRequest, Loader2, Tag } from "lucide-react";
+import { CalendarClock, GitPullRequest, Loader2, ShieldCheck, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { setBotJobs, type BotSetup } from "@/lib/github/bot";
@@ -15,8 +15,8 @@ const MODES: Array<{ id: Mode; label: string }> = [
 ];
 
 /**
- * The bot's standing jobs on this repo: its label, and what it does on its
- * schedule. Changing them opens a pull request on the workflow; nothing
+ * The bot's standing jobs on this repo: its label, what it does on its
+ * schedule, and Agent Check on every pull request. Changing them opens a pull request on the workflow; nothing
  * changes until someone merges it.
  */
 export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: string; name: string }) {
@@ -24,6 +24,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const now = workflow.jobs;
   const startMode: Mode = !now.scheduled ? "off" : now.scheduled === "fix-ci" ? "fix-ci" : "task";
   const [label, setLabel] = useState(now.label);
+  const [pulls, setPulls] = useState(now.pulls);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -35,6 +36,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const scheduled = mode === "off" ? "" : mode === "fix-ci" ? "fix-ci" : task.trim();
   const changed =
     label !== now.label ||
+    pulls !== now.pulls ||
     scheduled !== (now.scheduled ?? "") ||
     (mode === "task" && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -44,7 +46,14 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
     setError(null);
     try {
       const out = await setBotJobs({
-        data: { owner, repo: name, label, scheduled, weekly: mode === "task" && weekly },
+        data: {
+          owner,
+          repo: name,
+          label,
+          scheduled,
+          weekly: mode === "task" && weekly,
+          pulls,
+        },
       });
       if (out.ok) setOpened(out.url);
       else setError(out.error);
@@ -79,6 +88,26 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           </span>
           <span className="mt-0.5 block text-muted">
             Add the label to an issue and the bot does what it says.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={pulls}
+          onChange={(event) => setPulls(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <ShieldCheck className="size-3.5 text-subtle" />
+            Check every pull request
+          </span>
+          <span className="mt-0.5 block text-muted">
+            Aperture Agent Check on each push: one report on the pull request, kept up to date. It
+            changes nothing and uses no model key.
           </span>
         </span>
       </label>

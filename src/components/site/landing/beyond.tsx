@@ -32,7 +32,7 @@ export function AgentsStory() {
           <p className="mt-5 max-w-sm text-lg text-muted">
             Claude Code, Cursor or Grok Bot gets the same checks before it changes a file.
           </p>
-          <Link to="/agents" className="mt-8 inline-block text-lg text-fg">
+          <Link to="/bot" search={{ tab: "agents" }} className="mt-8 inline-block text-lg text-fg">
             Connect an agent →
           </Link>
         </div>
@@ -57,10 +57,10 @@ export function AgentCheckStory() {
             Every pull request, checked.
           </h2>
           <p className="mt-5 max-w-sm text-lg text-muted">
-            Aperture Agent Check runs them in GitHub Actions, on your runner. A red check marks the
-            line.
+            Aperture Agent Check runs them in GitHub Actions, on your runner, on its own or through
+            Aperture Bot. A red check marks the line.
           </p>
-          <Link to="/agent-check" className="mt-8 inline-block text-lg text-fg">
+          <Link to="/bot" search={{ tab: "check" }} className="mt-8 inline-block text-lg text-fg">
             Add it to a repository →
           </Link>
         </div>

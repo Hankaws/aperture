@@ -5,6 +5,9 @@ export type MdBlock =
   | { type: "ul"; items: string[] }
   | { type: "quote"; text: string };
 
+/** `# Title` to `### Title`. A paragraph stops only where one starts, so `#12 is fixed` stays text. */
+const HEADING = /^(#{1,3})\s+(.+)$/;
+
 export function parseMarkdown(src: string): MdBlock[] {
   const lines = src.replace(/\r\n/g, "\n").split("\n");
   const out: MdBlock[] = [];
@@ -23,7 +26,7 @@ export function parseMarkdown(src: string): MdBlock[] {
       out.push({ type: "code", lang, text: body.join("\n") });
       continue;
     }
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    const heading = HEADING.exec(line);
     if (heading) {
       out.push({ type: "h", level: heading[1]!.length as 1 | 2 | 3, text: heading[2]!.trim() });
       i += 1;
@@ -48,7 +51,7 @@ export function parseMarkdown(src: string): MdBlock[] {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i]!.trim() && !lines[i]!.startsWith("#") && !lines[i]!.startsWith("```") && !/^\s*[-*]\s+/.test(lines[i]!)) {
+    while (i < lines.length && lines[i]!.trim() && !HEADING.test(lines[i]!) && !lines[i]!.startsWith("```") && !/^\s*[-*]\s+/.test(lines[i]!)) {
       para.push(lines[i]!);
       i += 1;
     }

@@ -2,7 +2,7 @@
 
 **The coding bot that checks before it pushes.**
 
-Comment `/aperture` and a task on an issue or a pull request. Aperture Bot plans the change, makes it, and runs [Aperture Agent Check](https://aperturesais.grok.me/agent-check) on it: parses, imports, types with your packages' real types, and your own tests. It opens a pull request only when nothing is red. When it cannot get there, it says so on the thread, with the change it did not push, and pushes nothing.
+Comment `/aperture` and a task on an issue or a pull request. Aperture Bot plans the change, makes it, and runs [Aperture Agent Check](https://aperturesais.grok.me/bot?tab=check) on it: parses, imports, types with your packages' real types, and your own tests. It opens a pull request only when nothing is red. When it cannot get there, it says so on the thread, with the change it did not push, and pushes nothing.
 
 It runs on your runner with your model key. There is no Aperture account, server or bill.
 
@@ -58,16 +58,21 @@ Then, on an issue:
 | A pull request from this repository | A commit on its branch                                                                                                      | The same reply                                            |
 | A pull request from a fork          | Nothing: it replies that it will not run a fork's code                                                                      |                                                           |
 
+## Check a pull request
+
+Comment `/aperture check` on a pull request and the bot runs Aperture Agent Check on it, against its base, and replies with the report: each check, what is red, and the evidence. It changes nothing and does not call a model, so it needs no model key. Tests run in the same sandbox as the bot's own. The run fails when a check is red, so it can be a required check.
+
 While it works, one comment on the thread says what it is doing and links the run; at the end that comment becomes its reply. [The Bot page](https://aperturesais.grok.me/bot) shows every task on a repo in one place, and can ask the bot and add this workflow for you.
 
 Only people with write access to the repository can ask; anyone else's comment is ignored. Edited comments and other bots' comments are never commands.
 
 ## Standing jobs
 
-Two more ways to ask, both optional, both still on your runner and your key:
+Three more ways to ask, all optional, all on your runner:
 
 - **The `aperture` label.** Add it to an issue and the bot does what the issue says, as if you had commented `/aperture`. Only a label added by someone with write access counts.
 - **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
+- **Every pull request.** Add `pull_request` to the workflow's triggers and each push to a pull request from this repository is checked, as with `/aperture check`. The report is one comment, updated on each push. Drafts are checked once they are ready for review.
 
 ```yaml
 on:
@@ -77,13 +82,16 @@ on:
     types: [labeled]
   schedule:
     - cron: "17 3 * * *" # every night at 03:17 UTC
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   bot:
     if: >-
       (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture')) ||
       (github.event_name == 'issues' && github.event.label.name == 'aperture') ||
-      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     # … the same steps as above, with:
     #     scheduled: fix-ci
 ```
@@ -132,7 +140,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 
 | Input               | Default                              | What it does                                                                                                                                   |
 | ------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model-key`         |                                      | The model provider's API key, from a secret. Required.                                                                                         |
+| `model-key`         |                                      | The model provider's API key, from a secret. Required, but checks do not use it.                                                               |
 | `provider`          | `grok`                               | `grok`, `openai`, `anthropic`, `gemini`, `deepseek` or `custom`.                                                                               |
 | `base-url`          |                                      | For `custom`: an OpenAI-compatible endpoint.                                                                                                   |
 | `model`             |                                      | For `custom`: the model to ask for.                                                                                                            |
@@ -148,7 +156,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `sandbox-image`     | `mirror.gcr.io/library/node:22-slim` | The Docker image tests run in.                                                                                                                 |
 | `working-directory` | the repository root                  | The project's folder in a monorepo.                                                                                                            |
 
-Outputs: `outcome` (`clear`, `red`, `stopped`, `no-change`, `declined`, `ignored` or `error`), `pull-request` and `commit`.
+Outputs: `outcome` (`clear`, `red`, `stopped`, `no-change`, `declined`, `ignored` or `error`), `pull-request`, `commit`, and after a check `verdict` (`red` or `clear`).
 
 ## Good to know
 

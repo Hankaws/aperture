@@ -5,7 +5,8 @@
  * The bot runs it on the checkout and, only when Aperture Agent Check is
  * clear, opens a pull request (asked on an issue) or pushes to the pull
  * request (asked on one). Otherwise it replies with what it tried and why it
- * stopped.
+ * stopped. `/aperture check` on a pull request, or a push to one, runs Agent
+ * Check alone and replies with its report: no model, and no change.
  *
  * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
  */
@@ -17,13 +18,26 @@ import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
 import type { Model } from "./model.ts";
-import { authorFor, checkoutPullHead, commitFiles, diffOf, freeBranch, push } from "./publish.ts";
+import { check } from "../../agent-check/src/main.ts";
+import { summaryMarkdown } from "../../agent-check/src/report.ts";
+import { readSummary } from "../../../src/lib/bot/summary.ts";
 import {
+  authorFor,
+  checkoutPullHead,
+  commitFiles,
+  diffOf,
+  fetchBase,
+  freeBranch,
+  push,
+} from "./publish.ts";
+import {
+  checkReply,
   commitMessage,
   doneReply,
   errorReply,
   forkReply,
   notDoneReply,
+  notPullReply,
   pullBody,
   titleFor,
   workingReply,
@@ -32,7 +46,7 @@ import {
 import { jobFrom, planJob } from "./jobs.ts";
 import { describeError } from "./retry.ts";
 import { runTask, type BotProgress } from "./run.ts";
-import { DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
+import { asTestRunner, DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
 
 export type ActionDeps = {
   fetch?: Fetch;
@@ -212,7 +226,78 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     return edits;
   };
 
+  const sandboxFor = async () =>
+    deps.sandbox !== undefined
+      ? deps.sandbox
+      : await prepareDocker(input(env, "sandbox-image") ?? DEFAULT_IMAGE, log);
+
+  /**
+   * Agent Check on the pull request's head, against its base: the report is
+   * the reply. A push's report replaces the last push's, so the thread keeps
+   * one, not one per push.
+   */
+  const checkPull = async (): Promise<number> => {
+    if (!command.isPull) {
+      await gh.comment(command.number, notPullReply(asked));
+      setOutput(env, { outcome: "declined" });
+      return 0;
+    }
+    const pull = await gh.pull(command.number);
+    if (pull.headRepo.toLowerCase() !== `${command.owner}/${command.repo}`.toLowerCase()) {
+      await gh.comment(command.number, forkReply(asked));
+      setOutput(env, { outcome: "declined" });
+      return 0;
+    }
+    const working = workingReply({ phase: "checking" }, asked);
+    if (command.via === "pull") {
+      const earlier = (await gh.comments(command.number))
+        .filter((c) => {
+          const s = c.authorType === "Bot" ? readSummary(c.body) : null;
+          return s?.kind === "check" && s.via === "pull";
+        })
+        .at(-1);
+      // Another app's comment cannot be edited: then this run posts its own.
+      if (earlier)
+        status = await gh
+          .editComment(earlier.id, working)
+          .then(() => earlier.id)
+          .catch(() => null);
+    }
+    if (status === null)
+      status = await gh
+        .comment(command.number, working)
+        .then((posted) => (Number.isSafeInteger(posted.id) ? posted.id : null))
+        .catch(() => null);
+    checkoutPullHead(cwd, pull.headRef);
+    const base = fetchBase(cwd, pull.baseRef);
+    install(cwd, input(env, "install") ?? "auto", log);
+    const sandbox = await sandboxFor();
+    log(`Aperture Bot: checking #${command.number} for @${command.author}`);
+    const result = check({
+      cwd,
+      base,
+      runTests: sandbox !== null,
+      testScript: input(env, "test-script") ?? "test",
+      timeoutMs: number(env, "timeout-minutes", 10) * 60_000,
+      failOn: "red",
+      testRunner: sandbox ? asTestRunner(sandbox) : undefined,
+      testsWhere: sandbox?.where,
+    });
+    log(result.text);
+    if (env.GITHUB_STEP_SUMMARY)
+      appendFileSync(
+        env.GITHUB_STEP_SUMMARY,
+        result.rows.length > 0
+          ? summaryMarkdown(result.rows, result.meta)
+          : `### Aperture Agent Check\n\n${result.text.replace(/^Aperture Agent Check: /, "")}\n`,
+      );
+    await reply(checkReply(result, { ...asked, tests: sandbox?.where ?? null }));
+    setOutput(env, { outcome: result.verdict, verdict: result.verdict });
+    return result.exitCode;
+  };
+
   try {
+    if (command.check) return await checkPull();
     const model = modelConfig(env);
     let pull: Pull | null = null;
     let diff: string | null = null;
@@ -236,10 +321,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       diff = await gh.diff(command.number);
     }
     install(cwd, input(env, "install") ?? "auto", log);
-    const sandbox =
-      deps.sandbox !== undefined
-        ? deps.sandbox
-        : await prepareDocker(input(env, "sandbox-image") ?? DEFAULT_IMAGE, log);
+    const sandbox = await sandboxFor();
     const comments = await gh.comments(command.number);
 
     log(`Aperture Bot: working on #${command.number} for @${command.author}: ${command.task}`);

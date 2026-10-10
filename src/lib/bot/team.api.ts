@@ -43,11 +43,13 @@ export const loadBotChat = createServerFn({ method: "POST" })
   .validator(botIdInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    if (await refusal(context.userId)) return { entries: [], updatedAt: null };
+    // Not ok: the page keeps this browser's copy and uploads nothing, so a
+    // refusal is never mistaken for an account with no conversation.
+    if (await refusal(context.userId)) return { ok: false as const };
     const { overLimit } = await import("@/lib/security/rate-limit");
-    if (overLimit("bot", context.userId)) return { entries: [], updatedAt: null };
+    if (overLimit("bot", context.userId)) return { ok: false as const };
     const { chatFor } = await import("./team.server");
-    return chatFor(context.userId, data.id);
+    return { ok: true as const, ...(await chatFor(context.userId, data.id)) };
   });
 
 /** Keeps a bot's conversation on the account, so every device shows the same. */

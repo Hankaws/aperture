@@ -43,6 +43,8 @@ function fakeGitHub(
     openPulls?: Array<{ ref: string; url: string }>;
     /** Who comments post as: a GitHub App's bot instead of the workflow's. */
     poster?: { login: string; id: number };
+    /** The thread's comments, instead of an ask and an earlier bot reply. */
+    thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -92,14 +94,16 @@ function fakeGitHub(
       );
     if (path.endsWith("/reactions")) return json({}, 201);
     if (method === "GET" && /\/issues\/\d+\/comments$/.test(path))
-      return json([
-        {
-          id: 1,
-          body: "The cart shows 100 instead of $1.00.",
-          user: { login: "ada", type: "User" },
-        },
-        { id: 2, body: "an earlier bot reply", user: { login: "aperture", type: "Bot" } },
-      ]);
+      return json(
+        options.thread ?? [
+          {
+            id: 1,
+            body: "The cart shows 100 instead of $1.00.",
+            user: { login: "ada", type: "User" },
+          },
+          { id: 2, body: "an earlier bot reply", user: { login: "aperture", type: "Bot" } },
+        ],
+      );
     if (method === "POST" && /\/issues\/\d+\/comments$/.test(path))
       return json(
         {
@@ -109,7 +113,7 @@ function fakeGitHub(
         },
         201,
       );
-    if (method === "PATCH" && /\/issues\/comments\/900$/.test(path)) return json({ id: 900 });
+    if (method === "PATCH" && /\/issues\/comments\/\d+$/.test(path)) return json({ id: 900 });
     if (method === "GET" && /\/pulls\/\d+$/.test(path)) {
       const accept = new Headers(init?.headers).get("accept") ?? "";
       if (accept.includes("diff")) return new Response("diff --git a/src/cart.ts b/src/cart.ts\n");
@@ -191,6 +195,7 @@ async function act(
     openIssues?: Array<{ number: number; title: string }>;
     openPulls?: Array<{ ref: string; url: string }>;
     poster?: { login: string; id: number };
+    thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
     payload?: unknown;
@@ -206,6 +211,7 @@ async function act(
     openIssues: options.openIssues,
     openPulls: options.openPulls,
     poster: options.poster,
+    thread: options.thread,
   });
   const eventPath =
     options.payload === undefined
@@ -564,4 +570,95 @@ test("with a GitHub App's token, the bot's commits are the app's, with its name 
     author.trim(),
     "Aperture Bot <1234+acme-aperture-bot[bot]@users.noreply.github.com>",
   );
+});
+
+const breaksCart = {
+  "src/price.ts":
+    "export function formatPrice(cents: number, currency: string): string {\n  return currency + String(cents);\n}\n",
+};
+
+test("/aperture check on a pull request reports Agent Check and changes nothing, with no model key", async () => {
+  const run = await act({
+    pull: { headRef: "feature" },
+    body: "/aperture check",
+    branches: { feature: { "src/extra.ts": "export const extra = 1;\n" } },
+    env: { "INPUT_MODEL-KEY": "" },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.replied(), /^### Aperture Agent Check\n\nNothing red on 1 changed file\./);
+  assert.match(run.replied(), /Tests were not run\. Nothing was changed\./);
+  const summary = readSummary(run.replied());
+  assert.equal(summary?.kind, "check");
+  assert.equal(summary?.state, "clear");
+  assert.equal(summary?.asked, 55);
+  assert.ok(summary?.checks?.some((c) => c.label === "Types"));
+  assert.equal(git(run.origin, "rev-parse", "feature"), git(run.ws, "rev-parse", "feature"));
+  assert.equal(run.posted(/\/pulls$/).length, 0);
+  assert.match(run.output, /outcome=clear\nverdict=clear\n/);
+  assert.match(run.summary, /### Aperture Agent Check/);
+});
+
+const pushEvent = {
+  action: "synchronize",
+  sender: { login: "maintainer", type: "User" },
+  pull_request: { number: 7, title: "Currency", body: "", draft: false },
+  repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+};
+
+test("a push to a pull request is checked; red fails the run and says what broke", async () => {
+  const run = await act({
+    pull: { headRef: "feature" },
+    branches: { feature: breaksCart },
+    eventName: "pull_request",
+    payload: pushEvent,
+  });
+  assert.equal(run.code, 1, run.lines.join("\n"));
+  assert.match(run.replied(), /check red on 1 changed file\. Do not merge this as it is\./);
+  const summary = readSummary(run.replied());
+  assert.equal(summary?.state, "red");
+  assert.equal(summary?.via, "pull");
+  assert.equal(summary?.by, "maintainer");
+  assert.equal(summary?.asked, 0);
+  assert.equal(run.posted(/\/reactions$/).length, 0);
+  assert.equal(run.posted(/\/issues\/7\/comments$/).length, 1);
+});
+
+test("the next push's report replaces the last one instead of adding a comment", async () => {
+  const earlier = {
+    id: 321,
+    body: `old report\n\n<!-- aperture-bot ${JSON.stringify({ v: 1, state: "red", kind: "check", via: "pull", asked: 0, run: "" })} -->`,
+    user: { login: "github-actions[bot]", type: "Bot" },
+  };
+  const run = await act({
+    pull: { headRef: "feature" },
+    branches: { feature: { "src/extra.ts": "export const extra = 1;\n" } },
+    eventName: "pull_request",
+    payload: pushEvent,
+    thread: [earlier],
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(run.posted(/\/issues\/7\/comments$/).length, 0);
+  const edits = run.gh.calls.filter((c) => c.method === "PATCH");
+  assert.ok(edits.length >= 2);
+  assert.ok(edits.every((c) => c.path.endsWith("/issues/comments/321")));
+  assert.equal(readSummary(run.replied())?.state, "clear");
+});
+
+test("a pull request from a fork is not checked out to be checked", async () => {
+  const run = await act({
+    pull: { headRef: "feature", fork: true },
+    eventName: "pull_request",
+    payload: pushEvent,
+  });
+  assert.equal(run.code, 0);
+  assert.match(run.replied(), /^This pull request comes from a fork/);
+});
+
+test("/aperture check on an issue says a check needs a pull request, and runs nothing", async () => {
+  const run = await act({ body: "/aperture check" });
+  assert.equal(run.code, 0);
+  assert.match(run.replied(), /^`\/aperture check` runs Aperture Agent Check on a pull request/);
+  assert.equal(readSummary(run.replied())?.state, "declined");
+  assert.deepEqual(branchesOf(run.origin), ["main"]);
+  assert.match(run.output, /^outcome=declined\n$/);
 });

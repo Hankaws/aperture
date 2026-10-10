@@ -29,7 +29,7 @@ test("a bot can talk on the account's choice, any saved key, or the custom endpo
   assert.deepEqual(modelChoices(custom).at(-1), { id: "custom", label: "qwen/qwen3-coder" });
   assert.equal(
     modelChoices(account({ modelSource: "local" }))[0]!.label,
-    "Default (a local model)",
+    "Default (a local model, not for bots: pick one)",
   );
 });
 

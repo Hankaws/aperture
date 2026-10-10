@@ -1,4 +1,4 @@
-/** How to add Aperture's MCP server to each agent. Settings → Agents and /agents show the same text. */
+/** How to add Aperture's MCP server to each agent. Settings → Agents and the Bot page's Agents tab show the same text. */
 export function agentSetups(url: string, token: string): Array<{ name: string; text: string }> {
   return [
     {

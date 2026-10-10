@@ -6,10 +6,17 @@
  */
 import type { MascotMood } from "./mascot.ts";
 import { phaseLine } from "./summary.ts";
-import type { BotTask, TaskState } from "./tasks.ts";
+import { isCheck, type BotTask, type TaskState } from "./tasks.ts";
 
+/** `checked` and `flagged`: Agent Check on a pull request, clear or red. */
 export type ActivityKind =
-  "asked" | "working" | "opened" | "pushed" | Exclude<TaskState, "waiting" | "working" | "clear">;
+  | "asked"
+  | "working"
+  | "opened"
+  | "pushed"
+  | "checked"
+  | "flagged"
+  | Exclude<TaskState, "waiting" | "working" | "clear">;
 
 export type Activity = {
   /** Unique in the feed: the repository, the task and the kind. */
@@ -34,6 +41,7 @@ export type Activity = {
 function who(task: BotTask): string {
   if (task.via === "schedule") return "A standing job";
   if (task.via === "label") return `@${task.author}'s label`;
+  if (task.via === "pull") return `@${task.author}'s push`;
   return `@${task.author}`;
 }
 
@@ -53,9 +61,12 @@ function outcome(task: BotTask): ActivityKind | null {
     case "waiting":
       return null;
     case "clear":
+      if (isCheck(task)) return "checked";
       if (task.summary?.link?.what === "pull") return "opened";
       if (task.summary?.link?.what === "commit") return "pushed";
       return "replied";
+    case "red":
+      return isCheck(task) ? "flagged" : "red";
     default:
       return task.state;
   }
@@ -109,10 +120,18 @@ export function activityFrom(repo: string, tasks: BotTask[]): Activity[] {
   return out;
 }
 
-/** Every repository's entries, newest first, at most `limit`. */
-export function feedOf(lists: Activity[][], limit = 60): Activity[] {
-  const all = lists.flat();
+/** Every repository's entries, newest first, at most `limit`, and at most `perList` from each. */
+export function feedOf(lists: Activity[][], limit = 60, perList = Infinity): Activity[] {
   const time = (a: Activity) => Date.parse(a.at) || 0;
+  const all = lists.flatMap((list) =>
+    perList === Infinity
+      ? list
+      : list
+          .map((a, i) => ({ a, i }))
+          .sort((x, y) => time(y.a) - time(x.a) || y.i - x.i)
+          .slice(0, perList)
+          .map(({ a }) => a),
+  );
   // Newest first; at the same moment, the outcome before its ask.
   return all
     .map((a, i) => ({ a, i }))
@@ -125,6 +144,7 @@ export function feedOf(lists: Activity[][], limit = 60): Activity[] {
 export function headline(a: Activity): string {
   switch (a.kind) {
     case "asked":
+      if (a.who.endsWith("'s push")) return `${a.who.slice(0, -7)} pushed`;
       return a.who === "A standing job" ? "A standing job asked" : `${a.who} asked`;
     case "working":
       return "Working";
@@ -134,6 +154,10 @@ export function headline(a: Activity): string {
       return "Pushed a commit to the pull request";
     case "red":
       return "Stopped: Agent Check still red, nothing pushed";
+    case "checked":
+      return "Checked the pull request: nothing red";
+    case "flagged":
+      return "Checked the pull request: red, not ready to merge";
     case "stopped":
       return "Stopped";
     case "no-change":
@@ -233,6 +257,10 @@ export function statusOf(items: Activity[], repo: string, now: number): BotStatu
       return was("done", `Pushed to ${n}`, "ok");
     case "red":
       return was("stuck", `Stuck: checks red on ${n}`, "danger");
+    case "checked":
+      return was("done", `Checked ${n}: clear`, "ok");
+    case "flagged":
+      return was("done", `Found red on ${n}`, "danger");
     case "error":
       return was("stuck", `Hit an error on ${n}`, "danger");
     case "stopped":

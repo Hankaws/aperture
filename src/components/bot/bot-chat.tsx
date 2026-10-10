@@ -1,15 +1,28 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUp, GitPullRequest, Loader2, Send, Trash2, X } from "lucide-react";
+import {
+  ArrowUp,
+  CircleDot,
+  Clock,
+  GitPullRequest,
+  Loader2,
+  Send,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
-import type { ChatTurn } from "@/lib/bot/chat";
+import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
+import { cardAsk, expired, isCheckCard, sendsItself, withRefs, type Thread } from "@/lib/bot/cards";
 import {
   KEEP,
   chatKey,
+  clearSavedChat,
   loadChat,
+  mergeChats,
   saveChat,
   type Card,
   type Entry,
@@ -30,6 +43,12 @@ const SUGGESTIONS = [
   "How did your recent tasks go?",
   "Fix the newest bug report",
 ];
+
+/** The person's last message before entry `at`: what a suggestion answers. */
+function askedBefore(entries: Entry[], at: number): string | null {
+  for (let i = at - 1; i >= 0; i--) if (entries[i]!.role === "user") return entries[i]!.text;
+  return null;
+}
 
 /** What the model reads back of an answer: its text, and what became of each task it proposed. */
 function turnText(entry: Entry): string {
@@ -71,6 +90,7 @@ export function BotChat({
   intro,
   onSent,
   onChange,
+  onEditRule,
 }: {
   bot: BotProfile;
   setup: BotSetup;
@@ -84,6 +104,8 @@ export function BotChat({
   onSent: () => void;
   /** The conversation changed: for the roster's last line. */
   onChange?: (entries: Entry[]) => void;
+  /** Opens the bot's profile, where its rule is. */
+  onEditRule?: () => void;
 }) {
   const repo = bot.repo;
   const [owner = "", name = ""] = repo.split("/");
@@ -91,31 +113,50 @@ export function BotChat({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  /** Said something here since opening: the account's copy must not overwrite it. */
-  const touched = useRef(false);
+  /** The conversation as it is now, for code that runs after an await. */
+  const latest = useRef<Entry[]>([]);
   const botId = bot.id;
+
+  const show = (next: Entry[]) => {
+    latest.current = next;
+    setEntries(next);
+  };
 
   useEffect(() => {
     let cancel = false;
-    touched.current = false;
     const key = chatKey({ id: botId });
-    const own = loadChat(key);
-    // A conversation kept per repository, before bots had names, carries over once.
-    const local = own.length > 0 ? own : loadChat(repo);
-    setEntries(local);
-    // The account's copy is the one every device shares; this browser's goes up if it has none.
+    let local = loadChat(key);
+    if (local.length === 0) {
+      // A conversation kept per repository, before bots had names, carries over once, here.
+      local = loadChat(repo);
+      if (local.length > 0) {
+        saveChat(key, local);
+        clearSavedChat(repo);
+      }
+    }
+    const opened = new Set(local.map((e) => e.id));
+    show(local);
+    // The account's copy is the one every device shares.
     void loadBotChat({ data: { id: botId } })
-      .then(({ entries: kept }) => {
-        if (cancel || touched.current) return;
-        if (kept.length > 0) {
-          setEntries(kept);
-          saveChat(key, kept);
-        } else if (local.length > 0) {
-          void saveBotChat({ data: { id: botId, entries: local } }).catch(() => {});
+      .then((kept) => {
+        if (cancel || !kept.ok) return;
+        if (kept.updatedAt === null) {
+          // Never kept on the account: this browser's copy goes up.
+          if (latest.current.length > 0)
+            void saveBotChat({ data: { id: botId, entries: latest.current.slice(-KEEP) } }).catch(
+              () => {},
+            );
+          return;
         }
+        // The account's copy wins (even an empty, cleared one); what was just said is kept.
+        const merged = mergeChats(kept.entries, latest.current, opened);
+        show(merged);
+        saveChat(key, merged);
+        if (merged.length > kept.entries.length)
+          void saveBotChat({ data: { id: botId, entries: merged } }).catch(() => {});
       })
       .catch(() => {
-        // Offline or signed out: this browser's copy stands.
+        // Offline or signed out: this browser's copy stands, and nothing goes up.
       });
     return () => {
       cancel = true;
@@ -124,8 +165,7 @@ export function BotChat({
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [entries.length, busy]);
 
   const update = (next: Entry[]) => {
-    touched.current = true;
-    setEntries(next);
+    show(next);
     saveChat(chatKey(bot), next);
     void saveBotChat({ data: { id: bot.id, entries: next.slice(-KEEP) } }).catch(() => {});
     onChange?.(next);
@@ -134,45 +174,74 @@ export function BotChat({
   async function send(text: string) {
     const said = text.trim();
     if (!said || busy) return;
-    const asked: Entry[] = [...entries, { id: id(), role: "user", text: said }];
+    const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
     update(asked);
     setDraft("");
     setBusy(true);
+    // The server reads the newest turns, each clipped: send no more than it takes.
+    const turns: ChatTurn[] = asked
+      .filter((e) => !(e.role === "assistant" && e.error))
+      .slice(-CHAT_LIMITS.turns)
+      .map((e) => ({ role: e.role, text: turnText(e).slice(0, CHAT_LIMITS.turnChars) }));
+    let reply: Entry;
     try {
-      const turns: ChatTurn[] = asked
-        .filter((e) => !(e.role === "assistant" && e.error))
-        .map((e) => ({ role: e.role, text: turnText(e) }));
       const out = await botChat({ data: { owner, repo: name, botId: bot.id, turns } });
-      update([
-        ...asked,
-        out.ok
-          ? {
-              id: id(),
-              role: "assistant",
-              text: out.reply,
-              looked: out.looked,
-              cards: out.proposals,
-            }
-          : { id: id(), role: "assistant", text: out.error, error: true },
-      ]);
+      const at = new Date().toISOString();
+      reply = out.ok
+        ? {
+            id: id(),
+            role: "assistant",
+            text: out.reply,
+            looked: out.looked,
+            cards: out.proposals.map((p) => ({ ...p, at })),
+          }
+        : { id: id(), role: "assistant", text: out.error, error: true };
     } catch (err) {
-      update([
-        ...asked,
-        {
-          id: id(),
-          role: "assistant",
-          text: err instanceof Error ? err.message : "The bot could not answer.",
-          error: true,
-        },
-      ]);
+      reply = {
+        id: id(),
+        role: "assistant",
+        text: err instanceof Error ? err.message : "The bot could not answer.",
+        error: true,
+      };
     } finally {
       setBusy(false);
     }
+    // After the conversation as it is now: a card sent or dismissed meanwhile stays so.
+    update([...latest.current, reply]);
+    if (reply.role === "assistant") await sendByRule(reply.id, reply.cards ?? []);
+  }
+
+  /** The bot's rule at work: a check on a pull request sends itself, and says so. */
+  async function sendByRule(entryId: string, cards: Card[]) {
+    if (!setup.workflow) return;
+    let sent = false;
+    for (const [i, card] of cards.entries()) {
+      const thread = setup.open.find((o) => o.number === card.number);
+      if (!sendsItself(card, bot.allow, Boolean(thread?.isPull))) continue;
+      try {
+        const out = await askBot({
+          data: { owner, repo: name, number: card.number, task: card.task },
+        });
+        if (!out.ok) continue;
+        setCard(entryId, i, {
+          sent: {
+            number: out.number,
+            url: out.url,
+            at: new Date(Date.now() - 60_000).toISOString(),
+          },
+          auto: true,
+        });
+        sent = true;
+      } catch {
+        // Left for a click, as without the rule.
+      }
+    }
+    if (sent) onSent();
   }
 
   const setCard = (entryId: string, index: number, patch: Partial<Card>) =>
     update(
-      entries.map((e) =>
+      latest.current.map((e) =>
         e.id === entryId && e.role === "assistant"
           ? { ...e, cards: e.cards?.map((c, i) => (i === index ? { ...c, ...patch } : c)) }
           : e,
@@ -225,7 +294,7 @@ export function BotChat({
           </div>
         )}
 
-        {entries.map((entry) =>
+        {entries.map((entry, at) =>
           entry.role === "user" ? (
             <div key={entry.id} className="flex justify-end">
               <p className="max-w-[85%] rounded-2xl rounded-br-md bg-elevated px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
@@ -246,7 +315,7 @@ export function BotChat({
                     )}
                   </p>
                 ) : (
-                  <Reply text={entry.text} />
+                  <Reply text={entry.text} open={setup.open} repo={repo} />
                 )}
                 {entry.looked && entry.looked.length > 0 && (
                   <p className="text-xs text-subtle">
@@ -258,6 +327,9 @@ export function BotChat({
                     <ProposalCard
                       key={i}
                       card={card}
+                      bot={bot.name}
+                      asked={askedBefore(entries, at)}
+                      onEditRule={onEditRule}
                       owner={owner}
                       name={name}
                       setup={setup}
@@ -326,7 +398,54 @@ export function BotChat({
   );
 }
 
-function Reply({ text }: { text: string }) {
+/** Text, with the open issues and pull requests it names as links that preview them. */
+function Linked({ text, open, repo }: { text: string; open: Thread[]; repo: string }) {
+  return (
+    <>
+      {withRefs(text, open).map((part, i) =>
+        typeof part === "string" ? (
+          <Inline key={i} text={part} />
+        ) : (
+          <RefLink key={i} thread={part} repo={repo} />
+        ),
+      )}
+    </>
+  );
+}
+
+/** `#12`, as a link to GitHub, with a card on hover or focus: what it is, and its title. */
+function RefLink({ thread, repo }: { thread: Thread; repo: string }) {
+  return (
+    <span className="group relative inline-block">
+      <a
+        href={`https://github.com/${repo}/${thread.isPull ? "pull" : "issues"}/${thread.number}`}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium text-accent hover:underline"
+        aria-label={`${thread.isPull ? "Pull request" : "Issue"} #${thread.number}: ${thread.title}`}
+      >
+        #{thread.number}
+      </a>
+      <span
+        role="tooltip"
+        className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-1.5 w-64 rounded-xl border border-border bg-surface p-3 text-left opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+      >
+        <span className="flex items-center gap-1.5 text-xs text-ok">
+          {thread.isPull ? (
+            <GitPullRequest className="size-3.5" />
+          ) : (
+            <CircleDot className="size-3.5" />
+          )}
+          Open {thread.isPull ? "pull request" : "issue"} #{thread.number}
+        </span>
+        <span className="mt-1 block text-sm font-medium text-fg">{thread.title}</span>
+        <span className="mt-0.5 block font-mono text-[11px] text-subtle">{repo}</span>
+      </span>
+    </span>
+  );
+}
+
+function Reply({ text, open, repo }: { text: string; open: Thread[]; repo: string }) {
   return (
     <div className="space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
       {parseMarkdown(text).map((block, i) =>
@@ -334,7 +453,7 @@ function Reply({ text }: { text: string }) {
           <ul key={i} className="list-disc space-y-1 pl-5">
             {block.items.map((item, j) => (
               <li key={j}>
-                <Inline text={item} />
+                <Linked text={item} open={open} repo={repo} />
               </li>
             ))}
           </ul>
@@ -347,7 +466,7 @@ function Reply({ text }: { text: string }) {
           </pre>
         ) : (
           <p key={i} className={block.type === "h" ? "font-medium" : undefined}>
-            <Inline text={block.text} />
+            <Linked text={block.text} open={open} repo={repo} />
           </p>
         ),
       )}
@@ -357,6 +476,9 @@ function Reply({ text }: { text: string }) {
 
 function ProposalCard({
   card,
+  bot,
+  asked,
+  onEditRule,
   owner,
   name,
   setup,
@@ -366,6 +488,11 @@ function ProposalCard({
   onDismiss,
 }: {
   card: Card;
+  /** The bot's name, so the card says who wants to act. */
+  bot: string;
+  /** What the person said that led to this suggestion, quoted on the card. */
+  asked: string | null;
+  onEditRule?: () => void;
   owner: string;
   name: string;
   setup: BotSetup;
@@ -379,6 +506,7 @@ function ProposalCard({
   const thread = card.number ? setup.open.find((o) => o.number === card.number) : null;
 
   if (card.sent && task) return <TaskCard task={task} now={now} />;
+  const stale = expired(card, now);
 
   async function send() {
     setBusy(true);
@@ -402,14 +530,46 @@ function ProposalCard({
   }
 
   return (
-    <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
-      <p className="flex items-center gap-2 text-xs font-medium text-accent">
-        <GitPullRequest className="size-3.5" />
-        {card.number
-          ? `Task on #${card.number}${thread ? ` ${thread.title}` : ""}`
-          : `New issue${card.title ? `: ${card.title}` : ""}`}
+    <div
+      className={cn(
+        "rounded-xl border p-4",
+        stale ? "border-border bg-elevated/40" : "border-accent/30 bg-accent/5",
+      )}
+    >
+      <p
+        className={cn(
+          "flex items-center gap-2 text-xs font-medium",
+          stale ? "text-muted" : "text-accent",
+        )}
+      >
+        {isCheckCard(card) ? (
+          <ShieldCheck className="size-3.5 shrink-0" />
+        ) : (
+          <GitPullRequest className="size-3.5 shrink-0" />
+        )}
+        <span className="min-w-0 truncate">{cardAsk(card, bot, thread ?? null)}</span>
       </p>
-      <p className="mt-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{card.task}</p>
+      {asked && (
+        <p className="mt-2 line-clamp-2 border-l-2 border-border pl-2.5 text-xs text-muted">
+          You asked: {asked}
+        </p>
+      )}
+      <p className="mt-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {isCheckCard(card)
+          ? "Run Aperture Agent Check on it and report. Nothing is changed."
+          : card.task}
+      </p>
+      {card.sent && card.auto && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+          <ShieldCheck className="size-3.5 text-ok" />
+          Sent by {bot}&apos;s rule: always allow checks.
+          {onEditRule && (
+            <button type="button" onClick={onEditRule} className="text-accent hover:underline">
+              Edit rule
+            </button>
+          )}
+        </p>
+      )}
       {card.sent ? (
         <p className="mt-3 text-sm text-muted">
           Sent.{" "}
@@ -423,6 +583,17 @@ function ProposalCard({
           </a>
           . Waiting for the workflow to pick it up…
         </p>
+      ) : stale ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="flex items-center gap-1.5 text-sm text-muted">
+            <Clock className="size-3.5" />
+            Expired unsent after a day: the repository may have moved on. Ask {bot} again.
+          </p>
+          <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss this task">
+            <X className="size-4" />
+            Dismiss
+          </Button>
+        </div>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => void send()} disabled={busy || !setup.workflow}>

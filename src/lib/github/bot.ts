@@ -18,7 +18,14 @@ import {
 } from "@/lib/security/inputs";
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
-import { ciText, openText, tasksText, threadText } from "@/lib/bot/github-text";
+import {
+  ciText,
+  filesText,
+  openText,
+  releasesText,
+  tasksText,
+  threadText,
+} from "@/lib/bot/github-text";
 import {
   DEFAULT_TRIGGER,
   endedRun,
@@ -262,19 +269,22 @@ async function loadTasks(
   };
   if (recent.status === 200 && Array.isArray(recent.body)) recent.body.forEach(addThread);
   let tasks = tasksFrom(comments.body as RawComment[], threads).slice(0, MAX_TASKS);
-  const missing = [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
-    0,
-    MAX_THREAD_LOOKUPS,
-  );
+  // Quick: no lookups one by one (thread titles, whether a run ended); the room does those.
+  const missing = quick
+    ? []
+    : [...new Set(tasks.filter((t) => !t.thread).map((t) => t.number))].slice(
+        0,
+        MAX_THREAD_LOOKUPS,
+      );
   await Promise.all(
     missing.map(async (n) => {
       const got = await get(`${base}/issues/${n}`);
       if (got.status === 200) addThread(got.body);
     }),
   );
-  const working = tasks
-    .filter((t) => t.state === "working" && t.summary?.run)
-    .slice(0, MAX_RUN_LOOKUPS);
+  const working = quick
+    ? []
+    : tasks.filter((t) => t.state === "working" && t.summary?.run).slice(0, MAX_RUN_LOOKUPS);
   const runs = new Map<number, { status?: string; conclusion?: string | null }>();
   await Promise.all(
     working.map(async (t) => {
@@ -369,7 +379,12 @@ export const botActivity = createServerFn({ method: "POST" })
         );
         lists.push(...batch);
       }
-      return { ok: true, activity: feedOf(lists), repos: names.length };
+      // A team's feed keeps each repository's newest: one busy one must not hide the rest.
+      return {
+        ok: true,
+        activity: data.repos?.length ? feedOf(lists, 150, 10) : feedOf(lists),
+        repos: names.length,
+      };
     } catch (error) {
       return {
         ok: false,
@@ -583,6 +598,10 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): ${jobs.scheduled.split("\n")[0]}`,
     );
+  if (jobs.pulls)
+    lines.push(
+      "- **Every pull request**: on each push to a pull request from this repository, Aperture Agent Check runs and its report is kept in one comment, updated on each push. It changes nothing, and needs no model key.",
+    );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
 
@@ -619,6 +638,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
       label: data.label,
       scheduled: scheduled || null,
       cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
+      pulls: data.pulls ?? false,
     };
     try {
       const read = await readWorkflow(call, base);
@@ -634,7 +654,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         message: "Aperture Bot: set its standing jobs",
         title: "Aperture Bot: standing jobs",
         body: [
-          "Sets [Aperture Bot](https://aperturesais.grok.me/bot)'s standing jobs. Each runs on this repository's runner with its model key, and opens a pull request only when Aperture Agent Check finds nothing red.",
+          "Sets [Aperture Bot](https://aperturesais.grok.me/bot)'s standing jobs. Each runs on this repository's runner; a job that changes code uses its model key, and opens a pull request only when Aperture Agent Check finds nothing red.",
           "",
           ...jobsText(jobs),
           "",
@@ -763,13 +783,19 @@ export const botChat = createServerFn({ method: "POST" })
         return openText(Array.isArray(items) ? items : []);
       },
       readThread: async (n) => {
-        const [issue, comments] = await Promise.all([
-          get(`${base}/issues/${n}`),
-          get(`${base}/issues/${n}/comments?per_page=100`),
-        ]);
+        const issue = await get(`${base}/issues/${n}`);
         if (issue.status === 404) return `There is no issue or pull request #${n}.`;
         if (issue.status !== 200) throw new Error(`GitHub returned ${issue.status}`);
-        return threadText(issue.body, Array.isArray(comments.body) ? comments.body : []);
+        // GitHub lists comments oldest first: the newest are on the last page.
+        const total = Number((issue.body as { comments?: unknown }).comments) || 0;
+        const last = Math.max(1, Math.ceil(total / 100));
+        const pages = await Promise.all(
+          (last > 1 ? [last - 1, last] : [1]).map((page) =>
+            get(`${base}/issues/${n}/comments?per_page=100&page=${page}`),
+          ),
+        );
+        const comments = pages.flatMap((p) => (Array.isArray(p.body) ? p.body : []));
+        return threadText(issue.body, comments);
       },
       ciStatus: async () => {
         const repo = (await must(base)) as { default_branch?: string };
@@ -793,6 +819,22 @@ export const botChat = createServerFn({ method: "POST" })
         const out = await loadTasks(base, get);
         if (!out.ok) throw new Error(out.error);
         return tasksText(out.tasks);
+      },
+      pullFiles: async (n) => {
+        const files = await get(`${base}/pulls/${n}/files?per_page=100`);
+        if (files.status === 404) return `There is no pull request #${n}.`;
+        if (files.status !== 200) throw new Error(`GitHub returned ${files.status}`);
+        return filesText(n, Array.isArray(files.body) ? files.body : []);
+      },
+      releases: async () => {
+        const [releases, tags] = await Promise.all([
+          get(`${base}/releases?per_page=10`),
+          get(`${base}/tags?per_page=20`),
+        ]);
+        return releasesText(
+          releases.status === 200 && Array.isArray(releases.body) ? releases.body : [],
+          tags.status === 200 && Array.isArray(tags.body) ? tags.body : [],
+        );
       },
     };
     try {

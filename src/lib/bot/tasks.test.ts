@@ -178,7 +178,7 @@ test("Set up's workflow file is one the Bot page recognises, with the provider's
 });
 
 test("standing jobs go into the workflow and read back the same", () => {
-  const jobs = { label: true, scheduled: "fix-ci", cron: NIGHTLY };
+  const jobs = { label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: false };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
     text,
@@ -194,7 +194,12 @@ test("standing jobs go into the workflow and read back the same", () => {
   );
   assert.match(text, / {10}scheduled: "fix-ci"\n/);
   assert.deepEqual(workflowUse(text).jobs, jobs);
-  const weekly = { label: false, scheduled: 'Update "docs" links\nthat 404', cron: WEEKLY };
+  const weekly = {
+    label: false,
+    scheduled: 'Update "docs" links\nthat 404',
+    cron: WEEKLY,
+    pulls: false,
+  };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", weekly)).jobs, weekly);
 });
 
@@ -216,13 +221,18 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     "          scheduled: old task",
     "",
   ].join("\n");
-  const next = withJobs(custom, { label: true, scheduled: "fix-ci", cron: NIGHTLY })!;
+  const next = withJobs(custom, { label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: false })!;
   assert.match(
     next,
     / {10}model-key: \$\{\{ secrets\.MY_KEY \}\}\n {10}provider: anthropic\n {10}test-script: test:unit # the fast ones\n {10}scheduled: "fix-ci"\n/,
   );
   assert.doesNotMatch(next, /old task/);
-  assert.deepEqual(workflowUse(next).jobs, { label: true, scheduled: "fix-ci", cron: NIGHTLY });
+  assert.deepEqual(workflowUse(next).jobs, {
+    label: true,
+    scheduled: "fix-ci",
+    cron: NIGHTLY,
+    pulls: false,
+  });
   const off = withJobs(next, NO_JOBS)!;
   assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
   assert.match(off, /test-script: test:unit/);
@@ -287,10 +297,10 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
   assert.match(app, / {10}github-token: \$\{\{ steps\.app\.outputs\.token \}\}\n/);
   assert.equal(workflowUse(app).app, true);
   // Changing the jobs keeps the app; turning the app off takes its token with it.
-  const jobs = withJobs(app, { label: true, scheduled: null, cron: null })!;
+  const jobs = withJobs(app, { label: true, scheduled: null, cron: null, pulls: false })!;
   assert.equal(workflowUse(jobs).app, true);
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
-  const off = withJobs(jobs, { label: true, scheduled: null, cron: null }, false)!;
+  const off = withJobs(jobs, { label: true, scheduled: null, cron: null, pulls: false }, false)!;
   assert.equal(workflowUse(off).app, false);
   assert.doesNotMatch(off, /github-token|create-github-app-token/);
   // A token of the person's own is theirs: it stays.
@@ -299,4 +309,21 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
     "model-key: ${{ secrets.XAI_API_KEY }}\n          github-token: ${{ secrets.BOT_PAT }}",
   );
   assert.match(withJobs(pat, NO_JOBS)!, /github-token: \$\{\{ secrets\.BOT_PAT \}\}/);
+});
+
+test("checking every pull request is a job: its trigger, only this repository's branches, read back", () => {
+  const jobs = { ...NO_JOBS, pulls: true };
+  const text = workflowFile("grok", "v1", jobs);
+  assert.match(
+    text,
+    /^ {2}pull_request:\n {4}types: \[opened, synchronize, reopened, ready_for_review\]\n/m,
+  );
+  assert.match(
+    text,
+    /\|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository\)/,
+  );
+  assert.match(text, /github\.event\.pull_request\.number/);
+  assert.doesNotMatch(text, /pull_request_target/);
+  assert.deepEqual(workflowUse(text).jobs, jobs);
+  assert.deepEqual(workflowUse(withJobs(text, NO_JOBS)!).jobs, NO_JOBS);
 });

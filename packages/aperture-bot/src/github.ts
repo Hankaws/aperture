@@ -92,10 +92,28 @@ export class GitHub {
     await this.call("POST", `${this.base}/issues/comments/${commentId}/reactions`, { content });
   }
 
+  /**
+   * Every page of a list, oldest first as GitHub gives them, up to `max`
+   * pages of 100: one page would miss the newest comments on a long thread,
+   * or a job's tracking issue in a busy repository.
+   */
+  private async all<T>(path: string, max = 10): Promise<T[]> {
+    const out: T[] = [];
+    const sep = path.includes("?") ? "&" : "?";
+    for (let page = 1; page <= max; page++) {
+      const items = await this.call<T[]>("GET", `${path}${sep}per_page=100&page=${page}`);
+      out.push(...items);
+      if (items.length < 100) break;
+    }
+    return out;
+  }
+
   async comments(issue: number): Promise<ThreadComment[]> {
-    const out = await this.call<
-      Array<{ id: number; body?: string; user?: { login?: string; type?: string } }>
-    >("GET", `${this.base}/issues/${issue}/comments?per_page=100`);
+    const out = await this.all<{
+      id: number;
+      body?: string;
+      user?: { login?: string; type?: string };
+    }>(`${this.base}/issues/${issue}/comments`);
     return out.map((c) => ({
       id: c.id,
       author: c.user?.login ?? "someone",
@@ -209,9 +227,8 @@ export class GitHub {
   }
 
   async openIssues(): Promise<Array<{ number: number; title: string; isPull: boolean }>> {
-    const out = await this.call<Array<{ number: number; title: string; pull_request?: unknown }>>(
-      "GET",
-      `${this.base}/issues?state=open&per_page=100`,
+    const out = await this.all<{ number: number; title: string; pull_request?: unknown }>(
+      `${this.base}/issues?state=open`,
     );
     return out.map((i) => ({ number: i.number, title: i.title, isPull: Boolean(i.pull_request) }));
   }
@@ -223,9 +240,8 @@ export class GitHub {
 
   /** Open pull requests from this repository's branches: their branch and page. */
   async openPulls(): Promise<Array<{ headRef: string; url: string }>> {
-    const out = await this.call<Array<{ head: { ref: string }; html_url: string }>>(
-      "GET",
-      `${this.base}/pulls?state=open&per_page=100`,
+    const out = await this.all<{ head: { ref: string }; html_url: string }>(
+      `${this.base}/pulls?state=open`,
     );
     return out.map((p) => ({ headRef: p.head.ref, url: p.html_url }));
   }

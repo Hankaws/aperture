@@ -2,7 +2,8 @@
  * What the bot says on GitHub: the body of the pull request it opens, and its
  * replies on the thread. Pure, so every wording is tested without a network.
  */
-import { shownRows } from "../../agent-check/src/report.ts";
+import type { Result as CheckResult } from "../../agent-check/src/main.ts";
+import { shownRows, summaryMarkdown } from "../../agent-check/src/report.ts";
 import {
   phaseLine,
   summaryMarker,
@@ -26,7 +27,7 @@ export const SITE = "https://aperturesais.grok.me";
 export type Asked = {
   asked: number;
   run: string;
-  via?: "label" | "schedule";
+  via?: "label" | "schedule" | "pull";
   by?: string;
   task?: string;
 };
@@ -36,6 +37,7 @@ export type ReplyContext = Asked & { tests: string | null };
 function askedBy(command: Command): string {
   if (command.via === "label") return `@${command.author} labelled #${command.number} for the bot`;
   if (command.via === "schedule") return `A standing job, on #${command.number}`;
+  if (command.via === "pull") return `@${command.author} pushed to #${command.number}`;
   return `@${command.author} asked in #${command.number}`;
 }
 
@@ -230,6 +232,18 @@ export function forkReply(ctx: Asked): string {
   );
 }
 
+/** `/aperture check` on an issue: there is no change to check. */
+export function notPullReply(ctx: Asked): string {
+  return join(
+    [
+      "`/aperture check` runs Aperture Agent Check on a pull request, and this is an issue, so there is nothing to check.",
+      "",
+      "Comment it on the pull request instead, or say what to do after `/aperture` and the bot will make the change.",
+    ],
+    [summaryMarker({ v: 1, state: "declined", kind: "check", asked: ctx.asked, run: ctx.run })],
+  );
+}
+
 export function errorReply(message: string, ctx: Asked): string {
   return join(
     ["Aperture Bot stopped with an error and changed nothing:", "", `> ${message}`],
@@ -242,6 +256,38 @@ export function errorReply(message: string, ctx: Asked): string {
         run: ctx.run,
         ...askedFields(ctx),
         error: message,
+      }),
+    ],
+  );
+}
+
+/**
+ * Aperture Agent Check on a pull request, asked with `/aperture check` or by a
+ * push: its report, and nothing changed.
+ */
+export function checkReply(check: CheckResult, ctx: ReplyContext): string {
+  const report =
+    check.rows.length > 0
+      ? summaryMarkdown(check.rows, check.meta).trim()
+      : `### Aperture Agent Check\n\n${check.text.replace(/^Aperture Agent Check: /, "")}`;
+  const tests = ctx.tests ? `Tests ran ${ctx.tests}.` : "Tests were not run.";
+  return join(
+    [report],
+    [`${tests} Nothing was changed. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
+    [
+      summaryMarker({
+        v: 1,
+        state: check.verdict,
+        kind: "check",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        checks: shownRows(check.rows).map((r) => ({
+          status: r.status,
+          label: r.label,
+          detail: r.detail,
+        })),
+        tests: ctx.tests,
       }),
     ],
   );

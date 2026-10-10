@@ -153,6 +153,14 @@ test("the feed merges repositories newest first, an outcome before its ask, up t
     ["acme/docs#9:asked", "acme/shop#1:no-change", "acme/shop#1:asked"],
   );
   assert.equal(feedOf([shop, docs], 2).length, 2);
+  // A busy repository keeps only its newest few, so the others still show.
+  const busy = activityFrom(
+    "acme/busy",
+    Array.from({ length: 8 }, (_, i) => make({ id: 100 + i, askedAt: at(i), updatedAt: at(i) })),
+  );
+  const fair = feedOf([busy, shop], 4, 3);
+  assert.equal(fair.filter((a) => a.repo === "acme/busy").length, 3);
+  assert.ok(fair.some((a) => a.repo === "acme/shop"));
 });
 
 test("days read as Today, Yesterday, then the date, and entries group under them", () => {
@@ -217,4 +225,42 @@ test("a bot's status is the newest news on its repository, and fades after a day
   assert.deepEqual([old.mood, old.tone, old.line], ["idle", "muted", "Stuck: checks red on #7"]);
   assert.equal(statusOf([entry("asked", 2)], "acme/shop", NOW)!.line, "Queued on #7");
   assert.equal(statusOf([entry("silent", 2)], "acme/shop", NOW)!.mood, "stuck");
+});
+
+test("a check on a pull request reads as a review, and a push names who pushed", () => {
+  const checks = [
+    { status: "pass", label: "Parses", detail: "" },
+    { status: "fail", label: "Types", detail: "1 error" },
+  ];
+  const items = activityFrom("acme/shop", [
+    make({
+      id: 5,
+      via: "pull",
+      author: "grace",
+      task: "Check this pull request",
+      state: "red",
+      updatedAt: at(10),
+      summary: { v: 1, state: "red", kind: "check", via: "pull", asked: 0, run: RUN, checks },
+    }),
+    make({
+      id: 6,
+      task: "check",
+      state: "clear",
+      updatedAt: at(5),
+      summary: { v: 1, state: "clear", kind: "check", asked: 6, run: RUN, checks: [checks[0]!] },
+    }),
+  ]);
+  assert.deepEqual(
+    items.map((a) => [a.kind, headline(a), a.detail]),
+    [
+      ["asked", "@grace pushed", null],
+      ["flagged", "Checked the pull request: red, not ready to merge", "1 of 2 checks red"],
+      ["asked", "@ada asked", null],
+      ["checked", "Checked the pull request: nothing red", "1 checks clear"],
+    ],
+  );
+  assert.equal(statusOf(feedOf([items.slice(0, 2)]), "acme/shop", NOW)?.line, "Found red on #7");
+  const clear = statusOf(feedOf([items]), "acme/shop", NOW);
+  assert.equal(clear?.line, "Checked #7: clear");
+  assert.equal(clear?.mood, "done");
 });

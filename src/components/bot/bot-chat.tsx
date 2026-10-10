@@ -30,6 +30,7 @@ import {
 } from "@/lib/bot/chat-saved";
 import type { MascotMood } from "@/lib/bot/mascot";
 import type { BotProfile } from "@/lib/bot/team";
+import { reportEntry, reportsDue, taskFor } from "@/lib/bot/reports";
 import { loadBotChat, saveBotChat } from "@/lib/bot/team.api";
 import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
@@ -62,17 +63,6 @@ function turnText(entry: Entry): string {
 }
 
 const id = () => Math.random().toString(36).slice(2, 10);
-
-/**
- * The task a sent card started: on its thread, asked since it was sent, with
- * the same words when there are some (tasks come newest first).
- */
-function taskFor(card: Card, tasks: BotTask[]): BotTask | null {
-  const sent = card.sent;
-  if (!sent) return null;
-  const since = tasks.filter((t) => t.number === sent.number && t.askedAt >= sent.at.slice(0, 19));
-  return since.find((t) => t.task === card.task) ?? since.at(-1) ?? null;
-}
 
 /**
  * The conversation with one bot of the team about its repository: the room's
@@ -112,6 +102,8 @@ export function BotChat({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The account's copy has been read (or could not be): only then does the bot report back. */
+  const [synced, setSynced] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   /** The conversation as it is now, for code that runs after an await. */
   const latest = useRef<Entry[]>([]);
@@ -136,10 +128,13 @@ export function BotChat({
     }
     const opened = new Set(local.map((e) => e.id));
     show(local);
+    setSynced(false);
     // The account's copy is the one every device shares.
     void loadBotChat({ data: { id: botId } })
       .then((kept) => {
-        if (cancel || !kept.ok) return;
+        if (cancel) return;
+        setSynced(true);
+        if (!kept.ok) return;
         if (kept.updatedAt === null) {
           // Never kept on the account: this browser's copy goes up.
           if (latest.current.length > 0)
@@ -157,6 +152,7 @@ export function BotChat({
       })
       .catch(() => {
         // Offline or signed out: this browser's copy stands, and nothing goes up.
+        if (!cancel) setSynced(true);
       });
     return () => {
       cancel = true;
@@ -170,6 +166,17 @@ export function BotChat({
     void saveBotChat({ data: { id: bot.id, entries: next.slice(-KEEP) } }).catch(() => {});
     onChange?.(next);
   };
+
+  // The bot comes back: a task sent from here that has settled gets a message, once.
+  useEffect(() => {
+    if (!synced) return;
+    const due = reportsDue(latest.current, tasks);
+    if (due.length === 0) return;
+    const at = new Date().toISOString();
+    update([...latest.current, ...due.map((task) => reportEntry(task, id(), at))]);
+    // `update` is a new function each render; the tasks and the sync are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, synced]);
 
   async function send(text: string) {
     const said = text.trim();
@@ -328,7 +335,7 @@ export function BotChat({
                       key={i}
                       card={card}
                       bot={bot.name}
-                      asked={askedBefore(entries, at)}
+                      asked={entry.report ? null : askedBefore(entries, at)}
                       onEditRule={onEditRule}
                       owner={owner}
                       name={name}
@@ -505,7 +512,7 @@ function ProposalCard({
   const [error, setError] = useState<string | null>(null);
   const thread = card.number ? setup.open.find((o) => o.number === card.number) : null;
 
-  if (card.sent && task) return <TaskCard task={task} now={now} />;
+  if (card.sent && task) return <TaskCard task={task} now={now} next={false} />;
   const stale = expired(card, now);
 
   async function send() {

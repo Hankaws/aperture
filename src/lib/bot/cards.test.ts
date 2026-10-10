@@ -44,6 +44,10 @@ test("the card names the bot and what it wants to do", () => {
     cardAsk({ title: "Add a currency", task: "…" }, "Iris", null),
     "Iris wants to open an issue: Add a currency",
   );
+  assert.equal(
+    cardAsk({ title: "Add a test for refunds", task: "Add a test for refunds" }, "Iris", null),
+    "Iris wants to open an issue",
+  );
 });
 
 test("open threads named in a reply become references; anything else stays text", () => {

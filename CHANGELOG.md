@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Bots come back with suggestions. When a task you sent from a bot's chat
+  finishes, the bot says so in the chat: the pull request it opened, a check
+  that came back red, or where it stopped. Every finished run ends with up
+  to three things the bot would do next, in its reply on GitHub, on the
+  task's card as "Suggested next", and in the chat as cards you can send or
+  dismiss. Nothing is done until you send one.
+  ([#65](https://github.com/Hankaws/aperture/pull/65))
 - Three in one: Aperture Bot now does Agent Check's job too. Comment
   `/aperture check` on a pull request and the bot runs Aperture Agent Check
   on it and replies with the report, changing nothing and using no model key.

@@ -46,9 +46,11 @@ const call = (name, args, id) => ({
   function: { name, arguments: JSON.stringify(args) },
 });
 
-/** Plans three steps, then proposes `edit` on every build turn. */
+/** Plans three steps, proposes `edit` on every build turn, then suggests what is next. */
 function model(edit) {
   return (body) => {
+    if (/might want done next/.test(body.messages[0]?.content ?? ""))
+      return { content: "- Use formatPrice in src/cart.ts too" };
     const names = (body.tools ?? []).map((t) => t.function.name);
     const thisTurn = body.messages.filter((m) => m.role === "assistant" && m.tool_calls?.length);
     if (!names.includes("propose_edit")) {
@@ -147,8 +149,13 @@ expect(
   clear.stdout,
 );
 expect(
-  /Used 2,000 input and 100 output tokens in 2 model calls\./.test(clear.stdout),
+  /Used 3,000 input and 150 output tokens in 3 model calls\./.test(clear.stdout),
   "it reports the tokens the endpoint billed",
+  clear.stdout,
+);
+expect(
+  /Next, I would suggest:\n- Use formatPrice in src\/cart\.ts too/.test(clear.stdout),
+  "it ends with what it would do next",
   clear.stdout,
 );
 

@@ -12,6 +12,7 @@ import { check, type Result as CheckResult } from "../../agent-check/src/main.ts
 import { git } from "../../agent-check/src/git.ts";
 import type { CompletionCfg } from "../../../src/lib/agent/complete.server.ts";
 import { runLoop } from "../../../src/lib/agent/loop.ts";
+import { planReadyText } from "../../../src/lib/agent/phase.ts";
 import type { AgentInput } from "../../../src/lib/agent/types.ts";
 import type { BotPhase } from "../../../src/lib/bot/summary.ts";
 import type { PlanEntry } from "../../../src/lib/workspace/types.ts";
@@ -163,13 +164,14 @@ export async function runTask(
   await progress({ phase: "planning" });
   const planned = await turn({ phase: "plan" });
   if (!planned.out.ok) return stopped(planned.out.error);
-  result.summary = planned.out.text;
+  // With nothing to say, the agent's text is the editor's "Click Build it": not for a thread.
+  result.summary = planned.out.text === planReadyText(undefined) ? "" : planned.out.text;
   result.plan = planned.out.plan ?? [];
   if (result.plan.length === 0) return finish("no-change");
 
   const history: AgentInput["history"] = [
     { role: "user", content: instruction },
-    { role: "assistant", content: planned.out.text },
+    { role: "assistant", content: result.summary || "Here is the plan." },
   ];
   let ask = instruction;
   await progress({ phase: "building" });

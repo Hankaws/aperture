@@ -169,6 +169,13 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- When the model plans without a word, the bot's reply no longer quotes the
+  editor's "Click Build it" as what the agent said.
+  ([#64](https://github.com/Hankaws/aperture/pull/64))
+- A model address that answers with something other than a model's reply
+  (a parked address saying "OK", an error page) now says what came back and
+  to check the address and model name, instead of "Unexpected token … is
+  not valid JSON". ([#64](https://github.com/Hankaws/aperture/pull/64))
 - When the model is busy (rate limited or overloaded, as Gemini's free tier
   often is), the bot waits and tries again, three times over about a
   minute and a half, instead of stopping on the first busy answer.

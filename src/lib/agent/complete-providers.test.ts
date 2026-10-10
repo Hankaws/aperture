@@ -150,3 +150,17 @@ test("a provider's refusal says what it said, never the key", async () => {
     claude.restore();
   }
 });
+
+test("a reply that is not JSON says what came back, not 'Unexpected token'", async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response("OK\r\n", { headers: { "content-type": "text/plain" } })) as typeof fetch;
+  try {
+    await assert.rejects(
+      complete({ provider: "openai", apiKey: "k" }, ask, false),
+      /^Error: openai answered with something that is not a model's reply: "OK"\. Check the address and the model name\.$/,
+    );
+  } finally {
+    globalThis.fetch = real;
+  }
+});

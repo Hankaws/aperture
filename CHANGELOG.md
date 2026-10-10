@@ -164,6 +164,11 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- From the bot's first run on a real repository: `/aperture check` counts
+  when "check" is the first line, so a signature under it no longer turns it
+  into a task; the error for a missing model key says where to add it; and
+  the workflow the Bot page writes says every way it starts the bot,
+  pull requests included. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - A line starting with `#` and a number, such as "#12 is fixed", no longer
   hangs and crashes a Markdown preview: the bot's chat replies and the
   editor's preview read it as text.

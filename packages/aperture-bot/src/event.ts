@@ -63,9 +63,12 @@ export function taskFrom(body: string, trigger = DEFAULT_TRIGGER): string | null
   return rest.trim();
 }
 
-/** `/aperture check`: the whole task is the word, so "check the login flow" stays a task. */
+/**
+ * `/aperture check`: the first line is the word alone, so "check the login
+ * flow" stays a task, and a signature or footer under it changes nothing.
+ */
 export function isCheck(task: string): boolean {
-  return /^check[.!]?$/i.test(task.trim());
+  return /^check[.!]?$/i.test(task.trim().split("\n")[0]!.trim());
 }
 
 export function parseEvent(

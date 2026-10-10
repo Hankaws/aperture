@@ -134,6 +134,11 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- With an Anthropic key, the editor's agent, the bot and its chat use
+  Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
+  and medium effort. A request Claude declines is retried on the model
+  Anthropic picks for it, and otherwise says it was declined instead of
+  answering with nothing. ([#62](https://github.com/Hankaws/aperture/pull/62))
 - The Agent Check workflow shown on the Bot page's Check tab and in the
   action's README uses `hankaws/aperture-agent-check@v1.1`, the release with
   the current checks. ([#60](https://github.com/Hankaws/aperture/pull/60))

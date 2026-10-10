@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CARD_TTL_MS, cardAsk, expired, sendsItself, withRefs } from "./cards.ts";
+import { CARD_TTL_MS, cardAsk, expired, quoteSelection, sendsItself, withFiles, withRefs } from "./cards.ts";
 
 const NOW = Date.parse("2026-10-10T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -66,4 +66,30 @@ test("open threads named in a reply become references; anything else stays text"
   ]);
   assert.deepEqual(withRefs("(#7)", open), ["(", open[0], ")"]);
   assert.deepEqual(withRefs("", open), []);
+});
+
+test("a file the reply names becomes a link, including a line; a URL or a version stays text", () => {
+  assert.deepEqual(withFiles("Look at src/lib/bot/cards.ts:12 next."), [
+    "Look at ",
+    { path: "src/lib/bot/cards.ts", line: 12 },
+    " next.",
+  ]);
+  assert.deepEqual(withFiles("Fix `./src/cart.ts` please"), [
+    "Fix `",
+    { path: "./src/cart.ts" },
+    "` please",
+  ]);
+  assert.deepEqual(withFiles("See https://github.com/a/b/blob/main/src/a.ts and file.ts"), [
+    "See https://github.com/a/b/blob/main/src/a.ts and file.ts",
+  ]);
+  assert.deepEqual(withFiles("Version 1.2/3.4 stays"), ["Version 1.2/3.4 stays"]);
+  assert.deepEqual(withFiles("(src/app.tsx)"), ["(", { path: "src/app.tsx" }, ")"]);
+  assert.deepEqual(withFiles(""), []);
+});
+
+test("a selection becomes a quote, appended to whatever is already written", () => {
+  assert.equal(quoteSelection("", "hello"), "> hello\n");
+  assert.equal(quoteSelection("hi", "a\nb"), "hi\n\n> a\n> b\n");
+  assert.equal(quoteSelection("hi\n\n", "line"), "hi\n\n> line\n");
+  assert.equal(quoteSelection("x", "   "), "x");
 });

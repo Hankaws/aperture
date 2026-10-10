@@ -141,6 +141,15 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The bot chat takes a few habits from Grok Bot. While it works, the status
+  says what it is doing ("Thinking it through") and leaves its name off.
+  Select text in the chat and press ⌘/Ctrl+L to quote it in the next message.
+  Your messages take that bot's colour, and the thread sits in a column on a
+  wide window. A long request on a card folds behind "View full request", and
+  an expired check offers "Always allow checks". A file the bot names
+  (`src/cart.ts`) links to that line on GitHub. The mascots' eyes are a little
+  larger, and the roster's buttons are round. A reply that failed can be tried
+  again. ([#66](https://github.com/Hankaws/aperture/pull/66))
 - With an Anthropic key, the editor's agent, the bot and its chat use
   Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
   and medium effort. A request Claude declines is retried on the model

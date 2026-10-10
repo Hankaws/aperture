@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { listGithubRepos, type GithubRepoSummary } from "@/lib/github/api";
 import { chatKey, clearSavedChat, lastLineOf, loadChat, type Entry } from "@/lib/bot/chat-saved";
-import { mascotFor, suggestName, type Mascot, type MascotMood } from "@/lib/bot/mascot";
+import { MASCOT_COLORS, mascotFor, suggestName, type Mascot, type MascotMood } from "@/lib/bot/mascot";
 import { activityFrom, statusOf, type BotStatus } from "@/lib/bot/activity";
 import { listBots, saveBotChat } from "@/lib/bot/team.api";
 import { modelChoices, type ModelChoice } from "@/lib/bot/team-models";
@@ -169,7 +169,7 @@ export function BotTeam() {
       type="button"
       onClick={() => setMobileMain(false)}
       aria-label="Back to your bots"
-      className="grid size-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg lg:hidden"
+      className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-elevated hover:text-fg lg:hidden"
     >
       <ArrowLeft className="size-5" />
     </button>
@@ -194,6 +194,7 @@ export function BotTeam() {
             onClick={() => open({ kind: "new" })}
             aria-label="New bot"
             title="New bot"
+            className="rounded-full"
           >
             <Plus className="size-5" />
           </Button>
@@ -256,7 +257,7 @@ export function BotTeam() {
             onClick={() => open({ kind: "activity" })}
             aria-current={view.kind === "activity" || undefined}
             className={cn(
-              "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted hover:bg-elevated hover:text-fg",
+              "flex h-10 w-full items-center gap-3 rounded-full px-3 text-sm text-muted hover:bg-elevated hover:text-fg",
               view.kind === "activity" && "bg-elevated text-fg",
             )}
           >
@@ -266,7 +267,7 @@ export function BotTeam() {
           <Link
             to="/settings"
             search={{ tab: "models" }}
-            className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted hover:bg-elevated hover:text-fg"
+            className="flex h-10 w-full items-center gap-3 rounded-full px-3 text-sm text-muted hover:bg-elevated hover:text-fg"
           >
             <KeyRound className="size-4" />
             Model keys
@@ -686,8 +687,13 @@ export function TeamPreview() {
               <span className="block text-xs text-accent">Working on a task</span>
             </span>
           </div>
-          <div className="space-y-4 px-4 py-5 text-sm">
-            <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-elevated px-4 py-2.5">
+          <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 text-sm">
+            <p
+              className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5"
+              style={{
+                background: `color-mix(in srgb, ${MASCOT_COLORS.teal} 36%, var(--color-elevated))`,
+              }}
+            >
               What&apos;s broken right now?
             </p>
             <div className="flex gap-3">
@@ -698,7 +704,7 @@ export function TeamPreview() {
                   <code className="rounded bg-elevated px-1 font-mono text-xs">test</code> fails in
                   the cart test since abc1234. The total adds cents as floats, so 0.1 + 0.2 comes
                   out a cent off. I&apos;d fix it in{" "}
-                  <code className="rounded bg-elevated px-1 font-mono text-xs">src/cart.ts</code>.
+                  <span className="font-mono text-[0.92em] text-accent">src/cart.ts</span>.
                 </p>
                 <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
                   <p className="text-xs font-medium text-accent">
@@ -714,10 +720,15 @@ export function TeamPreview() {
               </div>
             </div>
           </div>
-          <div className="mt-auto border-t border-border p-3">
-            <p className="rounded-2xl border border-border bg-elevated px-4 py-2.5 text-sm text-subtle">
-              Message Iris
-            </p>
+          <div className="mt-auto border-t border-border px-3 py-3">
+            <div className="mx-auto w-full max-w-3xl">
+              <p className="rounded-2xl border border-border bg-elevated px-4 py-2.5 text-sm text-subtle">
+                Message Iris
+              </p>
+              <p className="mt-2 px-1 text-xs text-subtle">
+                Enter sends. ⌘/Ctrl+L quotes a selection.
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -387,7 +387,7 @@ export async function executeTool(
       // Notes arrive label-prefixed ("Syntax check: …") for the diff card; the
       // agent already knows which file it edited, so report just the problem.
       const problems = notes.map((n) => n.text.replace(/^[^:]+ check: /, "")).join("; ");
-      return `Edit staged for ${path}, but ${checkLabel(path).toLowerCase()} failed: ${problems}. Fix before the user can Apply.`;
+      return `Edit staged for ${path}, but ${checkLabel(path, "lower")} failed: ${problems}. Fix before the user can Apply.`;
     }
     return `Edit staged for ${path}. The user must accept it in the UI.`;
   }

@@ -36,10 +36,9 @@ export function isCheckablePath(path: string): boolean {
 }
 
 /** What to call the check in a note, so a parse error does not read as markup. */
-export function checkLabel(path: string): string {
-  if (isPreviewPath(path)) return "Preview check";
-  if (isJsonPath(path)) return "JSON check";
-  return "Syntax check";
+export function checkLabel(path: string, casing: "title" | "lower"): string {
+  const label = isPreviewPath(path) ? "Preview check" : isJsonPath(path) ? "JSON check" : "Syntax check";
+  return casing === "lower" ? label.toLowerCase() : label;
 }
 
 export function htmlIssues(html: string): string[] {
@@ -122,7 +121,7 @@ export function previewIssues(
 }
 
 export function notesFromPreviewIssues(path: string, issues: string[]): DiffNote[] {
-  const label = checkLabel(path);
+  const label = checkLabel(path, "title");
   return issues.slice(0, 4).map((text, i) => ({
     id: `preview_${i}_${path}`,
     excerpt: "",

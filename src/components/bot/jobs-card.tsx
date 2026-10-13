@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { CalendarClock, GitPullRequest, Loader2, ShieldCheck, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,13 +6,23 @@ import { setBotJobs, type BotSetup } from "@/lib/github/bot";
 import { WEEKLY, WORKFLOW_PATH } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
 
-type Mode = "off" | "fix-ci" | "task";
+type Mode = "off" | "fix-ci" | "look-over" | "task";
 
 const MODES: Array<{ id: Mode; label: string }> = [
   { id: "off", label: "Off" },
   { id: "fix-ci", label: "Fix what's red" },
+  { id: "look-over", label: "Look over" },
   { id: "task", label: "A task" },
 ];
+
+/** Modes whose schedule the person picks: every night or every Monday. */
+const timed = (mode: Mode) => mode === "task" || mode === "look-over";
+
+function modeOf(scheduled: string | null): Mode {
+  if (!scheduled) return "off";
+  if (scheduled === "fix-ci" || scheduled === "look-over") return scheduled;
+  return "task";
+}
 
 /**
  * The bot's standing jobs on this repo: its label, what it does on its
@@ -22,7 +32,7 @@ const MODES: Array<{ id: Mode; label: string }> = [
 export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: string; name: string }) {
   const workflow = setup.workflow!;
   const now = workflow.jobs;
-  const startMode: Mode = !now.scheduled ? "off" : now.scheduled === "fix-ci" ? "fix-ci" : "task";
+  const startMode = modeOf(now.scheduled);
   const [label, setLabel] = useState(now.label);
   const [pulls, setPulls] = useState(now.pulls);
   const [mode, setMode] = useState<Mode>(startMode);
@@ -33,12 +43,12 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const [opened, setOpened] = useState<string | null>(null);
 
   const editable = workflow.path === WORKFLOW_PATH;
-  const scheduled = mode === "off" ? "" : mode === "fix-ci" ? "fix-ci" : task.trim();
+  const scheduled = mode === "off" ? "" : mode === "task" ? task.trim() : mode;
   const changed =
     label !== now.label ||
     pulls !== now.pulls ||
     scheduled !== (now.scheduled ?? "") ||
-    (mode === "task" && weekly !== (now.cron === WEEKLY));
+    (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
 
   async function save() {
@@ -51,7 +61,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           repo: name,
           label,
           scheduled,
-          weekly: mode === "task" && weekly,
+          weekly: timed(mode) && weekly,
           pulls,
         },
       });
@@ -63,6 +73,22 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
       setBusy(false);
     }
   }
+
+  const often: ReactNode = (
+    <label className="flex flex-wrap items-center gap-2 text-sm text-muted">
+      <select
+        value={weekly ? "weekly" : "nightly"}
+        onChange={(event) => setWeekly(event.target.value === "weekly")}
+        disabled={!editable}
+        aria-label="How often"
+        className="h-8 rounded-md border border-border bg-elevated px-2 text-sm text-fg"
+      >
+        <option value="nightly">Every night</option>
+        <option value="weekly">Every Monday</option>
+      </select>
+      at 03:17 UTC, on its own issue.
+    </label>
+  );
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="bot-jobs">
@@ -125,7 +151,11 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
               role="radio"
               aria-checked={mode === m.id}
               disabled={!editable}
-              onClick={() => setMode(m.id)}
+              onClick={() => {
+                setMode(m.id);
+                // A new look-over starts weekly: a note a week is news, one a night is noise.
+                if (m.id === "look-over" && startMode !== "look-over") setWeekly(true);
+              }}
               className={cn(
                 "h-8 flex-1 rounded-md text-xs",
                 mode === m.id ? "bg-elevated text-fg" : "text-muted hover:text-fg",
@@ -141,6 +171,16 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
             green, or while its last fix waits for review.
           </p>
         )}
+        {mode === "look-over" && (
+          <div className="mt-2 space-y-2">
+            <p className="text-sm text-pretty text-muted">
+              Read CI on {setup.defaultBranch} and the open issues and pull requests, then post how
+              things stand and up to three things worth doing. It changes nothing: the suggestions
+              come to this bot&apos;s chat, to send or dismiss.
+            </p>
+            {often}
+          </div>
+        )}
         {mode === "task" && (
           <div className="mt-2 space-y-2">
             <Textarea
@@ -152,19 +192,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
               aria-label="Scheduled task"
               disabled={!editable}
             />
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <select
-                value={weekly ? "weekly" : "nightly"}
-                onChange={(event) => setWeekly(event.target.value === "weekly")}
-                disabled={!editable}
-                aria-label="How often"
-                className="h-8 rounded-md border border-border bg-elevated px-2 text-sm text-fg"
-              >
-                <option value="nightly">Every night</option>
-                <option value="weekly">Every Monday</option>
-              </select>
-              at 03:17 UTC, on its own issue.
-            </label>
+            {often}
           </div>
         )}
       </div>

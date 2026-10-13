@@ -594,6 +594,10 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): fix whatever is red on the default branch. Nothing when it is green, or while the last fix waits for review.`,
     );
+  else if (jobs.scheduled === "look-over")
+    lines.push(
+      `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): look the repository over and post how it stands, with up to three things worth doing, on its own issue. It changes nothing; a suggestion is done only when someone sends it.`,
+    );
   else if (jobs.scheduled)
     lines.push(
       `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): ${jobs.scheduled.split("\n")[0]}`,

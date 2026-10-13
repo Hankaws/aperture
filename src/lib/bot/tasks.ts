@@ -166,6 +166,11 @@ export function isCheck(task: BotTask): boolean {
   return task.summary?.kind === "check";
 }
 
+/** A look over the repository on the bot's schedule: a note and suggestions, nothing changed. */
+export function isLook(task: BotTask): boolean {
+  return task.summary?.kind === "look";
+}
+
 /** Finished, one way or the other: nothing more will change without a new ask. */
 export function isSettled(state: TaskState): boolean {
   return state !== "working" && state !== "waiting";

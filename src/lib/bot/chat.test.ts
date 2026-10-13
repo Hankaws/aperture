@@ -200,6 +200,35 @@ test("GitHub's answers read as short text", () => {
     "CI on main (abc1234):\n✗ test: failure\n✓ lint: success",
   );
   assert.equal(tasksText([]), "Aperture Bot has no tasks on this repository yet.");
+  assert.equal(
+    tasksText([
+      {
+        id: 1,
+        via: "schedule",
+        number: 20,
+        thread: null,
+        task: "Look the repository over and suggest what to do next.",
+        author: "schedule",
+        askedAt: "2026-10-13T03:17:00Z",
+        askedUrl: "https://github.com/acme/shop/issues/20",
+        state: "clear",
+        summary: {
+          v: 1,
+          state: "clear",
+          kind: "look",
+          via: "schedule",
+          asked: 0,
+          run: "",
+          note: "Main is green.",
+          next: ["Review #8", "Close #3"],
+        },
+        replyUrl: null,
+        updatedAt: "2026-10-13T03:18:00Z",
+        diff: null,
+      },
+    ]),
+    '#20 "Look the repository over and suggest what to do next." by a standing job: looked the repository over: Main is green. Suggested: Review #8; Close #3',
+  );
 });
 
 test("a pull request's files and the releases are tools too, named in what it looked at", async () => {

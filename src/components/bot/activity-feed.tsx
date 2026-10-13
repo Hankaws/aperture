@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  Telescope,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ const MARK: Record<ActivityKind, { icon: LucideIcon; tone: string }> = {
   red: { icon: ShieldX, tone: "border-danger/30 bg-danger/10 text-danger" },
   checked: { icon: ShieldCheck, tone: "border-ok/30 bg-ok/10 text-ok" },
   flagged: { icon: ShieldAlert, tone: "border-danger/30 bg-danger/10 text-danger" },
+  looked: { icon: Telescope, tone: "border-accent/30 bg-accent/10 text-accent" },
   error: { icon: CircleAlert, tone: "border-danger/30 bg-danger/10 text-danger" },
   stopped: { icon: CircleSlash, tone: "border-warn/30 bg-warn/10 text-warn" },
   ended: { icon: CircleSlash, tone: "border-warn/30 bg-warn/10 text-warn" },

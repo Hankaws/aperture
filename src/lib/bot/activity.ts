@@ -6,9 +6,9 @@
  */
 import type { MascotMood } from "./mascot.ts";
 import { phaseLine } from "./summary.ts";
-import { isCheck, type BotTask, type TaskState } from "./tasks.ts";
+import { isCheck, isLook, type BotTask, type TaskState } from "./tasks.ts";
 
-/** `checked` and `flagged`: Agent Check on a pull request, clear or red. */
+/** `checked` and `flagged`: Agent Check on a pull request, clear or red. `looked`: a look-over. */
 export type ActivityKind =
   | "asked"
   | "working"
@@ -16,6 +16,7 @@ export type ActivityKind =
   | "pushed"
   | "checked"
   | "flagged"
+  | "looked"
   | Exclude<TaskState, "waiting" | "working" | "clear">;
 
 export type Activity = {
@@ -61,6 +62,7 @@ function outcome(task: BotTask): ActivityKind | null {
     case "waiting":
       return null;
     case "clear":
+      if (isLook(task)) return "looked";
       if (isCheck(task)) return "checked";
       if (task.summary?.link?.what === "pull") return "opened";
       if (task.summary?.link?.what === "commit") return "pushed";
@@ -70,6 +72,11 @@ function outcome(task: BotTask): ActivityKind | null {
     default:
       return task.state;
   }
+}
+
+function suggestions(count: number): string {
+  if (count === 0) return "Nothing to do right now";
+  return count === 1 ? "1 suggestion" : `${count} suggestions`;
 }
 
 function pullNumber(url: string | undefined): number | null {
@@ -103,9 +110,11 @@ export function activityFrom(repo: string, tasks: BotTask[]): Activity[] {
     const detail =
       kind === "working"
         ? phaseLine(s ?? {})
-        : kind === "error" || kind === "stopped"
-          ? (s?.error ?? checksLine(task))
-          : checksLine(task);
+        : kind === "looked"
+          ? suggestions(s?.next?.length ?? 0)
+          : kind === "error" || kind === "stopped"
+            ? (s?.error ?? checksLine(task))
+            : checksLine(task);
     out.push({
       ...base,
       id: `${repo}#${task.id}:${kind}`,
@@ -158,6 +167,8 @@ export function headline(a: Activity): string {
       return "Checked the pull request: nothing red";
     case "flagged":
       return "Checked the pull request: red, not ready to merge";
+    case "looked":
+      return "Looked things over";
     case "stopped":
       return "Stopped";
     case "no-change":
@@ -261,6 +272,8 @@ export function statusOf(items: Activity[], repo: string, now: number): BotStatu
       return was("done", `Checked ${n}: clear`, "ok");
     case "flagged":
       return was("done", `Found red on ${n}`, "danger");
+    case "looked":
+      return was("done", "Looked things over", "ok");
     case "error":
       return was("stuck", `Hit an error on ${n}`, "danger");
     case "stopped":

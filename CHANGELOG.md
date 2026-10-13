@@ -9,8 +9,8 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
-- `/benchmark` counts a real repository, [nestjs/nest](https://github.com/nestjs/nest)
-  at `de2574e` (13 Oct 2026): 2,111 TypeScript files. The editor's compiler
+- `/benchmark` counts a real repository, nestjs/nest, at `de2574e`
+  (13 Oct 2026): 2,111 TypeScript files. The editor's compiler
   refuses it. Agent Check still reads it. Recount with
   `node scripts/measure-large-repo.mjs`.
   ([#78](https://github.com/Hankaws/aperture/pull/78))

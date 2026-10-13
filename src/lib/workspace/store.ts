@@ -97,6 +97,8 @@ type WorkspaceState = {
   recordLesson: (messageId: string, score: "up" | "down", note: string) => void;
   clearLesson: (messageId: string) => void;
   markSynced: (revision: number, hash: string) => void;
+  /** Saved (Ctrl/⌘+S): these files' dots go. Their text was kept all along; a save runs their save hooks. */
+  markSaved: (paths: string[]) => void;
   adoptRemote: (name: string, files: Record<string, string>, revision: number) => void;
   setSyncState: (state: SyncState) => void;
   setGithub: (github: GithubOrigin | null) => void;
@@ -370,7 +372,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       openTabs: orderTabs(openTabs, get().pinned),
       activePath: edit.path,
       previewPath: get().previewPath === edit.path ? null : get().previewPath,
-      dirtyPaths: withPath(get().dirtyPaths, edit.path),
+      // Applying is the save: the change already ran its checks and stage hooks as staged.
+      dirtyPaths: get().dirtyPaths.filter((p) => p !== edit.path),
       chunks: buildIndex(files),
       messages,
       fileList: keepFileList(get().fileList, files),
@@ -993,6 +996,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       });
       schedulePersist();
       return { ok: true, commit: last };
+    },
+
+    markSaved: (paths) => {
+      const dirtyPaths = get().dirtyPaths.filter((p) => !paths.includes(p));
+      if (dirtyPaths.length === get().dirtyPaths.length) return;
+      set({ dirtyPaths });
+      schedulePersist();
     },
 
     markSynced: (revision, hash) => {

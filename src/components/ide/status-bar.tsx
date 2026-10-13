@@ -76,7 +76,11 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         <span className="hidden shrink-0 tabular-nums sm:inline">
           {fileCount} {fileCount === 1 ? "file" : "files"}
         </span>
-        {dirty > 0 && <span className="hidden shrink-0 text-fg sm:inline">{dirty} unsaved</span>}
+        {dirty > 0 && (
+          <span className="hidden shrink-0 text-fg sm:inline" title="Edited since you last saved (Ctrl/⌘+S runs its save hooks). Your work is kept in this browser either way.">
+            {dirty} unsaved
+          </span>
+        )}
         {staged > 0 && (
           <button
             type="button"

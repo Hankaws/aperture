@@ -5,6 +5,8 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { pendingPathKey } from "@/lib/workspace/edits";
 import { useIdeUi } from "@/lib/ui-store";
 
+const UNSAVED_TIP = "Edited since you last saved (Ctrl/⌘+S runs its save hooks). Your work is kept in this browser either way.";
+
 function tabIcon(path: string) {
   const ext = extOf(path);
   if (ext === "json") return FileJson;
@@ -147,6 +149,7 @@ export function TabBar() {
                 <button
                   type="button"
                   aria-label={dirty ? `Unsaved · Close ${basename(path)}` : `Close ${basename(path)}`}
+                  title={dirty ? `Close · ${UNSAVED_TIP}` : undefined}
                   className={cn(
                     "relative items-center justify-center rounded-md hover:bg-elevated",
                     active || dirty ? "flex size-6 opacity-100 pointer-coarse:size-9" : "hidden size-6 group-hover:flex",

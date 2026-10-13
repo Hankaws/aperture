@@ -120,7 +120,11 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
             <span className="size-1.5 shrink-0 rounded-full bg-ok" aria-label="Staged diff" />
           )}
           {dirty && !pending.has(node.path) && (
-            <span className="size-1.5 shrink-0 rounded-full bg-tab-modified" aria-label="Unsaved" />
+            <span
+              className="size-1.5 shrink-0 rounded-full bg-tab-modified"
+              aria-label="Unsaved"
+              title="Edited since you last saved (Ctrl/⌘+S runs its save hooks). Your work is kept in this browser either way."
+            />
           )}
         </button>
         {!isFolder && (

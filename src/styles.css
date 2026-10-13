@@ -58,6 +58,10 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+html[data-theme="cursor"] {
+  color-scheme: dark;
+}
+
 html[data-theme="claude"] {
   --color-bg: #161412;
   --color-surface: #1e1b18;
@@ -1108,6 +1112,78 @@ html[data-theme="light"] {
   100% {
     background-position: 200% 50%;
   }
+}
+
+@keyframes agent-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes agent-look {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  70% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes agent-blink {
+  0%,
+  36%,
+  46%,
+  100% {
+    transform: scaleY(1);
+  }
+  41% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes agent-iris {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  46% {
+    transform: scale(0.62);
+  }
+  72% {
+    transform: scale(1.06);
+  }
+}
+
+.agent-mark {
+  animation: agent-drift 5.5s ease-in-out infinite;
+}
+
+.agent-iris {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: agent-iris 4.8s ease-in-out infinite;
+}
+
+.agent-eyes {
+  animation: agent-look 6.5s ease-in-out infinite;
+}
+
+.agent-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: agent-blink 4.6s ease-in-out infinite;
+}
+
+.agent-eye-r {
+  animation-delay: 0.06s;
 }
 
 @media (prefers-reduced-motion: reduce) {

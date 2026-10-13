@@ -44,6 +44,8 @@ const options = (cwd: string, more: Partial<Options> = {}): Options => ({
   testScript: "test",
   timeoutMs: 60_000,
   failOn: "red",
+  baseline: "recompute",
+  baselineDir: join(cwd, ".aperture", "check-baseline"),
   ...more,
 });
 
@@ -299,7 +301,12 @@ test("settings come from flags, then action inputs, then the pull request event"
   assert.equal(fromFlags.base, "origin/dev");
   assert.equal(fromFlags.failOn, "red");
   assert.equal(fromFlags.runTests, true);
+  assert.equal(fromFlags.baseline, "recompute");
   assert.throws(() => parseOptions(["--fail-on", "sometimes"], {}), /fail-on/);
+  assert.throws(() => parseOptions(["--baseline", "branch"], {}), /baseline/);
+  const cached = parseOptions(["--baseline", "cache"], { GITHUB_WORKSPACE: "/repo" });
+  assert.equal(cached.baseline, "cache");
+  assert.equal(cached.baselineDir, join("/repo", ".aperture", "check-baseline"));
 });
 
 test("on a GitHub runner it prints annotations and writes the summary and the verdict output", () => {

@@ -12,6 +12,12 @@
  * allowlist constrains *which* script names run, never what those scripts do.
  * The sandbox is the boundary, which is why `sandboxEnv` exists: nothing that
  * is a secret to this app may ever be handed to it.
+ *
+ * Network is a second allowlist, `SANDBOX_ALLOWED_DOMAINS`: package registries
+ * and GitHub's tarball host, so an install can fetch dependencies and the code
+ * under test cannot reach anything else. A run whose environment carries a
+ * secret, or whose network list is wider than that, does not start until
+ * someone passes `approved`.
  */
 
 export type ScriptName = string;
@@ -26,6 +32,21 @@ const DENY = new Set(["dev", "start", "preview", "serve", "watch"]);
 /** Ceiling on a single run, independent of plan. A sandbox is billed by the second. */
 export const MAX_RUN_MS = 300_000;
 export const DEFAULT_RUN_MS = 120_000;
+
+/**
+ * Hosts a verify sandbox may reach, and why each one is there.
+ * Anything else needs an explicit approval before the sandbox starts.
+ */
+export const SANDBOX_NETWORK: ReadonlyArray<{ host: string; why: string }> = [
+  { host: "registry.npmjs.org", why: "npm package metadata and tarballs" },
+  { host: "*.npmjs.org", why: "npm's other registry hosts" },
+  { host: "registry.yarnpkg.com", why: "Yarn's registry" },
+  { host: "codeload.github.com", why: "GitHub tarballs some installs download" },
+];
+
+export const SANDBOX_ALLOWED_DOMAINS = SANDBOX_NETWORK.map((entry) => entry.host);
+
+const SECRET_ENV = /(^|_)(key|token|secret|password|passwd|database_url|session|credential)($|_)/i;
 
 export function declaredScripts(files: Record<string, string>): ScriptName[] {
   const raw = files["package.json"];
@@ -98,6 +119,39 @@ export function planRun(files: Record<string, string>, script: string): RunPlan 
  */
 export function sandboxEnv(): Record<string, string> {
   return { CI: "1", NODE_ENV: "test", NPM_CONFIG_FUND: "false", NPM_CONFIG_AUDIT: "false" };
+}
+
+/** Env names that would hand a secret to code the agent just wrote. */
+export function secretEnvNames(env: Record<string, string>): string[] {
+  return Object.keys(env)
+    .filter((name) => SECRET_ENV.test(name))
+    .sort();
+}
+
+/**
+ * Whether this sandbox run may start.
+ *
+ * The closed env and the registry allowlist start on their own. A secret in
+ * the environment, or a host outside the allowlist, waits for `approved`.
+ */
+export function approvalForRun(input: {
+  env: Record<string, string>;
+  network: readonly string[];
+  approved?: boolean;
+}): { ok: true } | { ok: false; reason: string } {
+  const allow = new Set<string>(SANDBOX_ALLOWED_DOMAINS);
+  const extra = input.network.filter((host) => !allow.has(host));
+  const secrets = secretEnvNames(input.env);
+  if (extra.length === 0 && secrets.length === 0) return { ok: true };
+  if (input.approved) return { ok: true };
+  const why: string[] = [];
+  if (extra.length) {
+    why.push(
+      `it would reach ${extra.join(", ")}, outside the package-registry allowlist (${SANDBOX_ALLOWED_DOMAINS.join(", ")})`,
+    );
+  }
+  if (secrets.length) why.push(`its environment includes ${secrets.join(", ")}`);
+  return { ok: false, reason: `Needs approval before it runs: ${why.join("; ")}.` };
 }
 
 export function clampTimeout(requested: number | undefined): number {

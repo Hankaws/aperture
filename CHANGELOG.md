@@ -16,6 +16,37 @@ release notes are every line from there down to the previous version.
   writes the files as an edit you can undo in one step, and leaves files
   with a staged change alone. Ctrl/⌘+P still opens a file by name.
   ([#79](https://github.com/Hankaws/aperture/pull/79))
+- `/benchmark` counts a real repository, nestjs/nest, at `de2574e`
+  (13 Oct 2026): 2,111 TypeScript files. The editor's compiler
+  refuses it. Agent Check still reads it. Recount with
+  `node scripts/measure-large-repo.mjs`.
+  ([#78](https://github.com/Hankaws/aperture/pull/78))
+- The replay demo can show a caught failed fix. Ask Composer to make
+  `listTasks` return a number: the checks go red, Send back stages a second
+  try that is still red, and nothing is applied. A clip of that is
+  `public/caught-a-bad-change.webm`.
+  ([#78](https://github.com/Hankaws/aperture/pull/78))
+- Checks now carry a verification id. It is a hash of the staged text, the
+  base it was written against, the package.json scripts, the lockfile,
+  `.aperture/hooks.json` and the verifier version. Apply recomputes it and
+  waits if any of those moved, including a staged edit that rewrites the
+  script a hook runs. The id is on the check strip.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
+- A Vercel Sandbox run that would reach a host outside the package-registry
+  allowlist, or that would put a secret in the environment, does not start
+  until it is approved. The closed verify run is unchanged.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
+- When a fix is sent back and comes back red, the check strip shows attempt
+  1 beside the fix: the red rows and the diff.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
+- `/benchmark` states the large-repo limits: the editor's compiler stops
+  above 600 TypeScript files, Agent Check reads 5,000 files and typechecks
+  3,000, and a 601-file project is the worked example.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
+- Agent Check can cache the base test result by commit (`baseline: cache`)
+  and reuse it while that commit stays the base. The default is still to
+  recompute.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
 - Routines: a bot can look things over on its own. Pick "Look over" in a
   bot's standing jobs, every night or every Monday. On its schedule the bot
   reads CI on the default branch and the open issues and pull requests, and
@@ -170,6 +201,11 @@ release notes are every line from there down to the previous version.
   (`src/cart.ts`) links to that line on GitHub. The mascots' eyes are a little
   larger, and the roster's buttons are round. A reply that failed can be tried
   again. ([#66](https://github.com/Hankaws/aperture/pull/66))
+- The public site follows the theme you pick. The switch reads the page, the
+  browser chrome matches, and "Your agent can ask too" carries the aperture
+  mark with eyes. Search results scroll on a short window, and the nav no
+  longer jumps when "Open" replaces its placeholder.
+  ([#77](https://github.com/Hankaws/aperture/pull/77))
 - With an Anthropic key, the editor's agent, the bot and its chat use
   Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
   and medium effort. A request Claude declines is retried on the model

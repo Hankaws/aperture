@@ -1,0 +1,11 @@
+{
+  "name": "nestjs/nest",
+  "url": "https://github.com/nestjs/nest",
+  "commit": "de2574ef7c91ddd220bac38f767cff5a7612fd99",
+  "commitDate": "2026-10-13",
+  "measured": "2026-10-13",
+  "relevantFiles": 2381,
+  "relevantBytes": 6468747,
+  "tsFiles": 2111,
+  "tsBytes": 5232349
+}

@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 export function AuthSlot({ compact = false, plain = false }: { compact?: boolean; plain?: boolean }) {
   const { user, isPending } = useHydratedUserState();
   if (isPending) {
+    // The bar's "Open →" is a short text link. A wide pill here jumps the nav when the session settles.
+    if (plain) return <div className="h-4 w-14 animate-pulse rounded-full bg-elevated" aria-hidden />;
     return <div className={cn("animate-pulse rounded-lg bg-elevated", compact ? "h-8 w-8 rounded-full" : "h-10 w-28")} />;
   }
   if (user) {

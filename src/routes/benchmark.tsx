@@ -3,6 +3,8 @@ import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { cn } from "@/lib/utils";
 import data from "@/lib/bench/results.json";
+import repo from "@/lib/bench/large-repo.json";
+import { SCALE, largeRepoVerdict, type LargeRepo } from "@/lib/bench/scale";
 import type { BenchResults, CaseResult } from "@/lib/bench/run";
 
 export const Route = createFileRoute("/benchmark")({ component: BenchmarkPage });
@@ -60,6 +62,16 @@ function CheckStates({ item }: { item: CaseResult }) {
   );
 }
 
+function megabytes(bytes: number): string {
+  return (bytes / 1_000_000).toFixed(1);
+}
+
+function repoWhen(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${day} ${months[(month ?? 1) - 1]} ${year}`;
+}
+
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -75,6 +87,9 @@ function BenchmarkPage() {
   const falseAlarms = results.cases.filter((item) => item.kind === "good" && item.caughtBy.length > 0);
   const misses = results.cases.filter((item) => item.kind === "bad" && item.caughtBy.length === 0);
   const missesUntested = misses.every((item) => item.mistake === "untested");
+  const large = repo as LargeRepo;
+  const verdict = largeRepoVerdict(large);
+  const commitUrl = `${large.url}/commit/${large.commit}`;
   return (
     <div className="min-h-dvh bg-bg text-fg">
       <SiteNav />
@@ -124,6 +139,54 @@ function BenchmarkPage() {
           light check cannot see: a wrong argument to a function from another file, a property that does not exist, a
           value that may be null, a status the type does not allow, a function returning the wrong type.
         </p>
+
+        <h2 className="mt-12 text-lg font-medium tracking-tight">Large repositories</h2>
+        <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
+          These four projects are small on purpose.{" "}
+          <a href={large.url} className="text-fg underline-offset-2 hover:underline">
+            {large.name}
+          </a>{" "}
+          at{" "}
+          <a href={commitUrl} className="font-mono text-fg underline-offset-2 hover:underline">
+            {large.commit.slice(0, 7)}
+          </a>{" "}
+          ({repoWhen(large.commitDate)}) is a years-old TypeScript repository:{" "}
+          {large.tsFiles.toLocaleString("en-US")} TypeScript files ({megabytes(large.tsBytes)} MB), and{" "}
+          {large.relevantFiles.toLocaleString("en-US")} files the checks would read ({megabytes(large.relevantBytes)}{" "}
+          MB). This is that commit's size, not a run of its tests.
+        </p>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
+          <li>
+            {verdict.editorRefuses ? (
+              <>
+                The editor's compiler refuses it. It is past {SCALE.editorFiles.toLocaleString("en-US")} TypeScript
+                files or {SCALE.editorBytes / 1_000_000} MB, so the Types row falls back to checking each changed file
+                on its own. Dependents of a changed file stay capped at {SCALE.dependents}, and packages are typed{" "}
+                <span className="font-mono text-fg">any</span> because the editor has no{" "}
+                <span className="font-mono text-fg">node_modules</span>.
+              </>
+            ) : (
+              <>The editor's compiler still takes a repository this size.</>
+            )}
+          </li>
+          <li>
+            {verdict.agentReads && verdict.agentTypechecks ? (
+              <>
+                Agent Check still takes it. It reads up to {SCALE.agentFiles.toLocaleString("en-US")} files (
+                {SCALE.agentBytes / 1_000_000} MB) and typechecks up to {SCALE.agentTscFiles.toLocaleString("en-US")} (
+                {SCALE.agentTscBytes / 1_000_000} MB) on your runner, with the installed packages' real types. A
+                repository past that is not checked, and the run says so instead of passing.
+              </>
+            ) : (
+              <>Agent Check does not take a repository this size, and the run says so instead of passing.</>
+            )}
+          </li>
+          <li>
+            A made-up project of {SCALE.probeFiles.toLocaleString("en-US")} files sits on the boundary between them:
+            the editor refuses it, and Agent Check still accepts it. Point a large repo at Agent Check, not at a
+            browser tab.
+          </li>
+        </ul>
 
         <h2 className="mt-12 text-lg font-medium tracking-tight">How it is measured</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">

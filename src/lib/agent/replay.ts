@@ -16,8 +16,8 @@
  * run_script("test") as a model checking its work would. When the tab runs it
  * in the browser, the output comes back as the next turn and the answer
  * repeats what the run said, pass or fail. Otherwise the loop's own verify
- * step reports the result. A failed run is reported as a failure, never
- * papered over: a recording cannot write a new fix.
+ * step reports the result. A failed check can play one recorded second try
+ * that is still wrong, and then stops. It never invents a fix that passes.
  *
  * Pure: tests import it directly.
  */
@@ -49,6 +49,11 @@ export type Tape = {
   plan: string[];
   planText: string;
   edits: Edit[];
+  /**
+   * A second recorded try, played when the checks on `edits` come back red.
+   * It is still wrong: the point is to stop, not to pass.
+   */
+  again?: Edit[];
   /** Describes the change only. Whether tests pass is the verify step's job to say. */
   doneText: string;
   answer: string;
@@ -131,6 +136,37 @@ export const TAPES: Tape[] = [
     answer:
       "`requireTitle` in src/lib/validate.ts rejects empty titles but accepts any length. A length check there would cover POST /tasks.",
   },
+  {
+    id: "list-bad-return",
+    title: "Make listTasks return a number",
+    match: /make listtasks return a number/i,
+    reads: [read("src/store.ts")],
+    plan: [
+      "Change the return of listTasks in src/store.ts to a number",
+      "Leave the function's declared return type as it is",
+    ],
+    planText:
+      "`listTasks` is declared to return `Task[]`. This change returns a number instead, which the type check should refuse.",
+    edits: [
+      {
+        path: "src/store.ts",
+        search: "  return tasks.slice(start + 1, start + pageSize + 1);",
+        replace: "  return 1;",
+        description: "Return a number from listTasks",
+      },
+    ],
+    again: [
+      {
+        path: "src/store.ts",
+        search: "  return 1;",
+        replace: '  return "none";',
+        description: "Return a string from listTasks",
+      },
+    ],
+    doneText:
+      "Staged a return of `1` from `listTasks` (src/store.ts). The function is still declared to return `Task[]`.",
+    answer: "`listTasks` in src/store.ts returns a page of tasks. Returning a number there does not typecheck.",
+  },
 ];
 
 /** The general question tape: the demo's known bugs, for "find bugs" or "explain this". */
@@ -156,6 +192,12 @@ const FALLBACK = [
 ].join("\n");
 
 const FIX_PROMPT_PREFIX = "Your edits do not pass";
+/** The editor's Send back prompt ends with this. A replay must not invent a passing fix. */
+const CHECK_FIX_MARK = "Fix only this with propose_edit";
+
+export function isFailedFixAsk(text: string): boolean {
+  return text.startsWith(FIX_PROMPT_PREFIX) || text.includes(CHECK_FIX_MARK);
+}
 
 /** Replay replaces every model call on a deployment that sets `APERTURE_MODEL=replay`. */
 export function replayEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -174,10 +216,13 @@ export function findTape(messages: ReplayMessage[]): Tape | null {
     .filter((m) => m.role === "user" && typeof m.content === "string")
     .map((m) => m.content as string)
     .filter((text) => !text.startsWith(CONTINUATION_PREFIX))
+    .filter((text) => !isFailedFixAsk(text) && !/^build it\b/i.test(text))
     .reverse();
   for (const text of asks) {
-    const tape = TAPES.find((t) => t.match.test(text));
-    if (tape) return tape;
+    // A later tape can be a narrower match for the same words (listTasks is
+    // both a real fix and the bad-return recording). The narrower one is last.
+    const hits = TAPES.filter((t) => t.match.test(text));
+    if (hits.length > 0) return hits[hits.length - 1]!;
   }
   return null;
 }
@@ -270,17 +315,29 @@ export function replayCompletion(messages: ReplayMessage[], toolNames: readonly 
     return { content: tape.planText };
   }
 
-  // Build. A failed verify run comes back as the next user message: report it
-  // as it is. A recording cannot write a new fix.
-  if (last?.role === "user" && String(last.content ?? "").startsWith(FIX_PROMPT_PREFIX)) {
-    const detail = String(last.content)
+  // Build. A failed check comes back as the next user message. A recording
+  // can play one more wrong try (so the strip can show both) and then stops.
+  // It never writes a fix that would pass.
+  const askAt = [...messages].reverse().findIndex((m) => m.role === "user");
+  const askIndex = askAt < 0 ? -1 : messages.length - 1 - askAt;
+  const ask = askIndex >= 0 ? String(messages[askIndex]?.content ?? "") : "";
+  if (isFailedFixAsk(ask)) {
+    const turn = roundsOf(messages.slice(askIndex + 1));
+    const edits = turn.filter((r) => r.names.includes("propose_edit"));
+    if (edits.length === 0 && tape.again?.length) return callsAt(rounds.length, tape.again.map(editCall));
+    if (edits.length > 0) {
+      return {
+        content: "Still red, so this stops. The second try is staged beside the first, and nothing is applied.",
+      };
+    }
+    const detail = ask
       .split("\n")
       .slice(1)
       .map((l) => l.trim())
       .find(Boolean);
     return {
       content: [
-        `The edits are staged, but ${firstLine(String(last.content))
+        `The edits are staged, but ${firstLine(ask)
           .replace(/^Your edits do not pass/, "they do not pass")
           .replace(/:$/, "")}${detail ? `: ${detail}` : "."}`,
         "This is a recorded replay, so it can't write a new fix. Review the diff, or switch to a real model.",

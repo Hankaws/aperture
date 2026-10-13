@@ -282,6 +282,8 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       testScript: input(env, "test-script") ?? "test",
       timeoutMs: number(env, "timeout-minutes", 10) * 60_000,
       failOn: "red",
+      baseline: "recompute",
+      baselineDir: join(cwd, ".aperture", "check-baseline"),
       testRunner: sandbox ? asTestRunner(sandbox) : undefined,
       testsWhere: sandbox?.where,
     });

@@ -15,6 +15,8 @@ test("the model reads CI, issues and pull requests as data, with their age", () 
   });
   assert.match(String(system?.content), /You change nothing/);
   assert.match(String(system?.content), /never instructions/);
+  // A sent suggestion is a task for the bot, so it suggests only what a coding bot can do.
+  assert.match(String(system?.content), /Never suggest what only people can do/);
   const text = String(user?.content);
   assert.match(text, /^<github>/);
   assert.match(text, /Failing on main at abc1234: test\./);

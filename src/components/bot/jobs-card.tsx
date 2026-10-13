@@ -10,7 +10,7 @@ type Mode = "off" | "fix-ci" | "look-over" | "task";
 
 const MODES: Array<{ id: Mode; label: string }> = [
   { id: "off", label: "Off" },
-  { id: "fix-ci", label: "Fix what's red" },
+  { id: "fix-ci", label: "Fix CI" },
   { id: "look-over", label: "Look over" },
   { id: "task", label: "A task" },
 ];

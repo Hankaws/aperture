@@ -125,8 +125,11 @@ const SAMPLES: Record<string, Sample[]> = {
       author: "schedule",
       summary: {
         kind: "look",
-        note: "Main is green. #18 has waited nine days for a review.",
-        next: ["Review #18 and answer its open question", "Close #9: the typo is already fixed"],
+        note: "Main is green. Issue #18 has had no answer for nine days.",
+        next: [
+          "Do what #18 asks: make the guide's search find pages with accents",
+          "Update the install guide for Node 22",
+        ],
       },
     },
     {

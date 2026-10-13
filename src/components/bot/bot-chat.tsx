@@ -219,7 +219,7 @@ export function BotChat({
     const due = reportsDue(latest.current, tasks);
     if (due.length === 0) return;
     const at = new Date().toISOString();
-    update([...latest.current, ...due.map((task) => reportEntry(task, id(), at))]);
+    update([...latest.current, ...due.map((task) => reportEntry(task, id(), at, setup.open))]);
     // `update` is a new function each render; the tasks and the sync are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, synced]);

@@ -3,6 +3,7 @@
  * chat gets a message from the bot saying how it went, with what it would
  * do next as cards to send or not. Pure, for tests on plain data.
  */
+import type { Thread } from "./cards.ts";
 import type { Card, Entry } from "./chat-saved.ts";
 import { isCheck, isLook, isSettled, type BotTask } from "./tasks.ts";
 
@@ -86,14 +87,33 @@ export function reportText(task: BotTask): string {
   }
 }
 
-/** The chat message for a settled task: what happened, and what it would do next. */
-export function reportEntry(task: BotTask, id: string, at: string): Entry {
+/**
+ * The open issue or pull request a suggestion is about: the one it names
+ * (`Fix #15: …`), when it names exactly one. Else the suggestion is new work,
+ * for a new issue.
+ */
+export function threadOf(suggestion: string, open: Thread[]): Thread | null {
+  const named = new Set(
+    [...suggestion.matchAll(/(?:^|[\s(,;:])#(\d{1,7})\b/g)].map((m) => Number(m[1])),
+  );
+  if (named.size !== 1) return null;
+  const [number] = named;
+  return open.find((t) => t.number === number) ?? null;
+}
+
+/**
+ * The chat message for a settled task: what happened, and what it would do
+ * next. A suggestion about an open thread is sent there; any other opens an
+ * issue.
+ */
+export function reportEntry(task: BotTask, id: string, at: string, open: Thread[] = []): Entry {
   const next = task.summary?.next ?? [];
-  const cards: Card[] = next.map((t) => ({
-    task: t,
-    title: t.length > 80 ? `${t.slice(0, 79)}…` : t,
-    at,
-  }));
+  const cards: Card[] = next.map((t) => {
+    const thread = threadOf(t, open);
+    return thread
+      ? { task: t, number: thread.number, at }
+      : { task: t, title: t.length > 80 ? `${t.slice(0, 79)}…` : t, at };
+  });
   return {
     id,
     role: "assistant",

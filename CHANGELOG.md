@@ -149,6 +149,11 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- A bot's suggestion about an open issue or pull request goes there. "Fix
+  #15: …" in a report or a look-over is a card that works on #15, with its
+  title, instead of opening a new issue that repeats it. A suggestion naming
+  no open thread, or several, still opens a new issue.
+  ([#76](https://github.com/Hankaws/aperture/pull/76))
 - The bot chat takes a few habits from Grok Bot. While it works, the status
   says what it is doing ("Thinking it through") and leaves its name off.
   Select text in the chat and press ⌘/Ctrl+L to quote it in the next message.

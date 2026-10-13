@@ -59,10 +59,15 @@ function persistCrew(ids: string[]) {
   }
 }
 
+export type Reveal = { path: string; line: number; col?: number; length?: number };
 export type MobilePane = "files" | "editor" | "agent";
 
 type IdeUiState = {
   sidebarOpen: boolean;
+  /** What the left sidebar shows: the file tree, or find and replace across files. */
+  sidebarView: "files" | "search";
+  /** Bumped to put the cursor in the Search view's box. */
+  searchFocusTick: number;
   chatOpen: boolean;
   commandOpen: boolean;
   helpOpen: boolean;
@@ -100,7 +105,8 @@ type IdeUiState = {
   lastCheck: { label: string; detail: string } | null;
   /** The last page element the user clicked in Design Mode. */
   lastElement: string | null;
-  reveal: { path: string; line: number } | null;
+  /** Where to put the cursor in a file: a line, or a match on it (`col`, `length`) to select. */
+  reveal: Reveal | null;
   findTick: number;
   steerQueue: string[];
   crewIds: string[];
@@ -135,7 +141,10 @@ type IdeUiState = {
   setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string; prompt?: string } | null) => void;
   setTabNote: (note: string | null) => void;
   setLastCheck: (check: { label: string; detail: string } | null) => void;
-  setReveal: (reveal: { path: string; line: number } | null) => void;
+  setReveal: (reveal: Reveal | null) => void;
+  setSidebarView: (view: "files" | "search") => void;
+  /** Opens the sidebar on Search with the cursor in its box. */
+  openSearch: () => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
   shiftSteer: () => string | undefined;
@@ -147,6 +156,8 @@ type IdeUiState = {
 
 export const useIdeUi = create<IdeUiState>((set) => ({
   sidebarOpen: true,
+  sidebarView: "files",
+  searchFocusTick: 0,
   chatOpen: true,
   commandOpen: false,
   helpOpen: false,
@@ -290,6 +301,9 @@ export const useIdeUi = create<IdeUiState>((set) => ({
     set((s) => (s.tabNote === note ? s : { tabNote: note })),
   setLastCheck: (check) => set({ lastCheck: check }),
   setReveal: (reveal) => set({ reveal }),
+  setSidebarView: (view) => set({ sidebarView: view }),
+  openSearch: () =>
+    set((s) => ({ sidebarOpen: true, sidebarView: "search", mobilePane: "files", searchFocusTick: s.searchFocusTick + 1 })),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),
   enqueueSteer: (text) =>
     set((s) => {

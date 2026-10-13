@@ -63,6 +63,7 @@ export function HelpDialog() {
 
   const rows = [
     [`${mod}P`, "Go to file"],
+    [`${mod}⇧F`, "Search and replace in every file"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

@@ -343,7 +343,10 @@ export function IdeShell() {
       }
       if (!isModEvent(e)) return;
       const key = e.key.toLowerCase();
-      if (key === "p") {
+      if (key === "f" && e.shiftKey) {
+        e.preventDefault();
+        useIdeUi.getState().openSearch();
+      } else if (key === "p") {
         e.preventDefault();
         setCommandOpen(true);
       } else if (key === "k") {

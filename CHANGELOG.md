@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Search across the project. Ctrl/⌘+Shift+F, or the search icon over the
+  files, opens Search in the sidebar: every match in every file, grouped by
+  file, with match case, whole word and regular expressions. A match opens
+  its file with the match selected. Replace works in one file or in all,
+  writes the files as an edit you can undo in one step, and leaves files
+  with a staged change alone. Ctrl/⌘+P still opens a file by name.
+  ([#79](https://github.com/Hankaws/aperture/pull/79))
 - Routines: a bot can look things over on its own. Pick "Look over" in a
   bot's standing jobs, every night or every Monday. On its schedule the bot
   reads CI on the default branch and the open issues and pull requests, and

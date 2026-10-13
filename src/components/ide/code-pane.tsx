@@ -550,13 +550,17 @@ export function CodePane() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !reveal || reveal.path !== activePath) return;
-    const line = Math.min(Math.max(1, reveal.line), view.state.doc.lines);
-    const pos = view.state.doc.line(line).from;
+    const line = view.state.doc.line(Math.min(Math.max(1, reveal.line), view.state.doc.lines));
+    // A search hit selects its match; a line alone puts the cursor at its start.
+    const from = Math.min(line.from + (reveal.col ?? 0), line.to);
+    const to = Math.min(from + (reveal.length ?? 0), line.to);
     view.dispatch({
-      selection: { anchor: pos },
-      effects: EditorView.scrollIntoView(pos, { y: "center" }),
+      selection: { anchor: from, head: to },
+      effects: EditorView.scrollIntoView(from, { y: "center" }),
       annotations: syncAnn.of(true),
     });
+    // A search hit hands over to the code, so typing edits the match.
+    if (reveal.length) view.focus();
     useIdeUi.getState().setReveal(null);
   }, [reveal, activePath]);
 

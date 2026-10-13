@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Search across the project. Ctrl/⌘+Shift+F, or the search icon over the
+  files, opens Search in the sidebar: every match in every file, grouped by
+  file, with match case, whole word and regular expressions. A match opens
+  its file with the match selected. Replace works in one file or in all,
+  writes the files as an edit you can undo in one step, and leaves files
+  with a staged change alone. Ctrl/⌘+P still opens a file by name.
+  ([#79](https://github.com/Hankaws/aperture/pull/79))
 - `/benchmark` counts a real repository, nestjs/nest, at `de2574e`
   (13 Oct 2026): 2,111 TypeScript files. The editor's compiler
   refuses it. Agent Check still reads it. Recount with

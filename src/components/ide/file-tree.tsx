@@ -8,6 +8,7 @@ import { useIdeUi } from "@/lib/ui-store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { Button } from "@/components/ui/button";
+import { SearchPanel } from "./search-panel";
 
 type TreeNode = {
   name: string;
@@ -221,10 +222,18 @@ export function FileTree() {
   const pendingKey = useWorkspace((s) => pendingPathKey(s.messages, s.activeCopyId));
   const pending = useMemo(() => new Set(pendingKey.split("|").filter(Boolean)), [pendingKey]);
   const setNewFileOpen = useIdeUi((s) => s.setNewFileOpen);
-  const setCommandOpen = useIdeUi((s) => s.setCommandOpen);
+  const openSearch = useIdeUi((s) => s.openSearch);
+  const view = useIdeUi((s) => s.sidebarView);
   const tree = useMemo(() => buildTree(files), [files]);
   const [dropOver, setDropOver] = useState(false);
   const count = files.length;
+
+  if (view === "search")
+    return (
+      <div className="file-tree h-full min-h-0">
+        <SearchPanel />
+      </div>
+    );
 
   return (
     <div
@@ -243,7 +252,7 @@ export function FileTree() {
       <div className="ide-chrome-row flex min-w-0 items-center gap-0.5 overflow-hidden border-b border-border px-1.5">
         <p className="min-w-0 flex-1 truncate px-1 text-[11px] font-medium text-subtle">Workspace</p>
         <div className="flex shrink-0 items-center">
-          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="Search files" title="Search files" onClick={() => setCommandOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="Search in files" title="Search in files (Ctrl/⌘+Shift+F)" onClick={openSearch}>
             <Search className="size-3.5" />
             <span className="md:hidden">Search</span>
           </Button>

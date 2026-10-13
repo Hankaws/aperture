@@ -160,6 +160,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const suggestions = name === DEMO_WORKSPACE_NAME ? DEMO_SUGGESTIONS : GENERIC_SUGGESTIONS;
   const source = target.kind === "model" ? target.source : account?.modelSource ?? "hosted";
   const replay = useIdeUi((s) => s.aiReplay);
+  // Recorded runs cost nothing, so on a replay deployment a signed-out visitor can send too.
+  const canSend = Boolean(user) || replay;
   const quote = replay ? replayQuote(quoteRun(account, source)) : quoteRun(account, source);
   const blocked = target.kind === "model" && quote.blocked;
   const acpBlocked = target.kind === "acp" && target.remote === false && quote.blocked;
@@ -295,7 +297,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   async function send(text: string, background = false, phase?: AgentPhase) {
     const captures = useIdeUi.getState().captures;
     const trimmed = text.trim() || (captures.length > 0 ? "Revise the captured element. Keep the rest of the page." : "");
-    if (!trimmed || !user) return;
+    if (!trimmed || !canSend) return;
     // A background run does not wait for the turn on screen: that is the point of it.
     if (background) {
       if (blocked || acpBlocked) return;
@@ -358,7 +360,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   }
 
   async function buildPlan(message: ChatMessage, workers?: WorkerSpec[]) {
-    if (agentRunning || !user || !message.plan?.length) return;
+    if (agentRunning || !canSend || !message.plan?.length) return;
     useWorkspace.getState().patchMessage(message.id, { awaitingBuild: false });
     await submitAgent("Build it.", "composer", workers?.[0]?.source ?? source, {
       agentId: workers?.length ? null : target.kind === "acp" ? target.id : null,
@@ -372,7 +374,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
   async function sendNotes(edits: ChatMessage["edits"]) {
     const body = formatDiffNotes(edits ?? []);
-    if (!body || agentRunning || !user) return;
+    if (!body || agentRunning || !canSend) return;
     if (blocked || acpBlocked) return;
     await submitAgent(body, "composer", source, {
       agentId: target.kind === "acp" ? target.id : null,
@@ -467,14 +469,14 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     useIdeUi.getState().setMobilePane("editor");
   }
 
-  const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !user || blocked || acpBlocked;
+  const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !canSend || blocked || acpBlocked;
   const autoPhase: AgentPhase =
     phaseHint === "awaiting" && isBuildIntent(draft) ? "build" : phaseHint === "edits" ? "skip" : "plan";
   const sendPhase: AgentPhase = mode === "composer" ? (phaseLock === "auto" ? autoPhase : phaseLock) : "plan";
   const sendLabel = mode === "chat" ? "Ask" : sendPhase === "build" ? "Build" : sendPhase === "skip" ? "Iterate" : "Plan";
 
   useEffect(() => {
-    if (agentRunning || !user) return;
+    if (agentRunning || !canSend) return;
     const next = useIdeUi.getState().steerQueue[0];
     if (!next) return;
     useIdeUi.getState().shiftSteer();
@@ -483,7 +485,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     // that changed its deps, so it never sees a stale one. Listing it would
     // re-fire on every render, and the head check above is what drains the queue.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentRunning, user, nextSteer]);
+  }, [agentRunning, canSend, nextSteer]);
 
   return (
     // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.
@@ -586,12 +588,12 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       </div>
 
       <PlanChrome
-        actDisabled={agentRunning || !user}
+        actDisabled={agentRunning || !canSend}
         account={account}
         source={source}
         crewIds={crewIds}
         fileList={fileList}
-        canRun={Boolean(user) && !agentRunning}
+        canRun={canSend && !agentRunning}
         onBuild={buildPlan}
         onSendNotes={sendNotes}
         onFocus={() => composerRef.current?.focus()}
@@ -606,7 +608,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         suggestions={suggestions}
         onPick={(text) => {
           setDraft(text);
-          if (user && !blocked && !acpBlocked) void send(text);
+          if (canSend && !blocked && !acpBlocked) void send(text);
         }}
         onBuild={buildPlan}
         onSendNotes={sendNotes}
@@ -771,7 +773,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
               acpRemote={target.kind === "acp" && target.remote}
             />
             <CrewBar account={account} />
-            {signedOut ? (
+            {signedOut && !replay ? (
               <div className="flex items-center gap-2">
                 <button
                   type="button"

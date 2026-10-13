@@ -6,28 +6,21 @@ export const Route = createFileRoute("/api/agent")({
     handlers: {
       POST: async ({ request }) => {
         const { assertSameSiteRequest } = await import("@/lib/auth/isolation.server");
-        const { requireUserId, UnauthorizedError } = await import("@/lib/auth/verify.server");
         try {
           assertSameSiteRequest();
         } catch {
           return new Response("Forbidden", { status: 403 });
         }
 
-        let userId: string;
-        try {
-          const header = request.headers.get("authorization");
-          const bearer = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-          userId = await requireUserId(bearer);
-        } catch (error) {
-          if (error instanceof UnauthorizedError || (error instanceof Error && error.message === "Unauthorized")) {
-            return Response.json({ error: "Unauthorized" }, { status: 401 });
-          }
-          throw error;
-        }
+        // Signed in, or signed out on a replay deployment (the public demo), where runs cost nothing.
+        const { agentCaller } = await import("@/lib/agent/public-demo.server");
+        const caller = await agentCaller(request);
+        if (!caller) return Response.json({ error: "Unauthorized" }, { status: 401 });
+        const { userId, signedOut } = caller;
 
         const { MAX_AGENT_BODY, sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
         const { overLimit } = await import("@/lib/security/rate-limit");
-        const busy = overLimit("composer", userId);
+        const busy = overLimit("composer", userId) ?? (signedOut ? overLimit("demo", "signed-out") : null);
         if (busy) return Response.json({ error: busy }, { status: 429 });
 
         const raw = await request.text();
@@ -43,6 +36,11 @@ export const Route = createFileRoute("/api/agent")({
         const input = sanitizeAgentInput(parsed);
         if ("error" in input) {
           return Response.json({ error: input.error }, { status: 400 });
+        }
+
+        // External agents run on their own accounts: they are for people who signed in.
+        if (signedOut && input.agentId) {
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         if (input.agentId) {
@@ -112,7 +110,7 @@ export const Route = createFileRoute("/api/agent")({
                     };
                   },
                 );
-                if (result.ok) {
+                if (result.ok && !signedOut) {
                   for (const bill of bills) {
                     await recordAgentRun(userId, bill.hosted, bill.cents);
                   }
@@ -139,6 +137,7 @@ export const Route = createFileRoute("/api/agent")({
           headers: {
             "Content-Type": "text/event-stream; charset=utf-8",
             "Cache-Control": "no-cache, no-transform",
+            ...(signedOut?.cookie ? { "Set-Cookie": signedOut.cookie } : {}),
           },
         });
       },

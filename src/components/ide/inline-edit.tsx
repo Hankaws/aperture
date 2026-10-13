@@ -8,7 +8,7 @@ import { useWorkspace } from "@/lib/workspace/store";
 import { submitAgent } from "@/lib/agent/run";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useAccount } from "@/lib/billing/use-account";
-import { quoteRun } from "@/lib/billing/cost";
+import { quoteRun, replayQuote } from "@/lib/billing/cost";
 import { cn } from "@/lib/utils";
 
 export function InlineEdit() {
@@ -19,7 +19,10 @@ export function InlineEdit() {
   const { user, isPending } = useCurrentUserState();
   const { account } = useAccount();
   const [draft, setDraft] = useState("");
-  const quote = quoteRun(account);
+  // Replay (the public demo) runs recorded answers: no cost, and no account needed.
+  const replay = useIdeUi((s) => s.aiReplay);
+  const canSend = Boolean(user) || replay;
+  const quote = replay ? replayQuote(quoteRun(account)) : quoteRun(account);
 
   if (!open) return null;
 
@@ -35,7 +38,7 @@ export function InlineEdit() {
         className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-3 shadow-[var(--shadow-float)]"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!draft.trim() || !user) return;
+          if (!draft.trim() || !canSend) return;
           setInlineOpen(false);
           const instruction = draft;
           setDraft("");
@@ -49,7 +52,7 @@ export function InlineEdit() {
             {selection ? `${selection.path}:${selection.fromLine}` : "current line"}
           </span>
         </div>
-        {!isPending && !user ? (
+        {!isPending && !canSend ? (
           <div className="px-1 py-2">
             <p className="text-sm text-muted">Sign in to edit with the agent.</p>
             <Link
@@ -81,7 +84,7 @@ export function InlineEdit() {
               <Button variant="ghost" size="sm" onClick={() => setInlineOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={!draft.trim() || agentRunning || !user || quote.blocked}>
+              <Button type="submit" size="sm" disabled={!draft.trim() || agentRunning || !canSend || quote.blocked}>
                 Generate
               </Button>
             </div>

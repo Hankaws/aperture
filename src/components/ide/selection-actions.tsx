@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { submitAgent } from "@/lib/agent/run";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useAccount } from "@/lib/billing/use-account";
-import { quoteRun } from "@/lib/billing/cost";
+import { quoteRun, replayQuote } from "@/lib/billing/cost";
 import { useIdeUi } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 import { hasCodeRange } from "@/lib/workspace/edits";
@@ -20,7 +20,9 @@ function useAssistActions() {
   const agentRunning = useWorkspace((s) => s.agentRunning);
   const { user } = useCurrentUserState();
   const { account, refresh } = useAccount();
-  const quote = quoteRun(account, account?.modelSource ?? "hosted");
+  const replay = useIdeUi((s) => s.aiReplay);
+  const base = quoteRun(account, account?.modelSource ?? "hosted");
+  const quote = replay ? replayQuote(base) : base;
   const ranged = hasCodeRange(selection);
 
   async function run(kind: "explain" | "fix" | "bugs") {
@@ -31,7 +33,7 @@ function useAssistActions() {
       });
       return;
     }
-    if (!user) {
+    if (!user && !replay) {
       toast.error("Sign in to run Composer.");
       return;
     }

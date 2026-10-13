@@ -382,10 +382,10 @@ export function IdeShell() {
   }, [setCommandOpen, setHelpOpen, setInlineOpen, toggleChat, toggleSidebar]);
 
   const aiReplay = useIdeUi((s) => s.aiReplay);
-  const aiLabel = !user
-    ? "Sign in"
-    : aiReplay
-      ? "Replay model"
+  const aiLabel = aiReplay
+    ? "Replay model"
+    : !user
+      ? "Sign in"
       : account
         ? modelCaption(account)
         : aiAvailable === false

@@ -23,6 +23,8 @@ export const LIMITS = {
   bot: 30,
   botAsk: 6,
   botChat: 12,
+  /** Replay runs from signed-out visitors, all together: they cost no model, only server time. */
+  demo: 60,
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -42,6 +44,7 @@ const WHAT: Record<LimitName, string> = {
   bot: "Bot page refreshes",
   botAsk: "asks to Aperture Bot",
   botChat: "messages to Aperture Bot",
+  demo: "demo runs from signed-out visitors",
 };
 
 const WINDOW_MS = 60_000;

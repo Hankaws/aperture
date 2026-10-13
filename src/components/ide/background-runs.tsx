@@ -143,6 +143,11 @@ export function BackgroundCard({ run }: { run: BackgroundRun }) {
         )}
         {run.fixed && <span>1 automatic fix</span>}
       </p>
+      {run.attempt && (run.checks ?? []).some((row) => row.status === "fail") && (
+        <p className="mt-2 text-[11px] leading-snug text-muted">
+          Attempt 1 is still here ({run.attempt.rows.map((row) => row.label).join(", ") || "red"}), and this fix did not clear it.
+        </p>
+      )}
       {run.checks && run.checks.length > 0 && !isLive(run) && (
         <div className="mt-2">
           <CheckDots rows={run.checks.filter((row) => row.status !== "skip")} />

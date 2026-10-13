@@ -77,7 +77,12 @@ local in-process database (PGlite), so nothing else needs setting up.
     compressed) loads the first time a Composer turn starts in a TypeScript
     project and is reused after that. If it cannot run (a project over 600
     TypeScript files, say), a lighter check that reads each file on its own
-    stands in, and the row says so.
+    stands in, and the row says so. A repository that size, or an older one
+    with years of files, belongs on Agent Check rather than in the browser
+    tab: it reads up to 5,000 files (50 MB) and typechecks up to 3,000 (30 MB)
+    on your runner, with the installed packages' real types. `/benchmark`
+    publishes both limits, including a 601-file project the editor refuses
+    and Agent Check still accepts.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
 
@@ -114,7 +119,12 @@ local in-process database (PGlite), so nothing else needs setting up.
     browser can run, the tests run in your tab after its turn, and the
     output goes straight back to it as the next turn. It can check a fix,
     see a failure and try again, at no cost, up to three runs per task.
-  - Projects that need a real Node can run in Vercel Sandbox instead.
+  - Projects that need a real Node can run in Vercel Sandbox instead. The
+    sandbox can reach only the package registries (`registry.npmjs.org`,
+    `*.npmjs.org`, `registry.yarnpkg.com`) and `codeload.github.com` for
+    tarballs an install downloads. It is given no secrets. A run that asks
+    for any other host, or for a token or key in its environment, does not
+    start until that run is explicitly approved.
 - **Hooks.** `.aperture/hooks.json` names project scripts that run by
   themselves, in the same sandboxed browser runner as the tests:
 

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HOOK_LIMIT, HOOKS_TEMPLATE, hooksFor, parseHooks } from "./hooks.ts";
+import { HOOK_LIMIT, HOOKS_PATH, HOOKS_TEMPLATE, hookRunCommand, hooksFor, parseHooks } from "./hooks.ts";
+import { mergeEdits } from "./preview-check.ts";
 import { changeChecks, checksReady, checkStripState, hookRow, lookFailures } from "./checks.ts";
 import type { ProposedEdit } from "./types.ts";
 
@@ -123,4 +124,26 @@ test("a red hook holds Apply and is sent back like any red check; a running one 
   );
   assert.equal(checksReady(null, null, null, running), false);
   assert.equal(checksReady(null, null, null, []), true);
+});
+
+test("a staged package.json rewrite is the command the hook row shows", () => {
+  const files = {
+    "package.json": JSON.stringify({ scripts: { "check:api": "node scripts/old.js" } }),
+    [HOOKS_PATH]: JSON.stringify([{ run: "check:api", name: "API rules", on: ["stage"], files: ["src/**"] }]),
+    "src/a.ts": "export const a = 1;\n",
+  };
+  const edits = [
+    edit("src/a.ts", "export const a = 2;\n"),
+    edit("package.json", JSON.stringify({ scripts: { "check:api": "node scripts/rewritten.js" } })),
+  ];
+  const hook = hooksFor(parseHooks(files[HOOKS_PATH]).hooks, "stage", edits.map((item) => item.path))[0];
+  assert.ok(hook);
+  const run = hookRunCommand(
+    { hook: hook!, state: "done" as const, passed: false, detail: "route lacks auth" },
+    mergeEdits(files, edits),
+  );
+  assert.equal(run.command, "node scripts/rewritten.js");
+  const row = hookRow(run);
+  assert.match(row.detail, /npm run check:api \(`node scripts\/rewritten\.js`\) fails in the browser: route lacks auth/);
+  assert.doesNotMatch(row.detail, /old\.js/);
 });

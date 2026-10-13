@@ -6,7 +6,7 @@ import { collectImports, resolveSpecifier } from "./module-graph.ts";
 import { isTsPath } from "./tsc-core.ts";
 
 /** A change to a widely used file still checks only this many of the files that depend on it. */
-const MAX_IMPORTERS = 40;
+export const MAX_IMPORTERS = 40;
 
 /**
  * The changed TypeScript files and what depends on them, nearest first: files

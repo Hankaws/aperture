@@ -65,6 +65,9 @@ export function applyAppearance(theme: EditorTheme, density: Density) {
   const root = document.documentElement;
   root.dataset.theme = resolveTheme(theme, prefersLight());
   root.dataset.density = density;
+  const shown = root.dataset.theme;
+  const color = document.querySelector('meta[name="theme-color"]');
+  if (color) color.setAttribute("content", shown === "light" ? "#fafafa" : shown === "claude" ? "#161412" : "#09090b");
   // `system` keeps following the OS while the page is open.
   stopFollowing?.();
   stopFollowing = null;
@@ -72,6 +75,8 @@ export function applyAppearance(theme: EditorTheme, density: Density) {
     const query = matchMedia(LIGHT_QUERY);
     const follow = () => {
       root.dataset.theme = resolveTheme("system", query.matches);
+      const color = document.querySelector('meta[name="theme-color"]');
+      if (color) color.setAttribute("content", root.dataset.theme === "light" ? "#fafafa" : "#09090b");
     };
     query.addEventListener("change", follow);
     stopFollowing = () => query.removeEventListener("change", follow);

@@ -14,7 +14,7 @@ import { runIdFor } from "@/lib/workspace/board";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
-import { HOOKS_PATH, hooksFor, parseHooks } from "@/lib/workspace/hooks";
+import { HOOKS_PATH, hookRunCommand, hooksFor, parseHooks } from "@/lib/workspace/hooks";
 import { runHooks } from "@/lib/workspace/hook-runner";
 import { planBrowserRun } from "@/lib/runner/plan";
 import { compareRuns } from "@/lib/runner/compare";
@@ -211,7 +211,7 @@ export async function checkInBackground(
     verify: verify ?? null,
     browser,
     tsc,
-    hooks: hookRuns,
+    hooks: hookRuns.map((run) => hookRunCommand(run, merged)),
   });
   const page = renderEntry(snapshot, edits, { runScripts: useIdeUi.getState().runPreviewScripts });
   return rows.map((row) =>
@@ -255,10 +255,17 @@ async function drive(
     // The same one look the foreground gets. A replay cannot write a new fix.
     if (lookFailures(rows).length > 0 && !useIdeUi.getState().aiReplay) {
       fixed = true;
+      const attempt = {
+        edits: edits.map((edit) => ({ path: edit.path, oldText: edit.oldText, newText: edit.newText })),
+        rows: rows
+          .filter((row) => row.status === "fail")
+          .map((row) => ({ id: row.id, label: row.label, detail: row.detail })),
+      };
       patch(id, {
         state: "fixing",
         checks: rows,
         fixed,
+        attempt,
         status: `${lookFailures(rows)[0]} Fixing it…`,
       });
       const second = await turn(
@@ -408,6 +415,9 @@ export function openBackgroundRun(id: string): OpenOutcome {
     ...(copyId ? { copyId } : {}),
   });
   if (copyId) ws.setActiveCopy(copyId);
+  if (run.attempt && (run.checks ?? []).some((row) => row.status === "fail")) {
+    useIdeUi.getState().setFailedAttempt(run.attempt);
+  }
   const first = rebased.edits[0];
   if (first) ws.openFile(first.path);
   useBackgroundRuns.setState((state) => ({ runs: state.runs.filter((item) => item.id !== id) }));

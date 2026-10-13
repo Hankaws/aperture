@@ -23,7 +23,7 @@ const ITEMS: Item[] = [
 export function SiteLinks() {
   const base = "shrink-0 text-sm text-muted hover:text-fg";
   return (
-    <nav className="hidden items-center gap-5 lg:flex" aria-label="Sections">
+    <nav className="hidden min-w-0 flex-1 items-center gap-5 overflow-x-auto lg:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Sections">
       {ITEMS.filter((item) => !item.menu).map((item) => {
         const className = item.wide ? `${base} hidden xl:inline` : base;
         return item.to ? (

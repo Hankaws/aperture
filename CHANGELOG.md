@@ -9,6 +9,22 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Checks now carry a verification id. It is a hash of the staged text, the
+  base it was written against, the package.json scripts, the lockfile,
+  `.aperture/hooks.json` and the verifier version. Apply recomputes it and
+  waits if any of those moved, including a staged edit that rewrites the
+  script a hook runs. The id is on the check strip.
+- A Vercel Sandbox run that would reach a host outside the package-registry
+  allowlist, or that would put a secret in the environment, does not start
+  until it is approved. The closed verify run is unchanged.
+- When a fix is sent back and comes back red, the check strip shows attempt
+  1 beside the fix: the red rows and the diff.
+- `/benchmark` states the large-repo limits: the editor's compiler stops
+  above 600 TypeScript files, Agent Check reads 5,000 files and typechecks
+  3,000, and a 601-file project is the worked example.
+- Agent Check can cache the base test result by commit (`baseline: cache`)
+  and reuse it while that commit stays the base. The default is still to
+  recompute.
 - Bots come back with suggestions. When a task you sent from a bot's chat
   finishes, the bot says so in the chat: the pull request it opened, a check
   that came back red, or where it stopped. Every finished run ends with up
@@ -150,6 +166,10 @@ release notes are every line from there down to the previous version.
   (`src/cart.ts`) links to that line on GitHub. The mascots' eyes are a little
   larger, and the roster's buttons are round. A reply that failed can be tried
   again. ([#66](https://github.com/Hankaws/aperture/pull/66))
+- The public site follows the theme you pick. The switch reads the page, the
+  browser chrome matches, and "Your agent can ask too" carries the aperture
+  mark with eyes. Search results scroll on a short window, and the nav no
+  longer jumps when "Open" replaces its placeholder.
 - With an Anthropic key, the editor's agent, the bot and its chat use
   Claude Opus 5.5 instead of Claude Sonnet 4.5, with room for its thinking
   and medium effort. A request Claude declines is retried on the model

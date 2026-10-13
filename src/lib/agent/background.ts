@@ -13,6 +13,7 @@
  */
 import { mergeThree } from "../workspace/merge3.ts";
 import type { ModelSource } from "../billing/plans.ts";
+import type { AttemptSnap } from "../workspace/attempt.ts";
 import type { CheckRow } from "../workspace/checks.ts";
 import type { ProposedEdit } from "../workspace/types.ts";
 
@@ -53,6 +54,8 @@ export type BackgroundRun = {
   checks: CheckRow[] | null;
   /** The one automatic fix was sent. */
   fixed: boolean;
+  /** Attempt 1, kept when that fix was sent. Shown if the fix is red too. */
+  attempt?: AttemptSnap;
   /** Tool calls made, for the card. */
   steps: number;
   error?: string;

@@ -3,6 +3,7 @@ import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { cn } from "@/lib/utils";
 import data from "@/lib/bench/results.json";
+import { SCALE } from "@/lib/bench/scale";
 import type { BenchResults, CaseResult } from "@/lib/bench/run";
 
 export const Route = createFileRoute("/benchmark")({ component: BenchmarkPage });
@@ -124,6 +125,28 @@ function BenchmarkPage() {
           light check cannot see: a wrong argument to a function from another file, a property that does not exist, a
           value that may be null, a status the type does not allow, a function returning the wrong type.
         </p>
+
+        <h2 className="mt-12 text-lg font-medium tracking-tight">Large repositories</h2>
+        <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
+          These four projects are small on purpose. A years-old repository is a different question, and the checks say
+          when they stop rather than pretending they finished.
+        </p>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">
+          <li>
+            In the editor the compiler stops above {SCALE.editorFiles.toLocaleString("en-US")} TypeScript files or{" "}
+            {SCALE.editorBytes / 1_000_000} MB. A project of {SCALE.probeFiles.toLocaleString("en-US")} files is refused,
+            and the Types row falls back to checking each changed file on its own. Dependents of a changed file are
+            capped at {SCALE.dependents}, and packages are typed <span className="font-mono text-fg">any</span> because
+            the editor has no <span className="font-mono text-fg">node_modules</span>.
+          </li>
+          <li>
+            That {SCALE.probeFiles.toLocaleString("en-US")}-file tree is inside Agent Check, which reads up to{" "}
+            {SCALE.agentFiles.toLocaleString("en-US")} files ({SCALE.agentBytes / 1_000_000} MB) and typechecks up to{" "}
+            {SCALE.agentTscFiles.toLocaleString("en-US")} ({SCALE.agentTscBytes / 1_000_000} MB) on your runner, with the
+            installed packages' real types. A repository past that is not checked, and the run says so instead of
+            passing. Point a large repo at Agent Check, not at a browser tab.
+          </li>
+        </ul>
 
         <h2 className="mt-12 text-lg font-medium tracking-tight">How it is measured</h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-pretty text-muted">

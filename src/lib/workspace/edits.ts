@@ -55,6 +55,19 @@ export function pendingByPath(messages: ChatMessage[]): ProposedEdit[] {
   return [...map.values()];
 }
 
+/** The edits the check strip is judging: one per path, on the copy on screen. */
+export function editsUnderCheck(messages: ChatMessage[], activeCopyId: string | null): ProposedEdit[] {
+  const visible = pendingForRun(listPendingEdits(messages), undefined, activeCopyId);
+  const ids = new Set(visible.map((edit) => edit.id));
+  const map = new Map<string, ProposedEdit>();
+  for (const message of messages) {
+    for (const edit of message.edits ?? []) {
+      if (ids.has(edit.id)) map.set(edit.path, edit);
+    }
+  }
+  return [...map.values()];
+}
+
 export function attachNotesToPending(
   messages: ChatMessage[],
   incoming: ProposedEdit[],

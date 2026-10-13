@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
@@ -9,6 +10,31 @@ const APP_NAME = "Aperture";
 const TITLE = "Aperture: an AI code editor that checks its own work";
 const DESCRIPTION =
   "Every staged change is checked before you apply it: it parses, its imports resolve, the TypeScript compiler passes, the preview renders, and the tests pass. The tests run free in your browser tab.";
+
+function ToastHost() {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  useEffect(() => {
+    const sync = () => setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  return (
+    <Toaster
+      theme={theme}
+      position="bottom-right"
+      toastOptions={{
+        className: "font-sans",
+        style: {
+          background: "var(--color-elevated)",
+          border: "1px solid var(--color-border)",
+          color: "var(--color-fg)",
+        },
+      }}
+    />
+  );
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -69,18 +95,7 @@ export const Route = createRootRoute({
         <PreviewHostBridge />
         <AuthProvider>
           <Outlet />
-          <Toaster
-            theme="dark"
-            position="bottom-right"
-            toastOptions={{
-              className: "font-sans",
-              style: {
-                background: "var(--color-elevated)",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-fg)",
-              },
-            }}
-          />
+          <ToastHost />
         </AuthProvider>
         <Scripts />
       </body>

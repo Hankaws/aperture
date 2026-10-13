@@ -43,6 +43,15 @@ const request = {
   timeoutMs: 60_000,
 };
 
+test("a secret in the environment does not start a sandbox", async () => {
+  const { log, create } = fakeSandbox([{ exitCode: 0, output: "ok" }]);
+  const outcome = await new VercelSandboxRunner(create).run({ ...request, env: { NPM_TOKEN: "secret" } });
+  assert.equal(outcome.ok, false);
+  if (outcome.ok) return;
+  assert.match(outcome.error, /NPM_TOKEN/);
+  assert.equal(log.created, 0);
+});
+
 test("writes the workspace, runs each step with the run's env, and stops the sandbox", async () => {
   const { log, create } = fakeSandbox([
     { exitCode: 0, output: "added 3 packages" },

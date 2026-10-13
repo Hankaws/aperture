@@ -7,7 +7,7 @@
  */
 import { planById, type PlanId } from "../billing/plans.ts";
 import { spendOwnerId } from "../auth/visitor.ts";
-import { clampTimeout, planRun, runnableScripts, sandboxEnv } from "./policy.ts";
+import { approvalForRun, clampTimeout, planRun, runnableScripts, SANDBOX_ALLOWED_DOMAINS, sandboxEnv } from "./policy.ts";
 import { formatOutcome, type RunOutcome, type SandboxRunner } from "./runner.ts";
 import type { WorkspaceFiles } from "../workspace/sync.ts";
 
@@ -40,6 +40,8 @@ export type RunContext = {
   runner: SandboxRunner | null;
   files: WorkspaceFiles;
   signal?: AbortSignal;
+  /** A person approved a run that would otherwise be refused. The closed env never needs it. */
+  approved?: boolean;
 };
 
 /**
@@ -55,6 +57,13 @@ export async function runScript(
 ): Promise<{ text: string; passed: boolean; counted: boolean; ran: boolean }> {
   const plan = planRun(ctx.files, script);
   if (!plan.ok) return { text: plan.error, passed: false, counted: false, ran: false };
+
+  const gateRun = approvalForRun({
+    env: sandboxEnv(),
+    network: SANDBOX_ALLOWED_DOMAINS,
+    approved: ctx.approved,
+  });
+  if (!gateRun.ok) return { text: gateRun.reason, passed: false, counted: false, ran: false };
 
   if (!ctx.runner) {
     return {

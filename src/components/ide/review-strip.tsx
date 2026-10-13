@@ -4,8 +4,8 @@ import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { basename, cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
-import { activeCopyOf, openCopyIds, pendingForRun } from "@/lib/workspace/copies";
-import { pendingByPath } from "@/lib/workspace/edits";
+import { activeCopyOf, openCopyIds } from "@/lib/workspace/copies";
+import { editsUnderCheck } from "@/lib/workspace/edits";
 import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { lineOfIssue } from "@/lib/editor/marks";
@@ -27,17 +27,10 @@ export function ReviewStrip() {
   const copies = useWorkspace((s) => s.copies);
   const activeCopyId = useWorkspace((s) => s.activeCopyId);
   const setActiveCopy = useWorkspace((s) => s.setActiveCopy);
-  const rows = useMemo(() => {
-    const visible = pendingForRun(
-      messages.flatMap((m) => m.edits ?? []),
-      undefined,
-      activeCopyId,
-    );
-    const ids = new Set(visible.map((edit) => edit.id));
-    return pendingByPath(
-      messages.map((m) => ({ ...m, edits: m.edits?.filter((edit) => ids.has(edit.id)) })),
-    );
-  }, [messages, activeCopyId]);
+  const rows = useMemo(
+    () => editsUnderCheck(messages, activeCopyId),
+    [messages, activeCopyId],
+  );
   const verify = useMemo(() => {
     const ids = new Set(rows.map((edit) => edit.id));
     for (let i = messages.length - 1; i >= 0; i -= 1) {

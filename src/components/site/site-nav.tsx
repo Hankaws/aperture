@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { applyAppearance, readDensity, readTheme } from "@/lib/appearance";
+import { applyAppearance, readDensity } from "@/lib/appearance";
 import { AuthSlot } from "./auth-slot";
 import { SiteSearch } from "./site-search";
 import { SiteLinks, SiteTabs } from "./site-tabs";
@@ -8,7 +8,11 @@ import { SiteLinks, SiteTabs } from "./site-tabs";
 function ThemeToggle() {
   const [light, setLight] = useState(false);
   useEffect(() => {
-    setLight(readTheme() === "light" || document.documentElement.dataset.theme === "light");
+    const sync = () => setLight(document.documentElement.dataset.theme === "light");
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
   }, []);
   return (
     <button
@@ -19,15 +23,15 @@ function ThemeToggle() {
       title="Dark mode"
       className="flex shrink-0 items-center gap-2 text-sm text-muted hover:text-fg"
       onClick={() => {
-        const next = light ? "cursor" : "light";
+        const next = document.documentElement.dataset.theme === "light" ? "cursor" : "light";
         applyAppearance(next, readDensity());
         setLight(next === "light");
       }}
     >
       Dark
-      <span className="relative h-5 w-9 overflow-hidden rounded-full border border-border bg-surface">
+      <span className={`relative h-5 w-9 rounded-full border border-border ${light ? "bg-elevated" : "bg-fg"}`}>
         <span
-          className={`absolute top-0.5 left-0.5 size-3.5 rounded-full bg-fg transition-transform duration-200 ${light ? "translate-x-0" : "translate-x-3.5"}`}
+          className={`absolute top-0.5 left-0.5 size-3.5 rounded-full transition-transform duration-200 ${light ? "translate-x-0 bg-fg" : "translate-x-3.5 bg-bg"}`}
         />
       </span>
     </button>
@@ -43,10 +47,10 @@ export function SiteNav({ overlay = false }: { overlay?: boolean }) {
         </Link>
         <SiteTabs />
         <SiteLinks />
-        <div className="ml-auto hidden md:block">
+        <div className="hidden shrink-0 md:block">
           <SiteSearch />
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-4 lg:ml-5">
+        <div className="ml-auto flex shrink-0 items-center gap-4 lg:ml-0">
           <ThemeToggle />
           <AuthSlot plain />
         </div>

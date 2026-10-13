@@ -14,6 +14,7 @@ import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
 import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
+import { takeAttempt } from "@/lib/workspace/attempt";
 import { startBackgroundRun } from "@/lib/agent/background-runner";
 import { BackgroundTray } from "./background-runs";
 import { clearStanding, readStanding, saveStanding, subscribeStanding } from "@/lib/workspace/lessons";
@@ -1013,6 +1014,8 @@ function PlanChrome({
       const hint = useIdeUi.getState().checkHint;
       const detail = hint?.detail ?? "A check failed.";
       const path = hint?.path;
+      const snap = takeAttempt();
+      if (snap && !useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(snap);
       if (path) useWorkspace.getState().openFile(path);
       useIdeUi.getState().setMobilePane("editor");
       void submitAgent("Fix the failing checks", "composer", source, {

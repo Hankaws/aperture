@@ -143,7 +143,7 @@ export function UserButton({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       {avatar}
-      <span className="hidden max-w-28 truncate text-sm font-medium lg:inline">{label}</span>
+      <span className="hidden max-w-28 truncate text-sm font-medium lg:inline-block">{label}</span>
       {authEnabled && !gateSession && (
         <button
           type="button"

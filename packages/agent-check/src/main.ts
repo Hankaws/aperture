@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import type { BrowserTests, CheckRow } from "../../../src/lib/workspace/checks.ts";
 import { staticChangeChecks } from "../../../src/lib/workspace/static-checks.ts";
+import { baseFromCacheOrRun, type BaselineMode } from "./baseline.ts";
 import { mergeBase, repoPrefix } from "./git.ts";
 import { installedFiles } from "./installed.ts";
 import { loadProject } from "./project.ts";
@@ -39,10 +40,17 @@ export type Options = {
   testRunner?: TestRunner;
   /** How the report says where `testRunner` ran them, e.g. "in a container with no network". */
   testsWhere?: string;
+  /**
+   * `recompute` runs the base every time. `cache` stores that result by base
+   * commit and script, and reuses it while the base stays put.
+   */
+  baseline: BaselineMode;
+  /** Where a cached baseline is written. Ignored when `baseline` is `recompute`. */
+  baselineDir: string;
 };
 
 /** The runner can afford a bigger project than a browser tab. */
-const RUNNER_TSC_LIMITS = { files: 3_000, bytes: 30_000_000, where: "on this runner" };
+export const RUNNER_TSC_LIMITS = { files: 3_000, bytes: 30_000_000, where: "on this runner" };
 
 function hereDir(): string {
   if (typeof __dirname === "string") return __dirname;
@@ -103,10 +111,13 @@ export function parseOptions(argv: string[], env: NodeJS.ProcessEnv): Options {
     throw new Error(`fail-on must be "red" or "never", not "${failOn}".`);
   const minutes = Number(flag(argv, "timeout-minutes") ?? input(env, "timeout-minutes") ?? 10);
   const testsInput = input(env, "run-tests");
+  const baseline = flag(argv, "baseline") ?? input(env, "baseline") ?? "recompute";
+  if (baseline !== "recompute" && baseline !== "cache") {
+    throw new Error(`baseline must be "recompute" or "cache", not "${baseline}".`);
+  }
+  const cwd = resolve(flag(argv, "cwd") ?? input(env, "working-directory") ?? env.GITHUB_WORKSPACE ?? process.cwd());
   return {
-    cwd: resolve(
-      flag(argv, "cwd") ?? input(env, "working-directory") ?? env.GITHUB_WORKSPACE ?? process.cwd(),
-    ),
+    cwd,
     base:
       flag(argv, "base") ??
       input(env, "base") ??
@@ -116,6 +127,8 @@ export function parseOptions(argv: string[], env: NodeJS.ProcessEnv): Options {
     testScript: flag(argv, "test-script") ?? input(env, "test-script") ?? "test",
     timeoutMs: (Number.isFinite(minutes) && minutes > 0 ? minutes : 10) * 60_000,
     failOn,
+    baseline,
+    baselineDir: resolve(flag(argv, "baseline-dir") ?? input(env, "baseline-dir") ?? join(cwd, ".aperture", "check-baseline")),
   };
 }
 
@@ -144,15 +157,12 @@ function testsFor(options: Options, rev: string): BrowserTests {
     where: options.testsWhere ?? "on this runner",
   };
   if (head.passed) return { ...done, passed: true, detail: "" };
-  const base = runTestsAtBase(
-    options.cwd,
-    rev,
-    options.testScript,
-    options.timeoutMs,
-    options.testRunner,
+  const base = baseFromCacheOrRun(options.baseline, options.baselineDir, rev, options.testScript, () =>
+    runTestsAtBase(options.cwd, rev, options.testScript, options.timeoutMs, options.testRunner),
   );
-  const preexisting = base !== null && base.ran && !base.passed;
-  return { ...done, passed: false, detail: head.detail, evidence: head.evidence, preexisting };
+  const preexisting = base.run !== null && base.run.ran && !base.run.passed;
+  const note = base.cached ? " Compared with a cached baseline for this base." : "";
+  return { ...done, passed: false, detail: `${head.detail}${note}`, evidence: head.evidence, preexisting };
 }
 
 export function check(options: Options): Result {

@@ -34,6 +34,8 @@ test("the run on /agent-check is what the tool prints today, tests and all", () 
     testScript: "test",
     timeoutMs: 120_000,
     failOn: "red",
+    baseline: "recompute",
+    baselineDir: join(dir, ".aperture", "check-baseline"),
   });
   const update =
     "the tool prints something else now: update RUN_EXAMPLE in packages/agent-check/src/run-example.ts";

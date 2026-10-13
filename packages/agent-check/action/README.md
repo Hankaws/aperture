@@ -42,6 +42,8 @@ Make it a required check in the branch's protection rules, and a red check block
 | `fail-on`           | `red`                   | `never` reports without failing the step.    |
 | `base`              | the pull request's base | Branch, tag or commit to compare against.    |
 | `working-directory` | repository root         | The project's folder in a monorepo.          |
+| `baseline`          | `recompute`             | `cache` stores the base test result by commit and reuses it while that commit stays the base. |
+| `baseline-dir`      | `.aperture/check-baseline` | Where the cache is written, when `baseline` is `cache`. |
 
 Output: `verdict`, `red` or `clear`.
 
@@ -56,6 +58,7 @@ Nothing. The checks run in this step: no token, no network, no account. Free.
 - It checks JavaScript and TypeScript (plus JSON, HTML and CSS for parsing). Other languages are listed as not checked.
 - Types uses the installed packages' real types when the dependencies are installed before the step (the `npm ci` above), so it reports what your own `tsc` would. Without them, packages are typed loosely and a mistake only a package's types would show is not caught.
 - A project over 5,000 files or 50 MB of source is not checked, and says so instead of passing.
+- The base tests run again on every check. Set `baseline: cache` to keep that result for the base commit, which is the per-branch option when the base is not moving. The default stays `recompute`.
 
 ## Badge
 

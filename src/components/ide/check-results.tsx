@@ -26,8 +26,10 @@ import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { TscCheck } from "@/lib/workspace/checks";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
-import { HOOKS_PATH, hooksFor, parseHooks, type HookRun } from "@/lib/workspace/hooks";
+import { HOOKS_PATH, hookRunCommand, hooksFor, parseHooks, type HookRun } from "@/lib/workspace/hooks";
 import { runHooks } from "@/lib/workspace/hook-runner";
+import { attemptDiff, noteStrip, secondTryFailed, takeAttempt } from "@/lib/workspace/attempt";
+import { verificationId } from "@/lib/workspace/verify-id";
 
 /** Long enough for a page's own scripts to settle; a page slower than this is a finding. */
 const RENDER_TIMEOUT_MS = 5000;
@@ -93,18 +95,6 @@ function useRenderCheck(files: Record<string, string>, edits: ProposedEdit[]) {
   return { result, frame };
 }
 
-// Files are keyed by identity: the store only replaces the object when a file changes.
-const fileVersions = new WeakMap<object, number>();
-let nextFileVersion = 0;
-function versionOf(files: Record<string, string>): number {
-  let version = fileVersions.get(files);
-  if (version === undefined) {
-    version = ++nextFileVersion;
-    fileVersions.set(files, version);
-  }
-  return version;
-}
-
 /**
  * Runs `npm run test` in the browser against the staged files, then, if it
  * fails, against the applied files too: a failure that was already there is
@@ -114,14 +104,13 @@ function versionOf(files: Record<string, string>): number {
 function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], verify: VerifyReport | null) {
   const ranInSandbox = verify?.status === "passed" || verify?.status === "failed";
   const touchesCode = edits.some((e) => isScriptPath(e.path) || /\.json$/i.test(e.path));
-  const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
   const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
+  const key = verificationId({ runtime: "browser", files, edits });
   const plan = useMemo(
     () => (touchesCode && !ranInSandbox ? planBrowserRun(merged) : null),
     [touchesCode, ranInSandbox, merged],
   );
   const [settled, setSettled] = useState<{ key: string; tests: BrowserTests; output: string } | null>(null);
-  const key = `${versionOf(files)}:${editsKey}`;
   const runnable = plan?.ok === true;
 
   useEffect(() => {
@@ -182,8 +171,7 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
     [edits],
   );
   const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
-  const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
-  const key = `${versionOf(files)}:${editsKey}`;
+  const key = verificationId({ runtime: "browser", files, edits });
   const wanted = tsPaths.length > 0;
   const [settled, setSettled] = useState<{ key: string; outcome: TscCheck } | null>(null);
 
@@ -234,8 +222,7 @@ function useStageHooks(files: Record<string, string>, edits: ProposedEdit[]): Ho
     [files, edits],
   );
   const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
-  const editsKey = useMemo(() => JSON.stringify(edits.map((e) => [e.path, e.newText])), [edits]);
-  const key = `${versionOf(files)}:${editsKey}:${hooks.map((hook) => `${hook.id}=${hook.name}`).join(",")}`;
+  const key = verificationId({ runtime: "browser", files, edits });
   const [settled, setSettled] = useState<{ key: string; runs: HookRun[] } | null>(null);
 
   useEffect(() => {
@@ -266,14 +253,15 @@ function useStageHooks(files: Record<string, string>, edits: ProposedEdit[]): Ho
 
   return useMemo(
     () =>
-      hooks.map(
-        (hook): HookRun =>
-          (settled?.key === key ? settled.runs.find((run) => run.hook.id === hook.id) : undefined) ?? {
+      hooks.map((hook): HookRun => {
+        const run: HookRun =
+          (settled?.key === key ? settled.runs.find((item) => item.hook.id === hook.id) : undefined) ?? {
             hook,
             state: "running",
-          },
-      ),
-    [hooks, settled, key],
+          };
+        return hookRunCommand(run, merged);
+      }),
+    [hooks, settled, key, merged],
   );
 }
 
@@ -354,6 +342,49 @@ function ChecksExplainer() {
   );
 }
 
+function AttemptPane({
+  title,
+  rows,
+  edits,
+}: {
+  title: string;
+  rows: Array<{ id: string; label: string; detail: string }>;
+  edits: Array<{ path: string; oldText: string; newText: string }>;
+}) {
+  return (
+    <div className="min-w-0 rounded-md border border-border bg-bg p-2">
+      <p className="text-[11px] font-medium text-fg">{title}</p>
+      {rows.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {rows.map((row) => (
+            <li key={row.id} className="truncate text-[11px] text-danger" title={row.detail}>
+              {row.label}: {row.detail}
+            </li>
+          ))}
+        </ul>
+      )}
+      {edits.slice(0, 3).map((edit) => {
+        const diff = attemptDiff(edit.oldText, edit.newText);
+        if (diff.lines.length === 0) return null;
+        return (
+          <pre key={edit.path} className="mt-1.5 overflow-auto font-mono text-[10px] leading-relaxed">
+            <span className="text-subtle">{edit.path}</span>
+            {"\n"}
+            {diff.lines.map((line, index) => (
+              <span key={index} className={line.type === "add" ? "text-ok" : "text-danger"}>
+                {line.type === "add" ? "+" : "−"}
+                {line.text}
+                {"\n"}
+              </span>
+            ))}
+            {diff.more > 0 ? <span className="text-subtle">… {diff.more} more lines{"\n"}</span> : null}
+          </pre>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CheckResults({
   files,
   edits,
@@ -379,16 +410,26 @@ export function CheckResults({
   const checkState = checkStripState(rows);
   const failedPath = failed?.path;
   const failedDetail = failed?.detail;
+  const liveId = verificationId({ runtime: "browser", files, edits });
+  const failedAttempt = useIdeUi((s) => s.failedAttempt);
+  const compare = secondTryFailed(failedAttempt, edits, Boolean(failed));
   // The fix prompt, evidence included, for Send back: the same words the automatic fix sends.
   const fixPrompt = failed ? lookPrompt(rows) : undefined;
   useEffect(() => {
+    noteStrip(edits, rows);
+  }, [edits, rows]);
+  useEffect(() => {
     useIdeUi.getState().setCheckHint(
       failed
-        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt }
-        : { state: checkState, path: failedPath },
+        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt, verificationId: liveId }
+        : { state: checkState, path: failedPath, verificationId: liveId },
     );
     return () => useIdeUi.getState().setCheckHint(null);
-  }, [checkState, failed, failedPath, failedDetail, fixPrompt]);
+  }, [checkState, failed, failedPath, failedDetail, fixPrompt, liveId]);
+  useEffect(() => {
+    if (checkState === "clear" && useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(null);
+  }, [checkState]);
+  useEffect(() => () => useIdeUi.getState().setFailedAttempt(null), []);
   const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
   const outputs = useMemo(() => {
     const byRow: Record<string, string> = {};
@@ -406,6 +447,8 @@ export function CheckResults({
     if (state.agentRunning) return;
     const message = pendingSource(state.messages);
     if (!shouldLookAgain(message, rows, Date.now(), { ready, replay: useIdeUi.getState().aiReplay })) return;
+    const snap = takeAttempt();
+    if (snap && !useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(snap);
     state.patchMessage(message!.id, { autoFixed: true });
     void submitAgent("The checks are red. Fixing them before you keep this.", "composer", message!.modelSource, {
       phase: "skip",
@@ -436,7 +479,16 @@ export function CheckResults({
             }
           />
         ))}
+        <li className="font-mono text-[10px] text-subtle" title="Verification id. Apply recomputes this and waits if the files moved.">
+          {liveId.slice(0, 8)}
+        </li>
       </ul>
+      {compare && failedAttempt && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2" aria-label="Attempt 1 and this fix">
+          <AttemptPane title="Attempt 1" rows={failedAttempt.rows} edits={failedAttempt.edits} />
+          <AttemptPane title="This fix" rows={rows.filter((row) => row.status === "fail")} edits={edits} />
+        </div>
+      )}
       <ChecksExplainer />
       {problem && (
         <p

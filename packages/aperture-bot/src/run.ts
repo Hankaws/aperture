@@ -225,6 +225,8 @@ export async function runTask(
       testScript: options.testScript,
       timeoutMs: options.timeoutMs,
       failOn: "red",
+      baseline: "recompute",
+      baselineDir: join(cwd, ".aperture", "check-baseline"),
       testRunner: sandbox ? asTestRunner(sandbox) : undefined,
       testsWhere: sandbox?.where,
     });

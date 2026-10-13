@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { DesignCapture } from "@/lib/workspace/design-mode";
 import type { JobRecord } from "@/lib/jobs/types";
 import { applyAppearance, readDensity, readTheme, type Density, type EditorTheme } from "@/lib/appearance";
+import type { AttemptSnap } from "@/lib/workspace/attempt";
 import {
   DEFAULT_LAYOUT_PREFS,
   LAYOUT_PREFS_KEY,
@@ -16,6 +17,15 @@ export type TscFindings = {
   after: Record<string, string[]>;
   before: Record<string, string[]>;
   parse?: Record<string, string[]>;
+};
+
+/** What the staged checks say. `verificationId` is what they judged; Apply recomputes it. */
+export type CheckHint = {
+  state: "running" | "clear" | "failed";
+  path?: string;
+  detail?: string;
+  prompt?: string;
+  verificationId?: string;
 };
 
 const CREW_KEY = "aperture-crew";
@@ -93,7 +103,9 @@ type IdeUiState = {
   density: Density;
   composerUnread: boolean;
   /** What the staged checks say, so Composer can suggest Apply or Open. */
-  checkHint: { state: "running" | "clear" | "failed"; path?: string; detail?: string; prompt?: string } | null;
+  checkHint: CheckHint | null;
+  /** Attempt 1, kept after Send back so a second red try can be shown beside it. */
+  failedAttempt: AttemptSnap | null;
   /** Why ghost text is not showing. Empty when a suggestion arrived or none was asked for. */
   tabNote: string | null;
   /** The last failing check the user opened. */
@@ -132,7 +144,8 @@ type IdeUiState = {
   setTheme: (theme: EditorTheme) => void;
   setDensity: (density: Density) => void;
   setComposerUnread: (on: boolean) => void;
-  setCheckHint: (hint: { state: "running" | "clear" | "failed"; path?: string; detail?: string; prompt?: string } | null) => void;
+  setCheckHint: (hint: CheckHint | null) => void;
+  setFailedAttempt: (attempt: AttemptSnap | null) => void;
   setTabNote: (note: string | null) => void;
   setLastCheck: (check: { label: string; detail: string } | null) => void;
   setReveal: (reveal: { path: string; line: number } | null) => void;
@@ -172,6 +185,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   density: "compact",
   composerUnread: false,
   checkHint: null,
+  failedAttempt: null,
   tabNote: null,
   lastCheck: null,
   lastElement: null,
@@ -281,11 +295,13 @@ export const useIdeUi = create<IdeUiState>((set) => ({
         s.checkHint?.state === hint?.state &&
         s.checkHint?.path === hint?.path &&
         s.checkHint?.detail === hint?.detail &&
-        s.checkHint?.prompt === hint?.prompt
+        s.checkHint?.prompt === hint?.prompt &&
+        s.checkHint?.verificationId === hint?.verificationId
       )
         return s;
       return { checkHint: hint };
     }),
+  setFailedAttempt: (attempt) => set((s) => (s.failedAttempt === attempt ? s : { failedAttempt: attempt })),
   setTabNote: (note) =>
     set((s) => (s.tabNote === note ? s : { tabNote: note })),
   setLastCheck: (check) => set({ lastCheck: check }),

@@ -348,7 +348,7 @@ function tamperedRow(row: CheckRow, tampering: string[]): CheckRow {
 export function hookRow(run: HookRun): CheckRow {
   const id: CheckId = `hook:${run.hook.id}`;
   const label = run.hook.name;
-  const command = `npm run ${run.hook.script}`;
+  const command = run.command ? `npm run ${run.hook.script} (\`${run.command}\`)` : `npm run ${run.hook.script}`;
   if (run.state === "running") return { id, label, status: "running", detail: `Running ${command} in the browser…` };
   if (run.state === "unsupported") return { id, label, status: "skip", detail: `Not run: ${run.reason}` };
   if (run.passed) return { id, label, status: "pass", detail: `${command} passed in the browser.` };

@@ -10,6 +10,8 @@ import {
   planRun,
   runnableScripts,
   sandboxEnv,
+  approvalForRun,
+  SANDBOX_ALLOWED_DOMAINS,
 } from "./policy.ts";
 
 const pkg = (scripts: Record<string, string>) => ({
@@ -78,6 +80,23 @@ test("the sandbox environment carries nothing secret", () => {
     assert.equal(blob.includes(leak), false, `sandbox env mentions ${leak}`);
   }
   assert.equal(env.CI, "1");
+  assert.equal(approvalForRun({ env, network: SANDBOX_ALLOWED_DOMAINS }).ok, true);
+});
+
+test("a secret or a host outside the registry allowlist needs approval", () => {
+  const closed = approvalForRun({ env: { NPM_TOKEN: "1" }, network: SANDBOX_ALLOWED_DOMAINS });
+  assert.equal(closed.ok, false);
+  assert.match(closed.ok ? "" : closed.reason, /NPM_TOKEN/);
+  const wider = approvalForRun({ env: sandboxEnv(), network: [...SANDBOX_ALLOWED_DOMAINS, "evil.example"] });
+  assert.equal(wider.ok, false);
+  assert.match(wider.ok ? "" : wider.reason, /evil\.example/);
+  assert.match(wider.ok ? "" : wider.reason, /registry\.npmjs\.org/);
+  const allowed = approvalForRun({
+    env: { NPM_TOKEN: "1" },
+    network: [...SANDBOX_ALLOWED_DOMAINS, "evil.example"],
+    approved: true,
+  });
+  assert.equal(allowed.ok, true);
 });
 
 test("timeouts are clamped into a billable range", () => {

@@ -15,20 +15,10 @@
  * running is unavailable, so a missing setup degrades rather than breaks.
  */
 import { env } from "../env.server.ts";
+import { approvalForRun, SANDBOX_ALLOWED_DOMAINS } from "./policy.ts";
 import { clipOutput, type RunOutcome, type RunRequest, type SandboxRunner, type StepResult } from "./runner.ts";
 
-/**
- * Package registries only. Installs work; the code under test (which the agent
- * may have written) cannot reach anything else. The sandbox holds no secrets
- * either (see `sandboxEnv`), so this narrows exfiltration and abuse, not a
- * last line of defence.
- */
-export const SANDBOX_ALLOWED_DOMAINS = [
-  "registry.npmjs.org",
-  "*.npmjs.org",
-  "registry.yarnpkg.com",
-  "codeload.github.com",
-];
+export { SANDBOX_ALLOWED_DOMAINS } from "./policy.ts";
 
 /** Extra time for the sandbox itself (boot, writing files) beyond the run's own budget. */
 const SETUP_MS = 60_000;
@@ -119,6 +109,12 @@ export class VercelSandboxRunner implements SandboxRunner {
   }
 
   async run(request: RunRequest): Promise<RunOutcome> {
+    const gate = approvalForRun({
+      env: request.env,
+      network: SANDBOX_ALLOWED_DOMAINS,
+      approved: request.approved,
+    });
+    if (!gate.ok) return { ok: false, error: gate.reason };
     // Starting a sandbox bills even if it is stopped at once.
     if (request.signal?.aborted) return { ok: false, error: "Run cancelled." };
     const started = Date.now();

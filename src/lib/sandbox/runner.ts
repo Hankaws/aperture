@@ -27,6 +27,8 @@ export type RunRequest = {
   env: Record<string, string>;
   timeoutMs: number;
   signal?: AbortSignal;
+  /** Set when a person approved a run that leaves the registry allowlist or carries a secret. */
+  approved?: boolean;
 };
 
 export interface SandboxRunner {

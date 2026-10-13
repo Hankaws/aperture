@@ -106,7 +106,7 @@ export function SiteSearch() {
         />
       </label>
       {open && (
-        <ul className="absolute top-10 right-0 z-40 w-72 overflow-hidden rounded-xl border border-border bg-bg py-1 shadow-[var(--shadow-float)]" role="listbox">
+        <ul className="absolute top-10 right-0 z-40 max-h-[min(24rem,calc(100dvh-4.5rem))] w-72 overflow-y-auto rounded-xl border border-border bg-bg py-1 shadow-[var(--shadow-float)]" role="listbox">
           {items.length === 0 ? (
             <li className="px-3 py-2 text-sm text-subtle">Nothing matches.</li>
           ) : (

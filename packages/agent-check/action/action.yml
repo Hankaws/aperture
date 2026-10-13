@@ -27,6 +27,13 @@ inputs:
   working-directory:
     description: The project's folder, when it is not the repository root.
     required: false
+  baseline:
+    description: '"recompute" runs the base tests every time. "cache" stores them by base commit and reuses them while that commit stays the base.'
+    required: false
+    default: recompute
+  baseline-dir:
+    description: Where a cached baseline is written. Ignored when baseline is recompute.
+    required: false
 outputs:
   verdict:
     description: '"red" or "clear".'

@@ -114,6 +114,27 @@ export function hookMatches(hook: Hook, path: string): boolean {
   return hook.files.length === 0 || hook.files.some((glob) => globMatches(glob, path));
 }
 
+/** The command `npm run <script>` will execute, from this package.json. */
+export function hookScriptBody(files: Record<string, string>, script: string): string | null {
+  const raw = files["package.json"];
+  if (!raw) return null;
+  try {
+    const body = (JSON.parse(raw) as { scripts?: Record<string, unknown> }).scripts?.[script];
+    return typeof body === "string" && body.trim() ? body.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stamp a hook run with the script body the staged package.json would run. */
+export function hookRunCommand<T extends { hook: Hook }>(
+  run: T,
+  files: Record<string, string>,
+): T & { command?: string } {
+  const command = hookScriptBody(files, run.hook.script);
+  return command ? { ...run, command } : run;
+}
+
 /**
  * The hooks to run for this event and these files. A staged change already
  * runs `npm run test` as the Tests row, so a stage hook for `test` would only
@@ -130,8 +151,8 @@ export function hooksFor(hooks: Hook[], event: HookEvent, paths: string[]): Hook
 
 /** One hook's run, as the strip and the status bar show it. */
 export type HookRun =
-  | { hook: Hook; state: "running" }
-  | { hook: Hook; state: "unsupported"; reason: string }
+  | { hook: Hook; state: "running"; command?: string }
+  | { hook: Hook; state: "unsupported"; reason: string; command?: string }
   | {
       hook: Hook;
       state: "done";
@@ -143,4 +164,6 @@ export type HookRun =
       output?: string;
       /** What failed in full, for a fix (see runner/stack.ts). */
       evidence?: string;
+      /** The package.json script body this run actually executes, when it is known. */
+      command?: string;
     };

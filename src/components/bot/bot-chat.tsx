@@ -323,112 +323,112 @@ export function BotChat({
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div ref={thread} className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
-          {entries.length === 0 && !busy && (
-            <div className="flex flex-col items-center px-2 py-6 text-center">
-              <MascotAvatar mascot={bot.mascot} mood={mood} size={72} />
-              <p className="mt-4 text-lg font-medium text-balance">Hi, I&apos;m {bot.name}.</p>
-              <p className="mt-1 max-w-md text-sm text-pretty text-muted">
-                I look after <span className="font-mono text-xs">{repo}</span>: I read its issues,
-                pull requests and CI, and suggest tasks. Nothing reaches GitHub until you send it.
+        {entries.length === 0 && !busy && (
+          <div className="flex flex-col items-center px-2 py-6 text-center">
+            <MascotAvatar mascot={bot.mascot} mood={mood} size={72} />
+            <p className="mt-4 text-lg font-medium text-balance">Hi, I&apos;m {bot.name}.</p>
+            <p className="mt-1 max-w-md text-sm text-pretty text-muted">
+              I look after <span className="font-mono text-xs">{repo}</span>: I read its issues,
+              pull requests and CI, and suggest tasks. Nothing reaches GitHub until you send it.
+            </p>
+            {intro ?? (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void send(s)}
+                    className="h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {entries.map((entry, at) =>
+          entry.role === "user" ? (
+            <div key={entry.id} className="flex justify-end">
+              <p
+                className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+                style={{
+                  background: `color-mix(in srgb, ${MASCOT_COLORS[bot.mascot.color]} 36%, var(--color-elevated))`,
+                }}
+              >
+                {entry.text}
               </p>
-              {intro ?? (
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => void send(s)}
-                      className="h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-          )}
-
-          {entries.map((entry, at) =>
-            entry.role === "user" ? (
-              <div key={entry.id} className="flex justify-end">
-                <p
-                  className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
-                  style={{
-                    background: `color-mix(in srgb, ${MASCOT_COLORS[bot.mascot.color]} 36%, var(--color-elevated))`,
-                  }}
-                >
-                  {entry.text}
-                </p>
-              </div>
-            ) : (
-              <div key={entry.id} className="flex gap-3">
-                <MascotAvatar mascot={bot.mascot} size={28} className="mt-0.5" />
-                <div className="min-w-0 flex-1 space-y-3">
-                  {entry.error ? (
-                    <div className="space-y-2">
-                      <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {entry.text}{" "}
-                        {/key|endpoint|Settings/i.test(entry.text) && (
-                          <Link to="/settings" search={{ tab: "models" }} className="underline">
-                            Open Settings
-                          </Link>
-                        )}
-                      </p>
-                      {askedBefore(entries, at) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const again = askedBefore(entries, at);
-                            if (again) void send(again);
-                          }}
-                          className="text-xs font-medium text-accent hover:underline"
-                        >
-                          Try again
-                        </button>
+          ) : (
+            <div key={entry.id} className="flex gap-3">
+              <MascotAvatar mascot={bot.mascot} size={28} className="mt-0.5" />
+              <div className="min-w-0 flex-1 space-y-3">
+                {entry.error ? (
+                  <div className="space-y-2">
+                    <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {entry.text}{" "}
+                      {/key|endpoint|Settings/i.test(entry.text) && (
+                        <Link to="/settings" search={{ tab: "models" }} className="underline">
+                          Open Settings
+                        </Link>
                       )}
-                    </div>
-                  ) : (
-                    <Reply
-                      text={entry.text}
-                      open={setup.open}
-                      repo={repo}
-                      branch={setup.defaultBranch}
-                    />
-                  )}
-                  {entry.looked && entry.looked.length > 0 && (
-                    <p className="text-xs text-subtle">
-                      Looked at {[...new Set(entry.looked)].join(" · ")}
                     </p>
-                  )}
-                  {entry.cards?.map((card, i) =>
-                    card.dismissed ? null : (
-                      <ProposalCard
-                        key={i}
-                        card={card}
-                        bot={bot.name}
-                        allow={bot.allow}
-                        asked={entry.report ? null : askedBefore(entries, at)}
-                        onEditRule={onEditRule}
-                        owner={owner}
-                        name={name}
-                        setup={setup}
-                        task={taskFor(card, tasks)}
-                        now={now}
-                        onSent={(sent) => {
-                          setCard(entry.id, i, { sent });
-                          onSent();
+                    {askedBefore(entries, at) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const again = askedBefore(entries, at);
+                          if (again) void send(again);
                         }}
-                        onDismiss={() => setCard(entry.id, i, { dismissed: true })}
-                      />
-                    ),
-                  )}
-                </div>
+                        className="text-xs font-medium text-accent hover:underline"
+                      >
+                        Try again
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <Reply
+                    text={entry.text}
+                    open={setup.open}
+                    repo={repo}
+                    branch={setup.defaultBranch}
+                  />
+                )}
+                {entry.looked && entry.looked.length > 0 && (
+                  <p className="text-xs text-subtle">
+                    Looked at {[...new Set(entry.looked)].join(" · ")}
+                  </p>
+                )}
+                {entry.cards?.map((card, i) =>
+                  card.dismissed ? null : (
+                    <ProposalCard
+                      key={i}
+                      card={card}
+                      bot={bot.name}
+                      allow={bot.allow}
+                      asked={entry.report ? null : askedBefore(entries, at)}
+                      onEditRule={onEditRule}
+                      owner={owner}
+                      name={name}
+                      setup={setup}
+                      task={taskFor(card, tasks)}
+                      now={now}
+                      onSent={(sent) => {
+                        setCard(entry.id, i, { sent });
+                        onSent();
+                      }}
+                      onDismiss={() => setCard(entry.id, i, { dismissed: true })}
+                    />
+                  ),
+                )}
               </div>
-            ),
-          )}
+            </div>
+          ),
+        )}
 
-          {busy && <Thinking mascot={bot.mascot} />}
-          <div ref={end} />
+        {busy && <Thinking mascot={bot.mascot} />}
+        <div ref={end} />
         </div>
       </div>
 
@@ -440,37 +440,37 @@ export function BotChat({
         }}
       >
         <div className="mx-auto w-full max-w-3xl">
-          <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
-            <Textarea
-              ref={box}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  void send(draft);
-                }
-              }}
-              rows={1}
-              maxLength={6000}
-              placeholder={`Message ${bot.name}`}
-              aria-label={`Message to ${bot.name}`}
-              className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={busy || !draft.trim()}
-              aria-label="Send"
-              className="shrink-0 rounded-full"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
-          </div>
-          <p className="mt-2 px-1 text-xs text-subtle">
-            Uses your model key from Settings. Enter sends, Shift+Enter adds a line. ⌘/Ctrl+L quotes
-            selected text.
-          </p>
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
+          <Textarea
+            ref={box}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void send(draft);
+              }
+            }}
+            rows={1}
+            maxLength={6000}
+            placeholder={`Message ${bot.name}`}
+            aria-label={`Message to ${bot.name}`}
+            className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={busy || !draft.trim()}
+            aria-label="Send"
+            className="shrink-0 rounded-full"
+          >
+            <ArrowUp className="size-4" />
+          </Button>
+        </div>
+        <p className="mt-2 px-1 text-xs text-subtle">
+          Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
+          ⌘/Ctrl+L quotes selected text.
+        </p>
         </div>
       </form>
     </section>
@@ -516,7 +516,15 @@ function FileBits({ text, repo, branch }: { text: string; repo: string; branch: 
   );
 }
 
-function FileLink({ repo, branch, file }: { repo: string; branch: string; file: FileRef }) {
+function FileLink({
+  repo,
+  branch,
+  file,
+}: {
+  repo: string;
+  branch: string;
+  file: FileRef;
+}) {
   const clean = file.path.replace(/^\.\//, "");
   const safeBranch = branch.split("/").map(encodeURIComponent).join("/");
   const path = clean

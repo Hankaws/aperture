@@ -336,6 +336,14 @@ would fail every project. The compiler is warmed when a Composer turn starts
 (`warmTypecheck` in `run.ts`). The light check (`type-check.ts`) still runs in
 the agent's own turn on the server and stands in when tsc cannot run.
 
+The same worker answers the editor (`ts-service.ts`, TypeScript's language
+service on the same options, libraries and shim): hover a name for its type
+and docs, F12 or Ctrl/⌘+click to go to its definition (`ts-intel.ts`, after
+`gotoImport` so an import path still opens its file). `tsc.ts` sends the
+project's TypeScript files only when the store's `files` object changes, and
+each question carries the open file's text. The first question loads the
+compiler, so the hover says "Loading TypeScript…" until it answers.
+
 ## The agent loop runs in two places
 
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from

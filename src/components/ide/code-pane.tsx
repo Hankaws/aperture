@@ -24,6 +24,7 @@ import { applyHeldBecause } from "@/lib/workspace/checks";
 import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark, shownMarks } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
+import { tsIntel } from "@/lib/editor/ts-intel";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { ED, SYN } from "@/lib/editor/theme";
 import { clampSession, loadSession, saveSession } from "@/lib/editor/session";
@@ -278,6 +279,15 @@ export function CodePane() {
             () => pathRef.current,
             () => useWorkspace.getState().files,
             (path) => useWorkspace.getState().openFile(path),
+          ),
+          tsIntel(
+            () => pathRef.current,
+            () => useWorkspace.getState().files,
+            (target) => {
+              useWorkspace.getState().openFile(target.path);
+              useIdeUi.getState().setReveal(target);
+            },
+            (message) => toast.info(message, { id: "ts-definition" }),
           ),
           keymap.of([
             ...closeBracketsKeymap,

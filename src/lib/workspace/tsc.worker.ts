@@ -4,9 +4,12 @@
  * megabytes, so nobody who never edits TypeScript downloads them.
  *
  * The compiler only parses and type-checks: no project code runs here.
+ * The same worker answers the editor's questions (hover, go to definition)
+ * from TypeScript's language service, so the compiler is downloaded once.
  */
 import ts from "typescript";
 import { checkProject, compilerOptions, loadLibFiles, type TscCache, type TscResult } from "./tsc-core";
+import { createTsService, serviceUnavailable, type DefinitionResult, type HoverInfo, type TsService } from "./ts-service";
 
 /** Load the compiler's library files and parse them, so the first real check is quick. */
 export type TscWarm = { type: "warm"; files: Record<string, string> };
@@ -20,6 +23,17 @@ export type TscRequest = {
   before: Record<string, string>;
   paths: string[];
 };
+
+/** The project's TypeScript files as the editor has them now; sent only when they change. */
+export type TsFiles = { type: "files"; files: Record<string, string> };
+
+/** A question about the name at `offset` in `path`, whose text is `text` (the editor's, unsaved typing included). */
+export type TsAsk = { type: "hover" | "definition"; id: number; path: string; text: string; offset: number };
+
+export type TsAnswer =
+  | { id: number; hover: HoverInfo | null }
+  | { id: number; definition: DefinitionResult }
+  | { id: number; unavailable: string };
 
 export type TscReply =
   | {
@@ -45,7 +59,35 @@ function loadLibs(options: ts.CompilerOptions): Promise<Map<string, string>> {
   return loadLibFiles(ts, options, libTexts, (name) => libLoaders[`${LIB_PREFIX}${name}`]);
 }
 
-self.onmessage = async (event: MessageEvent<TscRequest | TscWarm>) => {
+let projectFiles: Record<string, string> = {};
+let service: TsService | null = null;
+
+async function answer(ask: TsAsk): Promise<TsAnswer> {
+  const files = { ...projectFiles, [ask.path]: ask.text };
+  const tooBig = serviceUnavailable(files);
+  if (tooBig) return { id: ask.id, unavailable: tooBig };
+  const options = compilerOptions(ts, files);
+  service ??= createTsService(ts);
+  service.update(files, await loadLibs(options), options);
+  return ask.type === "hover"
+    ? { id: ask.id, hover: service.hover(ask.path, ask.offset) }
+    : { id: ask.id, definition: service.definition(ask.path, ask.offset) };
+}
+
+self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsAsk>) => {
+  if (event.data.type === "files") {
+    projectFiles = event.data.files;
+    return;
+  }
+  if (event.data.type === "hover" || event.data.type === "definition") {
+    const ask = event.data;
+    try {
+      self.postMessage(await answer(ask) satisfies TsAnswer);
+    } catch (error) {
+      self.postMessage({ id: ask.id, unavailable: error instanceof Error ? error.message : "The compiler failed." } satisfies TsAnswer);
+    }
+    return;
+  }
   if (event.data.type === "warm") {
     try {
       const options = compilerOptions(ts, event.data.files);
@@ -55,7 +97,8 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm>) => {
     }
     return;
   }
-  const { id, after, before, paths } = event.data;
+  // Every other kind of message has returned above.
+  const { id, after, before, paths } = event.data as TscRequest;
   const started = performance.now();
   try {
     const afterOptions = compilerOptions(ts, after);

@@ -247,6 +247,13 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- The unsaved dot means what it says. Ctrl/⌘+S showed "Saved" but left the
+  dot on the file and the count in the status bar until a reload, and
+  applying a change marked its file unsaved. Now Ctrl/⌘+S runs the file's
+  save hooks and clears its dot, and Apply counts as the save, since the
+  change already ran its checks. The dot's tooltip says your work is kept in
+  this browser either way.
+  ([#81](https://github.com/Hankaws/aperture/pull/81))
 - When the model plans without a word, the bot's reply no longer quotes the
   editor's "Click Build it" as what the agent said.
   ([#64](https://github.com/Hankaws/aperture/pull/64))

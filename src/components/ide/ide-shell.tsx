@@ -372,7 +372,9 @@ export function IdeShell() {
       } else if (key === "s") {
         e.preventDefault();
         toast.success("Saved", { id: "workspace-saved" });
-        void runSaveHooks(useWorkspace.getState().activePath);
+        const saved = useWorkspace.getState().activePath;
+        void runSaveHooks(saved);
+        if (saved) useWorkspace.getState().markSaved([saved]);
       }
     }
     window.addEventListener("keydown", onKey);

@@ -82,7 +82,10 @@ local in-process database (PGlite), so nothing else needs setting up.
     tab: it reads up to 5,000 files (50 MB) and typechecks up to 3,000 (30 MB)
     on your runner, with the installed packages' real types. `/benchmark`
     publishes both limits, including a 601-file project the editor refuses
-    and Agent Check still accepts.
+    and Agent Check still accepts. Counted the same way, nestjs/nest at
+    [`de2574e`](https://github.com/nestjs/nest/commit/de2574ef7c91ddd220bac38f767cff5a7612fd99)
+    (13 Oct 2026) is 2,111 TypeScript files: the editor refuses it and Agent
+    Check still reads it. `/benchmark` has the count.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
 
@@ -95,6 +98,11 @@ local in-process database (PGlite), so nothing else needs setting up.
   - a failing test's message and its stack, mapped back to your files and
     lines;
   - the code around the line where it broke.
+
+  A second try that is still red is not applied. The replay demo shows it:
+  ask Composer to make `listTasks` return a number, Send back, and the change
+  stops. A clip of that is
+  [`public/caught-a-bad-change.webm`](public/caught-a-bad-change.webm).
 
   The live preview's script errors are shown at the line of your script
   file that threw, and every Composer turn is told about them.

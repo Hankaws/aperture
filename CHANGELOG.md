@@ -9,6 +9,16 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- `/benchmark` counts a real repository, nestjs/nest, at `de2574e`
+  (13 Oct 2026): 2,111 TypeScript files. The editor's compiler
+  refuses it. Agent Check still reads it. Recount with
+  `node scripts/measure-large-repo.mjs`.
+  ([#78](https://github.com/Hankaws/aperture/pull/78))
+- The replay demo can show a caught failed fix. Ask Composer to make
+  `listTasks` return a number: the checks go red, Send back stages a second
+  try that is still red, and nothing is applied. A clip of that is
+  `public/caught-a-bad-change.webm`.
+  ([#78](https://github.com/Hankaws/aperture/pull/78))
 - Checks now carry a verification id. It is a hash of the staged text, the
   base it was written against, the package.json scripts, the lockfile,
   `.aperture/hooks.json` and the verifier version. Apply recomputes it and

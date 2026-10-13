@@ -97,6 +97,7 @@ test("the three suggested prompts each pick their own tape", () => {
     ["Fix the off-by-one in listTasks", "list-off-by-one"],
     ["Return 404 from getTask when the id is missing", "get-task-404"],
     ["Reject titles longer than 80 characters", "title-length"],
+    ["Make listTasks return a number", "list-bad-return"],
   ] as const;
   for (const [prompt, id] of prompts) {
     const tape = findTape([
@@ -179,6 +180,19 @@ test("the build tape is still found when the instruction is just 'Build it'", ()
   assert.deepEqual(run.staged, ["src/lib/validate.ts"]);
 });
 
+test("Build it keeps the bad-return tape when the approved plan mentions listTasks", () => {
+  const tape = TAPES.find((t) => t.id === "list-bad-return")!;
+  const run = runTurn(`Build it\n\nApproved plan:\n1. Change the return of listTasks in src/store.ts to a number`, BUILD_TOOLS, {
+    plan: tape.plan,
+    history: [
+      { role: "user", content: tape.title },
+      { role: "assistant", content: tape.planText },
+    ],
+  });
+  assert.match(run.files["src/store.ts"]!, /return 1;/);
+  assert.doesNotMatch(run.files["src/store.ts"]!, /tasks\.slice\(start, start \+ pageSize\)/);
+});
+
 test("edits that no longer match the files are reported, never faked", () => {
   const files = { ...DEMO_FILES, "src/store.ts": "export function listTasks() { return []; }\n" };
   const run = runTurn("Fix the off-by-one in listTasks", BUILD_TOOLS, { plan: ["fix"], files });
@@ -200,6 +214,35 @@ test("a failed verify run is reported as a failure, not as success", () => {
   assert.match(reply.content, /do not pass `npm run test`: Error: first item should be tsk_100/);
   assert.match(reply.content, /can't write a new fix/);
   assert.doesNotMatch(reply.content, /\bpass(ed|es)\b/i);
+});
+
+test("a red check sent back plays one worse try, then stops without applying", () => {
+  const tape = TAPES.find((t) => t.id === "list-bad-return")!;
+  const first = runTurn(tape.title, BUILD_TOOLS, { plan: tape.plan });
+  assert.deepEqual(first.staged, ["src/store.ts"]);
+  assert.match(first.files["src/store.ts"]!, /return 1;/);
+  first.messages.push({ role: "assistant", content: first.text });
+  first.messages.push({
+    role: "user",
+    content:
+      "Types: Type 'number' is not assignable to type 'Task[]'.\n\nFix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.",
+  });
+  const second = replayCompletion(first.messages, BUILD_TOOLS);
+  const call = second.tool_calls?.[0];
+  assert.equal(call?.function.name, "propose_edit");
+  const args = JSON.parse(call!.function.arguments) as { replace: string };
+  assert.match(args.replace, /return "none"/);
+  first.messages.push({ role: "assistant", content: "", tool_calls: second.tool_calls });
+  first.messages.push({
+    role: "tool",
+    tool_call_id: call!.id,
+    content: "Edit staged for src/store.ts. The user must accept it in the UI.",
+  });
+  const stop = replayCompletion(first.messages, BUILD_TOOLS);
+  assert.equal(stop.tool_calls, undefined);
+  assert.match(stop.content, /Still red, so this stops/);
+  assert.match(stop.content, /nothing is applied/i);
+  assert.doesNotMatch(stop.content, /\bpass(ed|es)\b/i);
 });
 
 test("an unknown task gets the list of recorded tasks, in plan and build alike", () => {

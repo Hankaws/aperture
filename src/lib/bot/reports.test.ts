@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Entry } from "./chat-saved.ts";
-import { reportEntry, reportText, reportsDue, taskFor } from "./reports.ts";
+import { reportEntry, reportText, reportsDue, taskFor, threadOf } from "./reports.ts";
 import type { BotSummary } from "./summary.ts";
 import type { BotTask } from "./tasks.ts";
 
@@ -178,4 +178,37 @@ test("the newest look-over comes to a started chat once, while it is fresh, with
     quiet.role === "assistant" && quiet.text,
     "I looked things over. Main is green. #8 has waited 12 days for review.\n\nNothing I would do right now.",
   );
+});
+
+test("a suggestion that names one open thread is sent there; anything else opens an issue", () => {
+  const open = [
+    { number: 15, title: "Checkout button is hard to see on mobile", isPull: false },
+    { number: 8, title: "Show dollars", isPull: true },
+  ];
+  assert.equal(threadOf("Fix #15: give the button more contrast", open)?.number, 15);
+  assert.equal(threadOf("Do what #8 asks", open)?.number, 8);
+  assert.equal(threadOf("Fix #15 and #8 together", open), null, "two threads: new work");
+  assert.equal(threadOf("Fix #99: closed or not there", open), null);
+  assert.equal(threadOf("Add a test for refunds", open), null);
+  assert.equal(threadOf("Use issue#15 style names", open), null, "part of a word");
+
+  const done = task({
+    state: "clear",
+    summary: {
+      v: 1,
+      state: "clear",
+      asked: 101,
+      run: RUN,
+      next: ["Fix #15: give the checkout button more contrast", "Add a test for refunds"],
+    },
+  });
+  const entry = reportEntry(done, "x", "2026-10-13T10:00:00Z", open);
+  assert.deepEqual(entry.role === "assistant" && entry.cards, [
+    {
+      task: "Fix #15: give the checkout button more contrast",
+      number: 15,
+      at: "2026-10-13T10:00:00Z",
+    },
+    { task: "Add a test for refunds", title: "Add a test for refunds", at: "2026-10-13T10:00:00Z" },
+  ]);
 });

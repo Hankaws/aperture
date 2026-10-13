@@ -6,7 +6,8 @@
  * Browser only: this module starts a Worker.
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
-import type { TscReply, TscRequest, TscWarm } from "./tsc.worker";
+import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
+import type { DefinitionResult, HoverInfo } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
 
@@ -27,12 +28,14 @@ const TIMEOUT_MS = 45_000;
 
 let worker: Worker | null = null;
 let nextId = 0;
-const waiting = new Map<number, (reply: TscReply) => void>();
+const waiting = new Map<number, (reply: TscReply | TsAnswer) => void>();
+/** The files the worker has, by identity: the store replaces the object when a file changes. */
+let sentFiles: Record<string, string> | null = null;
 
 function startWorker(): Worker {
   if (worker) return worker;
   const started = new Worker(new URL("./tsc.worker.ts", import.meta.url), { type: "module" });
-  started.onmessage = (event: MessageEvent<TscReply>) => {
+  started.onmessage = (event: MessageEvent<TscReply | TsAnswer>) => {
     waiting.get(event.data.id)?.(event.data);
     waiting.delete(event.data.id);
   };
@@ -47,6 +50,7 @@ function startWorker(): Worker {
 function stopWorker(reason: string) {
   worker?.terminate();
   worker = null;
+  sentFiles = null;
   for (const [id, done] of waiting) done({ id, error: reason });
   waiting.clear();
 }
@@ -102,7 +106,8 @@ export function typecheckChange(
       reject(new DOMException("Superseded", "AbortError"));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
-    waiting.set(id, (reply) => {
+    waiting.set(id, (answer) => {
+      const reply = answer as TscReply;
       window.clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
       if ("error" in reply) return resolve({ state: "unavailable", reason: reply.error });
@@ -118,4 +123,84 @@ export function typecheckChange(
     });
     running.postMessage({ type: "check", id, after, before, paths } satisfies TscRequest);
   });
+}
+
+/** The first question downloads and starts the compiler; later ones are quick. */
+const ASK_TIMEOUT_MS = 30_000;
+
+let answered = false;
+/** True once the language service has answered: the compiler is loaded, so a question is quick. */
+export function tsReady(): boolean {
+  return answered && worker !== null;
+}
+
+/** The worker's copy of the project, refreshed when the files changed since it was sent. */
+function syncFiles(running: Worker, files: Record<string, string>) {
+  if (sentFiles === files) return;
+  sentFiles = files;
+  const typescript = Object.fromEntries(
+    Object.entries(files).filter(([path]) => isTsPath(path) || path === "tsconfig.json"),
+  );
+  running.postMessage({ type: "files", files: typescript } satisfies TsFiles);
+}
+
+/** Asks the language service about the name at `offset`; null when it cannot answer. */
+function askTs(
+  type: TsAsk["type"],
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<TsAnswer | null> {
+  return new Promise((resolve) => {
+    if (signal?.aborted || !isTsPath(path)) return resolve(null);
+    let running: Worker;
+    try {
+      running = startWorker();
+      syncFiles(running, files);
+    } catch {
+      return resolve(null);
+    }
+    const id = ++nextId;
+    const done = (answer: TsAnswer | null) => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      waiting.delete(id);
+      resolve(answer);
+    };
+    const timer = window.setTimeout(() => done(null), ASK_TIMEOUT_MS);
+    const onAbort = () => done(null);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    waiting.set(id, (reply) => {
+      if (!("error" in reply)) answered = true;
+      done("error" in reply ? null : (reply as TsAnswer));
+    });
+    running.postMessage({ type, id, path, text, offset } satisfies TsAsk);
+  });
+}
+
+/** The type and docs of the name at `offset` in `path`, for the editor's hover. */
+export async function tsHover(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<HoverInfo | null> {
+  const answer = await askTs("hover", files, path, text, offset, signal);
+  return answer && "hover" in answer ? answer.hover : null;
+}
+
+/** Where the name at `offset` in `path` is defined; null when the compiler cannot say. */
+export async function tsDefinition(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+): Promise<DefinitionResult | { unavailable: string } | null> {
+  const answer = await askTs("definition", files, path, text, offset);
+  if (!answer) return null;
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "definition" in answer ? answer.definition : null;
 }

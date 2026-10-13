@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- TypeScript in the editor knows your code. Hover a name to see its type
+  and its doc comment, from the TypeScript compiler. Press F12, or
+  Ctrl/⌘+click a name, to open where it is defined, with the name selected;
+  a name from the standard library says so. The compiler loads the first
+  time you ask, and the hover says it is loading until then.
+  ([#80](https://github.com/Hankaws/aperture/pull/80))
 - Search across the project. Ctrl/⌘+Shift+F, or the search icon over the
   files, opens Search in the sidebar: every match in every file, grouped by
   file, with match case, whole word and regular expressions. A match opens

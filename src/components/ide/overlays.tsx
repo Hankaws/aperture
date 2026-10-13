@@ -64,6 +64,7 @@ export function HelpDialog() {
   const rows = [
     [`${mod}P`, "Go to file"],
     [`${mod}⇧F`, "Search and replace in every file"],
+    [`F12 · ${mod}click`, "Go to definition (TypeScript) · hover a name for its type"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

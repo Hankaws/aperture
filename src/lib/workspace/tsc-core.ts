@@ -29,14 +29,14 @@ export const TSC_LIMITS = { files: 600, bytes: 4_000_000 } as const;
 /** How big a project the compiler takes on, and where, for the message when it is too big. */
 export type TscLimits = { files: number; bytes: number; where?: string };
 
-const SHIM_PATH = "/__aperture__/ambient.d.ts";
+export const SHIM_PATH = "/__aperture__/ambient.d.ts";
 
 /**
  * The asset imports a bundler handles, JSX elements without React's types,
  * a test runner's globals and Node's CommonJS ones are `any`. A script, not a module: in a module,
  * `declare module` would augment instead of declare.
  */
-const SHIM = `declare module "*.css";
+export const SHIM = `declare module "*.css";
 declare module "*.scss";
 declare module "*.svg";
 declare module "*.png";

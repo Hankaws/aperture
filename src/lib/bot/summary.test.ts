@@ -21,3 +21,22 @@ test("suggestions read back at most three, clipped, and only as strings", () => 
     undefined,
   );
 });
+
+test("a look-over reads back as one, with its note", () => {
+  const body = summaryMarker({
+    v: 1,
+    state: "clear",
+    asked: 0,
+    kind: "look",
+    via: "schedule",
+    run: "https://github.com/a/b/actions/runs/1",
+    note: "Main is green. Two pull requests wait for review.",
+    next: ["Review #8"],
+  });
+  const s = readSummary(body);
+  assert.equal(s?.kind, "look");
+  assert.equal(s?.note, "Main is green. Two pull requests wait for review.");
+  const odd = `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", asked: 0, run: "", kind: "other", note: 5 })} -->`;
+  assert.equal(readSummary(odd)?.kind, undefined);
+  assert.equal(readSummary(odd)?.note, undefined);
+});

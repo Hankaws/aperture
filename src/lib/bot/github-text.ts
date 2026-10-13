@@ -139,10 +139,13 @@ export function tasksText(tasks: BotTask[]): string {
             : t.via === "pull"
               ? `a push by @${t.author}`
               : `@${t.author}`;
+      const s = t.summary;
       const state =
-        t.summary?.kind === "check" && (t.state === "clear" || t.state === "red")
-          ? `Agent Check ${t.state === "red" ? "red: not ready to merge" : "clear"}`
-          : (TASK_STATE[t.state] ?? t.state);
+        s?.kind === "look" && t.state === "clear"
+          ? `looked the repository over: ${oneLine(s.note ?? "", 300)}${s.next?.length ? ` Suggested: ${s.next.map((n) => oneLine(n, 120)).join("; ")}` : ""}`
+          : s?.kind === "check" && (t.state === "clear" || t.state === "red")
+            ? `Agent Check ${t.state === "red" ? "red: not ready to merge" : "clear"}`
+            : (TASK_STATE[t.state] ?? t.state);
       return `#${t.number} "${oneLine(t.task || "do what the thread asks", 120)}" by ${who}: ${state}${link}`;
     })
     .join("\n");

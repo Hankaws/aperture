@@ -17,6 +17,7 @@ import { ago } from "@/lib/bot/activity";
 import { phaseLine, type BotPhase } from "@/lib/bot/summary";
 import {
   isCheck,
+  isLook,
   isSettled,
   PROVIDER_SECRET,
   type BotTask,
@@ -459,6 +460,8 @@ const CHECKED: Partial<Record<TaskState, { label: string; tone: string }>> = {
   red: { label: "Checked: red", tone: "border-danger/30 bg-danger/10 text-danger" },
 };
 
+const LOOKED = { label: "Looked over", tone: "border-accent/30 bg-accent/10 text-accent" };
+
 /** `next` false leaves out the suggestions, for the chat, where they come as cards. */
 export function TaskCard({
   task,
@@ -471,7 +474,11 @@ export function TaskCard({
 }) {
   const s = task.summary;
   const checking = isCheck(task);
-  const state = (checking && CHECKED[task.state]) || STATE[task.state];
+  const looking = isLook(task);
+  const state =
+    (looking && task.state === "clear" && LOOKED) ||
+    (checking && CHECKED[task.state]) ||
+    STATE[task.state];
   const [showDiff, setShowDiff] = useState(false);
   return (
     <article className="rounded-2xl border border-border bg-surface p-4 sm:p-5">
@@ -505,6 +512,8 @@ export function TaskCard({
           </span>
         )}
       </p>
+
+      {looking && s?.note && <p className="mt-3 text-sm text-pretty">{s.note}</p>}
 
       {task.state === "working" && s && (
         <div className="mt-4 space-y-2">

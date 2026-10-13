@@ -117,11 +117,11 @@ export function resultSummary(
 }
 
 /** What the bot would do next, as a list the maintainer can ask for. */
-function nextList(result: BotResult): string[] {
-  if (result.next.length === 0) return [];
+function nextList(next: string[]): string[] {
+  if (next.length === 0) return [];
   return [
     "**Next, I would suggest**",
-    ...result.next.map((task) => `- ${task}`),
+    ...next.map((task) => `- ${task}`),
     "",
     "Ask for one with `/aperture` and the task, or send it from the Bot page. Nothing is done until you do.",
   ];
@@ -197,7 +197,7 @@ export function doneReply(
   return join(
     [text],
     plan(result),
-    nextList(result),
+    nextList(result.next),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx, link))],
   );
@@ -229,7 +229,7 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
         ]
       : [],
     agentSaid(result),
-    nextList(result),
+    nextList(result.next),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx))],
   );
@@ -302,6 +302,37 @@ export function checkReply(check: CheckResult, ctx: ReplyContext): string {
           detail: r.detail,
         })),
         tests: ctx.tests,
+      }),
+    ],
+  );
+}
+
+/**
+ * A look-over's report on its issue: how the repository stands, and what the
+ * bot would do next. Nothing was changed.
+ */
+export function lookReply(
+  look: { note: string; next: string[] },
+  where: { branch: string; sha: string },
+  ctx: Asked & { usage: string },
+): string {
+  const at = where.sha ? ` at ${where.sha.slice(0, 7)}` : "";
+  return join(
+    [`**Looked things over** on ${where.branch}${at}.`],
+    look.note ? [look.note] : [],
+    look.next.length > 0 ? nextList(look.next) : ["Nothing I would do right now."],
+    [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
+    [
+      summaryMarker({
+        v: 1,
+        state: "clear",
+        kind: "look",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        ...(look.note ? { note: look.note } : {}),
+        ...(look.next.length ? { next: look.next } : {}),
+        usage: ctx.usage,
       }),
     ],
   );

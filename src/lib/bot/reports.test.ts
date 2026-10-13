@@ -126,3 +126,56 @@ test("what the bot would do next comes back as cards to send, on new issues", ()
   assert.ok(plain.role === "assistant" && plain.cards === undefined);
   assert.equal(plain.text, "I looked at #7 and found nothing to change.");
 });
+
+test("the newest look-over comes to a started chat once, while it is fresh, with its suggestions as cards", () => {
+  const now = Date.parse("2026-10-13T10:00:00Z");
+  const look = (id: number, updatedAt: string, next?: string[]) =>
+    task({
+      id,
+      via: "schedule",
+      number: 30,
+      task: "Look the repository over and suggest what to do next.",
+      state: "clear",
+      updatedAt,
+      summary: {
+        v: 1,
+        state: "clear",
+        kind: "look",
+        via: "schedule",
+        asked: 0,
+        run: RUN,
+        note: "Main is green. #8 has waited 12 days for review.",
+        ...(next ? { next } : {}),
+      },
+    });
+  const newest = look(201, "2026-10-13T03:20:00Z", ["Review #8", "Close #3: already fixed"]);
+  const older = look(200, "2026-10-06T03:20:00Z");
+  // Tasks come newest first.
+  assert.deepEqual(
+    reportsDue(chat, [newest, older], now).map((t) => t.id),
+    [201],
+  );
+  assert.deepEqual(reportsDue([], [newest], now), [], "not before a conversation starts");
+  const reported: Entry[] = [...chat, { id: "r", role: "assistant", text: "…", report: 201 }];
+  assert.deepEqual(reportsDue(reported, [newest, older], now), [], "once");
+  assert.deepEqual(
+    reportsDue(chat, [look(202, "2026-10-01T03:20:00Z")], now),
+    [],
+    "a stale one stays on GitHub",
+  );
+
+  const entry = reportEntry(newest, "x", "2026-10-13T10:00:00Z");
+  assert.equal(
+    entry.role === "assistant" && entry.text,
+    "I looked things over. Main is green. #8 has waited 12 days for review.\n\nHere is what I would do next:",
+  );
+  assert.deepEqual(entry.role === "assistant" && entry.cards?.map((c) => c.task), [
+    "Review #8",
+    "Close #3: already fixed",
+  ]);
+  const quiet = reportEntry(older, "y", "2026-10-13T10:00:00Z");
+  assert.equal(
+    quiet.role === "assistant" && quiet.text,
+    "I looked things over. Main is green. #8 has waited 12 days for review.\n\nNothing I would do right now.",
+  );
+});

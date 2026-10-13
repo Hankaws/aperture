@@ -619,10 +619,13 @@ page (`/bot`).
   to write; there is no comment to react to), and the workflow's schedule or
   a manual run, which does the `scheduled` input's job (`jobs.ts`). `fix-ci`
   reads the default branch's failed checks and statuses (a run still going,
-  like the bot's own, is not a failure) and turns them into the task; any
-  other text is the task. A job reports on its own tracking issue, found
-  again by title, and does nothing when the branch is green or a pull
-  request for that issue (`aperture/<n>-…`) is still open. There is no
+  like the bot's own, is not a failure) and turns them into the task;
+  `look-over` (`look.ts`) changes nothing: it reads CI, the open issues and
+  pull requests, makes one model call without tools, and posts a short note
+  and at most three suggestions (`kind: "look"`, `note`, `next`); any other
+  text is the task. A job reports on its own tracking issue, found again by
+  title, and a job that changes code does nothing when the branch is green
+  or a pull request for that issue (`aperture/<n>-…`) is still open. There is no
   permission gate on the schedule: whoever can change the workflow can write.
 - **One comment per run.** Once work starts the Action posts "on it" with the
   run's link and edits that comment at each step (`onProgress` in `runTask`,

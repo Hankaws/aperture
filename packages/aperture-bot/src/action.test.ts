@@ -39,8 +39,8 @@ function fakeGitHub(
     staleOnce?: boolean;
     /** The default branch's checks: one failed, or all passed. */
     red?: boolean;
-    openIssues?: Array<{ number: number; title: string }>;
-    openPulls?: Array<{ ref: string; url: string }>;
+    openIssues?: Array<{ number: number; title: string; updated_at?: string }>;
+    openPulls?: Array<{ ref: string; url: string; number?: number; title?: string }>;
     /** Who comments post as: a GitHub App's bot instead of the workflow's. */
     poster?: { login: string; id: number };
     /** The thread's comments, instead of an ask and an earlier bot reply. */
@@ -90,7 +90,12 @@ function fakeGitHub(
     if (method === "POST" && path === "/repos/acme/shop/issues") return json({ number: 7 }, 201);
     if (method === "GET" && path === "/repos/acme/shop/pulls")
       return json(
-        (options.openPulls ?? []).map((p) => ({ head: { ref: p.ref }, html_url: p.url })),
+        (options.openPulls ?? []).map((p) => ({
+          head: { ref: p.ref },
+          html_url: p.url,
+          number: p.number ?? 0,
+          title: p.title ?? "",
+        })),
       );
     if (path.endsWith("/reactions")) return json({}, 201);
     if (method === "GET" && /\/issues\/\d+\/comments$/.test(path))
@@ -192,9 +197,11 @@ async function act(
     env?: Record<string, string>;
     staleOnce?: boolean;
     red?: boolean;
-    openIssues?: Array<{ number: number; title: string }>;
-    openPulls?: Array<{ ref: string; url: string }>;
+    openIssues?: Array<{ number: number; title: string; updated_at?: string }>;
+    openPulls?: Array<{ ref: string; url: string; number?: number; title?: string }>;
     poster?: { login: string; id: number };
+    /** The model, instead of one scripted to build `builds`. */
+    model?: ReturnType<typeof scripted>["model"];
     thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
@@ -224,7 +231,7 @@ async function act(
     ...options.env,
   });
   const lines: string[] = [];
-  const { model } = scripted(options.builds ?? [[dollars]]);
+  const model = options.model ?? scripted(options.builds ?? [[dollars]]).model;
   const code = await action.runAction(e.env, {
     fetch: gh.fetch,
     model,
@@ -536,6 +543,78 @@ test("the nightly job does nothing on a green branch, or while its last fix wait
   const unset = await act({ eventName: "schedule", payload: {} });
   assert.match(unset.lines.join("\n"), /its scheduled input is empty/);
   assert.equal(unset.gh.calls.length, 0);
+});
+
+test("the look-over reads the repository, changes nothing, and reports on its own issue", async () => {
+  const seen: string[] = [];
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    red: true,
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues: [
+      { number: 3, title: "Prices show cents", updated_at: "2026-01-01T00:00:00Z" },
+      { number: 8, title: "Show dollars", pull_request: {} } as never,
+    ],
+    openPulls: [
+      {
+        ref: "dollars",
+        url: "https://github.com/acme/shop/pull/8",
+        number: 8,
+        title: "Show dollars",
+      },
+    ],
+    model: async (_cfg, messages, useTools) => {
+      assert.equal(useTools, false);
+      seen.push(messages.map((m) => String(m.content)).join("\n"));
+      return {
+        content:
+          "Main is red: test fails. #8 waits for review.\n\nNext:\n- Fix the failing cart test\n- Review #8",
+        usage: { input: 900, output: 40 },
+      };
+    },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [issue] = run.posted(/\/repos\/acme\/shop\/issues$/);
+  const created = issue!.body as { title: string; body: string };
+  assert.equal(created.title, "Aperture Bot: looking things over");
+  assert.match(created.body, /It changes nothing\./);
+  assert.equal(seen.length, 1, "one model call");
+  assert.match(seen[0]!, /Failing on main at abc1234: test\./);
+  assert.match(seen[0]!, /Open issues:\n- #3 Prices show cents, updated \d+ days ago\n\n/);
+  assert.match(seen[0]!, /Open pull requests:\n- #8 Show dollars/);
+  // Nothing checked out, pushed, opened or reacted to.
+  assert.equal(run.posted(/\/pulls$/).length, 0);
+  assert.equal(run.posted(/\/reactions$/).length, 0);
+  assert.equal(run.gh.calls.filter((c) => c.path.endsWith("/permission")).length, 0);
+  const body = run.replied();
+  assert.match(
+    body,
+    /^\*\*Looked things over\*\* on main at abc1234\.\n\nMain is red: test fails\. #8 waits for review\./,
+  );
+  assert.match(body, /\*\*Next, I would suggest\*\*\n- Fix the failing cart test\n- Review #8/);
+  assert.match(body, /Nothing was changed\. Used 900 input and 40 output tokens in 1 model call\./);
+  const s = readSummary(body)!;
+  assert.deepEqual([s.state, s.kind, s.via, s.asked], ["clear", "look", "schedule", 0]);
+  assert.equal(s.note, "Main is red: test fails. #8 waits for review.");
+  assert.deepEqual(s.next, ["Fix the failing cart test", "Review #8"]);
+  assert.match(run.output, /^outcome=clear\n$/);
+});
+
+test("the look-over runs again on its issue even with a pull request open for it", async () => {
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
+    openPulls: [{ ref: "aperture/7-x", url: "https://github.com/acme/shop/pull/9" }],
+    model: async () => ({ content: "All quiet: main is green.\n\nNext: none" }),
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(run.posted(/\/repos\/acme\/shop\/issues$/).length, 0, "the issue is found again");
+  const body = run.replied();
+  assert.match(body, /All quiet: main is green\.\n\nNothing I would do right now\./);
+  assert.equal(readSummary(body)?.next, undefined);
 });
 
 test("a scheduled task is done on its own issue, found again on the next run", async () => {

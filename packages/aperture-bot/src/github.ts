@@ -226,11 +226,21 @@ export class GitHub {
     return out;
   }
 
-  async openIssues(): Promise<Array<{ number: number; title: string; isPull: boolean }>> {
-    const out = await this.all<{ number: number; title: string; pull_request?: unknown }>(
-      `${this.base}/issues?state=open`,
-    );
-    return out.map((i) => ({ number: i.number, title: i.title, isPull: Boolean(i.pull_request) }));
+  async openIssues(): Promise<
+    Array<{ number: number; title: string; isPull: boolean; updatedAt?: string }>
+  > {
+    const out = await this.all<{
+      number: number;
+      title: string;
+      pull_request?: unknown;
+      updated_at?: string;
+    }>(`${this.base}/issues?state=open`);
+    return out.map((i) => ({
+      number: i.number,
+      title: i.title,
+      isPull: Boolean(i.pull_request),
+      updatedAt: i.updated_at,
+    }));
   }
 
   async createIssue(title: string, body: string): Promise<number> {
@@ -238,12 +248,33 @@ export class GitHub {
     return out.number;
   }
 
-  /** Open pull requests from this repository's branches: their branch and page. */
-  async openPulls(): Promise<Array<{ headRef: string; url: string }>> {
-    const out = await this.all<{ head: { ref: string }; html_url: string }>(
-      `${this.base}/pulls?state=open`,
-    );
-    return out.map((p) => ({ headRef: p.head.ref, url: p.html_url }));
+  /** Open pull requests: their branch and page, and what the look-over reads. */
+  async openPulls(): Promise<
+    Array<{
+      headRef: string;
+      url: string;
+      number: number;
+      title: string;
+      draft: boolean;
+      updatedAt?: string;
+    }>
+  > {
+    const out = await this.all<{
+      head: { ref: string };
+      html_url: string;
+      number: number;
+      title: string;
+      draft?: boolean;
+      updated_at?: string;
+    }>(`${this.base}/pulls?state=open`);
+    return out.map((p) => ({
+      headRef: p.head.ref,
+      url: p.html_url,
+      number: p.number,
+      title: p.title,
+      draft: p.draft === true,
+      updatedAt: p.updated_at,
+    }));
   }
 
   async editComment(id: number, body: string): Promise<void> {

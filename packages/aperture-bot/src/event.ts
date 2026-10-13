@@ -26,6 +26,8 @@ export type Command = {
   via: "comment" | "label" | "schedule" | "pull";
   /** Run Aperture Agent Check on the pull request and report it, changing nothing. */
   check?: boolean;
+  /** Look the repository over and report how it stands, changing nothing (`jobs.ts`). */
+  look?: boolean;
   owner: string;
   repo: string;
   defaultBranch: string;

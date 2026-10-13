@@ -30,6 +30,14 @@ release notes are every line from there down to the previous version.
   and reuse it while that commit stays the base. The default is still to
   recompute.
   ([#77](https://github.com/Hankaws/aperture/pull/77))
+- Routines: a bot can look things over on its own. Pick "Look over" in a
+  bot's standing jobs, every night or every Monday. On its schedule the bot
+  reads CI on the default branch and the open issues and pull requests, and
+  posts a few sentences on how things stand, with up to three things it would
+  do next, on its own issue. It changes nothing. The note shows on the task
+  card and in the activity feed, and the newest one comes to the bot's chat
+  with its suggestions as cards to send or dismiss.
+  ([#68](https://github.com/Hankaws/aperture/pull/68))
 - Bots come back with suggestions. When a task you sent from a bot's chat
   finishes, the bot says so in the chat: the pull request it opened, a check
   that came back red, or where it stopped. Every finished run ends with up
@@ -162,6 +170,11 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- A bot's suggestion about an open issue or pull request goes there. "Fix
+  #15: …" in a report or a look-over is a card that works on #15, with its
+  title, instead of opening a new issue that repeats it. A suggestion naming
+  no open thread, or several, still opens a new issue.
+  ([#76](https://github.com/Hankaws/aperture/pull/76))
 - The bot chat takes a few habits from Grok Bot. While it works, the status
   says what it is doing ("Thinking it through") and leaves its name off.
   Select text in the chat and press ⌘/Ctrl+L to quote it in the next message.

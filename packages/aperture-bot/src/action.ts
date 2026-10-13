@@ -17,7 +17,8 @@ import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.se
 import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
-import type { Model } from "./model.ts";
+import { lookMessages, parseLook, type LookView } from "./look.ts";
+import { Budget, providerModel, runnerHost, type Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
 import { readSummary } from "../../../src/lib/bot/summary.ts";
@@ -36,6 +37,7 @@ import {
   doneReply,
   errorReply,
   forkReply,
+  lookReply,
   notDoneReply,
   notPullReply,
   pullBody,
@@ -298,7 +300,45 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     return result.exitCode;
   };
 
+  /**
+   * The look-over: how the repository stands (CI on the default branch, open
+   * issues and pull requests), one model call, and a report on its issue.
+   * It checks nothing out and changes nothing.
+   */
+  const lookOver = async (): Promise<number> => {
+    const branch = command.defaultBranch;
+    const sha = await gh.head(branch);
+    const [failures, issues, pulls] = await Promise.all([
+      sha ? gh.failures(sha) : Promise.resolve([]),
+      gh.openIssues(),
+      gh.openPulls(),
+    ]);
+    const view: LookView = {
+      branch,
+      sha,
+      failing: failures.map((f) => f.name),
+      issues: issues.filter((i) => !i.isPull && i.number !== command.number),
+      pulls: pulls.map((p) => ({
+        number: p.number,
+        title: p.title,
+        draft: p.draft,
+        updatedAt: p.updatedAt,
+      })),
+      now: Date.now(),
+    };
+    const budget = new Budget(number(env, "max-tokens", 1_000_000));
+    const host = runnerHost(deps.model ?? providerModel, budget);
+    log(`Aperture Bot: looking ${command.owner}/${command.repo} over`);
+    const answer = await host.complete(modelConfig(env), lookMessages(view), false);
+    const look = parseLook(answer.content ?? "");
+    log([look.note, ...look.next.map((task) => `- ${task}`)].filter(Boolean).join("\n"));
+    await reply(lookReply(look, { branch, sha }, { ...asked, usage: budget.describe() }));
+    setOutput(env, { outcome: "clear" });
+    return 0;
+  };
+
   try {
+    if (command.look) return await lookOver();
     if (command.check) return await checkPull();
     const model = modelConfig(env);
     let pull: Pull | null = null;

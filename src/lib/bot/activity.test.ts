@@ -264,3 +264,37 @@ test("a check on a pull request reads as a review, and a push names who pushed",
   assert.equal(clear?.line, "Checked #7: clear");
   assert.equal(clear?.mood, "done");
 });
+
+test("a look-over reads as one, with how many suggestions it made", () => {
+  const look = (id: number, next?: string[]) =>
+    make({
+      id,
+      via: "schedule",
+      author: "schedule",
+      number: 30,
+      task: "Look the repository over and suggest what to do next.",
+      state: "clear",
+      updatedAt: at(2),
+      summary: {
+        v: 1,
+        state: "clear",
+        kind: "look",
+        via: "schedule",
+        asked: 0,
+        run: RUN,
+        note: "Main is green.",
+        ...(next ? { next } : {}),
+      },
+    });
+  const items = activityFrom("acme/shop", [look(8, ["Review #8", "Close #3"])]);
+  assert.deepEqual(
+    items.map((a) => [a.kind, headline(a), a.detail]),
+    [
+      ["asked", "A standing job asked", null],
+      ["looked", "Looked things over", "2 suggestions"],
+    ],
+  );
+  assert.equal(activityFrom("acme/shop", [look(9)])[1]?.detail, "Nothing to do right now");
+  const status = statusOf(feedOf([items]), "acme/shop", NOW);
+  assert.deepEqual([status?.line, status?.mood], ["Looked things over", "done"]);
+});

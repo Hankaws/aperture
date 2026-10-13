@@ -114,6 +114,25 @@ const SAMPLES: Record<string, Sample[]> = {
   ],
   "acme/docs": [
     {
+      id: 7101,
+      number: 20,
+      title: "Aperture Bot: looking things over",
+      task: "Look the repository over and suggest what to do next.",
+      state: "clear",
+      asked: 7 * HOUR,
+      took: 1,
+      via: "schedule",
+      author: "schedule",
+      summary: {
+        kind: "look",
+        note: "Main is green. Issue #18 has had no answer for nine days.",
+        next: [
+          "Do what #18 asks: make the guide's search find pages with accents",
+          "Update the install guide for Node 22",
+        ],
+      },
+    },
+    {
       id: 7001,
       number: 12,
       title: "Broken links in the guide",

@@ -194,6 +194,8 @@ test("standing jobs go into the workflow and read back the same", () => {
   );
   assert.match(text, / {10}scheduled: "fix-ci"\n/);
   assert.deepEqual(workflowUse(text).jobs, jobs);
+  const look = { label: false, scheduled: "look-over", cron: WEEKLY, pulls: true };
+  assert.deepEqual(workflowUse(workflowFile("grok", "v1", look)).jobs, look);
   const weekly = {
     label: false,
     scheduled: 'Update "docs" links\nthat 404',

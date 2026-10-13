@@ -3,8 +3,9 @@
  * chat gets a message from the bot saying how it went, with what it would
  * do next as cards to send or not. Pure, for tests on plain data.
  */
+import type { Thread } from "./cards.ts";
 import type { Card, Entry } from "./chat-saved.ts";
-import { isCheck, isSettled, type BotTask } from "./tasks.ts";
+import { isCheck, isLook, isSettled, type BotTask } from "./tasks.ts";
 
 /**
  * The task a sent card started: on its thread, asked since it was sent, with
@@ -17,8 +18,16 @@ export function taskFor(card: Card, tasks: BotTask[]): BotTask | null {
   return since.find((t) => t.task === card.task) ?? since.at(-1) ?? null;
 }
 
-/** Tasks sent from this chat that have settled and that the bot has not reported yet. */
-export function reportsDue(entries: Entry[], tasks: BotTask[]): BotTask[] {
+/** How long a look-over stays news in the chat: a weekly one, until the next. */
+export const LOOK_FRESH_MS = 8 * 86_400_000;
+
+/**
+ * What the bot has to tell this chat and has not yet: tasks sent from it that
+ * have settled, and its newest look-over while that is fresh. A look-over
+ * waits for a conversation to have started, so it never replaces the first
+ * hello.
+ */
+export function reportsDue(entries: Entry[], tasks: BotTask[], now = Date.now()): BotTask[] {
   const reported = new Set(
     entries.flatMap((e) => (e.role === "assistant" && e.report ? [e.report] : [])),
   );
@@ -30,6 +39,9 @@ export function reportsDue(entries: Entry[], tasks: BotTask[]): BotTask[] {
       if (task && isSettled(task.state) && !reported.has(task.id)) due.set(task.id, task);
     }
   }
+  const look = entries.length > 0 ? tasks.find((t) => isLook(t) && t.state === "clear") : null;
+  if (look && !reported.has(look.id) && now - Date.parse(look.updatedAt) < LOOK_FRESH_MS)
+    due.set(look.id, look);
   return [...due.values()];
 }
 
@@ -44,6 +56,8 @@ export function reportText(task: BotTask): string {
   const n = `#${task.number}`;
   const s = task.summary;
   const pull = /\/pull\/(\d+)/.exec(s?.link?.url ?? "")?.[1];
+  if (isLook(task) && task.state === "clear")
+    return s?.note ? `I looked things over. ${s.note}` : "I looked things over.";
   switch (task.state) {
     case "clear":
       if (isCheck(task)) return `Checked ${n}: nothing red.`;
@@ -73,20 +87,41 @@ export function reportText(task: BotTask): string {
   }
 }
 
-/** The chat message for a settled task: what happened, and what it would do next. */
-export function reportEntry(task: BotTask, id: string, at: string): Entry {
+/**
+ * The open issue or pull request a suggestion is about: the one it names
+ * (`Fix #15: …`), when it names exactly one. Else the suggestion is new work,
+ * for a new issue.
+ */
+export function threadOf(suggestion: string, open: Thread[]): Thread | null {
+  const named = new Set(
+    [...suggestion.matchAll(/(?:^|[\s(,;:])#(\d{1,7})\b/g)].map((m) => Number(m[1])),
+  );
+  if (named.size !== 1) return null;
+  const [number] = named;
+  return open.find((t) => t.number === number) ?? null;
+}
+
+/**
+ * The chat message for a settled task: what happened, and what it would do
+ * next. A suggestion about an open thread is sent there; any other opens an
+ * issue.
+ */
+export function reportEntry(task: BotTask, id: string, at: string, open: Thread[] = []): Entry {
   const next = task.summary?.next ?? [];
-  const cards: Card[] = next.map((t) => ({
-    task: t,
-    title: t.length > 80 ? `${t.slice(0, 79)}…` : t,
-    at,
-  }));
+  const cards: Card[] = next.map((t) => {
+    const thread = threadOf(t, open);
+    return thread
+      ? { task: t, number: thread.number, at }
+      : { task: t, title: t.length > 80 ? `${t.slice(0, 79)}…` : t, at };
+  });
   return {
     id,
     role: "assistant",
-    text: next.length
-      ? `${reportText(task)}\n\nWhile I was at it, I noticed a few things I could do next:`
-      : reportText(task),
+    text: isLook(task)
+      ? `${reportText(task)}\n\n${next.length ? "Here is what I would do next:" : "Nothing I would do right now."}`
+      : next.length
+        ? `${reportText(task)}\n\nWhile I was at it, I noticed a few things I could do next:`
+        : reportText(task),
     report: task.id,
     ...(cards.length ? { cards } : {}),
   };

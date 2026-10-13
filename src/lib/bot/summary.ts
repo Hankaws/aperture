@@ -19,8 +19,11 @@ export type BotSummary = {
   state: BotState;
   /** The id of the comment that asked; 0 when a label or the schedule did. */
   asked: number;
-  /** What the bot did: a change (unset), or Aperture Agent Check on a pull request. */
-  kind?: "check";
+  /**
+   * What the bot did: a change (unset), Aperture Agent Check on a pull
+   * request, or a look over the repository on its schedule, changing nothing.
+   */
+  kind?: "check" | "look";
   /** How the bot was asked, when it was not a comment: a push to a pull request is a check. */
   via?: "label" | "schedule" | "pull";
   /** Who asked, when it was not a comment: whoever added the label or pushed, or "schedule". */
@@ -45,6 +48,8 @@ export type BotSummary = {
   error?: string;
   /** What the bot would suggest doing next, for the maintainer to send or not. */
   next?: string[];
+  /** A look-over's few sentences on how the repository stands. */
+  note?: string;
 };
 
 const OPEN = "<!-- aperture-bot ";
@@ -69,6 +74,7 @@ function bounded(summary: BotSummary): BotSummary {
     next: summary.next?.slice(0, LIMITS.next).map((task) => clip(task, LIMITS.text)),
     task: summary.task === undefined ? undefined : clip(summary.task, LIMITS.error),
     error: summary.error === undefined ? undefined : clip(summary.error, LIMITS.error),
+    note: summary.note === undefined ? undefined : clip(summary.note, LIMITS.error),
   };
 }
 
@@ -124,7 +130,7 @@ export function readSummary(body: string): BotSummary | null {
     asked: r.asked,
     run: isGithubUrl(r.run) ? r.run : "",
   };
-  if (r.kind === "check") out.kind = "check";
+  if (r.kind === "check" || r.kind === "look") out.kind = r.kind;
   if (r.via === "label" || r.via === "schedule" || r.via === "pull") out.via = r.via;
   if (typeof r.by === "string") out.by = r.by.slice(0, 100);
   if (typeof r.task === "string") out.task = r.task;
@@ -152,6 +158,7 @@ export function readSummary(body: string): BotSummary | null {
   if (typeof r.tests === "string" || r.tests === null) out.tests = r.tests;
   if (typeof r.usage === "string") out.usage = r.usage;
   if (typeof r.error === "string") out.error = r.error;
+  if (typeof r.note === "string" && r.note.trim()) out.note = clip(r.note, LIMITS.error);
   return out;
 }
 

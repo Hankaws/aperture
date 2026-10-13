@@ -71,7 +71,7 @@ Only people with write access to the repository can ask; anyone else's comment i
 Three more ways to ask, all optional, all on your runner:
 
 - **The `aperture` label.** Add it to an issue and the bot does what the issue says, as if you had commented `/aperture`. Only a label added by someone with write access counts.
-- **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
+- **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. `look-over` changes nothing: it reads CI on the default branch and the open issues and pull requests, and posts a few sentences on how things stand with up to three things it would do next, for you to send or not. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
 - **Every pull request.** Add `pull_request` to the workflow's triggers and each push to a pull request from this repository is checked, as with `/aperture check`. The report is one comment, updated on each push. Drafts are checked once they are ready for review.
 
 ```yaml
@@ -147,7 +147,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `github-token`      | the workflow's token                 | Comments, pushes and pull requests.                                                                                                            |
 | `trigger`           | `/aperture`                          | The word a comment starts with.                                                                                                                |
 | `label`             | `aperture`                           | The label that asks the bot to do what an issue says.                                                                                          |
-| `scheduled`         |                                      | On the schedule: `fix-ci`, or a task to do each time. Empty: nothing.                                                                          |
+| `scheduled`         |                                      | On the schedule: `fix-ci`, `look-over`, or a task to do each time. Empty: nothing.                                                             |
 | `test-script`       | `test`                               | The package.json script that runs the tests.                                                                                                   |
 | `timeout-minutes`   | `10`                                 | How long one test run may take.                                                                                                                |
 | `max-tokens`        | `1000000`                            | The token budget for one run.                                                                                                                  |

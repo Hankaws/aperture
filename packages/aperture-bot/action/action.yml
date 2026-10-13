@@ -31,7 +31,7 @@ inputs:
     required: false
     default: aperture
   scheduled:
-    description: 'What to do when the workflow runs on its schedule or by hand: "fix-ci" fixes whatever is red on the default branch; any other text is a task to do each time. Empty: nothing.'
+    description: 'What to do when the workflow runs on its schedule or by hand: "fix-ci" fixes whatever is red on the default branch; "look-over" reports how the repository stands and what the bot would do next, changing nothing; any other text is a task to do each time. Empty: nothing.'
     required: false
   test-script:
     description: The package.json script that runs the tests.

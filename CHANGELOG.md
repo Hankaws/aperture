@@ -211,6 +211,12 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The Agent Check workflow on the Bot page's Check tab, on the landing page
+  and in the action's README uses `hankaws/aperture-agent-check@v1.2`, the
+  release with `baseline` and `baseline-dir`. Both say that a GitHub-hosted
+  runner starts empty, so `baseline: cache` needs the folder kept with
+  `actions/cache`, keyed on the base commit, and show the step.
+  ([#86](https://github.com/Hankaws/aperture/pull/86))
 - The review step reads more plainly. With the checks in, skipping the
   optional review pass is "Apply now" ("Apply anyway" is kept for a red
   check), the recap's "Didn't:" line is now "Elsewhere:", listing other files

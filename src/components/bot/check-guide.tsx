@@ -55,7 +55,7 @@ const INPUTS: Array<[name: string, fallback: string, what: string]> = [
   ["fail-on", "red", "red fails the step when a check is red; never only reports."],
   ["base", "the pull request's base", "Branch, tag or commit to compare against."],
   ["working-directory", "the repository root", "The project's folder in a monorepo."],
-  ["baseline", "recompute", "cache stores the base test result by commit and reuses it while that commit stays the base."],
+  ["baseline", "recompute", "cache stores the base test result by commit and reuses it while that commit stays the base. A GitHub-hosted runner starts empty each time: keep baseline-dir with actions/cache, keyed on the base commit."],
   ["baseline-dir", ".aperture/check-baseline", "Where the cache is written, when baseline is cache."],
 ];
 

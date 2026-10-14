@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci # only needed for the tests
-      - uses: hankaws/aperture-agent-check@v1.1
+      - uses: hankaws/aperture-agent-check@v1.2
 ```
 
 Make it a required check in the branch's protection rules, and a red check blocks the merge.
@@ -58,7 +58,14 @@ Nothing. The checks run in this step: no token, no network, no account. Free.
 - It checks JavaScript and TypeScript (plus JSON, HTML and CSS for parsing). Other languages are listed as not checked.
 - Types uses the installed packages' real types when the dependencies are installed before the step (the `npm ci` above), so it reports what your own `tsc` would. Without them, packages are typed loosely and a mistake only a package's types would show is not caught.
 - A project over 5,000 files or 50 MB of source is not checked, and says so instead of passing.
-- The base tests run again on every check. Set `baseline: cache` to keep that result for the base commit, which is the per-branch option when the base is not moving. The default stays `recompute`.
+- The base tests run again on every check. Set `baseline: cache` to keep that result for the base commit, which is the per-branch option when the base is not moving. The default stays `recompute`. A GitHub-hosted runner starts empty each time, so keep the folder between runs with `actions/cache`, before this step:
+
+  ```yaml
+  - uses: actions/cache@v4
+    with:
+      path: .aperture/check-baseline
+      key: aperture-check-baseline-${{ github.event.pull_request.base.sha }}
+  ```
 
 ## Badge
 

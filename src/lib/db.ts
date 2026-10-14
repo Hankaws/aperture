@@ -1,4 +1,5 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { hmrPeek, hmrSingleton } from "./hmr-singleton";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -37,18 +38,8 @@ export interface Sql {
   ): Promise<T[]>;
 }
 
-/**
- * Init state lives on globalThis as promises: dev HMR creates new instances of
- * this module, and two instances racing module-level state would open a second
- * pool or run two concurrent PGLite migration passes (whose duplicate
- * `_migrations` insert rejects — and would get memoized, poisoning every later
- * `getSql()`). A failed init clears its slot so the next call retries.
- */
-const globalRef = globalThis as typeof globalThis & {
-  __pgSqlPromise__?: Promise<Sql>;
-  __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
-  __pgliteMigrateChain__?: Promise<void>;
-};
+type PGliteInstance = import("@electric-sql/pglite").PGlite;
+const PGLITE_KEY = "__pgliteInstance__";
 
 /**
  * Result-type parity: Postgres sends every value as text plus a type OID — the
@@ -86,7 +77,7 @@ function toSql(run: Run): Sql {
 }
 
 function createNeonSql(): Promise<Sql> {
-  globalRef.__pgSqlPromise__ ??= (async () => {
+  return hmrSingleton("__pgSqlPromise__", async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
     // pooled endpoint. One pool per process; warm serverless instances reuse it.
     const { Pool, types } = await import("pg");
@@ -98,18 +89,14 @@ function createNeonSql(): Promise<Sql> {
       const res = await pool.query(text, params);
       return res.rows as T[];
     });
-  })().catch((err) => {
-    globalRef.__pgSqlPromise__ = undefined;
-    throw err;
   });
-  return globalRef.__pgSqlPromise__;
 }
 
 async function createPgliteSql(): Promise<Sql> {
   // Embedded Postgres, imported on demand so it never loads on the Neon path.
   // One in-memory instance per process, shared across HMR module instances, so
   // data survives source edits (it resets on dev-server restart).
-  globalRef.__pgliteInstance__ ??= (async () => {
+  const pg = await hmrSingleton(PGLITE_KEY, async (): Promise<PGliteInstance> => {
     const { PGlite } = await import("@electric-sql/pglite");
     const pg = new PGlite({
       parsers: {
@@ -123,11 +110,7 @@ async function createPgliteSql(): Promise<Sql> {
       "create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())",
     );
     return pg;
-  })().catch((err) => {
-    globalRef.__pgliteInstance__ = undefined;
-    throw err;
   });
-  const pg = await globalRef.__pgliteInstance__;
 
   // Apply migrations/ (the single schema source) so preview matches production.
   // SQL is inlined by the bundler via import.meta.glob (no runtime fs); applied
@@ -155,10 +138,12 @@ async function createPgliteSql(): Promise<Sql> {
       });
     }
   };
-  const pass = (globalRef.__pgliteMigrateChain__ ?? Promise.resolve())
+  // One pass at a time across HMR instances: concurrent passes race on the `_migrations` insert.
+  const chain = hmrSingleton("__pgliteMigrateChain__", () => ({ tail: Promise.resolve() }));
+  const pass = chain.tail
     .catch(() => undefined) // an earlier failed pass must not wedge the chain
     .then(migrate);
-  globalRef.__pgliteMigrateChain__ = pass;
+  chain.tail = pass;
   await pass;
 
   return toSql(async <T>(text: string, params: unknown[]) => {
@@ -204,7 +189,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
     throw new Error("getPglite() is only available on the PGLite fallback (no DATABASE_URL)");
   }
   await getSql();
-  const pg = await globalRef.__pgliteInstance__;
+  const pg = await hmrPeek<Promise<PGliteInstance>>(PGLITE_KEY);
   if (!pg) throw new Error("PGLite instance failed to initialize");
   return pg;
 }
@@ -226,13 +211,11 @@ export function ensureDbReady(): Promise<void> {
 
 // Server-only eager start: kick PGLite bootstrap as soon as this module loads in
 // Node. Client bundles never hit this path (`getSql` throws in the browser).
-const globalBoot = globalThis as typeof globalThis & {
-  __pgBootstrapPromise__?: Promise<void>;
-};
 if (typeof window === "undefined" && dbSource === "pglite") {
-  globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
-    globalBoot.__pgBootstrapPromise__ = undefined;
-    console.error("[db] PGLite bootstrap failed:", err);
-    throw err;
-  });
+  hmrSingleton("__pgBootstrapPromise__", () =>
+    ensureDbReady().catch((err) => {
+      console.error("[db] PGLite bootstrap failed:", err);
+      throw err;
+    }),
+  );
 }

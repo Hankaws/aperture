@@ -9,6 +9,11 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Type errors as you type. In a TypeScript file, a mistake is underlined a
+  moment after you stop typing, with TypeScript's message on hover, and the
+  status bar counts the file's errors. Opening a file does not download the
+  compiler; the first edit does.
+  ([#91](https://github.com/Hankaws/aperture/pull/91))
 - Rename and completions in the editor, from TypeScript itself. Press F2 on
   a name to rename it everywhere the project uses it: one Undo puts every
   file back, a staged change is never touched, and comments, strings and docs

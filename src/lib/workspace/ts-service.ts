@@ -1,8 +1,9 @@
 /**
  * TypeScript's language service on the project held in memory: what the
  * editor asks while you work. Hovering a name shows its type and docs, F12 or
- * Ctrl/⌘+click jumps to where it is defined, F2 renames it everywhere, and
- * typing gets completions that know the types.
+ * Ctrl/⌘+click jumps to where it is defined, F2 renames it everywhere,
+ * typing gets completions that know the types, and the open file's type
+ * errors are underlined as you type.
  *
  * It sees the project exactly as the "Types" check does: the same compiler
  * options (`compilerOptions`), standard library and shim for what packages
@@ -67,6 +68,19 @@ export type RenameLocation = {
 export type RenameResult =
   { ok: true; name: string; locations: RenameLocation[] } | { ok: false; reason: string };
 
+export type Problem = {
+  start: number;
+  length: number;
+  /** TypeScript's message, with its chain of reasons on the lines below. */
+  message: string;
+  severity: "error" | "warning";
+  /** TS2322 and the like, as tsc prints it. */
+  code: string;
+};
+
+/** The most problems marked in one file: past that the file needs a closer look, not more underlines. */
+export const MAX_PROBLEMS = 200;
+
 /** The most completions sent back for one question; the editor narrows them as you type. */
 export const MAX_COMPLETIONS = 200;
 
@@ -83,6 +97,8 @@ export type TsService = {
   completions(path: string, offset: number): CompletionList | null;
   /** Every place the name at `offset` is used in the project, when it can be renamed. */
   rename(path: string, offset: number): RenameResult;
+  /** The file's syntax and type errors, as the "Types" check would report them. */
+  problems(path: string): Problem[];
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -251,6 +267,33 @@ export function createTsService(ts: Ts): TsService {
         .slice(0, MAX_COMPLETIONS)
         .map((e) => ({ name: e.name, kind: e.kind, sortText: e.sortText }));
       return { entries, member: found.isMemberCompletion };
+    },
+
+    problems(path) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return [];
+      const found = [
+        ...service.getSyntacticDiagnostics(name),
+        ...service.getSemanticDiagnostics(name),
+      ];
+      return found
+        .filter(
+          (d) =>
+            d.start !== undefined &&
+            d.category !== ts.DiagnosticCategory.Suggestion &&
+            d.category !== ts.DiagnosticCategory.Message,
+        )
+        .slice(0, MAX_PROBLEMS)
+        .map((d) => ({
+          start: d.start!,
+          length: Math.max(1, d.length ?? 1),
+          message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+          severity:
+            d.category === ts.DiagnosticCategory.Warning
+              ? ("warning" as const)
+              : ("error" as const),
+          code: `TS${d.code}`,
+        }));
     },
 
     rename(path, offset) {

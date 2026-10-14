@@ -371,6 +371,12 @@ language service in TypeScript files once it has answered once; until then
 the word list (`workspace-complete.ts`) answers, and after that it steps
 aside there (`tsCompletesHere`) so the two lists never mix.
 
+The open file's errors are underlined as you type (`problems` in
+`ts-service.ts`, a CodeMirror `linter` in `ts-intel.ts`, 600 ms after typing
+stops) and counted in the status bar (`typeErrors` in the UI store). Opening a
+file never downloads the compiler: the linter waits until someone types in the
+editor or the compiler is already loaded for another question.
+
 ## The agent loop runs in two places
 
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from

@@ -295,6 +295,7 @@ export function CodePane() {
             },
             (message) => toast.info(message, { id: "ts-definition" }),
             setRenameAsk,
+            (count) => useIdeUi.setState({ typeErrors: count }),
           ),
           keymap.of([
             ...closeBracketsKeymap,

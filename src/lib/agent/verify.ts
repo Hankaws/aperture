@@ -86,11 +86,12 @@ export function verifyRecap(
   const leftover: string[] = [];
   for (const symbol of [...new Set(edits.flatMap(symbolsFromEdit))].slice(0, 5)) {
     const hits = filesMentioning(files, symbol, skip);
-    if (hits.length) leftover.push(`${symbol} still in ${hits.slice(0, 2).join(", ")}`);
+    if (hits.length) leftover.push(`${symbol} also appears in ${hits.slice(0, 2).join(", ")}`);
   }
+  // Where else the changed names appear, to look at before applying: a note, not a failure.
   const line2 = leftover.length
-    ? `Didn't: ${leftover.slice(0, 2).join("; ")}`
-    : "Didn't: no other files mention the changed names.";
+    ? `Elsewhere: ${leftover.slice(0, 2).join("; ")}`
+    : "Elsewhere: no other file mentions the changed names.";
 
   const tracked = plan.some((e) => e.status !== "pending");
   const open = plan.filter((e) => e.status !== "completed").map((e) => e.content);

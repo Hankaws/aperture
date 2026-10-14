@@ -198,6 +198,12 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The review step reads more plainly. With the checks in, skipping the
+  optional review pass is "Apply now" ("Apply anyway" is kept for a red
+  check), the recap's "Didn't:" line is now "Elsewhere:", listing other files
+  that use a changed name, and the Composer bar no longer squeezes its title
+  behind a finished plan's progress bar.
+  ([#83](https://github.com/Hankaws/aperture/pull/83))
 - A bot's suggestion about an open issue or pull request goes there. "Fix
   #15: …" in a report or a look-over is a card that works on #15, with its
   title, instead of opening a new issue that repeats it. A suggestion naming

@@ -95,6 +95,25 @@ test("nextAction offers to send a failed check back, or apply and remember it", 
   assert.equal(next.altCta, "Apply anyway");
 });
 
+test("with the checks in, skipping the review is Apply now, not Apply anyway", () => {
+  const clear = {
+    running: false,
+    awaiting: false,
+    pending: 1,
+    workerCount: 0,
+    crewModels: 1,
+    keyReady: 1,
+    messages: 4,
+    checks: "clear" as const,
+  };
+  const next = nextAction(clear);
+  assert.equal(next.kind, "reviewer");
+  assert.equal(next.cta, "Review");
+  assert.equal(next.altKind, "apply");
+  assert.equal(next.altCta, "Apply now");
+  assert.equal(nextAction({ ...clear, copies: 2 }).altCta, "Keep now");
+});
+
 test("nextAction keeps reviewing while checks are still running", () => {
   const next = nextAction({
     running: false,

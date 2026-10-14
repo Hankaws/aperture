@@ -63,11 +63,12 @@ export function nextAction(input: {
   if (input.pending > 0 && input.checks === "clear" && !input.reviewed) {
     return {
       kind: "reviewer",
-      title: "Review the diff before you keep it",
+      title: "Checks done. Review the diff?",
       detail: "One pass. A comment only where something is wrong. Dismiss it and it will not come back.",
       cta: "Review",
+      // The checks are in, so skipping the review is not a risk: "anyway" is kept for a red check.
       altKind: "apply",
-      altCta: (input.copies ?? 0) > 1 ? "Keep anyway" : "Apply anyway",
+      altCta: (input.copies ?? 0) > 1 ? "Keep now" : "Apply now",
     };
   }
   if (input.pending > 0 && input.checks === "clear") {

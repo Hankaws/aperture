@@ -34,7 +34,7 @@ test("verifyRecap is three lines: changed / didn't / left", () => {
   const lines = recap.split("\n");
   assert.equal(lines.length, 3);
   assert.match(lines[0]!, /^Changed: src\/store\.ts/);
-  assert.match(lines[1]!, /Didn't:.*listTasks still in src\/index\.ts/);
+  assert.match(lines[1]!, /Elsewhere:.*listTasks also appears in src\/index\.ts/);
   assert.match(lines[2]!, /Left: Add a test/);
 });
 
@@ -60,7 +60,7 @@ test("a name in a README or notes file is not code that still references it", ()
     ".aperture.md": "listTasks is the paging helper.",
     "docs/notes.txt": "listTasks",
   });
-  assert.match(recap, /^Didn't: no other files mention the changed names\.$/m);
+  assert.match(recap, /^Elsewhere: no other file mentions the changed names\.$/m);
 });
 
 test("appendVerify skips when there are no edits", () => {
@@ -82,6 +82,6 @@ test("other files count as mentions only for the whole identifier, in the same c
     "README.md": "The listTasksAll helper and ListTasks docs are unrelated.",
     "src/routes/tasks.ts": "import { listTasks } from './store';",
   });
-  assert.match(recap, /Didn't: listTasks still in src\/routes\/tasks\.ts$/m);
+  assert.match(recap, /Elsewhere: listTasks also appears in src\/routes\/tasks\.ts$/m);
   assert.doesNotMatch(recap, /README/);
 });

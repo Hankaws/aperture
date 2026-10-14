@@ -1278,12 +1278,15 @@ function TaskStrip({
 
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2.5">
-      {task.total > 0 && (
-        <span className="relative h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-elevated">
+      {/* Progress only while there is some: a finished plan's full bar would just squeeze the title. */}
+      {task.total > 0 && task.done < task.total && (
+        <span className="relative h-1 w-12 shrink-0 overflow-hidden rounded-full bg-elevated">
           <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${pct}%` }} />
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{hint.title}</span>
+      <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={hint.title}>
+        {hint.title}
+      </span>
       {hint.kind !== "wait" && hint.altCta && (
         <Button
           type="button"

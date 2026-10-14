@@ -5,6 +5,9 @@ import { Input } from "@/components/ui/input";
 import { clearGithubAccount, githubStatus, saveGithubToken, type GithubAccount } from "@/lib/github/api";
 import { clearGithubToken } from "@/lib/github/roundtrip";
 
+/** GitHub's new-token form with the scopes this card asks for already ticked. */
+const NEW_TOKEN_URL = "https://github.com/settings/tokens/new?scopes=repo,workflow&description=Aperture";
+
 /** GitHub on the signed-in account. The token stays on the server. `onAccount` hears every change. */
 export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubAccount) => void } = {}) {
   const [account, setAccount] = useState<GithubAccount | null>(null);
@@ -105,6 +108,15 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
             {busy ? "Saving…" : "Connect"}
           </Button>
         </form>
+      )}
+      {!account?.connected && (
+        <p className="mt-2 text-xs text-subtle">
+          No token yet?{" "}
+          <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+            Make one on GitHub
+          </a>
+          , with the repo and workflow scopes already ticked, then paste it here.
+        </p>
       )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>

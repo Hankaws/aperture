@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { readSummary, summaryMarker, unpushedDiff, type BotSummary } from "./summary.ts";
 import {
@@ -152,6 +153,17 @@ test("the summary reader keeps only well-formed fields and github.com links", ()
   assert.equal(readSummary("<!-- aperture-bot {not json} -->"), null);
   assert.equal(readSummary("no summary here"), null);
   assert.equal(unpushedDiff("no diff"), null);
+});
+
+test("the workflow the Bot page shows to add by hand is the README's, word for word", () => {
+  const readme = readFileSync(
+    new URL("../../../packages/aperture-bot/action/README.md", import.meta.url),
+    "utf8",
+  );
+  const block = /```yaml\n# \.github\/workflows\/aperture-bot\.yml\n([\s\S]*?)```/.exec(
+    readme,
+  )?.[1];
+  assert.equal(workflowFile("grok", "v1"), block);
 });
 
 test("Set up's workflow file is one the Bot page recognises, with the provider's secret", () => {

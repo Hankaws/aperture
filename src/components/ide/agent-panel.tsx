@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore, memo, type KeyboardEvent, type RefObject } from "react";
+import { useLatest } from "@/lib/use-keyed-async";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
@@ -475,17 +476,14 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const sendPhase: AgentPhase = mode === "composer" ? (phaseLock === "auto" ? autoPhase : phaseLock) : "plan";
   const sendLabel = mode === "chat" ? "Ask" : sendPhase === "build" ? "Build" : sendPhase === "skip" ? "Iterate" : "Plan";
 
+  const sendRef = useLatest(send);
   useEffect(() => {
     if (agentRunning || !canSend) return;
     const next = useIdeUi.getState().steerQueue[0];
     if (!next) return;
     useIdeUi.getState().shiftSteer();
-    void send(next);
-    // `send` is recreated every render; the effect always runs with the render
-    // that changed its deps, so it never sees a stale one. Listing it would
-    // re-fire on every render, and the head check above is what drains the queue.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentRunning, canSend, nextSteer]);
+    void sendRef.current(next);
+  }, [agentRunning, canSend, nextSteer, sendRef]);
 
   return (
     // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.

@@ -100,6 +100,8 @@ type IdeUiState = {
   layoutEpoch: number;
   /** The server answers Composer from recorded runs (APERTURE_MODEL=replay), not a model. */
   aiReplay: boolean;
+  /** Errors TypeScript finds in the open file; null when it has not looked (not TypeScript, or not loaded). */
+  typeErrors: number | null;
   captures: DesignCapture[];
   previewErrors: string[];
   runPreviewScripts: boolean;
@@ -188,6 +190,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   swapSides: DEFAULT_LAYOUT_PREFS.swapSides,
   layoutEpoch: 0,
   aiReplay: false,
+  typeErrors: null,
   captures: [],
   previewErrors: [],
   runPreviewScripts: false,

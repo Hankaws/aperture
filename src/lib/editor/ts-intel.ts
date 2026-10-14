@@ -6,6 +6,7 @@
  * which loads the first time anyone asks, so nobody who never asks downloads it.
  */
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { linter, type Diagnostic } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, type Tooltip } from "@codemirror/view";
 import type { CompletionEntry, DefinitionTarget, RenameLocation } from "../workspace/ts-service.ts";
@@ -110,7 +111,41 @@ export function tsIntel(
   say: (message: string) => void,
   /** Ask for the new name of a rename TypeScript can do. */
   rename: (ask: RenameAsk) => void,
+  /** How many errors the open file has; null when TypeScript has not looked at it. */
+  errors: (count: number | null) => void = () => {},
 ) {
+  /**
+   * Views someone has typed in. The compiler is a few megabytes: opening a file
+   * does not download it, but typing in one, or any other question, does.
+   */
+  const typedIn = new WeakSet<EditorView>();
+
+  async function problems(view: EditorView): Promise<Diagnostic[]> {
+    const path = current();
+    if (!path || !isTsPath(path)) {
+      errors(null);
+      return [];
+    }
+    const { tsProblems, tsReady } = await import("../workspace/tsc");
+    if (!tsReady() && !typedIn.has(view)) {
+      errors(null);
+      return [];
+    }
+    const doc = view.state.doc.toString();
+    const found = await tsProblems(files(), path, doc);
+    // Superseded by more typing, or no answer: the next run will say.
+    if (found === null || view.state.doc.toString() !== doc || current() !== path) return [];
+    errors(found.filter((p) => p.severity === "error").length);
+    const end = view.state.doc.length;
+    return found.map((p) => ({
+      from: Math.min(p.start, end),
+      to: Math.min(p.start + p.length, end),
+      severity: p.severity,
+      message: p.message,
+      source: p.code,
+    }));
+  }
+
   const ready = (view: EditorView, pos: number) => {
     const path = current();
     if (!path || !isTsPath(path) || !view.state.wordAt(pos)) return null;
@@ -178,6 +213,12 @@ export function tsIntel(
 
   return [
     tipTheme,
+    EditorView.updateListener.of((update) => {
+      if (update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete")))
+        typedIn.add(update.view);
+    }),
+    // A moment after typing stops; each run checks the open file only, against the rest as saved in the store.
+    linter(problems, { delay: 600 }),
     EditorState.languageData.of(() => [{ autocomplete: complete }]),
     hoverTooltip(
       async (view, pos): Promise<Tooltip | null> => {

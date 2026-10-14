@@ -190,3 +190,29 @@ test("what cannot be renamed says why, and a stale rename writes nothing", () =>
   assert.match(renameProblem("n", "class") ?? "", /reserved/);
   assert.match(renameProblem("n", "n") ?? "", /name it has/);
 });
+
+test("the open file's problems are the type errors the check would report, at their places", () => {
+  const text =
+    'import { listTasks } from "./store";\n\nexport const n: number = listTasks(0, 10);\nlistTasks("a");\n';
+  const { service } = serviceFor({ ...files, "src/use.ts": text });
+  const problems = service.problems("src/use.ts");
+  assert.deepEqual(
+    problems.map((p) => [p.code, text.slice(p.start, p.start + p.length)]),
+    [
+      ["TS2322", "n"],
+      ["TS2554", "listTasks"],
+    ],
+  );
+  assert.match(problems[0]!.message, /Type 'Task\[\]' is not assignable to type 'number'/);
+  assert.ok(problems.every((p) => p.severity === "error"));
+  assert.deepEqual(service.problems("src/store.ts"), [], "a clean file has none");
+  assert.deepEqual(service.problems("src/missing.ts"), []);
+});
+
+test("a syntax error is a problem too, where the parser stopped", () => {
+  const text = "export const a = (1 + ;\n";
+  const { service } = serviceFor({ "src/a.ts": text });
+  const problems = service.problems("src/a.ts");
+  assert.ok(problems.length > 0);
+  assert.equal(problems[0]!.code, "TS1109");
+});

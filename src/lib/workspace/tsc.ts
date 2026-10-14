@@ -7,7 +7,7 @@
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
 import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
-import type { CompletionList, DefinitionResult, HoverInfo, RenameResult } from "./ts-service";
+import type { CompletionList, DefinitionResult, HoverInfo, Problem, RenameResult } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
 
@@ -228,4 +228,15 @@ export async function tsRename(
   if (!answer) return { ok: false, reason: "TypeScript could not answer here." };
   if ("unavailable" in answer) return { ok: false, reason: answer.unavailable };
   return "rename" in answer ? answer.rename : { ok: false, reason: "TypeScript could not answer here." };
+}
+
+/** The open file's syntax and type errors; null when the compiler cannot say (too big, not loaded, superseded). */
+export async function tsProblems(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<Problem[] | null> {
+  const answer = await askTs("problems", files, path, text, 0, signal);
+  return answer && "problems" in answer ? answer.problems : null;
 }

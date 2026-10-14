@@ -1,4 +1,4 @@
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { isPublicDemoHost } from "./public-demo.ts";
 
 /** True on the public demo, where Composer must not spend the operator's Grok key. */
@@ -60,4 +60,18 @@ export async function agentCaller(
     const replay = await signedOutReplay(request);
     return replay ? { userId: replay.userId, signedOut: { cookie: replay.cookie } } : null;
   }
+}
+
+/**
+ * `signedOutReplay` for a server function, where there is no Response to put
+ * the cookie on: the visitor's user id, with the cookie set on this response
+ * when the browser had none. Null where a signed-out run is not allowed.
+ */
+export async function signedOutReplayHere(): Promise<string | null> {
+  const request = getRequest();
+  if (!request) return null;
+  const visitor = await signedOutReplay(request);
+  if (!visitor) return null;
+  if (visitor.cookie) setResponseHeader("Set-Cookie", visitor.cookie);
+  return visitor.userId;
 }

@@ -1,7 +1,7 @@
 import { AGENT_TOOLS, type AgentToolDef } from "./tools";
 import { cachedText } from "./cost";
 import type { ProviderId } from "@/lib/billing/plans";
-import { REPLAY_INLINE_ERROR, replayCompletion, streamPieces } from "./replay";
+import { replayCompletion, replayInline, streamPieces } from "./replay";
 import { iterateSseData, readOpenAiStream } from "./openai-stream";
 import { anthropicUsage, openAiUsage, type TokenUsage } from "./usage";
 
@@ -166,7 +166,7 @@ export async function complete(
   tools: AgentToolDef[] = AGENT_TOOLS,
 ): Promise<Completion> {
   if (cfg.provider === "replay") {
-    if (!useTools) throw new Error(REPLAY_INLINE_ERROR);
+    if (!useTools) return { content: replayInline(messages) };
     return replayCompletion(messages, tools.map((t) => t.function.name));
   }
   if (cfg.provider === "anthropic") {

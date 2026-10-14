@@ -615,6 +615,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       />
 
       <div>
+      {replay && name === DEMO_WORKSPACE_NAME && checkpoints.length > 0 && <DemoNext />}
       {checkpoints.length > 0 && (
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
           <p className="min-w-0 truncate text-xs text-muted">Last run: {checkpoints[checkpoints.length - 1]!.label}</p>
@@ -923,6 +924,60 @@ function EmptyComposer({
 }
 
 const PLAN_FIRST_KEY = "aperture-plan-first";
+const DEMO_NEXT_KEY = "aperture-demo-next-dismissed";
+
+/**
+ * After a change is applied on the replay demo: what ran here was recorded,
+ * on a sample project, and Composer on this host replays for everyone, signed
+ * in or not. What runs on the visitor's own code is the GitHub side, in their
+ * own Actions (Aperture Bot on their own key, Agent Check on none), so that is
+ * where this points. Dismissed once, it stays dismissed in this browser.
+ */
+function DemoNext() {
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem(DEMO_NEXT_KEY) === "1");
+    } catch {
+      setDismissed(false);
+    }
+  }, []);
+  if (dismissed) return null;
+  function dismiss() {
+    setDismissed(true);
+    try {
+      window.localStorage.setItem(DEMO_NEXT_KEY, "1");
+    } catch {
+      // Storage blocked: it stays closed for this page.
+    }
+  }
+  return (
+    <div className="relative border-t border-border bg-accent/5 px-3 py-2.5" role="note" aria-label="Try it on your own code">
+      <button
+        type="button"
+        aria-label="Dismiss"
+        title="Dismiss"
+        onClick={dismiss}
+        className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded text-subtle hover:bg-elevated hover:text-fg"
+      >
+        <X className="size-3.5" />
+      </button>
+      <p className="pr-6 text-xs font-medium text-fg">That ran on harbor-api, a sample project, with recorded answers.</p>
+      <p className="mt-0.5 text-xs text-muted">
+        On your own code, in your repo&apos;s GitHub Actions: Aperture Bot takes a task from an issue and opens a pull request, on
+        your own model key. Agent Check runs these same checks on every pull request, with no key at all.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Link to="/bot" className={cn(buttonVariants({ size: "sm" }))}>
+          Set up Aperture Bot
+        </Link>
+        <Link to="/agent-check" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+          Agent Check
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function PlanChrome({
   actDisabled,

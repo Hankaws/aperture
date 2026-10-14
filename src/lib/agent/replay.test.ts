@@ -5,11 +5,14 @@ import { editTurnStop } from "./cost.ts";
 import { DEMO_FILES } from "../workspace/demo-repo.ts";
 import { continuationInstruction, handoffToolText } from "./browser-handoff.ts";
 import {
+  REPLAY_INLINE_ERROR,
   TAPES,
   findTape,
+  inlineFix,
   phaseFromTools,
   replayCompletion,
   replayEnabled,
+  replayInline,
   streamPieces,
   type ReplayMessage,
 } from "./replay.ts";
@@ -386,4 +389,69 @@ test("a fix for one of several known bugs says what it fixed and that the rest w
     run.text,
     "Checked in the browser: the fix makes `store starts page 0 at the first task` pass. `npm run test` still fails 2 other tests, which failed the same way before these edits, so they are not from this change.",
   );
+});
+
+/** The loop's inline prompt (runInline), and the file after the replacement goes in where the selection was. */
+function inlineEdit(path: string, selected: string, instruction: string): string {
+  const file = DEMO_FILES[path]!;
+  assert.ok(file.includes(selected), `${selected} not in ${path}`);
+  const content = [
+    `File: ${path} L1-L2`,
+    `Instruction: ${instruction}`,
+    "Selected code:",
+    selected,
+    "Surrounding file (for context, do not repeat it):",
+    file,
+  ].join("\n\n");
+  const reply = replayInline([
+    { role: "system", content: "You rewrite a selected span of code." },
+    { role: "user", content },
+  ]);
+  const applied = applySearchReplace(file, selected, reply);
+  assert.ok(applied.ok, `the reply applies to ${path}`);
+  return applied.next;
+}
+
+test("an inline fix on a line a recorded fix changes gives that fix, and otherwise says what it knows", () => {
+  for (const tape of TAPES.filter((t) => !t.again)) {
+    for (const edit of tape.edits) {
+      const recorded = applySearchReplace(DEMO_FILES[edit.path]!, edit.search, edit.replace);
+      assert.ok(recorded.ok);
+      // The whole recorded span: exactly the recorded fix.
+      assert.equal(inlineEdit(edit.path, edit.search, "fix this"), recorded.next, `${tape.id}: whole span`);
+      // Only the code lines it removes: the fix, with at most a dropped comment left over.
+      const code = edit.search
+        .split("\n")
+        .filter((line) => !edit.replace.split("\n").some((kept) => kept.trim() === line.trim()))
+        .filter((line) => !line.trim().startsWith("//"));
+      const one = code.length ? code.join("\n") : edit.search.split("\n").find((l) => l.trim().startsWith("//"))!;
+      const fixed = inlineEdit(edit.path, one, tape.title);
+      for (const line of edit.replace.split("\n")) assert.ok(fixed.includes(line), `${tape.id}: ${line}`);
+      for (const line of code) assert.ok(!fixed.includes(line), `${tape.id}: ${line} is gone`);
+    }
+  }
+  // Mid-line: the selection starts after the indent, and the reply adds none.
+  assert.equal(
+    inlineFix(
+      { search: "  // c\n  return a + 1;", replace: "  return a;" },
+      "return a + 1;",
+    ),
+    "return a;",
+  );
+});
+
+test("an inline edit replay cannot honestly answer is refused, not guessed", () => {
+  const ret = "  return tasks.slice(start + 1, start + pageSize + 1);";
+  assert.throws(() => inlineEdit("src/store.ts", ret, "add logging here"), { message: REPLAY_INLINE_ERROR });
+  assert.throws(() => inlineEdit("src/store.ts", "export function countTasks(): number {", "fix this"), {
+    message: REPLAY_INLINE_ERROR,
+  });
+  // A comment the fix drops is not the fix: selecting only it would leave the bug in.
+  assert.throws(() => inlineEdit("src/store.ts", "  // Off-by-one: skips the first item on every page.", "fix this"), {
+    message: REPLAY_INLINE_ERROR,
+  });
+  // The recorded bad change (a deliberate type error) is never an inline answer.
+  assert.throws(() => inlineEdit("src/store.ts", ret, "make listTasks return a number"), {
+    message: REPLAY_INLINE_ERROR,
+  });
 });

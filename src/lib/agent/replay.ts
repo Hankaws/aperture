@@ -204,8 +204,81 @@ export function replayEnabled(env: Record<string, string | undefined> = process.
   return env.APERTURE_MODEL?.trim() === "replay";
 }
 
-/** Inline edits paste the reply straight into code, so replay refuses them rather than insert prose. */
-export const REPLAY_INLINE_ERROR = "Inline edits need a real model. The replay model only plays back recorded Composer tasks.";
+/**
+ * Inline edits paste the reply straight into code, so replay answers one only
+ * with a recorded fix and otherwise says why, rather than insert prose.
+ */
+export const REPLAY_INLINE_ERROR =
+  "The replay model only knows the demo's recorded fixes. Select a line one of them changes (the return in listTasks in src/store.ts, the \"Should be 404\" line in src/routes/tasks.ts, or the return in requireTitle in src/lib/validate.ts) and ask to fix it. Add a model key for anything else.";
+
+/** A fix ask. The inline box's instruction must say so, or name the tape's task. */
+const FIX_ASK = /\b(fix|bug|wrong|correct|repair|broken)/i;
+
+const lines = (text: string) => text.replace(/\n$/, "").split("\n");
+
+/**
+ * The replacement for a selection that a recorded fix changes, or null.
+ *
+ * The selection may be the whole recorded span or more (the span is replaced
+ * inside it), or some of its lines, as long as it holds every code line the
+ * fix removes (a comment the fix drops may stay outside it). Lines the
+ * selection leaves out that the fix keeps unchanged at either end are not
+ * repeated, so the file ends up as the recorded fix leaves it, or with only
+ * the dropped comment left over.
+ */
+export function inlineFix(edit: Pick<Edit, "search" | "replace">, selected: string): string | null {
+  if (selected.includes(edit.search)) return selected.replace(edit.search, edit.replace);
+  const search = lines(edit.search);
+  const sel = lines(selected);
+  const want = sel.map((line) => line.trim());
+  const at = search.findIndex((_, i) => want.every((line, j) => search[i + j]?.trim() === line));
+  if (at < 0 || !want.some(Boolean)) return null;
+  const kept = new Set(lines(edit.replace).map((line) => line.trim()));
+  const removed = search.filter((line) => !kept.has(line.trim()));
+  const code = removed.filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line));
+  const inSel = new Set(want);
+  if (!(code.length ? code : removed).every((line) => inSel.has(line.trim()))) return null;
+  let out = lines(edit.replace);
+  const before = search.slice(0, at);
+  const after = search.slice(at + sel.length);
+  while (before.length && out.length && before[0] === out[0]) {
+    before.shift();
+    out.shift();
+  }
+  while (after.length && out.length && after.at(-1) === out.at(-1)) {
+    after.pop();
+    out.pop();
+  }
+  if (!out.length) return null;
+  // A selection that starts mid-line has no indent before it in the file; the replacement must not add one.
+  const indent = (search[at] ?? "").length - (search[at] ?? "").trimStart().length;
+  const selIndent = sel[0]!.length - sel[0]!.trimStart().length;
+  if (selIndent < indent) out = [out[0]!.slice(indent - selIndent), ...out.slice(1)];
+  return out.join("\n") + (selected.endsWith("\n") ? "\n" : "");
+}
+
+/**
+ * An inline edit in replay: the loop's inline prompt carries the instruction
+ * and the selected code. A tape that is a fix (not the recorded bad change)
+ * answers when the ask is a fix and the selection is code that fix changes.
+ */
+export function replayInline(messages: ReplayMessage[]): string {
+  const ask = [...messages].reverse().find((m) => m.role === "user" && typeof m.content === "string")?.content ?? "";
+  const instruction = /^Instruction: (.*)$/m.exec(ask)?.[1] ?? "";
+  const selected = /\n\nSelected code:\n\n([\s\S]*?)\n\nSurrounding file \(/.exec(ask)?.[1];
+  if (!selected) throw new Error(REPLAY_INLINE_ERROR);
+  // The narrowest tape the words name, as findTape picks: "make listTasks return a number" is not a fix.
+  const named = TAPES.filter((t) => t.match.test(instruction)).at(-1);
+  const fixAsk = named ? !named.again : FIX_ASK.test(instruction);
+  for (const tape of TAPES) {
+    if (tape.again || !fixAsk) continue;
+    for (const edit of tape.edits) {
+      const fixed = inlineFix(edit, selected);
+      if (fixed !== null) return fixed;
+    }
+  }
+  throw new Error(REPLAY_INLINE_ERROR);
+}
 
 export function findTape(messages: ReplayMessage[]): Tape | null {
   // Skip the system prompt and the context message (which quotes file

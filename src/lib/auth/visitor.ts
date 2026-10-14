@@ -28,6 +28,23 @@ export function isVisitorCookie(value: string | null | undefined): value is stri
   return typeof value === "string" && UUID.test(value);
 }
 
+/** The `Set-Cookie` value that gives a browser its visitor id, as `anonymousUserId` sets it. */
+export function visitorCookieHeader(visitorId: string, secure: boolean): string {
+  return `${VISITOR_COOKIE}=${visitorId}; Path=/; Max-Age=${VISITOR_COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+}
+
+/** The visitor id in a request's Cookie header, when it is one this server could have minted. */
+export function visitorIdFrom(cookieHeader: string | null): string | null {
+  for (const part of (cookieHeader ?? "").split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === VISITOR_COOKIE) {
+      const value = rest.join("=");
+      return isVisitorCookie(value) ? value : null;
+    }
+  }
+  return null;
+}
+
 export function visitorUserId(visitorId: string): string {
   return `${PREFIX}${visitorId}`;
 }

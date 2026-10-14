@@ -5,6 +5,8 @@ import {
   isVisitorCookie,
   isVisitorUserId,
   spendOwnerId,
+  visitorCookieHeader,
+  visitorIdFrom,
   visitorUserId,
 } from "./visitor.ts";
 
@@ -30,4 +32,23 @@ test("every visitor spends from one shared pool; accounts spend their own", () =
   assert.equal(spendOwnerId(a), ANONYMOUS_POOL_ID);
   assert.equal(spendOwnerId(b), ANONYMOUS_POOL_ID);
   assert.equal(spendOwnerId("u7Kq2dXb9sWf"), "u7Kq2dXb9sWf");
+});
+
+test("a signed-out replay run reads the visitor id from the Cookie header, or is given one", () => {
+  const id = crypto.randomUUID();
+  assert.equal(visitorIdFrom(`theme=dark; aperture_visitor=${id}; other=1`), id);
+  assert.equal(
+    visitorIdFrom("aperture_visitor=not-a-uuid"),
+    null,
+    "only an id this server could have minted",
+  );
+  assert.equal(visitorIdFrom(null), null);
+  assert.equal(visitorIdFrom("aperture_visitor_x=1"), null);
+  assert.equal(
+    visitorCookieHeader(id, true),
+    `aperture_visitor=${id}; Path=/; Max-Age=15552000; HttpOnly; SameSite=Lax; Secure`,
+  );
+  assert.doesNotMatch(visitorCookieHeader(id, false), /Secure/);
+  // Whatever it runs is charged to the shared pool, never a fresh allowance.
+  assert.equal(spendOwnerId(visitorUserId(id)), ANONYMOUS_POOL_ID);
 });

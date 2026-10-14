@@ -9,6 +9,11 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Signed-out visitors can try the replay demo. On a deployment running the
+  replay model, Composer plans, builds, checks and applies without an
+  account, the way it does for someone signed in. The runs cost nothing and
+  are rate limited. Without replay, Composer still asks you to sign in.
+  ([#82](https://github.com/Hankaws/aperture/pull/82))
 - TypeScript in the editor knows your code. Hover a name to see its type
   and its doc comment, from the TypeScript compiler. Press F12, or
   Ctrl/⌘+click a name, to open where it is defined, with the name selected;

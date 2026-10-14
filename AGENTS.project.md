@@ -145,6 +145,12 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
 - It never claims tests passed: every result it states comes from a real run
   of the tests.
 - Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
+- Signed out, a replay deployment still runs Composer: `/api/agent` asks
+  `agentCaller` (`public-demo.server.ts`), which lets a signed-out request
+  through only when replay is on, as a visitor id from the `aperture_visitor`
+  cookie (set on the response when missing). These runs record no billing,
+  may not use an external agent, and share a `demo` rate limit on top of each
+  visitor's `composer` one. Anything else signed out is still a 401.
 - Try it: `APERTURE_MODEL=replay VITE_AUTH_ENABLED=false npm run dev`.
 
 ## Check results on every staged change

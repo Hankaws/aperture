@@ -15,7 +15,6 @@ import {
 import { runHooks } from "@/lib/workspace/hook-runner";
 
 type SaveHooks = {
-  /** The file that was saved. */
   path: string | null;
   runs: HookRun[];
 };

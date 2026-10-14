@@ -257,7 +257,6 @@ export type LoopHost = {
   ) => Promise<Completion>;
   /** Runs a package.json script in a sandbox, for a request with a known owner. */
   runScript?: (userId: string, files: Record<string, string>, script: string, signal?: AbortSignal) => Promise<ScriptOutcome>;
-  /** The account's MCP tools. */
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
   /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
   parser?: () => Promise<ParseCheck>;

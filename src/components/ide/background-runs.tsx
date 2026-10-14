@@ -117,7 +117,6 @@ function stateTone(run: BackgroundRun): string {
   return "bg-subtle";
 }
 
-/** A background run on the agent board. */
 export function BackgroundCard({ run }: { run: BackgroundRun }) {
   const files = new Set(pendingEdits(run).map((edit) => edit.path)).size;
   return (

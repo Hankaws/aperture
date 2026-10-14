@@ -44,7 +44,6 @@ export type BotTask = {
   askedUrl: string;
   state: TaskState;
   summary: BotSummary | null;
-  /** The bot's comment, when there is one. */
   replyUrl: string | null;
   updatedAt: string;
   /** The change the bot did not push, from its reply. */

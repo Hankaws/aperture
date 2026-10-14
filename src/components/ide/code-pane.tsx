@@ -26,6 +26,8 @@ import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
 import { tsCompletesHere, tsIntel, type RenameAsk } from "@/lib/editor/ts-intel";
 import { RenameBox } from "./rename-box";
+import { isTsPath } from "@/lib/workspace/tsc-core";
+import { applyQuickFix } from "@/lib/workspace/quick-fix";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { ED, SYN } from "@/lib/editor/theme";
 import { clampSession, loadSession, saveSession } from "@/lib/editor/session";
@@ -231,6 +233,8 @@ export function CodePane() {
   const reveal = useIdeUi((s) => s.reveal);
   const findTick = useIdeUi((s) => s.findTick);
   const tscFindings = useIdeUi((s) => s.tscFindings);
+  // TypeScript is checking the open file as you type: its underlines replace the light check's line marks.
+  const tsLive = useIdeUi((s) => s.typeErrors !== null);
   const tabOn = Boolean(account?.tab) && !pendingEdit;
   chunksRef.current = chunks;
   writeFileRef.current = writeFile;
@@ -242,6 +246,7 @@ export function CodePane() {
     if (!activePath) return [];
     const staged = pendingEdit?.path === activePath ? pendingEdit.newText : value;
     const staging = pendingEdit?.path === activePath;
+    if (!staging && tsLive && isTsPath(activePath)) return [];
     // While a change is staged, real tsc has the last word on its types once it has run.
     const types =
       staging && tscFindings?.after[activePath]
@@ -252,7 +257,7 @@ export function CodePane() {
           }
         : undefined;
     return collectMarks(activePath, staged, { ...files, [activePath]: staged }, staging ? files : undefined, types);
-  }, [activePath, pendingEdit, value, files, tscFindings]);
+  }, [activePath, pendingEdit, value, files, tscFindings, tsLive]);
 
   useEffect(() => {
     if (!parentRef.current || viewRef.current) return;
@@ -295,6 +300,9 @@ export function CodePane() {
             },
             (message) => toast.info(message, { id: "ts-definition" }),
             setRenameAsk,
+            (count) => useIdeUi.setState({ typeErrors: count }),
+            applyQuickFix,
+            (found) => useIdeUi.getState().openReferences(found),
           ),
           keymap.of([
             ...closeBracketsKeymap,

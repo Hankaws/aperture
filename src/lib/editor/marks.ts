@@ -169,7 +169,6 @@ const markField = StateField.define<Marked>({
   provide: (field) => EditorView.decorations.from(field, (value) => value.deco),
 });
 
-/** The marks the editor is showing now. */
 export function shownMarks(state: EditorState): LineMark[] {
   return state.field(markField, false)?.marks ?? [];
 }

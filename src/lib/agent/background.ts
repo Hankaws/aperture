@@ -46,7 +46,6 @@ export type BackgroundRun = {
   state: BackgroundState;
   /** One live line: what it is doing now, or how it ended. */
   status: string;
-  /** The agent's reply. */
   text: string;
   /** Staged against the snapshot the run started from. */
   edits: ProposedEdit[];

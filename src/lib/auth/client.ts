@@ -30,7 +30,7 @@ export const authClient = createAuthClient({
 
 /**
  * True when sign-in UI should be shown — i.e. whenever `VITE_AUTH_ENABLED` is
- * not `"false"`. The shipped template sets it to `"false"`
+ * not `"false"`. The repo sets it to `"false"`
  * (`.grok/app-env.json`), which selects the dev user (see `use-current-user`);
  * with the key removed, sign-in is real in preview (baked preview client) and
  * when deployed (injected per-app client).
@@ -40,7 +40,6 @@ export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 /** The upstream providers to render sign-in buttons for. */
 export { GROK_PROVIDERS };
 
-// ── Live-preview bearer token ────────────────────────────────────────────────
 // The embedded preview iframe has partitioned cookies, so we keep the session's
 // bearer token in sessionStorage and attach it to every Better Auth request (and
 // to server functions, via `@/lib/auth/middleware`). Empty everywhere except the

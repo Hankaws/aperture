@@ -15,7 +15,6 @@ export type NextInput = {
   written: string[];
   /** Agent Check's report, when it ran. */
   check: string | null;
-  /** The agent's own last words. */
   summary: string;
 };
 

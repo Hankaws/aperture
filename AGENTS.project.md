@@ -404,6 +404,32 @@ source (`LOCAL_RUNS_IN_BROWSER`) for anything it would have to run itself.
 `local-model.ts` only accepts loopback addresses, so the page cannot be used
 to probe the network.
 
+## The agent asks TypeScript
+
+`find_references` and `rename_symbol` (`tools.ts`) and the recap's
+"Elsewhere:" line (`verify.ts`) use the editor's language service
+(`ts-service.ts`) through `src/lib/agent/code-intel.ts`. A host that has the
+compiler passes `LoopHost.language`: the server (`loop.server.ts`, library
+files from `ts-libs.server.ts`, shared with `check_change`) and the bot
+(`packages/aperture-bot/src/model.ts`, library files from Agent Check's
+`libReader`). The browser's local-model host does not, so there the tools
+answer that TypeScript is not available and the recap uses text search.
+
+- The service is made once per run and loaded on first use: the first
+  `find_references`/`rename_symbol`, or the recap of a turn whose edits touch a
+  TypeScript file. It sees the whole project as sent (`fileMap`), with what the
+  run has staged since; the prompt's capped `files` would miss or clip files.
+- The model names a symbol by `path` + `name` (+ optional `line`), not an
+  offset: `nameOffsets` tries the declaration first, then every whole-word
+  match, and the service answers only on a real reference, so a match in a
+  comment is skipped.
+- `rename_symbol` has `propose_edit`'s locks and confidence rule, and its
+  result starts "Edit staged" so `editTurnStop` counts it.
+- In the recap, a name still in its file gets its uses by `file:line`; a name
+  gone from its file is checked in the files that mention it, and only lines
+  with an error naming it count ("is gone but still used in"). Past
+  `MAX_GONE_FILES`, or when the compiler cannot say, it is text search as before.
+
 ## Runs and the agent board
 
 A run is a request and every turn that answers it. `submitAgent` stamps each

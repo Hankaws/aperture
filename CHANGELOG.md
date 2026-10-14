@@ -9,6 +9,17 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The agent asks TypeScript, not a text search. Composer, Aperture Bot and
+  background runs can call `find_references`, which lists every place a name
+  is declared or used, following an import under another name and skipping
+  comments and an unrelated name spelled the same, and `rename_symbol`, which
+  renames a name everywhere as F2 does and stages one edit per file. The
+  recap's "Elsewhere:" line now comes from the compiler where it can: "listTasks
+  is used in src/routes/tasks.ts (lines 2, 5)", or "is gone but still used in"
+  when a change removes a name other code imports. Where the compiler is not
+  available (a model on your own machine), the tools say so and the recap
+  falls back to text, as before.
+  ([#94](https://github.com/Hankaws/aperture/pull/94))
 - Find all references and quick fixes in the editor. Shift+F12 on a
   TypeScript name lists every place it is declared or used, by file, in the
   sidebar; a row opens the file at the name. An underlined error offers

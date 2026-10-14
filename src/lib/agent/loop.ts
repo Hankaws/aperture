@@ -22,7 +22,9 @@ import { sanitizeFileMap, redactSecrets, safeRelPath } from "@/lib/security/reda
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
-import { appendVerify } from "./verify";
+import { appendVerify, type UsedIn } from "./verify";
+import { codeIntel, usedElsewhere, type CodeIntel, type LanguageHost } from "./code-intel";
+import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
 import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
 import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
@@ -260,6 +262,12 @@ export type LoopHost = {
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
   /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
   parser?: () => Promise<ParseCheck>;
+  /**
+   * The compiler and its library files, where the host has them: the agent's
+   * find_references and rename_symbol, and the recap's "Elsewhere:" line.
+   * Loaded on first use.
+   */
+  language?: () => Promise<LanguageHost>;
 };
 
 export async function runLoop(
@@ -313,6 +321,42 @@ export async function runLoop(
   let scriptsWithoutEdits = 0;
   const editsKeyOf = (edits: ProposedEdit[]) => JSON.stringify(mergeEdits(edits).map((e) => [e.path, e.newText]));
   const reviewTally = { kept: 0, dropped: 0 };
+  // The compiler sees the whole project, not just the files in the prompt (some
+  // clipped to fit): the files as sent, with what this run has staged since.
+  const sent = { ...files };
+  const project = () => {
+    const view = { ...fileMap };
+    for (const [path, text] of Object.entries(ctx.files)) if (text !== sent[path]) view[path] = text;
+    return view;
+  };
+  let intelLoad: Promise<CodeIntel | null> | undefined;
+  const intel = host.language && !reviewing
+    ? async () => {
+        intelLoad ??= host.language!().then(codeIntel, () => null);
+        const ask = await intelLoad;
+        if (!ask) return "TypeScript could not load here.";
+        const view = project();
+        try {
+          const service = await ask(view);
+          return typeof service === "string" ? service : { service, files: view };
+        } catch {
+          return "TypeScript could not read this project.";
+        }
+      }
+    : undefined;
+  /** The compiler's answer to "where else is this used", for the recap, when an edit touched TypeScript. */
+  const recapUses = async (edits: ProposedEdit[]): Promise<UsedIn | undefined> => {
+    if (!intel || !edits.some((e) => isTsPath(e.path))) return undefined;
+    const found = await intel();
+    if (typeof found === "string") return undefined;
+    return (path, symbol, skip) => {
+      try {
+        return usedElsewhere(found.service, found.files, path, symbol, skip);
+      } catch {
+        return null;
+      }
+    };
+  };
   const ctx: ToolContext = {
     files,
     chunks,
@@ -321,6 +365,7 @@ export async function runLoop(
     requirePlan,
     newFiles: input.newFiles,
     loadParse: host.parser,
+    intel,
     phase,
     mode: input.mode,
     role: input.role,
@@ -453,19 +498,20 @@ export async function runLoop(
   const maxSteps = reviewing ? 1 : phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
-  const succeed = (
+  const succeed = async (
     body: { text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean },
     steps: number,
-  ): AgentResult => {
+  ): Promise<AgentResult> => {
     const edits = body.edits;
     // The recap describes this turn's change; a follow-up that changed nothing (a browser run's report) has none.
     const changed = edits.some(
       (e) => !(input.pendingEdits ?? []).some((p) => p.id === e.id && p.newText === e.newText),
     );
-    const text =
-      body.awaitingBuild || phase === "plan" || !changed
-        ? body.text
-        : appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan, ctx.parse);
+    const recap = !body.awaitingBuild && phase !== "plan" && changed;
+    // Loading the compiler for the recap can take a moment: say so first.
+    if (recap) emit({ type: "status", text: "Verifying…" });
+    const usedIn = recap ? await recapUses(edits).catch(() => undefined) : undefined;
+    const text = recap ? appendVerify(body.text, edits, ctx.files, body.plan ?? ctx.plan, ctx.parse, usedIn) : body.text;
     const line =
       verify?.script && verify.status === "passed"
         ? verifiedLine(verify.script)
@@ -473,7 +519,6 @@ export async function runLoop(
           ? failedLine(verify.script)
           : "";
     const verifiedText = line ? `${text}\n\n${line}` : text;
-    if (text !== body.text) emit({ type: "status", text: "Verifying…" });
     const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
     const extra = {
       ...(debug ? { debug } : {}),
@@ -519,7 +564,7 @@ export async function runLoop(
 
       if (calls.length === 0) {
         if (reviewing) {
-          return succeed(
+          return await succeed(
             {
               text: withReviewLine(completion.content ?? "", reviewTally.kept, reviewTally.dropped),
               traces,
@@ -539,14 +584,14 @@ export async function runLoop(
           continue;
         }
         if (shouldAwaitBuild(phase, hasPlan, [])) {
-          return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
+          return await succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
         }
         const staged = mergeEdits(ctx.edits);
         const verifyScript = chooseVerifyScript(ctx.files);
         const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
         // The tab runs the agent's own check when this turn ends and reports back: no second run here.
         if (browserRun) {
-          return succeed({ text: completion.content.trim() || "Done.", traces, edits: staged, plan: ctx.plan }, step + 1);
+          return await succeed({ text: completion.content.trim() || "Done.", traces, edits: staged, plan: ctx.plan }, step + 1);
         }
         if (phase !== "plan" && staged.length > 0 && (!verifyScript || !ctx.runScript)) {
           verify = notRunReport({ script: verifyScript, hasRunner: Boolean(ctx.runScript) });
@@ -580,7 +625,7 @@ export async function runLoop(
           }
         }
         const text = completion.content.trim() || "Done.";
-        return succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
+        return await succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
       }
 
       messages.push({
@@ -627,8 +672,9 @@ export async function runLoop(
           traces.push(trace);
           emit({ type: "trace", trace });
           if (outcome.call.name === "set_plan") emit({ type: "plan", entries: ctx.plan });
-          if (outcome.call.name === "propose_edit" || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
-          if (outcome.call.name === "propose_edit") editResults.push(outcome.result);
+          const edited = outcome.call.name === "propose_edit" || outcome.call.name === "rename_symbol";
+          if (edited || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
+          if (edited) editResults.push(outcome.result);
           messages.push({
             role: "tool",
             tool_call_id: outcome.call.id,
@@ -638,7 +684,7 @@ export async function runLoop(
       }
 
       if (reviewing) {
-        return succeed(
+        return await succeed(
           {
             text: withReviewLine(completion.content ?? "", reviewTally.kept, reviewTally.dropped),
             traces,
@@ -661,7 +707,7 @@ export async function runLoop(
               continue;
             }
           }
-          return succeed(
+          return await succeed(
             {
               text:
                 stop === "stop"
@@ -689,11 +735,11 @@ export async function runLoop(
             ? "Staged. Tests run in your browser next."
             : "No edit yet. Tests run in your browser on the current files; stage the fix after the result."
           : "Stopped. Stage the change with propose_edit before running the tests again.";
-        return succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
+        return await succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
       }
 
       if (shouldAwaitBuild(phase, ctx.plan.length > 0, callNames)) {
-        return succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
+        return await succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
       }
     }
 
@@ -705,7 +751,7 @@ export async function runLoop(
           ? "Stopped after the tool-call limit. Review the staged edits."
           : "Stopped after the tool-call limit. Nothing was staged.";
     const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
-    return succeed(
+    return await succeed(
       {
         text,
         traces,

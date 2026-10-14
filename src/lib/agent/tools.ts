@@ -6,6 +6,8 @@ import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
+import type { TsService } from "@/lib/workspace/ts-service";
+import { planRename, referencesAnswer } from "./code-intel";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 
@@ -98,6 +100,42 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "find_references",
+      description:
+        "Every place a TypeScript name (function, type, variable, export) is declared or used, from the TypeScript compiler: it follows imports under another name and skips comments, strings and unrelated names spelled the same, which grep cannot. Use it before changing what a name takes or returns.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "A file where the name appears." },
+          name: { type: "string", description: "The name, e.g. listTasks." },
+          line: { type: "number", description: "Optional 1-based line, when the file has more than one thing by that name." },
+        },
+        required: ["path", "name"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "rename_symbol",
+      description:
+        "Rename a TypeScript name everywhere it is used, as the editor's F2 does, and stage one edit per file it changes. Safer than editing each use by hand: imports, re-exports and shorthand properties stay right. Comments and strings keep the old name. Same locks and confidence rule as propose_edit.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "A file where the name appears." },
+          name: { type: "string", description: "The current name." },
+          newName: { type: "string", description: "The new name." },
+          line: { type: "number", description: "Optional 1-based line, when the file has more than one thing by that name." },
+          confidence: { type: "number", description: "0 to 1. How sure this rename is right. Below 0.8 it is dropped." },
+        },
+        required: ["path", "name", "newName", "confidence"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_edit",
       description:
         "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
@@ -175,6 +213,7 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
     return AGENT_TOOLS.filter(
       (t) =>
         t.function.name !== "propose_edit" &&
+        t.function.name !== "rename_symbol" &&
         t.function.name !== "set_plan" &&
         t.function.name !== "note_diff" &&
         t.function.name !== "run_script" &&
@@ -182,7 +221,9 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
     );
   }
   if (kind === "plan") {
-    return AGENT_TOOLS.filter((t) => t.function.name !== "propose_edit" && t.function.name !== "note_diff");
+    return AGENT_TOOLS.filter(
+      (t) => t.function.name !== "propose_edit" && t.function.name !== "rename_symbol" && t.function.name !== "note_diff",
+    );
   }
   if (kind === "review") {
     return AGENT_TOOLS.filter((t) => t.function.name === "note_diff");
@@ -217,6 +258,11 @@ export type ToolContext = {
   parse?: ParseCheck;
   /** Loads `parse`, where the host can; only asked once an edit looks like it does not parse. */
   loadParse?: () => Promise<ParseCheck | undefined>;
+  /**
+   * TypeScript's language service on the whole project as staged so far, and
+   * the files it sees, where the host has the compiler; a string says why not.
+   */
+  intel?: () => Promise<{ service: TsService; files: Record<string, string> } | string>;
 };
 
 function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
@@ -250,6 +296,22 @@ function similarPaths(path: string, keys: string[]): string[] {
   const base = path.split("/").pop()?.toLowerCase() ?? path.toLowerCase();
   if (!base) return [];
   return keys.filter((key) => key.toLowerCase() === path.toLowerCase() || key.toLowerCase().endsWith(`/${base}`) || key.toLowerCase().includes(base)).slice(0, 8);
+}
+
+/** Why this turn may not stage an edit, or null when it may. */
+function editLock(ctx: ToolContext): string | null {
+  if (ctx.mode === "chat") return "Ask mode does not edit. The user can switch to Agent.";
+  if (ctx.role === "review") return "Review mode: call note_diff with bug and confidence. Do not propose_edit.";
+  if (ctx.phase === "plan") return "Edits are locked until the user clicks Build it.";
+  if (ctx.requirePlan && ctx.plan.length === 0 && ctx.phase !== "skip") {
+    return "Edits are locked until you call set_plan with 3–7 steps.";
+  }
+  return null;
+}
+
+function lineArg(value: unknown): number | undefined {
+  const line = Number(value);
+  return Number.isInteger(line) && line > 0 ? line : undefined;
 }
 
 export async function executeTool(
@@ -316,17 +378,49 @@ export async function executeTool(
     return paths.map((p) => `${p}  (${ctx.files[p]!.split("\n").length} lines)`).join("\n") || "(empty)";
   }
 
+  if (name === "find_references") {
+    const path = safeRelPath(String(args.path ?? "")) ?? "";
+    const symbol = String(args.name ?? "").trim();
+    if (!path || !symbol) return "find_references needs path and name.";
+    const intel = ctx.intel ? await ctx.intel() : "TypeScript is not available here.";
+    if (typeof intel === "string") return `${intel} Use grep instead.`;
+    return referencesAnswer(intel.service, intel.files, path, symbol, lineArg(args.line));
+  }
+
+  if (name === "rename_symbol") {
+    const locked = editLock(ctx);
+    if (locked) return locked;
+    if (!keepEdit(parseConfidence(args.confidence))) {
+      return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
+    }
+    const path = safeRelPath(String(args.path ?? "")) ?? "";
+    const symbol = String(args.name ?? "").trim();
+    const next = String(args.newName ?? "").trim();
+    if (!path || !symbol) return "rename_symbol needs path, name and newName.";
+    const intel = ctx.intel ? await ctx.intel() : "TypeScript is not available here.";
+    if (typeof intel === "string") return `${intel} Rename with propose_edit in each file instead.`;
+    const plan = planRename(intel.service, intel.files, path, symbol, next, lineArg(args.line));
+    if (!plan.ok) return `Rename not staged: ${plan.reason}`;
+    const paths = Object.keys(plan.changed).sort();
+    for (const changed of paths) {
+      const newText = plan.changed[changed]!;
+      ctx.edits.push({
+        id: `edit_${ctx.edits.length + 1}_${changed}`,
+        path: changed,
+        oldText: intel.files[changed]!,
+        newText,
+        description: `Rename ${symbol} to ${next}`,
+        status: "pending",
+      });
+      ctx.files[changed] = newText;
+    }
+    const files = paths.length === 1 ? "1 file" : `${paths.length} files`;
+    return `Edit staged for ${files}: ${symbol} renamed to ${next} in ${plan.places} ${plan.places === 1 ? "place" : "places"} (${paths.slice(0, 6).join(", ")}${paths.length > 6 ? ", …" : ""}). Comments and strings keep the old name; grep for it if they should change too.`;
+  }
+
   if (name === "propose_edit") {
-    if (ctx.mode === "chat") {
-      return "Ask mode does not edit. The user can switch to Agent.";
-    }
-    if (ctx.role === "review") return "Review mode: call note_diff with bug and confidence. Do not propose_edit.";
-    if (ctx.phase === "plan") {
-      return "Edits are locked until the user clicks Build it.";
-    }
-    if (ctx.requirePlan && ctx.plan.length === 0 && ctx.phase !== "skip") {
-      return "Edits are locked until you call set_plan with 3–7 steps.";
-    }
+    const locked = editLock(ctx);
+    if (locked) return locked;
     if (!keepEdit(parseConfidence(args.confidence))) {
       return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
     }

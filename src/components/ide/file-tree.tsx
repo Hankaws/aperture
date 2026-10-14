@@ -9,6 +9,7 @@ import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { Button } from "@/components/ui/button";
 import { SearchPanel } from "./search-panel";
+import { ReferencesPanel } from "./references-panel";
 
 type TreeNode = {
   name: string;
@@ -232,10 +233,10 @@ export function FileTree() {
   const [dropOver, setDropOver] = useState(false);
   const count = files.length;
 
-  if (view === "search")
+  if (view === "search" || view === "references")
     return (
       <div className="file-tree h-full min-h-0">
-        <SearchPanel />
+        {view === "search" ? <SearchPanel /> : <ReferencesPanel />}
       </div>
     );
 

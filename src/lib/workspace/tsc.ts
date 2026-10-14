@@ -7,7 +7,7 @@
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
 import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
-import type { DefinitionResult, HoverInfo } from "./ts-service";
+import type { CompletionList, DefinitionResult, HoverInfo, Problem, ReferencesResult, RenameResult } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
 
@@ -203,4 +203,53 @@ export async function tsDefinition(
   if (!answer) return null;
   if ("unavailable" in answer) return { unavailable: answer.unavailable };
   return "definition" in answer ? answer.definition : null;
+}
+
+/** What can be typed at `offset`; null when the compiler is not loaded yet or cannot say. */
+export async function tsCompletions(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<CompletionList | null> {
+  const answer = await askTs("completions", files, path, text, offset, signal);
+  return answer && "completions" in answer ? answer.completions : null;
+}
+
+/** Every use of the name at `offset`, to rename it; why not, when it cannot be renamed. */
+export async function tsRename(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+): Promise<RenameResult> {
+  const answer = await askTs("rename", files, path, text, offset);
+  if (!answer) return { ok: false, reason: "TypeScript could not answer here." };
+  if ("unavailable" in answer) return { ok: false, reason: answer.unavailable };
+  return "rename" in answer ? answer.rename : { ok: false, reason: "TypeScript could not answer here." };
+}
+
+/** The open file's syntax and type errors; null when the compiler cannot say (too big, not loaded, superseded). */
+export async function tsProblems(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<Problem[] | null> {
+  const answer = await askTs("problems", files, path, text, 0, signal);
+  return answer && "problems" in answer ? answer.problems : null;
+}
+
+/** Every place the name at `offset` is declared or used; why not, when TypeScript cannot say. */
+export async function tsReferences(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+): Promise<ReferencesResult | { unavailable: string } | null> {
+  const answer = await askTs("references", files, path, text, offset);
+  if (!answer) return { unavailable: "TypeScript could not answer here." };
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "references" in answer ? answer.references : null;
 }

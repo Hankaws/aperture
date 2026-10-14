@@ -31,6 +31,7 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
   const setHistoryOpen = useIdeUi((s) => s.setHistoryOpen);
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const lang = activePath ? languageLabel(activePath) : "";
+  const typeErrors = useIdeUi((s) => s.typeErrors);
   const line = selection && selection.path === activePath ? selection.fromLine : null;
   const fileCount = files.length;
   const github = useWorkspace((s) => s.github);
@@ -128,6 +129,14 @@ export function StatusBar({ aiLabel }: { aiLabel: string }) {
         )}
         {line != null && <span className="hidden tabular-nums md:inline">Line {line}</span>}
         {lang && <span className="hidden md:inline">{lang}</span>}
+        {typeErrors !== null && (
+          <span
+            className={cn("hidden md:inline", typeErrors > 0 ? "text-danger" : "text-subtle")}
+            title="TypeScript, in this file. Hover an underline for the message."
+          >
+            {typeErrors === 0 ? "No type errors" : `${typeErrors} type ${typeErrors === 1 ? "error" : "errors"}`}
+          </span>
+        )}
         <span className="hidden shrink-0 text-subtle md:inline" title="Composer waits for Build it, and a background run for you to open it. Nothing is applied until you Apply.">
           Manual
         </span>

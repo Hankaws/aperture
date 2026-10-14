@@ -4,12 +4,23 @@
  * megabytes, so nobody who never edits TypeScript downloads them.
  *
  * The compiler only parses and type-checks: no project code runs here.
- * The same worker answers the editor's questions (hover, go to definition)
+ * The same worker answers the editor's questions (hover, go to definition,
+ * completions, rename, the open file's problems and their fixes, references)
  * from TypeScript's language service, so the compiler is downloaded once.
  */
 import ts from "typescript";
 import { checkProject, compilerOptions, loadLibFiles, type TscCache, type TscResult } from "./tsc-core";
-import { createTsService, serviceUnavailable, type DefinitionResult, type HoverInfo, type TsService } from "./ts-service";
+import {
+  createTsService,
+  serviceUnavailable,
+  type CompletionList,
+  type DefinitionResult,
+  type HoverInfo,
+  type Problem,
+  type ReferencesResult,
+  type RenameResult,
+  type TsService,
+} from "./ts-service";
 
 /** Load the compiler's library files and parse them, so the first real check is quick. */
 export type TscWarm = { type: "warm"; files: Record<string, string> };
@@ -27,11 +38,21 @@ export type TscRequest = {
 export type TsFiles = { type: "files"; files: Record<string, string> };
 
 /** A question about the name at `offset` in `path`, whose text is `text` (the editor's, unsaved typing included). */
-export type TsAsk = { type: "hover" | "definition"; id: number; path: string; text: string; offset: number };
+export type TsAsk = {
+  type: "hover" | "definition" | "completions" | "rename" | "problems" | "references";
+  id: number;
+  path: string;
+  text: string;
+  offset: number;
+};
 
 export type TsAnswer =
   | { id: number; hover: HoverInfo | null }
   | { id: number; definition: DefinitionResult }
+  | { id: number; completions: CompletionList | null }
+  | { id: number; rename: RenameResult }
+  | { id: number; problems: Problem[] }
+  | { id: number; references: ReferencesResult | null }
   | { id: number; unavailable: string };
 
 export type TscReply =
@@ -68,9 +89,12 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   const options = compilerOptions(ts, files);
   service ??= createTsService(ts);
   service.update(files, await loadLibs(options), options);
-  return ask.type === "hover"
-    ? { id: ask.id, hover: service.hover(ask.path, ask.offset) }
-    : { id: ask.id, definition: service.definition(ask.path, ask.offset) };
+  if (ask.type === "hover") return { id: ask.id, hover: service.hover(ask.path, ask.offset) };
+  if (ask.type === "completions") return { id: ask.id, completions: service.completions(ask.path, ask.offset) };
+  if (ask.type === "rename") return { id: ask.id, rename: service.rename(ask.path, ask.offset) };
+  if (ask.type === "problems") return { id: ask.id, problems: service.problems(ask.path) };
+  if (ask.type === "references") return { id: ask.id, references: service.references(ask.path, ask.offset) };
+  return { id: ask.id, definition: service.definition(ask.path, ask.offset) };
 }
 
 self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsAsk>) => {
@@ -78,7 +102,14 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     projectFiles = event.data.files;
     return;
   }
-  if (event.data.type === "hover" || event.data.type === "definition") {
+  if (
+    event.data.type === "hover" ||
+    event.data.type === "definition" ||
+    event.data.type === "completions" ||
+    event.data.type === "rename" ||
+    event.data.type === "problems" ||
+    event.data.type === "references"
+  ) {
     const ask = event.data;
     try {
       self.postMessage(await answer(ask) satisfies TsAnswer);

@@ -9,6 +9,26 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Find all references and quick fixes in the editor. Shift+F12 on a
+  TypeScript name lists every place it is declared or used, by file, in the
+  sidebar; a row opens the file at the name. An underlined error offers
+  TypeScript's own fixes, such as "Add import from './store.ts'", as buttons
+  on hover, and Ctrl/⌘+. lists the file's problems with theirs. A fix is
+  written with Undo. An added import follows the project's style, with or
+  without the `.ts` extension. Where TypeScript checks the open file, its
+  underlines replace the older line marks.
+  ([#92](https://github.com/Hankaws/aperture/pull/92))
+- Type errors as you type. In a TypeScript file, a mistake is underlined a
+  moment after you stop typing, with TypeScript's message on hover, and the
+  status bar counts the file's errors. Opening a file does not download the
+  compiler; the first edit does.
+  ([#91](https://github.com/Hankaws/aperture/pull/91))
+- Rename and completions in the editor, from TypeScript itself. Press F2 on
+  a name to rename it everywhere the project uses it: one Undo puts every
+  file back, a staged change is never touched, and comments, strings and docs
+  keep the old name. In TypeScript files, typing lists what can go there,
+  with its kind: after a dot, the real members of what is on its left.
+  ([#87](https://github.com/Hankaws/aperture/pull/87))
 - The Bot page shows how to add the bot by hand, with no Aperture account:
   the repository secret, the workflow permission, and the workflow, with a
   Copy button. "Add it to a repo by hand" now goes there instead of off to

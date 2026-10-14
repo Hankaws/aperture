@@ -1,7 +1,8 @@
 /**
  * TypeScript's language service on the project held in memory: what the
- * editor asks while you work. Hovering a name shows its type and docs, and
- * F12 or Ctrl/⌘+click jumps to where it is defined.
+ * editor asks while you work. Hovering a name shows its type and docs, F12 or
+ * Ctrl/⌘+click jumps to where it is defined, F2 renames it everywhere, and
+ * typing gets completions that know the types.
  *
  * It sees the project exactly as the "Types" check does: the same compiler
  * options (`compilerOptions`), standard library and shim for what packages
@@ -40,6 +41,35 @@ export type DefinitionResult = {
   elsewhere: boolean;
 };
 
+export type CompletionEntry = {
+  name: string;
+  /** TypeScript's kind: "method", "property", "function", "class", "interface", "keyword"… */
+  kind: string;
+  /** TypeScript's own order: locals and members before globals. */
+  sortText: string;
+};
+
+export type CompletionList = {
+  entries: CompletionEntry[];
+  /** After a dot: only the members of what is on its left. */
+  member: boolean;
+};
+
+export type RenameLocation = {
+  path: string;
+  start: number;
+  length: number;
+  /** Shorthand properties and imports keep their meaning: `{ name }` becomes `{ name: next }`. */
+  prefixText?: string;
+  suffixText?: string;
+};
+
+export type RenameResult =
+  { ok: true; name: string; locations: RenameLocation[] } | { ok: false; reason: string };
+
+/** The most completions sent back for one question; the editor narrows them as you type. */
+export const MAX_COMPLETIONS = 200;
+
 export type TsService = {
   /** The project's files now. Unchanged files keep their parse. */
   update(
@@ -49,7 +79,60 @@ export type TsService = {
   ): void;
   hover(path: string, offset: number): HoverInfo | null;
   definition(path: string, offset: number): DefinitionResult;
+  /** What can be typed at `offset`, narrowed to names that contain the word being typed. */
+  completions(path: string, offset: number): CompletionList | null;
+  /** Every place the name at `offset` is used in the project, when it can be renamed. */
+  rename(path: string, offset: number): RenameResult;
 };
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/** Words a name cannot be: renaming to one would break the code. */
+const RESERVED = new Set(
+  (
+    "break case catch class const continue debugger default delete do else enum export extends false finally for " +
+    "function if import in instanceof new null return super switch this throw true try typeof var void while with " +
+    "as implements interface let package private protected public static yield await"
+  ).split(" "),
+);
+
+/** Why `next` cannot replace `name`, or null when it can. */
+export function renameProblem(name: string, next: string): string | null {
+  if (!next) return "Type a new name.";
+  if (next === name) return "That is the name it has.";
+  if (!IDENTIFIER.test(next))
+    return `"${next}" is not a name: use letters, digits, _ or $, not starting with a digit.`;
+  if (RESERVED.has(next)) return `"${next}" is a reserved word.`;
+  return null;
+}
+
+/**
+ * The files a rename changes, with their new text. Null when a file no longer
+ * holds the name where the rename found it (it was edited since), so a stale
+ * rename never writes into the wrong place.
+ */
+export function applyRename(
+  files: Record<string, string>,
+  name: string,
+  locations: RenameLocation[],
+  next: string,
+): Record<string, string> | null {
+  const byPath = new Map<string, RenameLocation[]>();
+  for (const loc of locations) byPath.set(loc.path, [...(byPath.get(loc.path) ?? []), loc]);
+  const out: Record<string, string> = {};
+  for (const [path, locs] of byPath) {
+    let text = files[path];
+    if (text === undefined) return null;
+    // From the end, so earlier offsets still hold.
+    for (const loc of [...locs].sort((a, b) => b.start - a.start)) {
+      if (text.slice(loc.start, loc.start + loc.length) !== name) return null;
+      const replacement = `${loc.prefixText ?? ""}${next}${loc.suffixText ?? ""}`;
+      text = text.slice(0, loc.start) + replacement + text.slice(loc.start + loc.length);
+    }
+    out[path] = text;
+  }
+  return out;
+}
 
 /** Why the service cannot answer for this project, or null when it can. */
 export function serviceUnavailable(
@@ -151,6 +234,63 @@ export function createTsService(ts: Ts): TsService {
           targets.push(target);
       }
       return { targets, elsewhere: targets.length === 0 && found.length > 0 };
+    },
+
+    completions(path, offset) {
+      const name = `/${path}`;
+      const text = texts.get(name)?.text ?? "";
+      const found = service.getCompletionsAtPosition(name, offset, {
+        includeCompletionsWithInsertText: false,
+        includeCompletionsForModuleExports: false,
+      });
+      if (!found) return null;
+      const typed = /[\w$]*$/.exec(text.slice(0, offset))?.[0].toLowerCase() ?? "";
+      const entries = found.entries
+        .filter((e) => !typed || e.name.toLowerCase().includes(typed))
+        .sort((a, b) => a.sortText.localeCompare(b.sortText) || a.name.localeCompare(b.name))
+        .slice(0, MAX_COMPLETIONS)
+        .map((e) => ({ name: e.name, kind: e.kind, sortText: e.sortText }));
+      return { entries, member: found.isMemberCompletion };
+    },
+
+    rename(path, offset) {
+      let name = `/${path}`;
+      let at = offset;
+      // At an import, TypeScript renames only the local name (`import { a as b }`). Renaming
+      // means everywhere, so start from where the name is declared, when that is in the project.
+      const local = service.findRenameLocations(name, at, false, false, {
+        providePrefixAndSuffixTextForRename: true,
+      });
+      if (
+        local?.some(
+          (loc) => / as $/.test(loc.prefixText ?? "") || /^ as /.test(loc.suffixText ?? ""),
+        )
+      ) {
+        const def = service.getDefinitionAtPosition(name, at)?.find((d) => inProject(d.fileName));
+        if (def) {
+          name = def.fileName;
+          at = def.textSpan.start;
+        }
+      }
+      const info = service.getRenameInfo(name, at, { allowRenameOfImportPath: false });
+      if (!info.canRename) return { ok: false, reason: info.localizedErrorMessage };
+      const found =
+        service.findRenameLocations(name, at, false, false, {
+          providePrefixAndSuffixTextForRename: true,
+        }) ?? [];
+      if (found.some((loc) => !inProject(loc.fileName)))
+        return {
+          ok: false,
+          reason: `${info.displayName} is defined outside this project, in TypeScript's standard library or a package.`,
+        };
+      const locations = found.map((loc) => ({
+        path: loc.fileName.slice(1),
+        start: loc.textSpan.start,
+        length: loc.textSpan.length,
+        ...(loc.prefixText ? { prefixText: loc.prefixText } : {}),
+        ...(loc.suffixText ? { suffixText: loc.suffixText } : {}),
+      }));
+      return { ok: true, name: info.displayName, locations };
     },
   };
 }

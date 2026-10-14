@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
 import { EditorState, Compartment, Annotation } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -24,7 +24,8 @@ import { applyHeldBecause } from "@/lib/workspace/checks";
 import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark, shownMarks } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
-import { tsIntel } from "@/lib/editor/ts-intel";
+import { tsCompletesHere, tsIntel, type RenameAsk } from "@/lib/editor/ts-intel";
+import { RenameBox } from "./rename-box";
 import { jumpReview } from "@/lib/editor/review-jump";
 import { ED, SYN } from "@/lib/editor/theme";
 import { clampSession, loadSession, saveSession } from "@/lib/editor/session";
@@ -198,6 +199,7 @@ export function CodePane() {
   const diffConf = useRef(new Compartment()).current;
   const wrapConf = useRef(new Compartment()).current;
   const narrowRef = useRef(false);
+  const [renameAsk, setRenameAsk] = useState<RenameAsk | null>(null);
   const scrolledFor = useRef<string | null>(null);
   const jumpedFor = useRef<string | null>(null);
   const langKeyRef = useRef("");
@@ -272,7 +274,11 @@ export function CodePane() {
           bracketMatching(),
           closeBrackets(),
           autocompletion({ activateOnTyping: true }),
-          workspaceComplete(() => chunksRef.current, () => pathRef.current),
+          workspaceComplete(
+            () => chunksRef.current,
+            () => pathRef.current,
+            () => tsCompletesHere(pathRef.current),
+          ),
           highlightSelectionMatches({ highlightWordAroundCursor: true }),
           stickyScroll(),
           gotoImport(
@@ -288,6 +294,7 @@ export function CodePane() {
               useIdeUi.getState().setReveal(target);
             },
             (message) => toast.info(message, { id: "ts-definition" }),
+            setRenameAsk,
           ),
           keymap.of([
             ...closeBracketsKeymap,
@@ -594,6 +601,15 @@ export function CodePane() {
         </div>
       )}
       <div ref={parentRef} className={activePath ? "h-full min-h-0 min-w-0 flex-1" : "hidden"} />
+      {renameAsk && (
+        <RenameBox
+          ask={renameAsk}
+          onClose={() => {
+            setRenameAsk(null);
+            viewRef.current?.focus();
+          }}
+        />
+      )}
       {activePath ? (
         <div
           ref={miniRef}

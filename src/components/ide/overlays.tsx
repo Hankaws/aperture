@@ -65,6 +65,7 @@ export function HelpDialog() {
     [`${mod}P`, "Go to file"],
     [`${mod}⇧F`, "Search and replace in every file"],
     [`F12 · ${mod}click`, "Go to definition (TypeScript) · hover a name for its type"],
+    ["F2", "Rename a TypeScript name everywhere it is used"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

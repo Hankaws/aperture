@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Rename and completions in the editor, from TypeScript itself. Press F2 on
+  a name to rename it everywhere the project uses it: one Undo puts every
+  file back, a staged change is never touched, and comments, strings and docs
+  keep the old name. In TypeScript files, typing lists what can go there,
+  with its kind: after a dot, the real members of what is on its left.
+  ([#87](https://github.com/Hankaws/aperture/pull/87))
 - The Bot page shows how to add the bot by hand, with no Aperture account:
   the repository secret, the workflow permission, and the workflow, with a
   Copy button. "Add it to a repo by hand" now goes there instead of off to

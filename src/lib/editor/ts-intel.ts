@@ -1,11 +1,14 @@
 /**
  * What the editor knows about a TypeScript name, from TypeScript itself:
  * hover a name for its type and docs; F12 or Ctrl/⌘+click to go to where it
- * is defined. The answers come from the compiler's worker (tsc.ts), which
- * loads the first time anyone asks, so nobody who never hovers downloads it.
+ * is defined; F2 to rename it everywhere; and completions that know the
+ * types as you type. The answers come from the compiler's worker (tsc.ts),
+ * which loads the first time anyone asks, so nobody who never asks downloads it.
  */
+import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, type Tooltip } from "@codemirror/view";
-import type { DefinitionTarget } from "../workspace/ts-service.ts";
+import type { CompletionEntry, DefinitionTarget, RenameLocation } from "../workspace/ts-service.ts";
 import { isTsPath } from "../workspace/tsc-core.ts";
 import { ED, SYN } from "./theme.ts";
 
@@ -52,6 +55,52 @@ function tipDom(signature: string, doc: string): HTMLElement {
   return dom;
 }
 
+/** TypeScript's kinds as CodeMirror's completion icons. */
+const COMPLETION_TYPE: Record<string, string> = {
+  method: "method",
+  function: "function",
+  "local function": "function",
+  property: "property",
+  getter: "property",
+  setter: "property",
+  class: "class",
+  "local class": "class",
+  interface: "interface",
+  type: "type",
+  "type parameter": "type",
+  enum: "enum",
+  "enum member": "enum",
+  module: "namespace",
+  keyword: "keyword",
+  const: "constant",
+};
+
+export function completionOf(entry: CompletionEntry): Completion {
+  // TypeScript sorts locals and members ("11") before globals ("15") and keywords.
+  const rank = Number.parseInt(entry.sortText, 10);
+  return {
+    label: entry.name,
+    type: COMPLETION_TYPE[entry.kind] ?? "variable",
+    detail: entry.kind,
+    boost: Number.isFinite(rank) ? Math.max(-99, Math.min(99, 20 - rank)) : 0,
+  };
+}
+
+/** Set once TypeScript has answered a completion here: the word list then steps aside in TypeScript files. */
+let typescriptCompletes = false;
+export function tsCompletesHere(path: string | null): boolean {
+  return typescriptCompletes && Boolean(path && isTsPath(path));
+}
+
+/** A rename that is ready for its new name: every place the name is used, and where to ask. */
+export type RenameAsk = {
+  path: string;
+  name: string;
+  locations: RenameLocation[];
+  /** Where the name is on screen, to put the box under it. */
+  at: { left: number; bottom: number } | null;
+};
+
 export function tsIntel(
   current: () => string | null,
   files: () => Record<string, string>,
@@ -59,6 +108,8 @@ export function tsIntel(
   go: (target: DefinitionTarget) => void,
   /** Say why there is nowhere to go. */
   say: (message: string) => void,
+  /** Ask for the new name of a rename TypeScript can do. */
+  rename: (ask: RenameAsk) => void,
 ) {
   const ready = (view: EditorView, pos: number) => {
     const path = current();
@@ -82,8 +133,52 @@ export function tsIntel(
     );
   }
 
+  async function startRename(view: EditorView, pos: number) {
+    const path = ready(view, pos);
+    if (!path) return;
+    const { tsRename, tsReady } = await import("../workspace/tsc");
+    if (!tsReady()) say("Loading TypeScript to rename…");
+    const result = await tsRename(files(), path, view.state.doc.toString(), pos);
+    if (!result.ok) return say(result.reason);
+    const coords = view.coordsAtPos(pos);
+    rename({
+      path,
+      name: result.name,
+      locations: result.locations,
+      at: coords ? { left: coords.left, bottom: coords.bottom } : null,
+    });
+  }
+
+  async function complete(context: CompletionContext): Promise<CompletionResult | null> {
+    const path = current();
+    if (!path || !isTsPath(path)) return null;
+    const word = context.matchBefore(/[\w$]*/);
+    const from = word ? word.from : context.pos;
+    const afterDot = context.state.sliceDoc(from - 1, from) === ".";
+    if (!context.explicit && !afterDot && !word?.text) return null;
+    const { tsCompletions, tsReady } = await import("../workspace/tsc");
+    const abort = new AbortController();
+    context.addEventListener("abort", () => abort.abort());
+    const asked = tsCompletions(
+      files(),
+      path,
+      context.state.doc.toString(),
+      context.pos,
+      abort.signal,
+    );
+    // Not loaded yet: start it, and let the word list answer this time rather than make typing wait.
+    if (!tsReady()) return null;
+    const list = await asked;
+    if (!list || context.aborted) return null;
+    typescriptCompletes = true;
+    const entries = list.member ? list.entries.filter((e) => e.kind !== "keyword") : list.entries;
+    if (entries.length === 0) return null;
+    return { from, options: entries.map(completionOf), validFor: /^[\w$]*$/ };
+  }
+
   return [
     tipTheme,
+    EditorState.languageData.of(() => [{ autocomplete: complete }]),
     hoverTooltip(
       async (view, pos): Promise<Tooltip | null> => {
         const path = ready(view, pos);
@@ -136,6 +231,15 @@ export function tsIntel(
       },
     }),
     keymap.of([
+      {
+        key: "F2",
+        run: (view) => {
+          const pos = view.state.selection.main.head;
+          if (!ready(view, pos)) return false;
+          void startRename(view, pos);
+          return true;
+        },
+      },
       {
         key: "F12",
         run: (view) => {

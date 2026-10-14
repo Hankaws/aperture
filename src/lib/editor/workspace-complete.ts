@@ -137,7 +137,12 @@ export function workspaceSource(
   };
 }
 
-export function workspaceComplete(getChunks: () => IndexedChunk[], getPath: () => string | null) {
+export function workspaceComplete(
+  getChunks: () => IndexedChunk[],
+  getPath: () => string | null,
+  /** True where a better source answers (TypeScript, once loaded): this one then stays out of the list. */
+  stepAside: () => boolean = () => false,
+) {
   const source = workspaceSource(getChunks, getPath);
-  return EditorState.languageData.of(() => [{ autocomplete: source }]);
+  return EditorState.languageData.of(() => [{ autocomplete: (context: CompletionContext) => (stepAside() ? null : source(context)) }]);
 }

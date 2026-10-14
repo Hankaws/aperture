@@ -361,6 +361,16 @@ project's TypeScript files only when the store's `files` object changes, and
 each question carries the open file's text. The first question loads the
 compiler, so the hover says "Loading TypeScript…" until it answers.
 
+F2 renames (`rename` in `ts-service.ts`, `RenameBox`): every use in the
+project, started from the declaration when F2 is on an import, so the name
+changes everywhere instead of gaining an alias. `applyRename` refuses when a
+file no longer holds the name where it was found, and the box refuses files
+with a staged change; it writes like Replace, after one checkpoint. Comments,
+strings and docs keep the old name. Completions (`completions`) come from the
+language service in TypeScript files once it has answered once; until then
+the word list (`workspace-complete.ts`) answers, and after that it steps
+aside there (`tsCompletesHere`) so the two lists never mix.
+
 ## The agent loop runs in two places
 
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from

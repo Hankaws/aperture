@@ -11,11 +11,11 @@ import { createMiddleware } from "@tanstack/react-start";
  *   import { getSql } from "@/lib/db";
  *   import { authMiddleware } from "@/lib/auth/middleware";
  *
- *   export const listTodos = createServerFn({ method: "GET" })
+ *   export const listProjects = createServerFn({ method: "GET" })
  *     .middleware([authMiddleware])
  *     .handler(async ({ context }) => {
  *       const sql = await getSql();
- *       return sql`select * from todos where user_id = ${context.userId}`;
+ *       return sql`select * from projects where user_id = ${context.userId}`;
  *     });
  *
  * Signed out with auth on (live preview included) -> throws `UnauthorizedError`

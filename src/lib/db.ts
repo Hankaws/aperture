@@ -23,8 +23,8 @@ export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
  * tagged-template and `.query()` forms resolve to an array of row objects:
  *
  *   const sql = await getSql();
- *   const rows = await sql`select * from todos where id = ${id}`; // parameterized
- *   const rows2 = await sql.query("select * from todos where id = $1", [id]);
+ *   const rows = await sql`select * from projects where id = ${id}`; // parameterized
+ *   const rows2 = await sql.query("select * from projects where id = $1", [id]);
  */
 export interface Sql {
   <T = Record<string, unknown>>(

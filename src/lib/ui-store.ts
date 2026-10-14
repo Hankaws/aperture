@@ -113,7 +113,6 @@ type IdeUiState = {
   failedAttempt: AttemptSnap | null;
   /** Why ghost text is not showing. Empty when a suggestion arrived or none was asked for. */
   tabNote: string | null;
-  /** The last failing check the user opened. */
   lastCheck: { label: string; detail: string } | null;
   /** The last page element the user clicked in Design Mode. */
   lastElement: string | null;

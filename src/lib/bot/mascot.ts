@@ -60,7 +60,6 @@ export function mascotFrom(raw: unknown): Mascot {
   };
 }
 
-/** The face the mascot shows for a mood. */
 export function faceFor(mascot: Mascot, mood: MascotMood): MascotFace {
   switch (mood) {
     case "thinking":

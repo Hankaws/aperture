@@ -11,6 +11,7 @@ import {
   type LayoutPrefs,
   type PreviewDock,
 } from "@/lib/layout-prefs";
+import type { ReferencesResult } from "@/lib/workspace/ts-service";
 
 /** Real tsc on the staged change, for the margin: issues after and before, and parse errors after. */
 export type TscFindings = {
@@ -75,7 +76,9 @@ export type MobilePane = "files" | "editor" | "agent";
 type IdeUiState = {
   sidebarOpen: boolean;
   /** What the left sidebar shows: the file tree, or find and replace across files. */
-  sidebarView: "files" | "search";
+  sidebarView: "files" | "search" | "references";
+  /** The last Shift+F12: a name and every place it is used. */
+  references: ReferencesResult | null;
   /** Bumped to put the cursor in the Search view's box. */
   searchFocusTick: number;
   chatOpen: boolean;
@@ -160,6 +163,7 @@ type IdeUiState = {
   setSidebarView: (view: "files" | "search") => void;
   /** Opens the sidebar on Search with the cursor in its box. */
   openSearch: () => void;
+  openReferences: (found: ReferencesResult) => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
   shiftSteer: () => string | undefined;
@@ -172,6 +176,7 @@ type IdeUiState = {
 export const useIdeUi = create<IdeUiState>((set) => ({
   sidebarOpen: true,
   sidebarView: "files",
+  references: null,
   searchFocusTick: 0,
   chatOpen: true,
   commandOpen: false,
@@ -323,6 +328,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setSidebarView: (view) => set({ sidebarView: view }),
   openSearch: () =>
     set((s) => ({ sidebarOpen: true, sidebarView: "search", mobilePane: "files", searchFocusTick: s.searchFocusTick + 1 })),
+  openReferences: (found) => set({ sidebarOpen: true, sidebarView: "references", mobilePane: "files", references: found }),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),
   enqueueSteer: (text) =>
     set((s) => {

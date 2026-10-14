@@ -5,7 +5,14 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
 import { compilerOptions, libFilesFor } from "./tsc-core.ts";
-import { applyRename, createTsService, renameProblem, serviceUnavailable } from "./ts-service.ts";
+import {
+  applyFileChanges,
+  applyRename,
+  createTsService,
+  importsKeepExtension,
+  renameProblem,
+  serviceUnavailable,
+} from "./ts-service.ts";
 
 const libDir = dirname(createRequire(import.meta.url).resolve("typescript/lib/lib.d.ts"));
 const readLib = (name: string) => {
@@ -215,4 +222,60 @@ test("a syntax error is a problem too, where the parser stopped", () => {
   const problems = service.problems("src/a.ts");
   assert.ok(problems.length > 0);
   assert.equal(problems[0]!.code, "TS1109");
+});
+
+test("references list the declaration and every use, across files, with their lines", () => {
+  const { service } = serviceFor(files);
+  const found = service.references("src/use.ts", at(use, "listTasks", 1) + 1);
+  assert.ok(found);
+  assert.equal(found.name, "listTasks");
+  assert.deepEqual(
+    found.references.map((r) => [r.path, r.line, r.col, r.definition]),
+    [
+      ["src/store.ts", 4, 16, true],
+      ["src/use.ts", 1, 9, false],
+      ["src/use.ts", 3, 21, false],
+    ],
+  );
+  assert.equal(found.references[2]!.text, "export const first = listTasks(0, 10)[0];");
+  assert.equal(service.references("src/use.ts", 0), null, "a keyword is not a name");
+});
+
+test("a name used without its import gets TypeScript's fix, and the fix applies", () => {
+  const text = "export const pages = listTasks(0, 10);\n";
+  const project = { ...files, "src/use.ts": text };
+  const { service } = serviceFor(project);
+  const [problem] = service.problems("src/use.ts");
+  assert.equal(problem?.code, "TS2304");
+  const fix = problem?.fixes?.find((f) => /import/i.test(f.description));
+  assert.ok(fix, `fixes: ${JSON.stringify(problem?.fixes?.map((f) => f.description))}`);
+  const changed = applyFileChanges(project, fix.changes);
+  assert.ok(changed);
+  assert.match(changed["src/use.ts"]!, /^import \{ listTasks \} from "\.\/store";\n/);
+  const after = serviceFor({ ...project, ...changed }).service;
+  assert.deepEqual(after.problems("src/use.ts"), []);
+  // The file changed since the fix was worked out: it no longer fits, so nothing is written.
+  assert.equal(
+    applyFileChanges({ ...project, "src/use.ts": "" }, [
+      { path: "src/use.ts", edits: [{ start: 5, length: 3, newText: "x" }] },
+    ]),
+    null,
+  );
+});
+
+test("an added import is written the way the project writes its imports", () => {
+  const withExt = {
+    "src/store.ts": "export function listTasks() { return []; }\n",
+    "src/a.ts": 'import { listTasks } from "./store.ts";\nexport const a = listTasks();\n',
+    "src/b.ts": "export const pages = listTasks();\n",
+  };
+  assert.equal(importsKeepExtension(withExt), true);
+  assert.equal(importsKeepExtension(files), false);
+  const { service } = serviceFor(withExt);
+  const fix = service.problems("src/b.ts")[0]?.fixes?.find((f) => /import/i.test(f.description));
+  assert.ok(fix);
+  assert.match(
+    applyFileChanges(withExt, fix.changes)!["src/b.ts"]!,
+    /^import \{ listTasks \} from "\.\/store\.ts";/,
+  );
 });

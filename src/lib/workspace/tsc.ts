@@ -7,7 +7,7 @@
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
 import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
-import type { CompletionList, DefinitionResult, HoverInfo, Problem, RenameResult } from "./ts-service";
+import type { CompletionList, DefinitionResult, HoverInfo, Problem, ReferencesResult, RenameResult } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
 
@@ -239,4 +239,17 @@ export async function tsProblems(
 ): Promise<Problem[] | null> {
   const answer = await askTs("problems", files, path, text, 0, signal);
   return answer && "problems" in answer ? answer.problems : null;
+}
+
+/** Every place the name at `offset` is declared or used; why not, when TypeScript cannot say. */
+export async function tsReferences(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+): Promise<ReferencesResult | { unavailable: string } | null> {
+  const answer = await askTs("references", files, path, text, offset);
+  if (!answer) return { unavailable: "TypeScript could not answer here." };
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "references" in answer ? answer.references : null;
 }

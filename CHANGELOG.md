@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The replay demo answers inline edits and points to your own code. Select
+  a line one of the demo's bugs is on, press Ctrl/⌘K and ask to fix it: the
+  recorded fix is staged, with its checks, signed in or not. Anything else
+  says which lines work. After you apply a change, Composer says it ran on a
+  sample project with recorded answers, and links to Aperture Bot and Agent
+  Check, which run in your own repository's GitHub Actions.
+  ([#84](https://github.com/Hankaws/aperture/pull/84))
 - Signed-out visitors can try the replay demo. On a deployment running the
   replay model, Composer plans, builds, checks and applies without an
   account, the way it does for someone signed in. The runs cost nothing and

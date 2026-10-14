@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { authMiddleware } from "@/lib/auth/middleware";
+import { agentCallerMiddleware } from "@/lib/auth/middleware";
 import type { AgentResult } from "./types";
 import { agentInput } from "@/lib/security/inputs";
 
@@ -12,15 +12,19 @@ export const getAiStatus = createServerFn({ method: "POST" }).handler(async () =
 
 export const runAgent = createServerFn({ method: "POST" })
   .validator(agentInput)
-  .middleware([authMiddleware])
+  .middleware([agentCallerMiddleware])
   .handler(async ({ data, context }): Promise<AgentResult> => {
     // The same limit as /api/agent: they are two doors to the same loop.
     const { overLimit } = await import("@/lib/security/rate-limit");
-    const busy = overLimit("composer", context.userId);
+    const busy =
+      overLimit("composer", context.userId) ??
+      (context.signedOut ? overLimit("demo", "signed-out") : null);
     if (busy) return { ok: false, error: busy };
     const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
     const input = sanitizeAgentInput(data);
     if ("error" in input) return { ok: false, error: input.error };
+    // Signed out (the replay demo): no external agents, as on /api/agent.
+    if (context.signedOut && input.agentId) return { ok: false, error: "Unauthorized" };
     const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
     const resolved = await resolveModel(context.userId, input.source);
     if (!resolved.ok) return { ok: false, error: resolved.error };
@@ -32,7 +36,7 @@ export const runAgent = createServerFn({ method: "POST" })
       model: resolved.model,
       userId: context.userId,
     });
-    if (result.ok) {
+    if (result.ok && !context.signedOut) {
       await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
     }
     return result;

@@ -144,7 +144,18 @@ tests and demos. The UI labels it "Replay model" and it costs nothing.
   the turn the way the loop does.
 - It never claims tests passed: every result it states comes from a real run
   of the tests.
-- Inline edits (Ctrl/⌘K) and Tab refuse in replay rather than paste prose.
+- Tab refuses in replay rather than paste prose. Inline edits (Ctrl/⌘K)
+  answer only with a recorded fix (`replayInline`, `inlineFix`): the ask must
+  be a fix and the selection must hold every code line a fix tape removes.
+  Anything else gets `REPLAY_INLINE_ERROR`, which names the lines that work.
+  The bad-change tape (`again`) is never an inline answer. Inline runs go
+  through the `runAgent` server function, whose `agentCallerMiddleware` lets
+  signed-out visitors through on replay the same way `/api/agent` does.
+- After an Apply on the replay demo, Composer shows a card (`DemoNext`):
+  that run was recorded, on a sample project, and Composer on this host
+  replays for everyone. What runs on a visitor's own code is Aperture Bot and
+  Agent Check in their GitHub Actions, so the card links there. It stays
+  dismissed per browser.
 - Signed out, a replay deployment still runs Composer: `/api/agent` asks
   `agentCaller` (`public-demo.server.ts`), which lets a signed-out request
   through only when replay is on, as a visitor id from the `aperture_visitor`

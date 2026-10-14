@@ -79,6 +79,11 @@ export function InlineEdit() {
                 if (e.key === "Escape") setInlineOpen(false);
               }}
             />
+            {replay && (
+              <p className="mt-1.5 px-1 text-[11px] text-subtle">
+                Recorded fixes only: select a line one of the demo&apos;s bugs is on, such as the return in listTasks, and ask to fix it.
+              </p>
+            )}
             <div className="mt-2 flex items-center justify-end gap-2">
               <p className="mr-auto truncate text-[11px] text-subtle">{quote.label}</p>
               <Button variant="ghost" size="sm" onClick={() => setInlineOpen(false)}>

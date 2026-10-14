@@ -45,3 +45,36 @@ export const authMiddleware = createMiddleware({ type: "function" })
     const userId = await requireUserId(context.bearerToken);
     return next({ context: { userId } });
   });
+
+/**
+ * `authMiddleware` for the agent loop's server function, which also lets a
+ * signed-out caller through on a replay deployment (the public demo), as
+ * `/api/agent` does: recorded runs cost nothing. Such a caller runs as a
+ * visitor id, with `context.signedOut` set. Signed out anywhere else still
+ * throws `UnauthorizedError`.
+ */
+export const agentCallerMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const { getBearerToken } = await import("./client");
+    return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+  })
+  .server(async ({ next, context }) => {
+    // Only `*.server` modules here, as in authMiddleware above.
+    const { assertSameSiteRequest } = await import("./isolation.server");
+    const { requireUserId, UnauthorizedError } = await import("./verify.server");
+    assertSameSiteRequest();
+    let caller: { userId: string; signedOut: boolean };
+    try {
+      caller = { userId: await requireUserId(context.bearerToken), signedOut: false };
+    } catch (error) {
+      const unauthorized =
+        error instanceof UnauthorizedError ||
+        (error instanceof Error && error.message === "Unauthorized");
+      if (!unauthorized) throw error;
+      const { signedOutReplayHere } = await import("@/lib/agent/public-demo.server");
+      const visitor = await signedOutReplayHere();
+      if (!visitor) throw error;
+      caller = { userId: visitor, signedOut: true };
+    }
+    return next({ context: caller });
+  });

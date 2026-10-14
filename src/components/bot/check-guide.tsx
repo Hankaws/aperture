@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { CopyBlock } from "@/components/site/copy-block";
 import { summary as bench } from "@/lib/bench/results.json";
 import { AGENT_STOPS } from "@/lib/mcp-server/example";

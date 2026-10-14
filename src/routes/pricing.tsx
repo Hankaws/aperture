@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { PricingTable } from "@/components/site/pricing-table";
 import { useAccount } from "@/lib/billing/use-account";
 import { showPricing } from "@/lib/billing/pricing-visible";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pricing")({ component: PricingPage });

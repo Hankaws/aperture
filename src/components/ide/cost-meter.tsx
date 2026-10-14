@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { RunQuote } from "@/lib/billing/cost";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export function CostMeter({

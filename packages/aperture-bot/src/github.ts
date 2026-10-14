@@ -137,7 +137,6 @@ export class GitHub {
     };
   }
 
-  /** The pull request's diff, as text. */
   async diff(number: number): Promise<string> {
     return this.call<string>(
       "GET",
@@ -181,7 +180,6 @@ export class GitHub {
     return out.default_branch ?? "main";
   }
 
-  /** The commit a branch points at. */
   async head(branch: string): Promise<string> {
     const out = await this.call<{ commit?: { sha?: string } }>(
       "GET",

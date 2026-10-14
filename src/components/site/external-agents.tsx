@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { deleteAgent, listAgents, saveAgent, type AgentConnection } from "@/lib/acp/api";
 import { ACP_KINDS, BUILTIN_ACP, acpAgentNames, type AcpKind } from "@/lib/acp/kinds";

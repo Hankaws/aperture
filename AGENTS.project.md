@@ -371,6 +371,25 @@ language service in TypeScript files once it has answered once; until then
 the word list (`workspace-complete.ts`) answers, and after that it steps
 aside there (`tsCompletesHere`) so the two lists never mix.
 
+The open file's errors are underlined as you type (`problems` in
+`ts-service.ts`, a CodeMirror `linter` in `ts-intel.ts`, 600 ms after typing
+stops) and counted in the status bar (`typeErrors` in the UI store). Opening a
+file never downloads the compiler: the linter waits until someone types in the
+editor or the compiler is already loaded for another question.
+While TypeScript is live on a file, its underlines replace the light check's
+line marks there (`lintMarks` in `code-pane.tsx`); a staged change keeps them,
+since the check strip speaks for it.
+
+Quick fixes: `problems` carries TypeScript's code fixes for the first 20
+problems (`fixesFor`), shown as buttons on the underline's hover and in the
+problems list (Ctrl/⌘+., `openLintPanel`). `applyQuickFix` (`quick-fix.ts`)
+writes one after a checkpoint, with Undo, and refuses when a file changed
+since the fix was worked out or holds a staged change. Fixes that create a
+file are left out. An added import follows the project's own style
+(`importsKeepExtension`: `./store.ts` when most relative imports keep the
+extension). Shift+F12 (`references`) lists every place a name is declared or
+used in the sidebar's References view (`references-panel.tsx`).
+
 ## The agent loop runs in two places
 
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { UserButton } from "@/lib/auth/gates";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export function AuthSlot({ compact = false, plain = false }: { compact?: boolean; plain?: boolean }) {

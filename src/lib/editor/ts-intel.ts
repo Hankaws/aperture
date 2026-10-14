@@ -6,9 +6,16 @@
  * which loads the first time anyone asks, so nobody who never asks downloads it.
  */
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { linter, openLintPanel, type Diagnostic } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, type Tooltip } from "@codemirror/view";
-import type { CompletionEntry, DefinitionTarget, RenameLocation } from "../workspace/ts-service.ts";
+import type {
+  CompletionEntry,
+  DefinitionTarget,
+  QuickFix,
+  ReferencesResult,
+  RenameLocation,
+} from "../workspace/ts-service.ts";
 import { isTsPath } from "../workspace/tsc-core.ts";
 import { ED, SYN } from "./theme.ts";
 
@@ -110,7 +117,58 @@ export function tsIntel(
   say: (message: string) => void,
   /** Ask for the new name of a rename TypeScript can do. */
   rename: (ask: RenameAsk) => void,
+  /** How many errors the open file has; null when TypeScript has not looked at it. */
+  errors: (count: number | null) => void = () => {},
+  /** Apply one of TypeScript's fixes, worked out against `basis` (the files as they were then). */
+  fix: (fix: QuickFix, basis: Record<string, string>) => void = () => {},
+  /** Show every place a name is used. */
+  references: (found: ReferencesResult) => void = () => {},
 ) {
+  /**
+   * Views someone has typed in. The compiler is a few megabytes: opening a file
+   * does not download it, but typing in one, or any other question, does.
+   */
+  const typedIn = new WeakSet<EditorView>();
+
+  async function problems(view: EditorView): Promise<Diagnostic[]> {
+    const path = current();
+    if (!path || !isTsPath(path)) {
+      errors(null);
+      return [];
+    }
+    const { tsProblems, tsReady } = await import("../workspace/tsc");
+    if (!tsReady() && !typedIn.has(view)) {
+      errors(null);
+      return [];
+    }
+    const doc = view.state.doc.toString();
+    const basis = { ...files(), [path]: doc };
+    const found = await tsProblems(basis, path, doc);
+    // Superseded by more typing, or no answer: the next run will say.
+    if (found === null || view.state.doc.toString() !== doc || current() !== path) return [];
+    errors(found.filter((p) => p.severity === "error").length);
+    const end = view.state.doc.length;
+    return found.map((p) => ({
+      from: Math.min(p.start, end),
+      to: Math.min(p.start + p.length, end),
+      severity: p.severity,
+      message: p.message,
+      source: p.code,
+      actions: (p.fixes ?? []).map((f) => ({ name: f.description, apply: () => fix(f, basis) })),
+    }));
+  }
+
+  async function findReferences(view: EditorView, pos: number) {
+    const path = ready(view, pos);
+    if (!path) return;
+    const { tsReferences, tsReady } = await import("../workspace/tsc");
+    if (!tsReady()) say("Loading TypeScript to find references…");
+    const found = await tsReferences(files(), path, view.state.doc.toString(), pos);
+    if (!found) return say("Not a name TypeScript knows here.");
+    if ("unavailable" in found) return say(found.unavailable);
+    references(found);
+  }
+
   const ready = (view: EditorView, pos: number) => {
     const path = current();
     if (!path || !isTsPath(path) || !view.state.wordAt(pos)) return null;
@@ -178,6 +236,12 @@ export function tsIntel(
 
   return [
     tipTheme,
+    EditorView.updateListener.of((update) => {
+      if (update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete")))
+        typedIn.add(update.view);
+    }),
+    // A moment after typing stops; each run checks the open file only, against the rest as saved in the store.
+    linter(problems, { delay: 600 }),
     EditorState.languageData.of(() => [{ autocomplete: complete }]),
     hoverTooltip(
       async (view, pos): Promise<Tooltip | null> => {
@@ -231,6 +295,17 @@ export function tsIntel(
       },
     }),
     keymap.of([
+      {
+        key: "Shift-F12",
+        run: (view) => {
+          const pos = view.state.selection.main.head;
+          if (!ready(view, pos)) return false;
+          void findReferences(view, pos);
+          return true;
+        },
+      },
+      // The file's problems, with TypeScript's fixes as buttons: the keyboard's way to a fix.
+      { key: "Mod-.", run: openLintPanel },
       {
         key: "F2",
         run: (view) => {

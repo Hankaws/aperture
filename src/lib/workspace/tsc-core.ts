@@ -92,7 +92,6 @@ export type InstalledFiles = {
   read(path: string): string | undefined;
   isFile(path: string): boolean;
   isDirectory(path: string): boolean;
-  /** The folders directly inside `path`. */
   folders(path: string): string[];
 };
 

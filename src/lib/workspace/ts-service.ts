@@ -1,8 +1,9 @@
 /**
  * TypeScript's language service on the project held in memory: what the
  * editor asks while you work. Hovering a name shows its type and docs, F12 or
- * Ctrl/⌘+click jumps to where it is defined, F2 renames it everywhere, and
- * typing gets completions that know the types.
+ * Ctrl/⌘+click jumps to where it is defined, F2 renames it everywhere,
+ * typing gets completions that know the types, and the open file's type
+ * errors are underlined as you type.
  *
  * It sees the project exactly as the "Types" check does: the same compiler
  * options (`compilerOptions`), standard library and shim for what packages
@@ -67,6 +68,71 @@ export type RenameLocation = {
 export type RenameResult =
   { ok: true; name: string; locations: RenameLocation[] } | { ok: false; reason: string };
 
+/** Edits to one file, as offsets into its current text. */
+export type FileChange = {
+  path: string;
+  edits: Array<{ start: number; length: number; newText: string }>;
+};
+
+/** One of TypeScript's own fixes for a problem: "Add import from './store'" and the like. */
+export type QuickFix = { description: string; changes: FileChange[] };
+
+export type Problem = {
+  start: number;
+  length: number;
+  /** TypeScript's message, with its chain of reasons on the lines below. */
+  message: string;
+  severity: "error" | "warning";
+  /** TS2322 and the like, as tsc prints it. */
+  code: string;
+  /** TypeScript's fixes for it, when it has any. Only for the first problems in a file. */
+  fixes?: QuickFix[];
+};
+
+/** Problems that get their fixes worked out; the rest are underlined without. */
+export const MAX_FIXED_PROBLEMS = 20;
+
+export type Reference = {
+  path: string;
+  start: number;
+  length: number;
+  /** 1-based, as the editor numbers lines. */
+  line: number;
+  /** 0-based column of the name in its line. */
+  col: number;
+  /** The whole line, trimmed, for the list. */
+  text: string;
+  /** Where the name is declared, rather than used. */
+  definition: boolean;
+};
+
+export type ReferencesResult = { name: string; references: Reference[] };
+
+/**
+ * The files `changes` touch, with their new text: each file's edits applied
+ * from the end, so earlier offsets still hold. Null when an edit no longer
+ * fits its file (it changed since the fix was worked out).
+ */
+export function applyFileChanges(
+  files: Record<string, string>,
+  changes: FileChange[],
+): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const change of changes) {
+    let text = out[change.path] ?? files[change.path];
+    if (text === undefined) return null;
+    for (const edit of [...change.edits].sort((a, b) => b.start - a.start)) {
+      if (edit.start < 0 || edit.start + edit.length > text.length) return null;
+      text = text.slice(0, edit.start) + edit.newText + text.slice(edit.start + edit.length);
+    }
+    out[change.path] = text;
+  }
+  return out;
+}
+
+/** The most problems marked in one file: past that the file needs a closer look, not more underlines. */
+export const MAX_PROBLEMS = 200;
+
 /** The most completions sent back for one question; the editor narrows them as you type. */
 export const MAX_COMPLETIONS = 200;
 
@@ -83,6 +149,10 @@ export type TsService = {
   completions(path: string, offset: number): CompletionList | null;
   /** Every place the name at `offset` is used in the project, when it can be renamed. */
   rename(path: string, offset: number): RenameResult;
+  /** The file's syntax and type errors, as the "Types" check would report them, with fixes for the first ones. */
+  problems(path: string): Problem[];
+  /** Every place the name at `offset` is declared or used in the project. Null when it is not a name. */
+  references(path: string, offset: number): ReferencesResult | null;
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -146,6 +216,20 @@ export function serviceUnavailable(
   return null;
 }
 
+/** Whether most of the project's relative imports name the file with its extension (`./store.ts`). */
+export function importsKeepExtension(files: Record<string, string>): boolean {
+  let withExt = 0;
+  let without = 0;
+  for (const [path, text] of Object.entries(files)) {
+    if (!isTsPath(path)) continue;
+    for (const match of text.matchAll(/\bfrom\s+["'](\.{1,2}\/[^"']+)["']/g)) {
+      if (/\.[cm]?[jt]sx?$/.test(match[1]!)) withExt++;
+      else without++;
+    }
+  }
+  return withExt > without;
+}
+
 export function createTsService(ts: Ts): TsService {
   /** Every file the service can read, by compiler path, with a version that moves when its text does. */
   const texts = new Map<string, { text: string; version: number }>();
@@ -178,6 +262,49 @@ export function createTsService(ts: Ts): TsService {
 
   const inProject = (name: string) => name !== SHIM_PATH && !name.startsWith(LIB_DIR);
 
+  const format: ts.FormatCodeSettings = {
+    ...ts.getDefaultFormatCodeSettings("\n"),
+    indentSize: 2,
+    tabSize: 2,
+    convertTabsToSpaces: true,
+  };
+  let preferences: ts.UserPreferences = {
+    quotePreference: "auto",
+    importModuleSpecifierPreference: "relative",
+    importModuleSpecifierEnding: "auto",
+  };
+
+  function fixesFor(name: string, start: number, end: number, code: number): QuickFix[] {
+    let found: readonly ts.CodeFixAction[];
+    try {
+      found = service.getCodeFixesAtPosition(name, start, end, [code], format, preferences);
+    } catch {
+      // A fix TypeScript cannot work out is no fix: the problem is still underlined.
+      return [];
+    }
+    return (
+      found
+        // Only fixes that edit files already in the project: one that creates a file is left to the person.
+        .filter((fix) =>
+          fix.changes.every(
+            (c) => !c.isNewFile && inProject(c.fileName) && c.fileName.startsWith("/"),
+          ),
+        )
+        .slice(0, 3)
+        .map((fix) => ({
+          description: fix.description,
+          changes: fix.changes.map((c) => ({
+            path: c.fileName.slice(1),
+            edits: c.textChanges.map((t) => ({
+              start: t.span.start,
+              length: t.span.length,
+              newText: t.newText,
+            })),
+          })),
+        }))
+    );
+  }
+
   return {
     update(files, libs, next) {
       options = next;
@@ -194,6 +321,12 @@ export function createTsService(ts: Ts): TsService {
       roots = Object.keys(files)
         .filter(isTsPath)
         .map((path) => `/${path}`);
+      // An added import is written the way the project writes them: `./store.ts` or `./store`.
+      // "js" is TypeScript's name for keeping the extension, which is `.ts` here.
+      preferences = {
+        ...preferences,
+        importModuleSpecifierEnding: importsKeepExtension(files) ? "js" : "auto",
+      };
     },
 
     hover(path, offset) {
@@ -251,6 +384,84 @@ export function createTsService(ts: Ts): TsService {
         .slice(0, MAX_COMPLETIONS)
         .map((e) => ({ name: e.name, kind: e.kind, sortText: e.sortText }));
       return { entries, member: found.isMemberCompletion };
+    },
+
+    problems(path) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return [];
+      const found = [
+        ...service.getSyntacticDiagnostics(name),
+        ...service.getSemanticDiagnostics(name),
+      ];
+      return found
+        .filter(
+          (d) =>
+            d.start !== undefined &&
+            d.category !== ts.DiagnosticCategory.Suggestion &&
+            d.category !== ts.DiagnosticCategory.Message,
+        )
+        .slice(0, MAX_PROBLEMS)
+        .map((d, i) => ({
+          start: d.start!,
+          length: Math.max(1, d.length ?? 1),
+          message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+          severity:
+            d.category === ts.DiagnosticCategory.Warning
+              ? ("warning" as const)
+              : ("error" as const),
+          code: `TS${d.code}`,
+          ...(() => {
+            if (i >= MAX_FIXED_PROBLEMS) return {};
+            const fixes = fixesFor(name, d.start!, d.start! + (d.length ?? 0), d.code);
+            return fixes.length ? { fixes } : {};
+          })(),
+        }));
+    },
+
+    references(path, offset) {
+      const name = `/${path}`;
+      const found = service.findReferences(name, offset);
+      if (!found?.length) return null;
+      const program = service.getProgram();
+      // Where the name is declared, as go to definition finds it: past an import's alias, to the real one.
+      const declared = new Set(
+        (service.getDefinitionAtPosition(name, offset) ?? []).map(
+          (d) => `${d.fileName}:${d.textSpan.start}`,
+        ),
+      );
+      const seen = new Set<string>();
+      const references: Reference[] = [];
+      for (const symbol of found) {
+        for (const ref of symbol.references) {
+          if (!inProject(ref.fileName)) continue;
+          const key = `${ref.fileName}:${ref.textSpan.start}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const file = program?.getSourceFile(ref.fileName);
+          if (!file) continue;
+          const at = file.getLineAndCharacterOfPosition(ref.textSpan.start);
+          const lineStart = file.getPositionOfLineAndCharacter(at.line, 0);
+          const lineEnd = file.getLineEndOfPosition(ref.textSpan.start);
+          references.push({
+            path: ref.fileName.slice(1),
+            start: ref.textSpan.start,
+            length: ref.textSpan.length,
+            line: at.line + 1,
+            col: at.character,
+            text: file.text.slice(lineStart, lineEnd).trim().slice(0, 160),
+            definition: declared.has(key),
+          });
+        }
+      }
+      references.sort((a, b) => a.path.localeCompare(b.path) || a.start - b.start);
+      // Asked off a name (a keyword next to one), TypeScript can still answer for a nearby name: not here.
+      const onName = references.some(
+        (r) => r.path === path && r.start <= offset && offset <= r.start + r.length,
+      );
+      const first = references[0];
+      if (!first || !onName) return null;
+      const text = texts.get(`/${first.path}`)?.text ?? "";
+      return { name: text.slice(first.start, first.start + first.length), references };
     },
 
     rename(path, offset) {

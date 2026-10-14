@@ -33,7 +33,6 @@ export type BoardRun = {
   /** The latest version of each file the run changed. */
   files: RunFile[];
   copyId: string | null;
-  /** The reply to show when the run is opened. */
   focusId: string;
   /** Turns the editor sent itself: test results handed back, the automatic fix. */
   automaticTurns: number;

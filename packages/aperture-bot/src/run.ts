@@ -45,7 +45,6 @@ export type BotOutcome = "clear" | "red" | "no-change" | "stopped";
 
 export type BotResult = {
   outcome: BotOutcome;
-  /** The agent's own last words. */
   summary: string;
   plan: PlanEntry[];
   /** Files the bot wrote, relative to the checkout. */
@@ -59,7 +58,6 @@ export type BotResult = {
   error?: string;
   /** What the bot would suggest doing next: for the maintainer to send or not. */
   next: string[];
-  /** The whole report, as plain text. */
   text: string;
 };
 

@@ -12,7 +12,7 @@ import { CheckGuide } from "@/components/bot/check-guide";
 import { CheckPull } from "@/components/bot/check-pull";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { githubStatus, type GithubAccount } from "@/lib/github/api";

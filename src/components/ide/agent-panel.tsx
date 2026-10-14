@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { ApertureMark } from "./logo";
 import { PlanCard } from "./plan-card";
 import { SlashPopover } from "./slash-popover";

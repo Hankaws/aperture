@@ -28,7 +28,6 @@ export type TscWarm = { type: "warm"; files: Record<string, string> };
 export type TscRequest = {
   type: "check";
   id: number;
-  /** The files with the staged change applied. */
   after: Record<string, string>;
   /** The files as they are now, to tell a new error from one that was already there. */
   before: Record<string, string>;

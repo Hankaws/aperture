@@ -51,16 +51,16 @@ export type CurrentUserState = {
  *   const { user, isPending } = useCurrentUserState();
  *   if (isPending) return null;              // still resolving — don't redirect yet
  *   if (!user) return <RedirectToSignIn />;  // definitely signed out
- *
- * `authEnabled` is a module-level constant fixed at load, so the guarded hook
- * call keeps a stable hook order across every render of a given component.
  */
-export function useCurrentUserState(): CurrentUserState {
-  if (!authEnabled) return { user: DEV_USER, isPending: false };
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- authEnabled is constant for the app's lifetime
+export const useCurrentUserState: () => CurrentUserState = authEnabled ? useSessionUser : useDevUser;
+
+function useDevUser(): CurrentUserState {
+  return { user: DEV_USER, isPending: false };
+}
+
+function useSessionUser(): CurrentUserState {
   const { data, isPending } = authClient.useSession();
   const raw = data?.user;
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- paired with useSession above
   const user = useMemo<AppUser | null>(() => {
     if (!raw) return null;
     return {

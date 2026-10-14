@@ -92,7 +92,7 @@ try {
     check(await waitForText(page, /\nChanged: src\/store\.ts/, 60_000), "Build it stages the fix and recaps it");
     const recap = await bodyText(page);
     check(/Left: nothing on the plan\./.test(recap), "the recap does not list finished steps as left");
-    check(!/Didn't: [^\n]*\.md/.test(recap), "the recap does not count docs as code that still references the change");
+    check(!/Elsewhere: [^\n]*\.md/.test(recap), "the recap does not count docs as code that still references the change");
     // The agent board shows the run, staged for review.
     await page.keyboard.press("Control+j");
     const review = await page.locator('[role="dialog"] section[aria-label="Review"] li').allInnerTexts();
@@ -123,7 +123,7 @@ try {
       (await page.getByRole("button", { name: "store.md" }).count()) > 0 && /Followed rule/.test(await bodyText(page)),
       "the rule for src/store.ts is given to the agent and listed on the message",
     );
-    await page.getByRole("button", { name: /^(Apply all|Apply anyway)$/ }).first().click();
+    await page.getByRole("button", { name: /^(Apply all|Apply now|Apply anyway)$/ }).first().click();
     const revert = page.getByRole("button", { name: "Revert" }).first();
     await revert.waitFor({ timeout: 15_000 });
     await revert.click();

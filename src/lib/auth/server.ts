@@ -38,6 +38,7 @@ import { accountLinkingPolicy } from "./account-linking";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
 import { GROK_PROVIDERS } from "./providers";
+import { hmrSingleton } from "@/lib/hmr-singleton";
 import { pgliteDialect } from "./pglite-dialect";
 import {
   GROK_ISSUER_DEFAULT,
@@ -49,18 +50,9 @@ import {
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
 void ensureDbReady();
 
-/**
- * Preview secret must outlive module reloads: PGLite (and its session rows) is
- * stored on `globalThis`, so an HMR re-eval of this file must NOT mint a new
- * signing secret or every existing session becomes invalid mid-dev. Process
- * restart clears both the secret and PGLite together.
- */
-const globalAuthRef = globalThis as typeof globalThis & {
-  __grokAuthPreviewSecret__?: string;
-};
+// Lives as long as PGLite's session rows, so HMR doesn't sign everyone out.
 function previewAuthSecret(): string {
-  globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
-  return globalAuthRef.__grokAuthPreviewSecret__;
+  return hmrSingleton("__grokAuthPreviewSecret__", () => randomBytes(32).toString("hex"));
 }
 
 /** Read an env var, treating empty/whitespace as unset. */
@@ -174,7 +166,7 @@ const grokOAuthPlugin = authConfigured
 export const auth = betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
-  // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).
+  // hmrSingleton so HMR doesn't invalidate PGLite-backed sessions.
   secret: env("BETTER_AUTH_SECRET") ?? previewAuthSecret(),
   database,
 

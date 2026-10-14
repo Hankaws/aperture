@@ -968,10 +968,10 @@ function DemoNext() {
         your own model key. Agent Check runs these same checks on every pull request, with no key at all.
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Link to="/bot" className={cn(buttonVariants({ size: "sm" }))}>
+        <Link to="/bot" hash="by-hand" className={cn(buttonVariants({ size: "sm" }))}>
           Set up Aperture Bot
         </Link>
-        <Link to="/agent-check" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+        <Link to="/bot" search={{ tab: "check" }} className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
           Agent Check
         </Link>
       </div>

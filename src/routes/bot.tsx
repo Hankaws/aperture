@@ -4,6 +4,7 @@ import { ArrowRight, Bot, PlugZap, ShieldCheck, type LucideIcon } from "lucide-r
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { GithubAccountCard } from "@/components/site/github-account";
+import { CopyBlock } from "@/components/site/copy-block";
 import { AgentTokens } from "@/components/site/agent-tokens";
 import { SampleFeed } from "@/components/bot/activity-feed";
 import { AgentsGuide } from "@/components/bot/agents-guide";
@@ -15,6 +16,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { githubStatus, type GithubAccount } from "@/lib/github/api";
+import { workflowFile } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
 
 /** One page, three jobs: the bot team, Agent Check on pull requests, and agents that check themselves. */
@@ -167,6 +169,8 @@ function BotPage() {
           </section>
         )}
 
+        {!working && <ByHand />}
+
         <div className={working ? "mx-auto max-w-3xl" : undefined}>
           <HowItWorks />
         </div>
@@ -219,11 +223,53 @@ function SignedOut() {
           Sign in
           <ArrowRight className="size-4" />
         </Link>
-        <a href={BOT_REPO} className={cn(buttonVariants({ variant: "outline", size: "md" }))}>
+        <a href="#by-hand" className={cn(buttonVariants({ variant: "outline", size: "md" }))}>
           Add it to a repo by hand
         </a>
       </div>
     </div>
+  );
+}
+
+/**
+ * The bot needs no Aperture account: three steps in the repository, the same
+ * as the README's, with the workflow this page would add for you. Anyone who
+ * would rather not connect a GitHub token here can stop at this.
+ */
+function ByHand() {
+  return (
+    <section id="by-hand" className="mt-16 scroll-mt-20" aria-labelledby="bot-by-hand">
+      <h2 id="bot-by-hand" className="text-xl font-medium tracking-tight">
+        Add it to a repo by hand
+      </h2>
+      <p className="mt-2 text-sm text-pretty text-muted">
+        No Aperture account: it runs on your GitHub runner with your model key.
+      </p>
+      <ol className="mt-5 space-y-3 text-sm text-pretty text-muted">
+        <li>
+          <span className="font-medium text-fg">1.</span> Add your model key as a repository secret:
+          Settings, Secrets and variables, Actions, New repository secret. The workflow below reads{" "}
+          <code className="font-mono text-xs">XAI_API_KEY</code>, for Grok; for another provider,
+          set <code className="font-mono text-xs">provider</code> (
+          <a href={`${BOT_REPO}#settings`} className="text-accent hover:underline">
+            the action&apos;s settings
+          </a>
+          ).
+        </li>
+        <li>
+          <span className="font-medium text-fg">2.</span> Let workflows open pull requests:
+          Settings, Actions, General, Workflow permissions, tick &ldquo;Allow GitHub Actions to
+          create and approve pull requests&rdquo;.
+        </li>
+        <li>
+          <span className="font-medium text-fg">3.</span> Add this workflow, then comment{" "}
+          <code className="font-mono text-xs">/aperture</code> and a task on an issue.
+        </li>
+      </ol>
+      <CopyBlock title=".github/workflows/aperture-bot.yml" className="mt-4">
+        {workflowFile("grok", "v1")}
+      </CopyBlock>
+    </section>
   );
 }
 

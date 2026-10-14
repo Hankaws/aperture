@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The Bot page shows how to add the bot by hand, with no Aperture account:
+  the repository secret, the workflow permission, and the workflow, with a
+  Copy button. "Add it to a repo by hand" now goes there instead of off to
+  GitHub. The workflows on the Check tab copy too, and the GitHub token
+  fields link to GitHub's new-token form with the scopes they need ticked.
+  ([#85](https://github.com/Hankaws/aperture/pull/85))
 - The replay demo answers inline edits and points to your own code. Select
   a line one of the demo's bugs is on, press Ctrl/⌘K and ask to fix it: the
   recorded fix is staged, with its checks, signed in or not. Anything else

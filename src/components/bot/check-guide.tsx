@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { CopyBlock } from "@/components/site/copy-block";
 import { summary as bench } from "@/lib/bench/results.json";
 import { AGENT_STOPS } from "@/lib/mcp-server/example";
 import { cn } from "@/lib/utils";
@@ -123,7 +124,7 @@ export function CheckGuide({ children }: { children?: ReactNode }) {
 
       <h3 className="mt-14 text-xl font-medium tracking-tight">Add the action</h3>
       <div className="mt-3">
-        <Block title=".github/workflows/aperture-agent-check.yml">{WORKFLOW}</Block>
+        <CopyBlock title=".github/workflows/aperture-agent-check.yml">{WORKFLOW}</CopyBlock>
       </div>
 
       <h3 className="mt-14 text-xl font-medium tracking-tight">What it checks</h3>
@@ -232,7 +233,7 @@ export function CheckGuide({ children }: { children?: ReactNode }) {
 
       <h3 className="mt-14 text-xl font-medium tracking-tight">Badge</h3>
       <div className="mt-3">
-        <Block title="README.md">{BADGE}</Block>
+        <CopyBlock title="README.md">{BADGE}</CopyBlock>
       </div>
 
       <p className="mt-14 text-sm leading-relaxed text-muted">

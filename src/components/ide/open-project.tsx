@@ -303,6 +303,20 @@ function GithubDialog({
                 </Button>
               </div>
             )}
+            {!login && (
+              <p className="mt-1.5 text-[11px] text-subtle">
+                No token yet?{" "}
+                <a
+                  href="https://github.com/settings/tokens/new?scopes=repo&description=Aperture"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  Make one on GitHub
+                </a>{" "}
+                with the repo scope ticked, then paste it here.
+              </p>
+            )}
             {repos.length > 0 && (
               <ul className="mt-3 max-h-36 overflow-y-auto rounded-md border border-border">
                 {repos.map((repo) => (

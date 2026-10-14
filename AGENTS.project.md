@@ -559,6 +559,13 @@ HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
   route reads only `Authorization: Bearer`, refuses a foreign `Origin`, and
   answers 401 otherwise, so another site cannot drive it with a visitor's
   session. Five tokens per account; deleting the account deletes them.
+- **Discovery is open.** `initialize`, `notifications/initialized`, `ping`,
+  `tools/list` (and `prompts/list`/`resources/list`, which answer "Method not
+  found") need no token, so registries such as Smithery can list the tool.
+  They answer from constants and never read an account. Any other method,
+  `tools/call` above all, needs a token: `OPEN_METHODS` and `needsToken` in
+  `protocol.ts`. A batch is judged whole, so without a token a batch holding
+  one `tools/call` is a 401 and nothing in it runs.
 - **Limits.** 20 `tools/call` a minute per account (`agentChecks`), 160
   files and 2.5 MB per check, 200 KB per file, paths relative with no `..`.
 - **TypeScript ships unbundled.** Bundled into the server's ES modules the

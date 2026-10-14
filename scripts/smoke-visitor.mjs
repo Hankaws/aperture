@@ -316,8 +316,15 @@ try {
         /src\/index\.ts: TS2322/.test(checked.result?.content?.[0]?.text ?? ""),
       "check_change flags the caller a change breaks",
     );
+    const openList = await mcp({ jsonrpc: "2.0", id: 5, method: "tools/list" }, {}).then((r) =>
+      r.json(),
+    );
+    check(
+      openList.result?.tools?.[0]?.name === "check_change",
+      "the MCP server lists check_change without a token",
+    );
     const cookieOnly = await page.request.post(`${base}/api/mcp`, {
-      data: { jsonrpc: "2.0", id: 3, method: "ping" },
+      data: { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "check_change" } },
     });
     check(
       cookieOnly.status() === 401,
@@ -328,7 +335,12 @@ try {
       .getByText("No tokens yet.")
       .waitFor({ timeout: 10_000 })
       .catch(() => {});
-    const revoked = await mcp({ jsonrpc: "2.0", id: 4, method: "ping" });
+    const revoked = await mcp({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "check_change" },
+    });
     check(revoked.status === 401, `a revoked token is refused (${revoked.status})`);
     clean(errors, "agent tokens");
     await context.close();

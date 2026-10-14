@@ -13,11 +13,9 @@ const notAllowed = () =>
     headers: { Allow: "POST" },
   });
 
-/** The account behind the request's agent token, or the refusal to send. */
-async function admit(request: Request): Promise<string | Response> {
+/** A refusal before the body is read: another site's page, or a protocol version we do not speak. */
+async function screen(request: Request): Promise<Response | null> {
   const { PROTOCOL_VERSIONS } = await import("@/lib/mcp-server/protocol");
-  const { bearerToken } = await import("@/lib/mcp-server/tokens");
-  const { userForAgentToken } = await import("@/lib/mcp-server/tokens.server");
   // A browser page on another site has no business here (DNS rebinding, stray fetches).
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin)
@@ -26,34 +24,31 @@ async function admit(request: Request): Promise<string | Response> {
   if (asked && !(PROTOCOL_VERSIONS as readonly string[]).includes(asked)) {
     return json({ error: `Unsupported MCP protocol version ${asked.slice(0, 40)}` }, 400);
   }
+  return null;
+}
+
+/** The account behind the request's agent token, or null. */
+async function signedIn(request: Request): Promise<string | null> {
+  const { bearerToken } = await import("@/lib/mcp-server/tokens");
+  const { userForAgentToken } = await import("@/lib/mcp-server/tokens.server");
   const token = bearerToken(request.headers.get("authorization"));
-  const userId = token ? await userForAgentToken(token) : null;
-  if (userId) return userId;
-  return json(
-    {
-      error:
-        "Make a token in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>.",
-    },
-    401,
-    { "WWW-Authenticate": 'Bearer realm="aperture"' },
-  );
+  return token ? await userForAgentToken(token) : null;
 }
 
 /**
  * Aperture's MCP server. Agents sign in with a token from Settings → Agents,
  * never a browser session: cookies are ignored here, so another site cannot
- * make a signed-in visitor's browser call it.
+ * make a signed-in visitor's browser call it. initialize, ping and tools/list
+ * answer without a token (the same static answer for everyone); a body with
+ * any other method, tools/call above all, gets a 401 without one.
  */
 export const Route = createFileRoute("/api/mcp")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const { overLimit } = await import("@/lib/security/rate-limit");
-        const admitted = await admit(request);
-        if (admitted instanceof Response) return admitted;
-        const userId = admitted;
-        // Counted per tools/call, so initialize and tools/list do not use it up.
-        const busy = () => overLimit("agentChecks", userId);
+        const refused = await screen(request);
+        if (refused) return refused;
 
         const raw = await request.text();
         if (raw.length > MAX_BODY_CHARS) return json({ error: "Too large" }, 413);
@@ -67,17 +62,26 @@ export const Route = createFileRoute("/api/mcp")({
           );
         }
 
-        const { handleMessage } = await import("@/lib/mcp-server/protocol");
+        const { serve } = await import("@/lib/mcp-server/protocol");
         const { checkChange } = await import("@/lib/mcp-server/check.server");
-        const ctx = { version, check: checkChange, busy };
-        if (Array.isArray(body)) {
-          const replies = (
-            await Promise.all(body.slice(0, 20).map((message) => handleMessage(message, ctx)))
-          ).filter(Boolean);
-          return replies.length > 0 ? json(replies) : new Response(null, { status: 202 });
-        }
-        const answer = await handleMessage(body, ctx);
-        return answer ? json(answer) : new Response(null, { status: 202 });
+        const served = await serve(
+          body,
+          () => signedIn(request),
+          (userId) => ({
+            version,
+            check: checkChange,
+            // Counted per tools/call, so initialize and tools/list do not use it up.
+            // No tools/call runs without an account; refuse rather than count nothing.
+            busy: () =>
+              userId ? overLimit("agentChecks", userId) : "This call needs an agent token.",
+          }),
+        );
+        if (served.status === 202) return new Response(null, { status: 202 });
+        return json(
+          served.body,
+          served.status,
+          served.status === 401 ? { "WWW-Authenticate": 'Bearer realm="aperture"' } : {},
+        );
       },
       GET: notAllowed,
       DELETE: notAllowed,

@@ -14,7 +14,10 @@ import {
   CHECK_TOOL,
   handleMessage,
   PROTOCOL_VERSIONS,
+  needsToken,
+  OPEN_METHODS,
   readCheckInput,
+  serve,
   type CheckInput,
   type ServerContext,
 } from "./protocol.ts";
@@ -221,4 +224,154 @@ test("every benchmark case gets the editor's verdict from check_change, except t
   // Of the 27 a check can see, the 7 behaviour mistakes need a test run. The editor's one false alarm is here too.
   assert.equal(stoppedBad, AGENT_STOPS, "/agents states AGENT_STOPS: update it in example.ts");
   assert.equal(flaggedGood, 1);
+});
+
+// Discovery without a token, everything else with one.
+
+const GOOD = "user-1";
+const rpc = (method: string, id: number | null = 1, params?: unknown) => ({
+  jsonrpc: "2.0",
+  ...(id === null ? {} : { id }),
+  method,
+  ...(params ? { params } : {}),
+});
+const smallCall = (id = 1) =>
+  call(
+    { files: { "a.ts": "export const a = 1;\n" }, changes: { "a.ts": "export const a = 2;\n" } },
+    id,
+  );
+
+/** serve() with a caller holding `user` (null: no token), recording what it asked. */
+async function served(body: unknown, user: string | null) {
+  let signIns = 0;
+  const users: (string | null)[] = [];
+  const checks: CheckInput[] = [];
+  const out = await serve(
+    body,
+    async () => {
+      signIns++;
+      return user;
+    },
+    (userId) => {
+      users.push(userId);
+      return ctx({
+        check: async (input) => {
+          checks.push(input);
+          return nodeCheck(input);
+        },
+      });
+    },
+  );
+  return { ...out, signIns, users, checks, answer: out.body as any };
+}
+
+test("initialize and tools/list answer without a token, and never look one up", async () => {
+  const init = await served(rpc("initialize", 1, { protocolVersion: "2025-06-18" }), null);
+  assert.equal(init.status, 200);
+  assert.equal(init.answer.result.serverInfo.name, "aperture");
+  assert.equal(init.signIns, 0);
+  assert.deepEqual(init.users, [null]);
+
+  const list = await served(rpc("tools/list", 2), null);
+  assert.equal(list.status, 200);
+  assert.equal(list.signIns, 0);
+  assert.deepEqual(
+    list.answer.result.tools.map((tool: { name: string }) => tool.name),
+    ["check_change"],
+  );
+});
+
+test("tools/list is the same static list with or without a token", async () => {
+  const open = await served(rpc("tools/list"), null);
+  const signedIn = await served(rpc("tools/list"), GOOD);
+  assert.deepEqual(open.answer, signedIn.answer);
+  assert.deepEqual(open.answer.result.tools, [CHECK_TOOL]);
+});
+
+test("ping and notifications/initialized need no token", async () => {
+  const ping = await served(rpc("ping", 3), null);
+  assert.equal(ping.status, 200);
+  assert.deepEqual(ping.answer.result, {});
+  const note = await served(rpc("notifications/initialized", null), null);
+  assert.equal(note.status, 202);
+  assert.equal(note.signIns, 0);
+});
+
+test("prompts/list and resources/list need no token and say there are none", async () => {
+  for (const method of ["prompts/list", "resources/list"]) {
+    const out = await served(rpc(method, 4), null);
+    assert.equal(out.status, 200);
+    assert.equal(out.answer.error.code, -32601);
+  }
+});
+
+test("tools/call without a token is a 401 JSON-RPC error, and nothing runs", async () => {
+  const out = await served(smallCall(7), null);
+  assert.equal(out.status, 401);
+  assert.equal(out.signIns, 1);
+  assert.deepEqual(out.users, []);
+  assert.equal(out.checks.length, 0);
+  assert.equal(out.answer.jsonrpc, "2.0");
+  assert.equal(out.answer.id, 7);
+  assert.equal(out.answer.error.code, -32001);
+  assert.match(out.answer.error.message, /Bearer/);
+});
+
+test("tools/call with a token runs the checks for that account", async () => {
+  const out = await served(smallCall(8), GOOD);
+  assert.equal(out.status, 200);
+  assert.deepEqual(out.users, [GOOD]);
+  assert.equal(out.checks.length, 1);
+  assert.equal(out.answer.id, 8);
+  assert.equal(out.answer.result.isError, false);
+});
+
+test("methods outside the open list need a token, unknown ones included", async () => {
+  for (const method of [
+    "tools/call",
+    "resources/read",
+    "prompts/get",
+    "logging/setLevel",
+    "made/up",
+  ])
+    assert.equal(needsToken(rpc(method)), true, method);
+  for (const method of OPEN_METHODS) assert.equal(needsToken(rpc(method)), false, method);
+  assert.equal(needsToken({ jsonrpc: "2.0", id: 1, result: {} }), false);
+  assert.equal(needsToken("garbage"), false);
+});
+
+test("a batch mixing tools/list and tools/call is refused whole without a token", async () => {
+  const out = await served([rpc("tools/list", 1), smallCall(2)], null);
+  assert.equal(out.status, 401);
+  assert.equal(out.answer.id, null);
+  assert.equal(out.answer.error.code, -32001);
+  assert.equal(out.checks.length, 0);
+  assert.deepEqual(out.users, []);
+});
+
+test("a tools/call hidden past the first 20 messages still needs a token", async () => {
+  const batch = [...Array.from({ length: 20 }, (_, i) => rpc("ping", i)), smallCall(99)];
+  assert.equal((await served(batch, null)).status, 401);
+});
+
+test("a batch mixing tools/list and tools/call answers both with a token", async () => {
+  const out = await served([rpc("tools/list", 1), smallCall(2)], GOOD);
+  assert.equal(out.status, 200);
+  assert.equal(out.answer.length, 2);
+  assert.deepEqual(out.answer[0].result.tools, [CHECK_TOOL]);
+  assert.equal(out.answer[1].result.isError, false);
+  assert.equal(out.checks.length, 1);
+});
+
+test("an all-open batch answers without a token", async () => {
+  const out = await served(
+    [rpc("initialize", 1), rpc("notifications/initialized", null), rpc("tools/list", 2)],
+    null,
+  );
+  assert.equal(out.status, 200);
+  assert.equal(out.signIns, 0);
+  assert.deepEqual(
+    out.answer.map((a: { id: number }) => a.id),
+    [1, 2],
+  );
 });

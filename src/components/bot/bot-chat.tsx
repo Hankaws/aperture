@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLatest } from "@/lib/use-keyed-async";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowUp,
@@ -213,16 +214,15 @@ export function BotChat({
     onChange?.(next);
   };
 
+  const reportRef = useLatest({ update, open: setup.open });
   // The bot comes back: a task sent from here that has settled gets a message, once.
   useEffect(() => {
     if (!synced) return;
     const due = reportsDue(latest.current, tasks);
     if (due.length === 0) return;
     const at = new Date().toISOString();
-    update([...latest.current, ...due.map((task) => reportEntry(task, id(), at, setup.open))]);
-    // `update` is a new function each render; the tasks and the sync are what matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, synced]);
+    reportRef.current.update([...latest.current, ...due.map((task) => reportEntry(task, id(), at, reportRef.current.open))]);
+  }, [tasks, synced, reportRef]);
 
   async function send(text: string) {
     const said = text.trim();

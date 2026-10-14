@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useKeyedAsync } from "@/lib/use-keyed-async";
 import { Check, LoaderCircle, Minus, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
@@ -113,45 +114,31 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
   const [settled, setSettled] = useState<{ key: string; tests: BrowserTests; output: string } | null>(null);
   const runnable = plan?.ok === true;
 
-  useEffect(() => {
-    if (!runnable) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const staged = await runTestsInBrowser(merged, { signal: controller.signal });
-        if (staged.kind === "unsupported") {
-          setSettled({ key, tests: { state: "unsupported", reason: staged.reason }, output: "" });
-          return;
-        }
-        let preexisting = false;
-        if (!staged.passed && !staged.timedOut) {
-          const before = await runTestsInBrowser(files, { signal: controller.signal });
-          preexisting = before.kind === "done" && compareRuns(staged, before).preexisting;
-        }
-        setSettled({
-          key,
-          tests: {
-            state: "done",
-            script: "test",
-            passed: staged.passed,
-            detail: staged.detail,
-            pass: staged.pass,
-            preexisting,
-            ...(staged.evidence ? { evidence: staged.evidence } : {}),
-          },
-          output: staged.output,
-        });
-      } catch {
-        // Superseded by a newer change, or unmounted.
-      }
-    }, 300);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-    // `key` covers files and edits; merged and files are read at that version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, runnable]);
+  useKeyedAsync(runnable ? key : null, async (signal) => {
+    const staged = await runTestsInBrowser(merged, { signal });
+    if (staged.kind === "unsupported") {
+      setSettled({ key, tests: { state: "unsupported", reason: staged.reason }, output: "" });
+      return;
+    }
+    let preexisting = false;
+    if (!staged.passed && !staged.timedOut) {
+      const before = await runTestsInBrowser(files, { signal });
+      preexisting = before.kind === "done" && compareRuns(staged, before).preexisting;
+    }
+    setSettled({
+      key,
+      tests: {
+        state: "done",
+        script: "test",
+        passed: staged.passed,
+        detail: staged.detail,
+        pass: staged.pass,
+        preexisting,
+        ...(staged.evidence ? { evidence: staged.evidence } : {}),
+      },
+      output: staged.output,
+    });
+  });
 
   if (!plan) return { tests: null as BrowserTests, output: "" };
   if (!plan.ok) return { tests: { state: "unsupported", reason: plan.reason } as BrowserTests, output: "" };
@@ -175,30 +162,16 @@ function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): Tsc
   const wanted = tsPaths.length > 0;
   const [settled, setSettled] = useState<{ key: string; outcome: TscCheck } | null>(null);
 
-  useEffect(() => {
-    if (!wanted) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const { pathsToCheck, typecheckChange } = await import("@/lib/workspace/tsc");
-        const outcome = await typecheckChange(merged, files, pathsToCheck(merged, tsPaths), controller.signal);
-        // A newer change owns the margin now.
-        if (controller.signal.aborted) return;
-        setSettled({ key, outcome });
-        useIdeUi
-          .getState()
-          .setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before, parse: outcome.parse } : null);
-      } catch {
-        // Superseded by a newer change, or unmounted.
-      }
-    }, 300);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-    // `key` covers files and edits; merged and files are read at that version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, wanted]);
+  useKeyedAsync(wanted ? key : null, async (signal) => {
+    const { pathsToCheck, typecheckChange } = await import("@/lib/workspace/tsc");
+    const outcome = await typecheckChange(merged, files, pathsToCheck(merged, tsPaths), signal);
+    // A newer change owns the margin now.
+    if (signal.aborted) return;
+    setSettled({ key, outcome });
+    useIdeUi
+      .getState()
+      .setTscFindings(outcome.state === "done" ? { after: outcome.after, before: outcome.before, parse: outcome.parse } : null);
+  });
 
   // Findings describe this change only: gone when it is, or when it no longer has TypeScript to check.
   useEffect(() => {
@@ -225,31 +198,17 @@ function useStageHooks(files: Record<string, string>, edits: ProposedEdit[]): Ho
   const key = verificationId({ runtime: "browser", files, edits });
   const [settled, setSettled] = useState<{ key: string; runs: HookRun[] } | null>(null);
 
-  useEffect(() => {
-    if (hooks.length === 0) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        let done: HookRun[] = [];
-        await runHooks(hooks, merged, {
-          before: files,
-          signal: controller.signal,
-          onRun: (run) => {
-            done = [...done, run];
-            setSettled({ key, runs: done });
-          },
-        });
-      } catch {
-        // Superseded by a newer change, or unmounted.
-      }
-    }, 300);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-    // `key` covers files, edits and the hooks; merged and files are read at that version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  useKeyedAsync(hooks.length > 0 ? key : null, async (signal) => {
+    let done: HookRun[] = [];
+    await runHooks(hooks, merged, {
+      before: files,
+      signal,
+      onRun: (run) => {
+        done = [...done, run];
+        setSettled({ key, runs: done });
+      },
+    });
+  });
 
   return useMemo(
     () =>

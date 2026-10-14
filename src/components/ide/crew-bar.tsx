@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLatest } from "@/lib/use-keyed-async";
 import { Check, Plus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addWorker, availableSeats, canConfirm, dropWorker, proposeWorkers, selectedSeats, toggleWorkerRole, type WorkerSpec } from "@/lib/agent/crew";
@@ -68,10 +69,11 @@ export function WorkerConfirm({
   // Re-propose when the plan or the crew changes (a seat toggled in the crew
   // bar, or the account loading after first paint), not on every file edit,
   // which would wipe the user's Build/Review toggles mid-review.
+  const inputs = useLatest({ plan, files, seats });
   useEffect(() => {
+    const { plan, files, seats } = inputs.current;
     setWorkers(proposeWorkers(plan, files, seats));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on planKey/seatKey above
-  }, [planKey, seatKey]);
+  }, [planKey, seatKey, inputs]);
 
   const quote = quoteRuns(account ?? null, quoteSource, Math.max(workers.length, 1));
   const ok = canConfirm(workers);

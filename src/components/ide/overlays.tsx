@@ -69,6 +69,8 @@ export function HelpDialog() {
     ["Shift+F12", "Find every reference to a TypeScript name"],
     [`${mod}.`, "Problems in this file, with TypeScript's quick fixes"],
     [`${mod}⇧M`, "Problems: every type error in the project"],
+    [`${mod}⇧Space`, "Parameter hints for the call you are in (they also open on ( and ,)"],
+    ["Shift+Alt+O", "Organize imports: drop unused ones and sort the rest"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

@@ -1,20 +1,21 @@
 /**
  * What the editor knows about a TypeScript name, from TypeScript itself:
  * hover a name for its type and docs; F12 or Ctrl/⌘+click to go to where it
- * is defined; F2 to rename it everywhere; and completions that know the
- * types as you type. The answers come from the compiler's worker (tsc.ts),
+ * is defined; F2 to rename it everywhere; completions that know the types as
+ * you type; parameter hints inside a call; and Shift+Alt+O to organize imports. The answers come from the compiler's worker (tsc.ts),
  * which loads the first time anyone asks, so nobody who never asks downloads it.
  */
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { linter, openLintPanel, type Diagnostic } from "@codemirror/lint";
-import { EditorState } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap, type Tooltip } from "@codemirror/view";
+import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { EditorView, hoverTooltip, keymap, showTooltip, type Tooltip } from "@codemirror/view";
 import type {
   CompletionEntry,
   DefinitionTarget,
   QuickFix,
   ReferencesResult,
   RenameLocation,
+  SignatureHelp,
 } from "../workspace/ts-service.ts";
 import { isTsPath } from "../workspace/tsc-core.ts";
 import { ED, SYN } from "./theme.ts";
@@ -44,7 +45,77 @@ const tipTheme = EditorView.baseTheme({
     whiteSpace: "pre-wrap",
     color: ED.muted,
   },
+  ".cm-aperture-ts-param": {
+    fontWeight: 600,
+    color: SYN.fg,
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
+  },
+  ".cm-aperture-ts-count": {
+    marginRight: "8px",
+    color: ED.muted,
+  },
 });
+
+/** The parameter hint: the signature with the argument being typed underlined, and its doc. */
+export function signatureDom(help: SignatureHelp): HTMLElement {
+  const dom = document.createElement("div");
+  dom.className = "cm-aperture-ts-tip";
+  dom.setAttribute("aria-label", "Parameter hints");
+  const sig = document.createElement("pre");
+  sig.className = "cm-aperture-ts-sig";
+  if (help.overloads > 1) {
+    const count = document.createElement("span");
+    count.className = "cm-aperture-ts-count";
+    count.textContent = `${help.overload}/${help.overloads}`;
+    sig.append(count);
+  }
+  sig.append(help.prefix);
+  help.params.forEach((param, i) => {
+    if (i > 0) sig.append(help.separator);
+    if (i === help.active) {
+      const strong = document.createElement("span");
+      strong.className = "cm-aperture-ts-param";
+      strong.textContent = param.label;
+      sig.append(strong);
+    } else sig.append(param.label);
+  });
+  sig.append(help.suffix);
+  dom.append(sig);
+  const active = help.params[help.active];
+  const doc = [active?.doc ? `${active.label.split(/[?:]/)[0]}: ${active.doc}` : "", help.doc]
+    .filter(Boolean)
+    .join("\n\n");
+  if (doc) {
+    const text = document.createElement("div");
+    text.className = "cm-aperture-ts-doc";
+    text.textContent = doc;
+    dom.append(text);
+  }
+  return dom;
+}
+
+/** The parameter hint on screen, anchored where the call's arguments start; null when none is shown. */
+const setSignature = StateEffect.define<{ pos: number; help: SignatureHelp } | null>();
+const signatureField = StateField.define<{ pos: number; help: SignatureHelp } | null>({
+  create: () => null,
+  update(value, tr) {
+    for (const effect of tr.effects) if (effect.is(setSignature)) return effect.value;
+    return value && tr.docChanged ? { ...value, pos: tr.changes.mapPos(value.pos) } : value;
+  },
+  provide: (field) =>
+    showTooltip.from(field, (value) =>
+      value
+        ? { pos: value.pos, above: true, create: () => ({ dom: signatureDom(value.help) }) }
+        : null,
+    ),
+});
+
+/** Typing that opens a call or moves to its next argument: the moments a parameter hint is wanted. */
+const OPENS_HINT = /[(,<]/;
+
+/** After the cursor moves inside an open hint, how long before the hint is asked again. */
+const HINT_MS = 120;
 
 function tipDom(signature: string, doc: string): HTMLElement {
   const dom = document.createElement("div");
@@ -207,6 +278,47 @@ export function tsIntel(
     });
   }
 
+  /** Asks for the parameter hint at the cursor; a newer ask, or a move, makes an older answer moot. */
+  let hintAsk = 0;
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  async function askSignature(view: EditorView, explicit: boolean) {
+    const path = current();
+    const seq = ++hintAsk;
+    if (!path || !isTsPath(path)) return;
+    const { tsSignatureHelp, tsReady } = await import("../workspace/tsc");
+    const doc = view.state.doc.toString();
+    const head = view.state.selection.main.head;
+    const asked = tsSignatureHelp({ ...files(), [path]: doc }, path, doc, head);
+    // Not loaded yet: the ask starts it; typing does not wait on a download for a hint.
+    if (!tsReady() && !explicit) return;
+    const help = await asked;
+    if (seq !== hintAsk || current() !== path) return;
+    if (view.state.doc.toString() !== doc || view.state.selection.main.head !== head) return;
+    if (!help && !view.state.field(signatureField, false)) {
+      if (explicit) say("Not inside a call TypeScript knows here.");
+      return;
+    }
+    view.dispatch({
+      effects: setSignature.of(
+        help && help.start <= view.state.doc.length ? { pos: help.start, help } : null,
+      ),
+    });
+  }
+
+  async function organizeImports(view: EditorView) {
+    const path = current();
+    if (!path || !isTsPath(path)) return;
+    const { tsOrganizeImports, tsReady } = await import("../workspace/tsc");
+    if (!tsReady()) say("Loading TypeScript to organize imports…");
+    const doc = view.state.doc.toString();
+    const basis = { ...files(), [path]: doc };
+    const changes = await tsOrganizeImports(basis, path, doc);
+    if (!changes) return say("TypeScript could not answer here.");
+    if ("unavailable" in changes) return say(changes.unavailable);
+    if (changes.length === 0) return say("Imports are already organized.");
+    fix({ description: "Organize imports", changes }, basis);
+  }
+
   async function complete(context: CompletionContext): Promise<CompletionResult | null> {
     const path = current();
     if (!path || !isTsPath(path)) return null;
@@ -239,7 +351,30 @@ export function tsIntel(
     EditorView.updateListener.of((update) => {
       if (update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete")))
         typedIn.add(update.view);
+      // Typing "(" or "," asks at once; while a hint is up, any edit or move asks again (and may close it).
+      const opened = update.transactions.some((tr) => {
+        if (!tr.isUserEvent("input")) return false;
+        let found = false;
+        tr.changes.iterChanges((_fa, _ta, _fb, _tb, inserted) => {
+          if (OPENS_HINT.test(inserted.toString())) found = true;
+        });
+        return found;
+      });
+      const shown = update.state.field(signatureField, false);
+      if (opened) {
+        clearTimeout(hintTimer);
+        void askSignature(update.view, false);
+      } else if (shown && (update.docChanged || update.selectionSet)) {
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(() => void askSignature(update.view, false), HINT_MS);
+      }
+      // Another file in this view: its hint no longer applies.
+      if (shown && update.transactions.some((tr) => tr.reconfigured)) {
+        hintAsk++;
+        queueMicrotask(() => update.view.dispatch({ effects: setSignature.of(null) }));
+      }
     }),
+    signatureField,
     // A moment after typing stops; each run checks the open file only, against the rest as saved in the store.
     linter(problems, { delay: 600 }),
     EditorState.languageData.of(() => [{ autocomplete: complete }]),
@@ -295,6 +430,31 @@ export function tsIntel(
       },
     }),
     keymap.of([
+      {
+        key: "Escape",
+        run: (view) => {
+          if (!view.state.field(signatureField, false)) return false;
+          hintAsk++;
+          view.dispatch({ effects: setSignature.of(null) });
+          return true;
+        },
+      },
+      {
+        key: "Mod-Shift-Space",
+        run: (view) => {
+          if (!current() || !isTsPath(current()!)) return false;
+          void askSignature(view, true);
+          return true;
+        },
+      },
+      {
+        key: "Shift-Alt-o",
+        run: (view) => {
+          if (!current() || !isTsPath(current()!)) return false;
+          void organizeImports(view);
+          return true;
+        },
+      },
       {
         key: "Shift-F12",
         run: (view) => {

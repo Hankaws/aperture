@@ -294,6 +294,86 @@ test("past the listing cap, the counts stay whole and the list says it stopped",
   );
 });
 
+test("signature help: the call around the cursor, with the argument being typed", () => {
+  const text =
+    'import { listTasks } from "./store";\n\n/** Pages of two. */\nexport function pair(first: number, second: string): void {}\npair(1, "a");\nlistTasks(0, ';
+  const { service } = serviceFor({ ...files, "src/use.ts": text });
+  const second = service.signatureHelp("src/use.ts", text.indexOf('"a"'));
+  assert.ok(second);
+  assert.equal(second.prefix, "pair(");
+  assert.deepEqual(
+    second.params.map((p) => p.label),
+    ["first: number", "second: string"],
+  );
+  assert.equal(second.separator, ", ");
+  assert.equal(second.suffix, "): void");
+  assert.equal(second.active, 1);
+  assert.equal(second.doc, "Pages of two.");
+  assert.equal(second.overloads, 1);
+  assert.equal(second.start, text.indexOf("1, "));
+
+  const typing = service.signatureHelp("src/use.ts", text.length);
+  assert.ok(typing, "a call still being typed");
+  assert.match(typing.prefix, /^listTasks\(/);
+  assert.equal(typing.active, 1);
+
+  assert.equal(
+    service.signatureHelp("src/use.ts", text.indexOf("/** Pages")),
+    null,
+    "outside a call",
+  );
+});
+
+test("signature help on a rest parameter keeps the last one active, and counts overloads", () => {
+  const text = [
+    "export function many(head: string, ...rest: number[]): void {}",
+    "many('a', 1, 2, 3);",
+    "export function over(a: string): void;",
+    "export function over(a: number, b: number): void;",
+    "export function over(a: unknown, b?: number) {}",
+    "over(1, ",
+  ].join("\n");
+  const { service } = serviceFor({ ...files, "src/rest.ts": text });
+  const rest = service.signatureHelp("src/rest.ts", text.indexOf("3)"));
+  assert.ok(rest);
+  assert.equal(rest.active, 1);
+  assert.equal(rest.params[1]!.label, "...rest: number[]");
+  const over = service.signatureHelp("src/rest.ts", text.length);
+  assert.ok(over);
+  assert.equal(over.overloads, 2);
+  assert.equal(over.params.length, 2, "the overload that takes two arguments");
+});
+
+test("organize imports drops what is unused and sorts the rest; a tidy file needs nothing", () => {
+  const text = [
+    'import { tasks, listTasks } from "./store";',
+    'import type { Task } from "./types";',
+    'import { unused } from "./store";',
+    "",
+    "export const all: Task[] = tasks;",
+    "export const page = listTasks(0, 10);",
+    "",
+  ].join("\n");
+  const project = {
+    ...files,
+    "src/store.ts": `${files["src/store.ts"]}\nexport const tasks: Task[] = [];\nexport const unused = 1;\n`,
+    "src/use.ts": text,
+  };
+  const { service, update } = serviceFor(project);
+  const changes = service.organizeImports("src/use.ts");
+  assert.deepEqual(
+    changes.map((c) => c.path),
+    ["src/use.ts"],
+  );
+  const after = applyFileChanges({ "src/use.ts": text }, changes)!["src/use.ts"]!;
+  assert.doesNotMatch(after, /unused/);
+  assert.match(after, /import \{ listTasks, tasks \} from "\.\/store";/);
+  assert.match(after, /export const all: Task\[\] = tasks;/);
+  update({ ...project, "src/use.ts": after });
+  assert.deepEqual(service.organizeImports("src/use.ts"), []);
+  assert.deepEqual(service.organizeImports("src/missing.ts"), []);
+});
+
 test("a syntax error is a problem too, where the parser stopped", () => {
   const text = "export const a = (1 + ;\n";
   const { service } = serviceFor({ "src/a.ts": text });

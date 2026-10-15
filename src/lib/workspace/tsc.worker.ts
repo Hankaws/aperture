@@ -19,6 +19,8 @@ import {
   type Problem,
   type FileChange,
   type ProjectProblems,
+  type RefactorAction,
+  type RefactorEdit,
   type SignatureHelp,
   type ReferencesResult,
   type RenameResult,
@@ -51,11 +53,17 @@ export type TsAsk = {
     | "references"
     | "project"
     | "signature"
-    | "organize";
+    | "organize"
+    | "refactors"
+    | "refactor";
   id: number;
   path: string;
   text: string;
   offset: number;
+  /** The selection's end, for refactors; `offset` is its start. */
+  end?: number;
+  /** Which refactor to write, for "refactor". */
+  refactor?: { name: string; action: string };
 };
 
 export type TsAnswer =
@@ -68,6 +76,8 @@ export type TsAnswer =
   | { id: number; project: ProjectProblems }
   | { id: number; signature: SignatureHelp | null }
   | { id: number; organize: FileChange[] }
+  | { id: number; refactors: RefactorAction[] }
+  | { id: number; refactor: RefactorEdit | null }
   | { id: number; unavailable: string };
 
 export type TscReply =
@@ -113,6 +123,16 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "project") return { id: ask.id, project: service.projectProblems() };
   if (ask.type === "signature") return { id: ask.id, signature: service.signatureHelp(ask.path, ask.offset) };
   if (ask.type === "organize") return { id: ask.id, organize: service.organizeImports(ask.path) };
+  const end = ask.end ?? ask.offset;
+  if (ask.type === "refactors")
+    return { id: ask.id, refactors: service.refactors(ask.path, ask.offset, end) };
+  if (ask.type === "refactor") {
+    const which = ask.refactor;
+    return {
+      id: ask.id,
+      refactor: which ? service.refactorEdits(ask.path, ask.offset, end, which.name, which.action) : null,
+    };
+  }
   return { id: ask.id, definition: service.definition(ask.path, ask.offset) };
 }
 
@@ -130,7 +150,9 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "references" ||
     event.data.type === "project" ||
     event.data.type === "signature" ||
-    event.data.type === "organize"
+    event.data.type === "organize" ||
+    event.data.type === "refactors" ||
+    event.data.type === "refactor"
   ) {
     const ask = event.data;
     try {

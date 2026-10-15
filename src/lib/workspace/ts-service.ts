@@ -116,6 +116,18 @@ export type Reference = {
 export type ReferencesResult = { name: string; references: Reference[] };
 
 /** One problem in the Problems panel: where it is, by line, and what TypeScript says. */
+/** One of TypeScript's refactors that applies at a selection: "Extract to constant in enclosing scope". */
+export type RefactorAction = { refactor: string; action: string; description: string };
+
+/** What a refactor writes: edits to existing files, new files whole, and where its new name is. */
+export type RefactorEdit = {
+  changes: FileChange[];
+  /** Files it creates ("Move to a new file"), with their text. */
+  created: Record<string, string>;
+  /** The name it made up ("newFunction"), as an offset in that file's new text, to rename at once. */
+  rename?: { path: string; offset: number };
+};
+
 /** The call around the cursor: what it takes, and which argument is being typed. */
 export type SignatureHelp = {
   /** Before the parameters: `listTasks(`. */
@@ -211,6 +223,16 @@ export type TsService = {
   signatureHelp(path: string, offset: number): SignatureHelp | null;
   /** The edits that remove the file's unused imports and sort the rest; none when they already are. */
   organizeImports(path: string): FileChange[];
+  /** The refactors TypeScript offers for `start`–`end` (a cursor when equal). */
+  refactors(path: string, start: number, end: number): RefactorAction[];
+  /** What one of them writes; null when it no longer applies there. */
+  refactorEdits(
+    path: string,
+    start: number,
+    end: number,
+    refactor: string,
+    action: string,
+  ): RefactorEdit | null;
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -362,6 +384,12 @@ export function createTsService(ts: Ts): TsService {
         }))
     );
   }
+
+  /** Refactors may write a new file ("Move to a new file"), which TypeScript offers only when told it can. */
+  const refactorPreferences = (): ts.UserPreferences => ({
+    ...preferences,
+    allowTextChangesInNewFiles: true,
+  });
 
   /**
    * A file's syntax and type errors (and warnings), as the "Types" check reports
@@ -540,6 +568,77 @@ export function createTsService(ts: Ts): TsService {
         if (after !== undefined && after !== text) changes.push({ path: file, edits });
       }
       return changes;
+    },
+
+    refactors(path, start, end) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return [];
+      const range = start === end ? start : { pos: start, end };
+      let found: readonly ts.ApplicableRefactorInfo[] = [];
+      try {
+        found = service.getApplicableRefactors(
+          name,
+          range,
+          refactorPreferences(),
+          "invoked",
+          undefined,
+          false,
+        );
+      } catch {
+        return [];
+      }
+      return found.flatMap((info) =>
+        info.actions
+          .filter((action) => !action.notApplicableReason)
+          .map((action) => ({
+            refactor: info.name,
+            action: action.name,
+            description: action.description,
+          })),
+      );
+    },
+
+    refactorEdits(path, start, end, refactor, action) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return null;
+      const range = start === end ? start : { pos: start, end };
+      let found: ts.RefactorEditInfo | undefined;
+      try {
+        // TypeScript asserts rather than answers when an action does not apply where it is asked.
+        found = service.getEditsForRefactor(
+          name,
+          format,
+          range,
+          refactor,
+          action,
+          refactorPreferences(),
+        );
+      } catch {
+        return null;
+      }
+      if (!found) return null;
+      const changes: FileChange[] = [];
+      const created: Record<string, string> = {};
+      for (const change of found.edits) {
+        if (!change.isNewFile && !inProject(change.fileName)) return null;
+        const edits = change.textChanges.map((t) => ({
+          start: t.span.start,
+          length: t.span.length,
+          newText: t.newText,
+        }));
+        const file = change.fileName.slice(1);
+        if (change.isNewFile) {
+          created[file] = applyFileChanges({ [file]: "" }, [{ path: file, edits }])?.[file] ?? "";
+        } else changes.push({ path: file, edits });
+      }
+      const renamed = found.renameFilename?.slice(1);
+      return {
+        changes,
+        created,
+        ...(renamed && found.renameLocation !== undefined
+          ? { rename: { path: renamed, offset: found.renameLocation } }
+          : {}),
+      };
     },
 
     projectProblems() {

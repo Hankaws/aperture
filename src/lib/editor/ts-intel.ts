@@ -2,7 +2,8 @@
  * What the editor knows about a TypeScript name, from TypeScript itself:
  * hover a name for its type and docs; F12 or Ctrl/⌘+click to go to where it
  * is defined; F2 to rename it everywhere; completions that know the types as
- * you type; parameter hints inside a call; and Shift+Alt+O to organize imports. The answers come from the compiler's worker (tsc.ts),
+ * you type; parameter hints inside a call; Shift+Alt+O to organize imports;
+ * and Ctrl/⌘+Shift+R for TypeScript's refactors. The answers come from the compiler's worker (tsc.ts),
  * which loads the first time anyone asks, so nobody who never asks downloads it.
  */
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
@@ -13,6 +14,7 @@ import type {
   CompletionEntry,
   DefinitionTarget,
   QuickFix,
+  RefactorAction,
   ReferencesResult,
   RenameLocation,
   SignatureHelp,
@@ -170,6 +172,18 @@ export function tsCompletesHere(path: string | null): boolean {
   return typescriptCompletes && Boolean(path && isTsPath(path));
 }
 
+/** The refactors TypeScript offers for a selection, for the menu to list, and what they were worked out against. */
+export type RefactorAsk = {
+  path: string;
+  start: number;
+  end: number;
+  actions: RefactorAction[];
+  /** The files as they were when asked: a refactor's offsets hold for these. */
+  basis: Record<string, string>;
+  /** The selection's start on screen: the menu opens under it, or over it near the bottom. */
+  at: { left: number; top: number; bottom: number } | null;
+};
+
 /** A rename that is ready for its new name: every place the name is used, and where to ask. */
 export type RenameAsk = {
   path: string;
@@ -194,6 +208,8 @@ export function tsIntel(
   fix: (fix: QuickFix, basis: Record<string, string>) => void = () => {},
   /** Show every place a name is used. */
   references: (found: ReferencesResult) => void = () => {},
+  /** Offer TypeScript's refactors for the selection. */
+  refactor: (ask: RefactorAsk) => void = () => {},
 ) {
   /**
    * Views someone has typed in. The compiler is a few megabytes: opening a file
@@ -317,6 +333,37 @@ export function tsIntel(
     if ("unavailable" in changes) return say(changes.unavailable);
     if (changes.length === 0) return say("Imports are already organized.");
     fix({ description: "Organize imports", changes }, basis);
+  }
+
+  async function askRefactors(view: EditorView) {
+    const path = current();
+    if (!path || !isTsPath(path)) return;
+    const { tsRefactors, tsReady } = await import("../workspace/tsc");
+    if (!tsReady()) say("Loading TypeScript to find refactors…");
+    const doc = view.state.doc.toString();
+    const basis = { ...files(), [path]: doc };
+    const { from, to } = view.state.selection.main;
+    const found = await tsRefactors(basis, path, doc, from, to);
+    if (!found) return say("TypeScript could not answer here.");
+    if ("unavailable" in found) return say(found.unavailable);
+    if (found.length === 0) {
+      return say(
+        from === to
+          ? "No refactors at the cursor. Select an expression or some statements to extract them."
+          : "No refactors for this selection.",
+      );
+    }
+    const coords = view.coordsAtPos(from);
+    // A selection is usually made to extract it: those first, the rest in TypeScript's order.
+    const extracts = found.filter((a) => a.description.startsWith("Extract"));
+    refactor({
+      path,
+      start: from,
+      end: to,
+      actions: [...extracts, ...found.filter((a) => !extracts.includes(a))],
+      basis,
+      at: coords ? { left: coords.left, top: coords.top, bottom: coords.bottom } : null,
+    });
   }
 
   async function complete(context: CompletionContext): Promise<CompletionResult | null> {
@@ -444,6 +491,14 @@ export function tsIntel(
         run: (view) => {
           if (!current() || !isTsPath(current()!)) return false;
           void askSignature(view, true);
+          return true;
+        },
+      },
+      {
+        key: "Mod-Shift-r",
+        run: (view) => {
+          if (!current() || !isTsPath(current()!)) return false;
+          void askRefactors(view);
           return true;
         },
       },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appendVerify, symbolsFromEdit, verifyRecap } from "./verify.ts";
+import { appendVerify, recapNames, symbolsFromEdit, verifyRecap } from "./verify.ts";
 import type { ProposedEdit } from "../workspace/types.ts";
 
 const edit = (over: Partial<ProposedEdit> = {}): ProposedEdit => ({
@@ -116,4 +116,24 @@ test("where the compiler cannot say, Elsewhere falls back to text", () => {
   };
   const recap = verifyRecap([edit()], files, [], undefined, () => null);
   assert.match(recap, /^Elsewhere: listTasks also appears in src\/routes\/tasks\.ts$/m);
+});
+
+test("recapNames: the first five changed names, each with the file it first changed in", () => {
+  const many = (path: string, names: string[]): ProposedEdit =>
+    edit({
+      path,
+      oldText: "",
+      newText: names.map((n) => `export function ${n}() {}\n`).join(""),
+    });
+  const names = recapNames([
+    many("src/a.ts", ["alpha", "beta", "gamma"]),
+    many("src/b.ts", ["beta", "delta", "epsilon", "zeta"]),
+  ]);
+  assert.deepEqual(names, [
+    { path: "src/a.ts", name: "alpha" },
+    { path: "src/a.ts", name: "beta" },
+    { path: "src/a.ts", name: "gamma" },
+    { path: "src/b.ts", name: "delta" },
+    { path: "src/b.ts", name: "epsilon" },
+  ]);
 });

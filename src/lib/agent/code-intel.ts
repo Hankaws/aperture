@@ -211,3 +211,64 @@ export function usedElsewhere(
   }
   return { broken: [...new Set(broken)] };
 }
+
+/** What the agent asks the compiler about the project, as the files sent with the question hold it. */
+export type CodeQuestion =
+  | { kind: "references"; path: string; name: string; line?: number }
+  | { kind: "rename"; path: string; name: string; next: string; line?: number }
+  | { kind: "elsewhere"; names: Array<{ path: string; name: string }>; skip: string[] };
+
+type Answers = {
+  references: string;
+  rename: RenamePlan;
+  elsewhere: Array<Elsewhere | null>;
+};
+export type AnswerTo<Q extends CodeQuestion> = Answers[Q["kind"]];
+export type CodeAnswer<Q extends CodeQuestion> = { answer: AnswerTo<Q> } | { unavailable: string };
+
+/**
+ * Asks the compiler, wherever it runs: in this process (the server, a runner)
+ * or in the tab's worker, for a run on a model on the person's own machine.
+ */
+export type CodeAsk = <Q extends CodeQuestion>(
+  files: Record<string, string>,
+  question: Q,
+) => Promise<CodeAnswer<Q>>;
+
+/** The answer to `question` from a service holding `files`. */
+export function answerCode<Q extends CodeQuestion>(
+  service: TsService,
+  files: Record<string, string>,
+  question: Q,
+): AnswerTo<Q> {
+  const q: CodeQuestion = question;
+  if (q.kind === "references")
+    return referencesAnswer(service, files, q.path, q.name, q.line) as AnswerTo<Q>;
+  if (q.kind === "rename")
+    return planRename(service, files, q.path, q.name, q.next, q.line) as AnswerTo<Q>;
+  const skip = new Set(q.skip);
+  return q.names.map(({ path, name }) => {
+    try {
+      return usedElsewhere(service, files, path, name, skip);
+    } catch {
+      return null;
+    }
+  }) as AnswerTo<Q>;
+}
+
+/** `CodeAsk` with the compiler in this process, loaded on the first question. */
+export function askInProcess(load: () => Promise<LanguageHost>): CodeAsk {
+  let loading: Promise<CodeIntel | null> | undefined;
+  return async (files, question) => {
+    loading ??= load().then(codeIntel, () => null);
+    const intel = await loading;
+    if (!intel) return { unavailable: "TypeScript could not load here." };
+    try {
+      const service = await intel(files);
+      if (typeof service === "string") return { unavailable: service };
+      return { answer: answerCode(service, files, question) };
+    } catch {
+      return { unavailable: "TypeScript could not read this project." };
+    }
+  };
+}

@@ -6,8 +6,7 @@ import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
-import type { TsService } from "@/lib/workspace/ts-service";
-import { planRename, referencesAnswer } from "./code-intel";
+import type { AnswerTo, CodeQuestion } from "./code-intel";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
 
@@ -259,10 +258,12 @@ export type ToolContext = {
   /** Loads `parse`, where the host can; only asked once an edit looks like it does not parse. */
   loadParse?: () => Promise<ParseCheck | undefined>;
   /**
-   * TypeScript's language service on the whole project as staged so far, and
-   * the files it sees, where the host has the compiler; a string says why not.
+   * TypeScript's answer about the whole project as staged so far, and the
+   * files it saw, where the host has the compiler; a string says why not.
    */
-  intel?: () => Promise<{ service: TsService; files: Record<string, string> } | string>;
+  intel?: <Q extends CodeQuestion>(
+    question: Q,
+  ) => Promise<{ answer: AnswerTo<Q>; files: Record<string, string> } | string>;
 };
 
 function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
@@ -382,9 +383,11 @@ export async function executeTool(
     const path = safeRelPath(String(args.path ?? "")) ?? "";
     const symbol = String(args.name ?? "").trim();
     if (!path || !symbol) return "find_references needs path and name.";
-    const intel = ctx.intel ? await ctx.intel() : "TypeScript is not available here.";
-    if (typeof intel === "string") return `${intel} Use grep instead.`;
-    return referencesAnswer(intel.service, intel.files, path, symbol, lineArg(args.line));
+    const found = ctx.intel
+      ? await ctx.intel({ kind: "references", path, name: symbol, line: lineArg(args.line) })
+      : "TypeScript is not available here.";
+    if (typeof found === "string") return `${found} Use grep instead.`;
+    return found.answer;
   }
 
   if (name === "rename_symbol") {
@@ -397,9 +400,11 @@ export async function executeTool(
     const symbol = String(args.name ?? "").trim();
     const next = String(args.newName ?? "").trim();
     if (!path || !symbol) return "rename_symbol needs path, name and newName.";
-    const intel = ctx.intel ? await ctx.intel() : "TypeScript is not available here.";
-    if (typeof intel === "string") return `${intel} Rename with propose_edit in each file instead.`;
-    const plan = planRename(intel.service, intel.files, path, symbol, next, lineArg(args.line));
+    const found = ctx.intel
+      ? await ctx.intel({ kind: "rename", path, name: symbol, next, line: lineArg(args.line) })
+      : "TypeScript is not available here.";
+    if (typeof found === "string") return `${found} Rename with propose_edit in each file instead.`;
+    const plan = found.answer;
     if (!plan.ok) return `Rename not staged: ${plan.reason}`;
     const paths = Object.keys(plan.changed).sort();
     for (const changed of paths) {
@@ -407,7 +412,7 @@ export async function executeTool(
       ctx.edits.push({
         id: `edit_${ctx.edits.length + 1}_${changed}`,
         path: changed,
-        oldText: intel.files[changed]!,
+        oldText: found.files[changed]!,
         newText,
         description: `Rename ${symbol} to ${next}`,
         status: "pending",

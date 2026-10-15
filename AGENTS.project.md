@@ -395,8 +395,8 @@ used in the sidebar's References view (`references-panel.tsx`).
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from
 where it runs comes in a `LoopHost` (model calls, a sandbox script runner, MCP
 tools). `loop.server.ts` passes the server's; `local-run.ts` passes a model
-client for Ollama or LM Studio on `localhost` (`local-model.ts`) and nothing
-else, and runs the loop in the browser tab when the model source is `local`.
+client for Ollama or LM Studio on `localhost` (`local-model.ts`) and the tab's
+compiler for the TypeScript tools (`askCode`, below), and runs the loop in the browser tab when the model source is `local`.
 Keep `loop.ts` free of `*.server` imports, `process`, and Node built-ins, or the
 browser build breaks or ships server code. The local model's address lives in
 the browser's storage (`aperture-local-model`); the server refuses the `local`
@@ -408,12 +408,24 @@ to probe the network.
 
 `find_references` and `rename_symbol` (`tools.ts`) and the recap's
 "Elsewhere:" line (`verify.ts`) use the editor's language service
-(`ts-service.ts`) through `src/lib/agent/code-intel.ts`. A host that has the
-compiler passes `LoopHost.language`: the server (`loop.server.ts`, library
-files from `ts-libs.server.ts`, shared with `check_change`) and the bot
-(`packages/aperture-bot/src/model.ts`, library files from Agent Check's
-`libReader`). The browser's local-model host does not, so there the tools
-answer that TypeScript is not available and the recap uses text search.
+(`ts-service.ts`) through `src/lib/agent/code-intel.ts`. The loop asks a
+`CodeQuestion` (`references`, `rename`, or `elsewhere` for the recap's names,
+all in one message) and `answerCode` answers it from a service; where the
+service lives is the host's:
+
+- In the process, from `LoopHost.language`: the server (`loop.server.ts`,
+  library files from `ts-libs.server.ts`, shared with `check_change`) and the
+  bot (`packages/aperture-bot/src/model.ts`, library files from Agent Check's
+  `libReader`). `askInProcess` loads the compiler on the first question.
+- In the tab's compiler worker, from `LoopHost.askCode`: a run on a model on the
+  person's own machine (`local-run.ts` passes `askCode` from `tsc.ts`). The
+  worker answers on the editor's service, so the compiler is downloaded once;
+  the agent's files differ from the editor's only in what the run staged, so
+  switching between them re-reads just those files. Keep the compiler off the
+  main thread: a project's references can take seconds.
+
+A host with neither gets "TypeScript is not available here" from the tools,
+and the recap uses text search.
 
 - The service is made once per run and loaded on first use: the first
   `find_references`/`rename_symbol`, or the recap of a turn whose edits touch a

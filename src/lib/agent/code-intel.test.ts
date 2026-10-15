@@ -6,6 +6,8 @@ import { test } from "node:test";
 import ts from "typescript";
 import { libFilesFor } from "../workspace/tsc-core.ts";
 import {
+  answerCode,
+  askInProcess,
   codeIntel,
   nameOffsets,
   planRename,
@@ -186,4 +188,77 @@ test("a project past the limits gets the reason instead of a service", async () 
     limits: { files: 1, bytes: 1_000_000, where: "on this runner" },
   });
   assert.match(String(await small(PROJECT)), /too large for the compiler on this runner/);
+});
+
+test("askInProcess answers each kind of question, as the tab's worker would", async () => {
+  const ask = askInProcess(async () => ({
+    ts,
+    libs: async (options) => libFilesFor(ts, options, readLib),
+  }));
+  const refs = await ask(PROJECT, { kind: "references", path: "src/tasks.ts", name: "listTasks" });
+  assert.ok("answer" in refs);
+  assert.match(refs.answer, /^listTasks: 6 places in 3 files/);
+
+  const renamed = await ask(PROJECT, {
+    kind: "rename",
+    path: "src/tasks.ts",
+    name: "listTasks",
+    next: "fetchTasks",
+  });
+  assert.ok("answer" in renamed && renamed.answer.ok);
+  assert.deepEqual(Object.keys(renamed.answer.changed).sort(), [
+    "src/routes/home.ts",
+    "src/routes/other.ts",
+    "src/tasks.ts",
+  ]);
+
+  const elsewhere = await ask(PROJECT, {
+    kind: "elsewhere",
+    names: [
+      { path: "src/tasks.ts", name: "listTasks" },
+      { path: "README.md", name: "listTasks" },
+    ],
+    skip: ["src/tasks.ts"],
+  });
+  assert.ok("answer" in elsewhere);
+  // One answer per name, in order; null where the compiler has nothing to say.
+  assert.deepEqual(elsewhere.answer, [
+    {
+      uses: [
+        "src/routes/home.ts:1",
+        "src/routes/home.ts:3",
+        "src/routes/other.ts:1",
+        "src/routes/other.ts:3",
+      ],
+    },
+    null,
+  ]);
+});
+
+test("askInProcess says why when the compiler cannot load or the project is too big", async () => {
+  const broken = askInProcess(() => Promise.reject(new Error("no typescript")));
+  assert.deepEqual(
+    await broken(PROJECT, { kind: "references", path: "src/tasks.ts", name: "listTasks" }),
+    { unavailable: "TypeScript could not load here." },
+  );
+  const small = askInProcess(async () => ({
+    ts,
+    libs: async (options) => libFilesFor(ts, options, readLib),
+    limits: { files: 1, bytes: 1_000_000, where: "on this runner" },
+  }));
+  const answer = await small(PROJECT, {
+    kind: "references",
+    path: "src/tasks.ts",
+    name: "listTasks",
+  });
+  assert.ok("unavailable" in answer);
+  assert.match(answer.unavailable, /too large for the compiler on this runner/);
+});
+
+test("answerCode gives the same answer as the function it stands for", async () => {
+  const service = await serviceFor(PROJECT);
+  assert.equal(
+    answerCode(service, PROJECT, { kind: "references", path: "src/tasks.ts", name: "listTasks" }),
+    referencesAnswer(service, PROJECT, "src/tasks.ts", "listTasks"),
+  );
 });

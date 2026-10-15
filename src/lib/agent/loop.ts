@@ -22,8 +22,8 @@ import { sanitizeFileMap, redactSecrets, safeRelPath } from "@/lib/security/reda
 import { acpSystemPreamble, acpTraceName, builtinById } from "@/lib/acp/kinds";
 import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
-import { appendVerify, type UsedIn } from "./verify";
-import { codeIntel, usedElsewhere, type CodeIntel, type LanguageHost } from "./code-intel";
+import { appendVerify, recapNames, type UsedIn } from "./verify";
+import { askInProcess, type CodeAsk, type LanguageHost } from "./code-intel";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
 import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
@@ -268,6 +268,8 @@ export type LoopHost = {
    * Loaded on first use.
    */
   language?: () => Promise<LanguageHost>;
+  /** The same answers from a compiler elsewhere: the tab's worker, for a model on this machine. */
+  askCode?: CodeAsk;
 };
 
 export async function runLoop(
@@ -329,33 +331,21 @@ export async function runLoop(
     for (const [path, text] of Object.entries(ctx.files)) if (text !== sent[path]) view[path] = text;
     return view;
   };
-  let intelLoad: Promise<CodeIntel | null> | undefined;
-  const intel = host.language && !reviewing
-    ? async () => {
-        intelLoad ??= host.language!().then(codeIntel, () => null);
-        const ask = await intelLoad;
-        if (!ask) return "TypeScript could not load here.";
+  const ask = host.askCode ?? (host.language ? askInProcess(host.language) : undefined);
+  const intel: ToolContext["intel"] = ask && !reviewing
+    ? async (question) => {
         const view = project();
-        try {
-          const service = await ask(view);
-          return typeof service === "string" ? service : { service, files: view };
-        } catch {
-          return "TypeScript could not read this project.";
-        }
+        const found = await ask(view, question);
+        return "unavailable" in found ? found.unavailable : { answer: found.answer, files: view };
       }
     : undefined;
   /** The compiler's answer to "where else is this used", for the recap, when an edit touched TypeScript. */
   const recapUses = async (edits: ProposedEdit[]): Promise<UsedIn | undefined> => {
-    if (!intel || !edits.some((e) => isTsPath(e.path))) return undefined;
-    const found = await intel();
+    const names = recapNames(edits);
+    if (!intel || !names.length || !edits.some((e) => isTsPath(e.path))) return undefined;
+    const found = await intel({ kind: "elsewhere", names, skip: [...new Set(edits.map((e) => e.path))] });
     if (typeof found === "string") return undefined;
-    return (path, symbol, skip) => {
-      try {
-        return usedElsewhere(found.service, found.files, path, symbol, skip);
-      } catch {
-        return null;
-      }
-    };
+    return (path, symbol) => found.answer[names.findIndex((n) => n.path === path && n.name === symbol)] ?? null;
   };
   const ctx: ToolContext = {
     files,

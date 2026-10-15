@@ -430,6 +430,15 @@ answer that TypeScript is not available and the recap uses text search.
   with an error naming it count ("is gone but still used in"). Past
   `MAX_GONE_FILES`, or when the compiler cannot say, it is text search as before.
 
+## The editor tour
+
+`src/components/site/editor-features.ts` lists the editor's TypeScript help
+with its keys; the landing page's Editor section (`landing/editor-story.tsx`,
+the keys in `LANDING_KEYS`) and `/editor` both read it, so add a feature there
+and to the editor's own help (`overlays.tsx`) together. The tour's screenshots
+in `public/editor/` come from `scripts/editor-shots.mjs` on the demo project;
+run it again when the editor's look changes.
+
 ## Parameter hints and Organize Imports
 
 `ts-intel.ts` keeps the hint in a `StateField` shown with `showTooltip`,

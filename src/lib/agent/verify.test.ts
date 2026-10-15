@@ -85,3 +85,35 @@ test("other files count as mentions only for the whole identifier, in the same c
   assert.match(recap, /Elsewhere: listTasks also appears in src\/routes\/tasks\.ts$/m);
   assert.doesNotMatch(recap, /README/);
 });
+
+test("with the compiler's answer, Elsewhere names real uses by line and skips the same word in unrelated code", () => {
+  const files = {
+    "src/store.ts": "export function listTasks() { return tasks.slice(offset); }",
+    "src/index.ts": 'import { listTasks } from "./store.ts";\nlistTasks();',
+    "src/local.ts": "const listTasks = 3;",
+  };
+  const asked: Array<[string, string, string[]]> = [];
+  const recap = verifyRecap([edit()], files, [], undefined, (path, symbol, skip) => {
+    asked.push([path, symbol, [...skip]]);
+    return { uses: ["src/index.ts:1", "src/index.ts:2", "src/a.ts:1", "src/b.ts:4", "src/c.ts:9"] };
+  });
+  assert.deepEqual(asked, [["src/store.ts", "listTasks", ["src/store.ts"]]]);
+  assert.match(recap, /^Elsewhere: listTasks is used in src\/index\.ts \(lines 1, 2\), src\/a\.ts:1 and 2 more files$/m);
+});
+
+test("a name gone from its file is flagged only where code still uses it, and silence says 'uses'", () => {
+  const files = { "src/store.ts": "", "src/index.ts": "", "src/local.ts": "const listTasks = 3;" };
+  const broken = verifyRecap([edit()], files, [], undefined, () => ({ broken: ["src/index.ts:1"] }));
+  assert.match(broken, /^Elsewhere: listTasks is gone but still used in src\/index\.ts:1$/m);
+  const clean = verifyRecap([edit()], files, [], undefined, () => ({ uses: [] }));
+  assert.match(clean, /^Elsewhere: no other file uses the changed names\.$/m);
+});
+
+test("where the compiler cannot say, Elsewhere falls back to text", () => {
+  const files = {
+    "src/store.ts": "export function listTasks() {}",
+    "src/routes/tasks.ts": "listTasks()",
+  };
+  const recap = verifyRecap([edit()], files, [], undefined, () => null);
+  assert.match(recap, /^Elsewhere: listTasks also appears in src\/routes\/tasks\.ts$/m);
+});

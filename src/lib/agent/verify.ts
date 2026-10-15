@@ -63,6 +63,33 @@ function filesMentioning(files: Record<string, string>, symbol: string, skip: Se
 }
 
 /**
+ * Where other code uses `symbol`, changed in `path`, as `file:line`, from the
+ * TypeScript compiler; null when it cannot say, and text search answers instead.
+ */
+export type UsedIn = (
+  path: string,
+  symbol: string,
+  skip: Set<string>,
+) => { uses: string[] } | { broken: string[] } | null;
+
+/** `file:line` places, by file: "a.ts (lines 2, 8), b.ts:3 and 2 more files". */
+function byFile(at: string[]): string {
+  const lines = new Map<string, string[]>();
+  for (const place of at) {
+    const cut = place.lastIndexOf(":");
+    const file = place.slice(0, cut);
+    lines.set(file, [...(lines.get(file) ?? []), place.slice(cut + 1)]);
+  }
+  const files = [...lines].map(([file, rows]) =>
+    rows.length === 1
+      ? `${file}:${rows[0]}`
+      : `${file} (lines ${rows.slice(0, 3).join(", ")}${rows.length > 3 ? ", …" : ""})`,
+  );
+  const more = files.length - 2;
+  return `${files.slice(0, 2).join(", ")}${more > 0 ? ` and ${more} more ${more === 1 ? "file" : "files"}` : ""}`;
+}
+
+/**
  * Recap: what changed, what code still references it, what the plan left open.
  * The last line only appears once some step has moved off "pending": a plan
  * nobody updated says nothing about what is left, and listing all of it would
@@ -73,6 +100,7 @@ export function verifyRecap(
   files: Record<string, string>,
   plan: PlanEntry[] = [],
   parse?: ParseCheck,
+  usedIn?: UsedIn,
 ): string {
   if (edits.length === 0) return "";
   const paths = [...new Set(edits.map((e) => e.path))];
@@ -84,14 +112,31 @@ export function verifyRecap(
   const line1 = `Changed: ${changed.slice(0, 4).join("; ")}`;
 
   const leftover: string[] = [];
-  for (const symbol of [...new Set(edits.flatMap(symbolsFromEdit))].slice(0, 5)) {
-    const hits = filesMentioning(files, symbol, skip);
-    if (hits.length) leftover.push(`${symbol} also appears in ${hits.slice(0, 2).join(", ")}`);
+  const seen = new Set<string>();
+  let exact = true;
+  for (const edit of edits) {
+    for (const symbol of symbolsFromEdit(edit)) {
+      if (seen.has(symbol) || seen.size >= 5) continue;
+      seen.add(symbol);
+      // The compiler's answer, where it has one: real uses, by line, and not the same word in unrelated code.
+      const found = usedIn?.(edit.path, symbol, skip) ?? null;
+      if (found) {
+        if ("uses" in found && found.uses.length) leftover.push(`${symbol} is used in ${byFile(found.uses)}`);
+        if ("broken" in found && found.broken.length)
+          leftover.push(`${symbol} is gone but still used in ${byFile(found.broken)}`);
+        continue;
+      }
+      exact = false;
+      const hits = filesMentioning(files, symbol, skip);
+      if (hits.length) leftover.push(`${symbol} also appears in ${hits.slice(0, 2).join(", ")}`);
+    }
   }
   // Where else the changed names appear, to look at before applying: a note, not a failure.
   const line2 = leftover.length
     ? `Elsewhere: ${leftover.slice(0, 2).join("; ")}`
-    : "Elsewhere: no other file mentions the changed names.";
+    : exact && seen.size > 0
+      ? "Elsewhere: no other file uses the changed names."
+      : "Elsewhere: no other file mentions the changed names.";
 
   const tracked = plan.some((e) => e.status !== "pending");
   const open = plan.filter((e) => e.status !== "completed").map((e) => e.content);
@@ -112,9 +157,10 @@ export function appendVerify(
   files: Record<string, string>,
   plan: PlanEntry[] = [],
   parse?: ParseCheck,
+  usedIn?: UsedIn,
 ): string {
   if (edits.length === 0 || text.includes("Changed:")) return text;
-  const recap = verifyRecap(edits, files, plan, parse);
+  const recap = verifyRecap(edits, files, plan, parse, usedIn);
   if (!recap) return text;
   return `${text.trim()}\n\n${recap}`;
 }

@@ -56,7 +56,7 @@ declare var __dirname: string, __filename: string, global: any;
  * runner's, a `NodeJS.` namespace. They would fail every Node project here,
  * and installing the package would make them go away.
  */
-function missingPackageTypes(diagnostic: ts.Diagnostic, text: string): boolean {
+export function missingPackageTypes(diagnostic: ts.Diagnostic, text: string): boolean {
   // An import tsc cannot resolve is typed `any`. For a package that is all it can be
   // here; a missing relative file is a real error (and the Imports check says so too).
   if (diagnostic.code === 2307 || diagnostic.code === 2792) {

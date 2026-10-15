@@ -3,27 +3,17 @@
  * compiler in this process. Nothing the caller sent is executed, stored or
  * logged.
  *
- * The compiler's library files come through Vite's glob, as in the browser's
- * tsc worker, so they are inside the server bundle: a deployed function has no
- * node_modules to read them from.
+ * The compiler's library files are bundled with the server (`ts-libs.server`).
  */
 import ts from "typescript";
 import type { CheckRow } from "@/lib/workspace/checks";
 import { staticChangeChecks } from "@/lib/workspace/static-checks";
-import { compilerOptions, loadLibFiles, type TscCache } from "@/lib/workspace/tsc-core";
+import { compilerOptions, type TscCache } from "@/lib/workspace/tsc-core";
+import { serverLibs, serverLibTexts } from "@/lib/workspace/ts-libs.server";
 import type { CheckInput } from "./protocol";
 
-const LIB_PREFIX = "/node_modules/typescript/lib/";
-const libLoaders = import.meta.glob("/node_modules/typescript/lib/lib.*.d.ts", {
-  query: "?raw",
-  import: "default",
-}) as Record<string, () => Promise<string>>;
-
-const libTexts = new Map<string, string>();
 /** Parsed library files only, so it is the same size whoever calls. */
 const cache: TscCache = new Map();
-
-const load = (name: string) => libLoaders[`${LIB_PREFIX}${name}`];
 
 /**
  * The compiler holds the process while it runs, and the rate limit is per
@@ -47,11 +37,11 @@ export async function checkChange(input: CheckInput): Promise<CheckRow[]> {
 
 async function runChecks(input: CheckInput): Promise<CheckRow[]> {
   const after = { ...input.files, ...input.changes };
-  await loadLibFiles(ts, compilerOptions(ts, after), libTexts, load);
-  await loadLibFiles(ts, compilerOptions(ts, input.files), libTexts, load);
+  await serverLibs(ts, compilerOptions(ts, after));
+  await serverLibs(ts, compilerOptions(ts, input.files));
   return staticChangeChecks({
     tsc: ts,
-    readLib: (name) => libTexts.get(name),
+    readLib: (name) => serverLibTexts.get(name),
     cache,
     before: input.files,
     changes: input.changes,

@@ -75,8 +75,8 @@ export type MobilePane = "files" | "editor" | "agent";
 
 type IdeUiState = {
   sidebarOpen: boolean;
-  /** What the left sidebar shows: the file tree, or find and replace across files. */
-  sidebarView: "files" | "search" | "references";
+  /** What the left sidebar shows: the file tree, find and replace, references, or the project's problems. */
+  sidebarView: "files" | "search" | "references" | "problems";
   /** The last Shift+F12: a name and every place it is used. */
   references: ReferencesResult | null;
   /** Bumped to put the cursor in the Search view's box. */
@@ -163,6 +163,8 @@ type IdeUiState = {
   /** Opens the sidebar on Search with the cursor in its box. */
   openSearch: () => void;
   openReferences: (found: ReferencesResult) => void;
+  /** Opens the sidebar on Problems: every type error in the project. */
+  openProblems: () => void;
   requestFind: () => void;
   enqueueSteer: (text: string) => void;
   shiftSteer: () => string | undefined;
@@ -328,6 +330,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   openSearch: () =>
     set((s) => ({ sidebarOpen: true, sidebarView: "search", mobilePane: "files", searchFocusTick: s.searchFocusTick + 1 })),
   openReferences: (found) => set({ sidebarOpen: true, sidebarView: "references", mobilePane: "files", references: found }),
+  openProblems: () => set({ sidebarOpen: true, sidebarView: "problems", mobilePane: "files" }),
   requestFind: () => set((s) => ({ findTick: s.findTick + 1 })),
   enqueueSteer: (text) =>
     set((s) => {

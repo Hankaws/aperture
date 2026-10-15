@@ -347,6 +347,9 @@ export function IdeShell() {
       if (key === "f" && e.shiftKey) {
         e.preventDefault();
         useIdeUi.getState().openSearch();
+      } else if (key === "m" && e.shiftKey) {
+        e.preventDefault();
+        useIdeUi.getState().openProblems();
       } else if (key === "p") {
         e.preventDefault();
         setCommandOpen(true);

@@ -7,6 +7,7 @@ import { complete, completeStreaming, type CompletionCfg } from "./complete.serv
 import type { AgentStreamEvent } from "./events";
 import { runLoop, type LoopHost } from "./loop";
 import { tsParseCheck } from "@/lib/workspace/ts-parse";
+import { TSC_LIMITS } from "@/lib/workspace/tsc-core";
 import type { AgentInput, AgentResult } from "./types";
 
 const SERVER_HOST: LoopHost = {
@@ -30,6 +31,12 @@ const SERVER_HOST: LoopHost = {
   parser: async () => {
     const mod = await import("typescript");
     return tsParseCheck(mod.default ?? mod);
+  },
+  language: async () => {
+    const mod = await import("typescript");
+    const ts = mod.default ?? mod;
+    const { serverLibs } = await import("@/lib/workspace/ts-libs.server");
+    return { ts, libs: (options) => serverLibs(ts, options), limits: { ...TSC_LIMITS, where: "on the server" } };
   },
 };
 

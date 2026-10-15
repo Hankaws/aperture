@@ -276,6 +276,19 @@ try {
       .innerText({ timeout: 15_000 })
       .catch(() => "");
     check(/^apt_[A-Za-z0-9_-]{43}$/.test(token), "Settings makes an agent token and shows it once");
+    const cursorHref = (await page.locator('[data-install="Cursor"]').getAttribute("href")) ?? "";
+    const vscodeHref = (await page.locator('[data-install="VS Code"]').getAttribute("href")) ?? "";
+    const cursorConfig = Buffer.from(
+      new URL(cursorHref).searchParams.get("config") ?? "",
+      "base64",
+    ).toString("utf8");
+    check(
+      cursorHref.startsWith("cursor://") &&
+        cursorConfig.includes(`Bearer ${token}`) &&
+        vscodeHref.startsWith("vscode:mcp/install?") &&
+        decodeURIComponent(vscodeHref).includes(`Bearer ${token}`),
+      "Add to Cursor and Add to VS Code carry the new token, by deeplink only",
+    );
     const mcp = (body, headers = { authorization: `Bearer ${token}` }) =>
       fetch(`${base}/api/mcp`, {
         method: "POST",

@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { authEnabled } from "@/lib/auth/client";
-import { agentSetups } from "./agent-setup";
+import { agentSetups, installLinks } from "./agent-setup";
 import { createAgentToken, listAgentTokens, revokeAgentToken } from "@/lib/mcp-server/tokens.api";
 import type { AgentTokenView } from "@/lib/mcp-server/tokens.server";
 
@@ -136,10 +137,33 @@ export function AgentTokens({ guide = true }: { guide?: boolean }) {
                   Copy
                 </Button>
               </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Add in one click">
+                {installLinks(url, made).map((link) => (
+                  <a
+                    key={link.name}
+                    href={link.href}
+                    className={buttonVariants({ size: "sm" })}
+                    data-install={link.name}
+                  >
+                    Add to {link.name}
+                  </a>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-subtle">
+                Each opens the editor on this computer with the server and this token filled in, for
+                you to confirm. Nothing is sent to Cursor or Microsoft. Claude Code: run the command
+                below.
+              </p>
             </div>
           )}
 
           <div className="mt-5 space-y-3">
+            {!made && (
+              <p className="text-xs text-subtle">
+                Make a token and Cursor and VS Code get one-click Add buttons, with it filled in. Or
+                copy a setup below and put your token in.
+              </p>
+            )}
             {agentSetups(url, made ?? "<token>").map((setup) => (
               <div key={setup.name}>
                 <div className="flex items-center justify-between gap-2">

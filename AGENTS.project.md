@@ -597,6 +597,11 @@ HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
   route reads only `Authorization: Bearer`, refuses a foreign `Origin`, and
   answers 401 otherwise, so another site cannot drive it with a visitor's
   session. Five tokens per account; deleting the account deletes them.
+- **One-click install.** `installLinks` in `agent-setup.ts` builds Add to
+  Cursor (`cursor://anysphere.cursor-deeplink/mcp/install?name=…&config=<base64
+  JSON>`) and Add to VS Code (`vscode:mcp/install?<url-encoded JSON>`), shown
+  only right after a token is made, since that is the only time it is known.
+  Never Cursor's https install page: the token would go to cursor.com in the URL.
 - **Discovery is open.** `initialize`, `notifications/initialized`, `ping`,
   `tools/list` (and `prompts/list`/`resources/list`, which answer "Method not
   found") need no token, so registries such as Smithery can list the tool.

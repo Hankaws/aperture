@@ -35,6 +35,19 @@ async function signedIn(request: Request): Promise<string | null> {
   return token ? await userForAgentToken(token) : null;
 }
 
+/** Whether the request sent a Bearer token: a 401 then means it is not valid, not that one is missing. */
+async function sentToken(request: Request): Promise<boolean> {
+  const { bearerToken } = await import("@/lib/mcp-server/tokens");
+  return bearerToken(request.headers.get("authorization")) !== null;
+}
+
+/** The 401's challenge; `invalid_token` (RFC 6750) when the token sent matched no account. */
+const challenge = (presented: boolean) => ({
+  "WWW-Authenticate": presented
+    ? 'Bearer realm="aperture", error="invalid_token"'
+    : 'Bearer realm="aperture"',
+});
+
 /**
  * Aperture's MCP server. Agents sign in with a token from Settings → Agents,
  * never a browser session: cookies are ignored here, so another site cannot
@@ -64,6 +77,7 @@ export const Route = createFileRoute("/api/mcp")({
 
         const { serve } = await import("@/lib/mcp-server/protocol");
         const { checkChange } = await import("@/lib/mcp-server/check.server");
+        const presented = await sentToken(request);
         const served = await serve(
           body,
           () => signedIn(request),
@@ -75,13 +89,10 @@ export const Route = createFileRoute("/api/mcp")({
             busy: () =>
               userId ? overLimit("agentChecks", userId) : "This call needs an agent token.",
           }),
+          presented,
         );
         if (served.status === 202) return new Response(null, { status: 202 });
-        return json(
-          served.body,
-          served.status,
-          served.status === 401 ? { "WWW-Authenticate": 'Bearer realm="aperture"' } : {},
-        );
+        return json(served.body, served.status, served.status === 401 ? challenge(presented) : {});
       },
       GET: notAllowed,
       DELETE: notAllowed,

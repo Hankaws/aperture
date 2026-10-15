@@ -238,14 +238,20 @@ export function needsToken(body: unknown): boolean {
   );
 }
 
-/** The JSON-RPC error a 401 carries: id of the message, or null for a batch. */
-export function tokenRequired(body: unknown): RpcResponse {
+/**
+ * The JSON-RPC error a 401 carries: id of the message, or null for a batch.
+ * `presented` says a Bearer token was sent but matched no account (revoked,
+ * mistyped, or from another Aperture), which is a different fix from sending none.
+ */
+export function tokenRequired(body: unknown, presented = false): RpcResponse {
   const id =
     isRecord(body) && (typeof body.id === "string" || typeof body.id === "number") ? body.id : null;
   return failure(
     id,
     -32001,
-    "This call needs an agent token. Make one in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>. initialize, ping and tools/list work without one.",
+    presented
+      ? "That agent token is not valid: it was revoked, or it is mistyped. Make a new one in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>."
+      : "This call needs an agent token. Make one in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>. initialize, ping and tools/list work without one.",
   );
 }
 
@@ -331,16 +337,18 @@ export type Served = { status: number; body: unknown };
  * one; `contextFor` builds the server context for that account (null when
  * the body is all open methods). Without an account, a body that needs one
  * gets 401 and nothing in it runs, so a batch cannot mix a `tools/call` in.
+ * `presented` (a Bearer token was sent) picks the 401's wording.
  */
 export async function serve(
   body: unknown,
   signIn: () => Promise<string | null>,
   contextFor: (userId: string | null) => ServerContext,
+  presented = false,
 ): Promise<Served> {
   let userId: string | null = null;
   if (needsToken(body)) {
     userId = await signIn();
-    if (!userId) return { status: 401, body: tokenRequired(body) };
+    if (!userId) return { status: 401, body: tokenRequired(body, presented) };
   }
   const ctx = contextFor(userId);
   if (Array.isArray(body)) {

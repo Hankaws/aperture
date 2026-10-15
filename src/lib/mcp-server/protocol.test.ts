@@ -241,8 +241,8 @@ const smallCall = (id = 1) =>
     id,
   );
 
-/** serve() with a caller holding `user` (null: no token), recording what it asked. */
-async function served(body: unknown, user: string | null) {
+/** serve() with a caller holding `user` (null: no account), recording what it asked. */
+async function served(body: unknown, user: string | null, presented = false) {
   let signIns = 0;
   const users: (string | null)[] = [];
   const checks: CheckInput[] = [];
@@ -261,6 +261,7 @@ async function served(body: unknown, user: string | null) {
         },
       });
     },
+    presented,
   );
   return { ...out, signIns, users, checks, answer: out.body as any };
 }
@@ -315,6 +316,23 @@ test("tools/call without a token is a 401 JSON-RPC error, and nothing runs", asy
   assert.equal(out.answer.id, 7);
   assert.equal(out.answer.error.code, -32001);
   assert.match(out.answer.error.message, /Bearer/);
+});
+
+test("a token that matches no account gets a 401 that says so, not that one is missing", async () => {
+  const out = await served(smallCall(8), null, true);
+  assert.equal(out.status, 401);
+  assert.equal(out.checks.length, 0);
+  assert.equal(out.answer.id, 8);
+  assert.equal(out.answer.error.code, -32001);
+  assert.match(out.answer.error.message, /not valid: it was revoked, or it is mistyped/);
+  assert.doesNotMatch(out.answer.error.message, /needs an agent token/);
+
+  const missing = await served(smallCall(9), null);
+  assert.match(missing.answer.error.message, /needs an agent token/);
+  // An open method never looks at the token, valid or not.
+  const list = await served(rpc("tools/list", 10), null, true);
+  assert.equal(list.status, 200);
+  assert.equal(list.signIns, 0);
 });
 
 test("tools/call with a token runs the checks for that account", async () => {

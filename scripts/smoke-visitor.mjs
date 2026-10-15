@@ -342,6 +342,12 @@ try {
       params: { name: "check_change" },
     });
     check(revoked.status === 401, `a revoked token is refused (${revoked.status})`);
+    const revokedSays = (await revoked.json().catch(() => ({})))?.error?.message ?? "";
+    check(
+      /not valid/.test(revokedSays) &&
+        /invalid_token/.test(revoked.headers.get("www-authenticate") ?? ""),
+      "the refusal says the token is not valid, not that one is missing",
+    );
     clean(errors, "agent tokens");
     await context.close();
   }

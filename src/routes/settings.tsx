@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ModelKeys } from "@/components/site/model-keys";
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
     tab: s.tab === "models" || s.tab === "limits" || s.tab === "agents" ? (s.tab as SettingsTab) : ("plan" as const),
   }),
+  head: () => pageHead("settings"),
   component: SettingsPage,
 });
 

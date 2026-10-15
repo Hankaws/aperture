@@ -112,7 +112,7 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
       {!account?.connected && (
         <p className="mt-2 text-xs text-subtle">
           No token yet?{" "}
-          <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
             Make one on GitHub
           </a>
           , with the repo and workflow scopes already ticked, then paste it here.

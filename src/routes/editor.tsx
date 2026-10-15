@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { EDITOR_FEATURES, type EditorFeature } from "@/components/site/editor-features";
 
-export const Route = createFileRoute("/editor")({ component: EditorTour });
+export const Route = createFileRoute("/editor")({ head: () => pageHead("editor"), component: EditorTour });
 
 function Feature({ feature }: { feature: EditorFeature }) {
   return (

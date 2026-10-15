@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import type { BenchResults } from "@/lib/bench/run";
 import benchData from "@/lib/bench/results.json";
 import { ProductDemo } from "./demo";
@@ -41,17 +40,13 @@ const FAQ = [
   },
 ];
 
+/**
+ * The editor is open to everyone: the demo needs no account, so this goes
+ * straight to /app. Sign-in is asked for only when you send to a model or save.
+ */
 function OpenLink({ className, label }: { className?: string; label: string }) {
-  const { user } = useHydratedUserState();
-  if (user) {
-    return (
-      <Link to="/app" className={className}>
-        {label}
-      </Link>
-    );
-  }
   return (
-    <Link to="/login" search={{ next: "/app" }} className={className}>
+    <Link to="/app" className={className}>
       {label}
     </Link>
   );
@@ -98,7 +93,7 @@ export function Landing() {
             <p className="mt-6 text-lg text-muted sm:text-xl">Nothing is written until you press Apply.</p>
             <p className="mt-3 text-base text-muted">
               {stopped} of {visible} caught. {missed} missed.{" "}
-              <Link to="/benchmark" className="text-fg">
+              <Link to="/benchmark" className="text-fg underline underline-offset-2">
                 See the list →
               </Link>
             </p>

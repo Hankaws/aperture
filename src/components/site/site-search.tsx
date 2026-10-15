@@ -31,9 +31,7 @@ export function SiteSearch() {
     const all: Item[] = [
       ...PAGES,
       ...(showPricing ? [{ label: "Pricing", hint: "Nothing is charged today.", to: "/pricing" }] : []),
-      user
-        ? { label: "Open the editor", hint: "Go to your project.", to: "/app" }
-        : { label: "Open the editor", hint: "Sign in, then the editor.", to: "/login" },
+      { label: "Open the editor", hint: user ? "Go to your project." : "Try the demo. No account needed.", to: "/app" },
     ];
     const needle = q.trim().toLowerCase();
     if (!needle) return all;
@@ -124,7 +122,6 @@ export function SiteSearch() {
                     <Link
                       id={`site-search-${i}`}
                       to={item.to}
-                      search={item.to === "/login" ? { next: "/app" } : undefined}
                       className={row}
                       onClick={() => {
                         setOpen(false);

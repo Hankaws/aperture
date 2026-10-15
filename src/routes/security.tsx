@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 
-export const Route = createFileRoute("/security")({ component: SecurityPage });
+export const Route = createFileRoute("/security")({ head: () => pageHead("security"), component: SecurityPage });
 
 function SecurityPage() {
   return (
@@ -22,7 +23,7 @@ function SecurityPage() {
         <h1 className="mt-4 text-4xl font-medium tracking-tight text-balance sm:text-5xl">Security</h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           What we try to protect, where the walls are, and how to report a hole. The{" "}
-          <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/privacy" className="text-fg underline underline-offset-2">
             privacy page
           </Link>{" "}
           is the one that says what data leaves the browser. This page is about who can reach what after that.
@@ -146,7 +147,7 @@ function SecurityPage() {
           Report them privately through GitHub: open the repository&apos;s{" "}
           <a
             href="https://github.com/Hankaws/aperture/security/advisories/new"
-            className="text-fg underline-offset-2 hover:underline"
+            className="text-fg underline underline-offset-2"
           >
             Security → Report a vulnerability
           </a>{" "}
@@ -157,7 +158,7 @@ function SecurityPage() {
           The same policy lives in{" "}
           <a
             href="https://github.com/Hankaws/aperture/blob/main/SECURITY.md"
-            className="text-fg underline-offset-2 hover:underline"
+            className="text-fg underline underline-offset-2"
           >
             SECURITY.md
           </a>
@@ -169,11 +170,11 @@ function SecurityPage() {
 
         <p className="mt-10 text-sm text-muted">
           Questions about data handling go to the{" "}
-          <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/privacy" className="text-fg underline underline-offset-2">
             privacy page
           </Link>
           . How often checks stop a bad edit is on the{" "}
-          <Link to="/benchmark" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/benchmark" className="text-fg underline underline-offset-2">
             checks benchmark
           </Link>
           .

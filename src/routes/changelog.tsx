@@ -1,11 +1,12 @@
 import { Fragment } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { inlineParts, parseChangelog, sectionLabel } from "@/lib/changelog";
 import source from "../../CHANGELOG.md?raw";
 
-export const Route = createFileRoute("/changelog")({ component: ChangelogPage });
+export const Route = createFileRoute("/changelog")({ head: () => pageHead("changelog"), component: ChangelogPage });
 
 const log = parseChangelog(source);
 // Unreleased is empty right after a release; a heading with nothing under it says nothing.
@@ -31,7 +32,7 @@ function Rich({ text }: { text: string }) {
           );
         if (part.kind === "link")
           return (
-            <a key={i} href={part.href} className="text-fg underline-offset-2 hover:underline">
+            <a key={i} href={part.href} className="text-fg underline underline-offset-2">
               {part.text}
             </a>
           );
@@ -58,7 +59,7 @@ function ChangelogPage() {
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-pretty text-muted">
           Newest first. Each line links the pull request it came from. The same list is{" "}
-          <a href={FILE_URL} className="text-fg underline-offset-2 hover:underline">
+          <a href={FILE_URL} className="text-fg underline underline-offset-2">
             CHANGELOG.md
           </a>{" "}
           in the repository.
@@ -95,7 +96,7 @@ function ChangelogPage() {
         </ol>
 
         <p className="mt-12 text-sm text-muted">
-          <Link to="/app" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/app" className="text-fg underline underline-offset-2">
             Try it in the editor
           </Link>{" "}
           · no key needed for the demo.

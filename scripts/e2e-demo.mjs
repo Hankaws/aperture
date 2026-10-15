@@ -123,7 +123,17 @@ try {
       (await page.getByRole("button", { name: "store.md" }).count()) > 0 && /Followed rule/.test(await bodyText(page)),
       "the rule for src/store.ts is given to the agent and listed on the message",
     );
-    await page.getByRole("button", { name: /^(Apply all|Apply now|Apply anyway)$/ }).first().click();
+    // The verdict first, and one Apply: the editor beside the diff offers a single button that writes the change.
+    check(/Safe to apply: \d+ of \d+ checks? passed/.test(await bodyText(page)), "the result opens with a verdict: Safe to apply, N of M checks passed");
+    const applyButtons = await page.getByRole("button", { name: /^(Apply \d+ files?|Keep this copy|Apply now|Apply all|Apply)$/ }).all();
+    let visibleApply = 0;
+    for (const button of applyButtons) if (await button.isVisible()) visibleApply += 1;
+    check(visibleApply === 1, `one Apply on screen, not three (${visibleApply})`);
+    check(
+      /Already failing before this change: [^\n]{80,}/.test(await page.locator('ul[aria-label="Why"]').innerText()),
+      "the amber explanation is shown in full, not cut to one line",
+    );
+    await page.getByRole("button", { name: /^(Apply \d+ files?|Keep this copy|Apply anyway)$/ }).first().click();
     const revert = page.getByRole("button", { name: "Revert" }).first();
     await revert.waitFor({ timeout: 15_000 });
     await revert.click();
@@ -202,6 +212,30 @@ try {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     check(overflow <= 0, `phone layout has no sideways scroll (${overflow}px)`);
     check(errors.length === 0, `phone console is clean${errors.length ? `: ${errors[0]}` : ""}`);
+    await page.close();
+  }
+
+  // 6. Pages say what they are: the editor is one click from the landing page, each page has its own title, and an unknown address gets a real 404.
+  {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = watch(page);
+    await page.goto(`${base}/`, { waitUntil: "networkidle" });
+    const hrefs = await page.getByRole("link", { name: /Open the editor/ }).evaluateAll((links) => links.map((a) => a.getAttribute("href")));
+    check(hrefs.length > 0 && hrefs.every((href) => href === "/app"), `"Open the editor" goes straight to /app (${hrefs.join(", ")})`);
+    for (const [path, title] of [
+      ["/app", "Editor · Aperture"],
+      ["/benchmark", "Benchmark · Aperture"],
+      ["/editor", "What the editor knows · Aperture"],
+    ]) {
+      await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+      check((await page.title()) === title, `${path} is titled "${title}" (${await page.title()})`);
+    }
+    const missing = await page.goto(`${base}/no-such-page`, { waitUntil: "networkidle" });
+    check(missing?.status() === 404, `an unknown address answers 404 (${missing?.status()})`);
+    check((await page.title()) === "Page not found · Aperture", `the 404 page is titled (${await page.title()})`);
+    check(await page.getByRole("heading", { level: 1, name: "There is no page here." }).isVisible(), "the 404 page has a heading and the site's own bar");
+    check(await page.getByRole("link", { name: "Open the editor" }).first().isVisible(), "the 404 page links back to the editor");
+    check(errors.length === 0, `404 console is clean${errors.length ? `: ${errors[0]}` : ""}`);
     await page.close();
   }
 } finally {

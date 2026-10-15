@@ -194,7 +194,7 @@ try {
     }
     await page.goto(`${base}/`, { waitUntil: "networkidle" });
     check(
-      (await page.getByRole("link", { name: `Version ${pkg.version}, changelog` }).count()) > 0,
+      (await page.getByRole("link", { name: `v${pkg.version} changelog` }).count()) > 0,
       `${device} footer shows v${pkg.version}`,
     );
     clean(errors, `${device} public pages`);

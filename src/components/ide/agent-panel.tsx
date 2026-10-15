@@ -1318,7 +1318,7 @@ function TaskStrip({
   onAlt,
   actDisabled,
 }: {
-  hint: { title: string; cta: string; kind: string; altCta?: string };
+  hint: { title: string; cta: string; kind: string; altKind?: string; altCta?: string };
   onAct: () => void;
   onAlt?: () => void;
   actDisabled?: boolean;
@@ -1346,7 +1346,9 @@ function TaskStrip({
           type="button"
           size="sm"
           variant="ghost"
-          className="h-6 shrink-0 px-2"
+          // Beside the editor, the one Apply is in the verdict above the diff. This copy stays for the phone,
+          // where Composer is its own screen. "Apply anyway" (a red check) is only ever here.
+          className={cn("h-6 shrink-0 px-2", hint.kind !== "fix" && hint.altKind === "apply" && "md:hidden")}
           disabled={actDisabled && hint.kind !== "fix"}
           onClick={onAlt}
         >
@@ -1357,7 +1359,7 @@ function TaskStrip({
         <Button
           type="button"
           size="sm"
-          className="h-6 shrink-0 px-2"
+          className={cn("h-6 shrink-0 px-2", hint.kind === "apply" && "md:hidden")}
           disabled={actDisabled && hint.kind !== "apply" && hint.kind !== "fix" && hint.kind !== "review"}
           onClick={onAct}
         >

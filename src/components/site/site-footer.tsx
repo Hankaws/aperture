@@ -8,8 +8,9 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
         <span className="inline-flex items-center gap-2">
           Aperture · MIT
-          <Link to="/changelog" className="font-mono text-xs hover:text-fg" aria-label={`Version ${version}, changelog`}>
+          <Link to="/changelog" className="font-mono text-xs hover:text-fg">
             v{version}
+            <span className="sr-only"> changelog</span>
           </Link>
         </span>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">

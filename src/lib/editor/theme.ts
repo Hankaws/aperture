@@ -90,7 +90,7 @@ export const SYNTAX = {
   string: "#5ee0a8",
   fn: "#e8c27a",
   type: "#5bc6d4",
-  comment: "#646770",
+  comment: "#868a96",
   number: "#c9ae86",
   property: "#b8bcc6",
   operator: "#8b8e98",

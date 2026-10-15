@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useKeyedAsync } from "@/lib/use-keyed-async";
 import { Check, LoaderCircle, Minus, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ import { HOOKS_PATH, hookRunCommand, hooksFor, parseHooks, type HookRun } from "
 import { runHooks } from "@/lib/workspace/hook-runner";
 import { attemptDiff, noteStrip, secondTryFailed, takeAttempt } from "@/lib/workspace/attempt";
 import { verificationId } from "@/lib/workspace/verify-id";
+import { checkVerdict, type Verdict } from "@/lib/workspace/verdict";
 
 /** Long enough for a page's own scripts to settle; a page slower than this is a finding. */
 const RENDER_TIMEOUT_MS = 5000;
@@ -349,11 +350,14 @@ export function CheckResults({
   edits,
   verify,
   onOpen,
+  header,
 }: {
   files: Record<string, string>;
   edits: ProposedEdit[];
   verify: VerifyReport | null;
   onOpen: (path: string, detail?: string) => void;
+  /** Rendered first, with the verdict the rows add up to: the headline and the one Apply. */
+  header?: (verdict: Verdict) => ReactNode;
 }) {
   const { result, frame } = useRenderCheck(files, edits);
   const { tests: browser, output } = useBrowserTests(files, edits, verify);
@@ -367,6 +371,7 @@ export function CheckResults({
   );
   const failed = rows.find((r) => r.status === "fail");
   const checkState = checkStripState(rows);
+  const verdict = useMemo(() => checkVerdict(rows), [rows]);
   const failedPath = failed?.path;
   const failedDetail = failed?.detail;
   const liveId = verificationId({ runtime: "browser", files, edits });
@@ -389,7 +394,11 @@ export function CheckResults({
     if (checkState === "clear" && useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(null);
   }, [checkState]);
   useEffect(() => () => useIdeUi.getState().setFailedAttempt(null), []);
-  const problem = rows.find((r) => r.status === "fail") ?? rows.find((r) => r.status === "warn");
+  // Every red and amber row says why, in full: the amber line is the most useful sentence on the screen.
+  const problems = useMemo(
+    () => [...rows.filter((r) => r.status === "fail"), ...rows.filter((r) => r.status === "warn")],
+    [rows],
+  );
   const outputs = useMemo(() => {
     const byRow: Record<string, string> = {};
     if (output.trim()) byRow.tests = output;
@@ -420,6 +429,7 @@ export function CheckResults({
   }, [ready, rows, edits]);
   return (
     <div className="border-t border-border px-2.5 py-1.5">
+      {header?.(verdict)}
       <ul aria-label="Check results" className="flex flex-wrap items-center gap-1">
         {rows.map((row) => (
           <Chip
@@ -449,25 +459,41 @@ export function CheckResults({
         </div>
       )}
       <ChecksExplainer />
-      {problem && (
-        <p
-          className={cn(
-            "mt-1 truncate font-mono text-[11px]",
-            problem.status === "warn" ? "text-warn" : "text-danger",
-            problem.path && "cursor-pointer",
-          )}
-          title={problem.detail}
-          onClick={
-            problem.path
-              ? () => {
-                  useIdeUi.getState().setLastCheck({ label: problem.label, detail: problem.detail });
-                  onOpen(problem.path!, problem.detail);
-                }
-              : undefined
-          }
-        >
-          {problem.detail}
-        </p>
+      {problems.length > 0 && (
+        <ul aria-label="Why" className="mt-1.5 space-y-1">
+          {problems.map((row) => {
+            const text = (
+              <>
+                <span className="font-medium">{row.label}</span>
+                <span aria-hidden> · </span>
+                {row.status === "fail" && <span className="sr-only">failed: </span>}
+                {row.detail}
+              </>
+            );
+            const tone = cn(
+              "block w-full text-left font-mono text-[12px] leading-snug break-words",
+              row.status === "warn" ? "text-warn" : "text-danger",
+            );
+            return (
+              <li key={row.id}>
+                {row.path ? (
+                  <button
+                    type="button"
+                    className={cn(tone, "cursor-pointer rounded-sm underline-offset-2 hover:underline")}
+                    onClick={() => {
+                      useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
+                      onOpen(row.path!, row.detail);
+                    }}
+                  >
+                    {text}
+                  </button>
+                ) : (
+                  <p className={tone}>{text}</p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
       {shownOutput && (
         <pre

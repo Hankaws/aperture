@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
 import { EditorState, Compartment, Annotation } from "@codemirror/state";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, temporarilySetTabFocusMode } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, indentOnInput, defaultHighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
@@ -313,8 +313,18 @@ export function CodePane() {
             ...historyKeymap,
             ...searchKeymap,
             ...completionKeymap,
+            // Last, so a popup, the search box or a selection takes Escape first. With none of them open,
+            // Escape lets the next Tab leave the editor: Tab otherwise indents, and a keyboard
+            // user would be stuck inside.
+            { key: "Escape", run: temporarilySetTabFocusMode },
             indentWithTab,
           ]),
+          // A name for the screen reader, with the way out. The file is read when the editor updates.
+          EditorView.contentAttributes.of(() => ({
+            // contenteditable is focusable already; saying so with tabindex lets a scanner see the scroller has a focusable child.
+            tabindex: "0",
+            "aria-label": `${pathRef.current ? `Code editor, ${pathRef.current}` : "Code editor"}. Press Escape, then Tab, to leave the editor.`,
+          })),
           theme,
           syntaxHighlighting(highlight),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),

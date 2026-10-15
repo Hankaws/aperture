@@ -16,6 +16,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as BenchmarkRouteImport } from './routes/benchmark'
 import { Route as BotRouteImport } from './routes/bot'
 import { Route as ChangelogRouteImport } from './routes/changelog'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -61,6 +62,11 @@ const BotRoute = BotRouteImport.update({
 const ChangelogRoute = ChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/benchmark': typeof BenchmarkRoute
   '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
+  '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/benchmark': typeof BenchmarkRoute
   '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
+  '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/benchmark': typeof BenchmarkRoute
   '/bot': typeof BotRoute
   '/changelog': typeof ChangelogRoute
+  '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/benchmark'
     | '/bot'
     | '/changelog'
+    | '/editor'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/benchmark'
     | '/bot'
     | '/changelog'
+    | '/editor'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -230,6 +241,7 @@ export interface FileRouteTypes {
     | '/benchmark'
     | '/bot'
     | '/changelog'
+    | '/editor'
     | '/login'
     | '/pricing'
     | '/privacy'
@@ -251,6 +263,7 @@ export interface RootRouteChildren {
   BenchmarkRoute: typeof BenchmarkRoute
   BotRoute: typeof BotRoute
   ChangelogRoute: typeof ChangelogRoute
+  EditorRoute: typeof EditorRoute
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -313,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/changelog'
       preLoaderRoute: typeof ChangelogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -403,6 +423,7 @@ const rootRouteChildren: RootRouteChildren = {
   BenchmarkRoute: BenchmarkRoute,
   BotRoute: BotRoute,
   ChangelogRoute: ChangelogRoute,
+  EditorRoute: EditorRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,

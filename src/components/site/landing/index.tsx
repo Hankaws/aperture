@@ -7,6 +7,7 @@ import benchData from "@/lib/bench/results.json";
 import { ProductDemo } from "./demo";
 import { AgentCheckStory, AgentsStory } from "./beyond";
 import { AskStory, ChecksStory, Vision } from "./story";
+import { EditorStory } from "./editor-story";
 
 const bench = benchData as BenchResults;
 const stopped = bench.summary.caughtCatchable;
@@ -112,6 +113,7 @@ export function Landing() {
 
         <AskStory />
         <ChecksStory />
+        <EditorStory />
         <Vision />
         <AgentsStory />
         <AgentCheckStory />

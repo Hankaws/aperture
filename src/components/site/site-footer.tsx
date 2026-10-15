@@ -13,6 +13,9 @@ export function SiteFooter() {
           </Link>
         </span>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
+          <Link to="/editor" className="hover:text-fg">
+            Editor
+          </Link>
           <Link to="/benchmark" className="hover:text-fg">
             Benchmark
           </Link>

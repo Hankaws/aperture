@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The site says what the editor knows. The landing page has an Editor section
+  (a parameter hint, and the keys for rename, references, quick fixes,
+  Problems and hints), and `/editor` tours it all: types on hover, parameter
+  hints, completions, go to definition, rename, references, live type errors,
+  quick fixes, Problems and Organize Imports, each with its key, three with a
+  screenshot of the demo project. The footer links to it.
+  ([#98](https://github.com/Hankaws/aperture/pull/98))
 - Parameter hints and Organize Imports in the editor. Typing `(` or `,` in a
   TypeScript call shows the function's parameters above it, with the one you
   are on underlined, its doc, and which overload it is; it follows the cursor

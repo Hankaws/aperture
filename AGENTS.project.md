@@ -430,6 +430,18 @@ answer that TypeScript is not available and the recap uses text search.
   with an error naming it count ("is gone but still used in"). Past
   `MAX_GONE_FILES`, or when the compiler cannot say, it is text search as before.
 
+## The Problems panel
+
+`problems-panel.tsx` is a sidebar view (`sidebarView: "problems"`, opened by
+`openProblems`: Ctrl/⌘+Shift+M, the file sidebar's button, or the status bar's
+count). It asks the tsc worker a `project` question (`tsProjectProblems`), which
+answers `service.projectProblems()`: every root file's diagnostics, without
+quick fixes (those cost a call per problem; the editor works them out for the
+open file). It asks only while open, again 700 ms after the files stop
+changing. `MAX_PROJECT_PROBLEMS` caps the list; the counts stay whole.
+`diagnosticsOf` in `ts-service.ts` drops `missingPackageTypes` exactly as
+`checkProject` does, so the panel, the underlines and the Types check agree.
+
 ## Runs and the agent board
 
 A run is a request and every turn that answers it. `submitAgent` stamps each

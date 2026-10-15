@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, CircleAlert, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -10,6 +10,7 @@ import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { Button } from "@/components/ui/button";
 import { SearchPanel } from "./search-panel";
 import { ReferencesPanel } from "./references-panel";
+import { ProblemsPanel } from "./problems-panel";
 
 type TreeNode = {
   name: string;
@@ -233,10 +234,10 @@ export function FileTree() {
   const [dropOver, setDropOver] = useState(false);
   const count = files.length;
 
-  if (view === "search" || view === "references")
+  if (view === "search" || view === "references" || view === "problems")
     return (
       <div className="file-tree h-full min-h-0">
-        {view === "search" ? <SearchPanel /> : <ReferencesPanel />}
+        {view === "search" ? <SearchPanel /> : view === "references" ? <ReferencesPanel /> : <ProblemsPanel />}
       </div>
     );
 
@@ -260,6 +261,10 @@ export function FileTree() {
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="Search in files" title="Search in files (Ctrl/⌘+Shift+F)" onClick={openSearch}>
             <Search className="size-3.5" />
             <span className="md:hidden">Search</span>
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="Problems" title="Problems: every type error in the project (Ctrl/⌘+Shift+M)" onClick={() => useIdeUi.getState().openProblems()}>
+            <CircleAlert className="size-3.5" />
+            <span className="md:hidden">Problems</span>
           </Button>
           <OpenMenu />
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 md:size-7 md:gap-0 md:px-0" aria-label="New file" title="New file" onClick={() => setNewFileOpen(true)}>

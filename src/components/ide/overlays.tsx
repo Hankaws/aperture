@@ -68,6 +68,7 @@ export function HelpDialog() {
     ["F2", "Rename a TypeScript name everywhere it is used"],
     ["Shift+F12", "Find every reference to a TypeScript name"],
     [`${mod}.`, "Problems in this file, with TypeScript's quick fixes"],
+    [`${mod}⇧M`, "Problems: every type error in the project"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

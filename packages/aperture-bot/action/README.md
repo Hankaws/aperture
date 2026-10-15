@@ -58,6 +58,8 @@ Then, on an issue:
 | A pull request from this repository | A commit on its branch                                                                                                      | The same reply                                            |
 | A pull request from a fork          | Nothing: it replies that it will not run a fork's code                                                                      |                                                           |
 
+It works with the TypeScript compiler, as the editor does: it can list every place a name is used, through imports under another name, and rename a name everywhere the way F2 does. Its reply ends with what it changed and an "Elsewhere:" line from the compiler: the files and lines that still use a name the change touched, or that still import one it removed.
+
 ## Check a pull request
 
 Comment `/aperture check` on a pull request and the bot runs Aperture Agent Check on it, against its base, and replies with the report: each check, what is red, and the evidence. It changes nothing and does not call a model, so it needs no model key. Tests run in the same sandbox as the bot's own. The run fails when a check is red, so it can be a required check.

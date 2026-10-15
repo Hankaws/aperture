@@ -188,7 +188,8 @@ local in-process database (PGlite), so nothing else needs setting up.
   the Ollama app, `launchctl setenv OLLAMA_ORIGINS "…"`, then restart it). Pick
   a model that can call tools, such as `qwen2.5-coder` or `llama3.1`. A crew
   and the sandbox's script runs stay on the server, so a local turn builds
-  alone and checks with the browser test runner.
+  alone and checks with the browser test runner. Its TypeScript tools
+  (references, renames) use the compiler in your tab.
 - **The checks, for any agent.** Aperture is also an MCP server. Make a token
   under Settings → Agents → **Connect an agent** and point Grok Bot, Claude
   Code, Cursor or any MCP client at `/api/mcp`. Its one tool, `check_change`,

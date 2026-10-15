@@ -75,6 +75,11 @@ export const EDITOR_FEATURES: EditorFeature[] = [
     body: "Extract the selection to a function or a constant, move code to a new file, convert an arrow function, and TypeScript's other refactors. One Undo puts it back.",
   },
   {
+    key: "✎ in the file tree",
+    title: "Move a file, keep its imports",
+    body: "Rename a file or move it to another folder, and every import of it is rewritten, the file's own included. One Undo puts it back.",
+  },
+  {
     key: "Shift+Alt+O",
     title: "Organize imports",
     body: "Drops the imports nothing uses and sorts the rest.",

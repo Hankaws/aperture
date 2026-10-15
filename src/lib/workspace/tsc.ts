@@ -6,7 +6,8 @@
  * Browser only: this module starts a Worker.
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
-import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
+import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsCodeAsk, TsFiles } from "./tsc.worker";
+import type { CodeAnswer, CodeQuestion } from "@/lib/agent/code-intel";
 import type {
   CompletionList,
   DefinitionResult,
@@ -164,7 +165,7 @@ function askTs(
   text: string,
   offset: number,
   signal?: AbortSignal,
-  extra: Pick<TsAsk, "end" | "refactor"> = {},
+  extra: Pick<TsAsk, "end" | "refactor" | "to"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
     if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
@@ -330,4 +331,50 @@ export async function tsRefactorEdits(
     refactor: { name: refactor.refactor, action: refactor.action },
   });
   return answer && "refactor" in answer ? answer.refactor : null;
+}
+
+/** The edits that keep every import working once `from` moves to `to`; why not, when TypeScript cannot say. */
+export async function tsFileRenameEdits(
+  files: Record<string, string>,
+  from: string,
+  to: string,
+): Promise<FileChange[] | { unavailable: string }> {
+  const answer = await askTs("fileRename", files, from, files[from] ?? "", 0, undefined, { to });
+  if (answer && "unavailable" in answer) return { unavailable: answer.unavailable };
+  if (answer && "fileRename" in answer && answer.fileRename) return answer.fileRename;
+  return { unavailable: "TypeScript could not work out the imports." };
+}
+
+/**
+ * The agent's TypeScript question (find_references, rename_symbol, the recap's
+ * uses), answered by this tab's compiler: for a run on a model on this machine,
+ * which has no server compiler to ask. The first question downloads it.
+ */
+export function askCode<Q extends CodeQuestion>(
+  files: Record<string, string>,
+  question: Q,
+): Promise<CodeAnswer<Q>> {
+  return new Promise((resolve) => {
+    let running: Worker;
+    try {
+      running = startWorker();
+    } catch {
+      return resolve({ unavailable: "TypeScript could not load here." });
+    }
+    const id = ++nextId;
+    const timer = window.setTimeout(() => {
+      waiting.delete(id);
+      resolve({ unavailable: "TypeScript took too long to answer." });
+    }, TIMEOUT_MS);
+    waiting.set(id, (reply) => {
+      window.clearTimeout(timer);
+      if ("code" in reply) {
+        answered = true;
+        return resolve({ answer: reply.code } as CodeAnswer<Q>);
+      }
+      const why = "unavailable" in reply ? reply.unavailable : "error" in reply ? reply.error : "";
+      resolve({ unavailable: why || "TypeScript could not answer here." });
+    });
+    running.postMessage({ type: "code", id, files, question } satisfies TsCodeAsk);
+  });
 }

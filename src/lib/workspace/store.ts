@@ -75,6 +75,8 @@ type WorkspaceState = {
   writeFile: (path: string, content: string) => void;
   createFile: (path: string, content?: string) => void;
   deleteFile: (path: string) => void;
+  /** Moves a file to `to`, its tabs and place in the recent list with it. False when `to` is taken or not a workspace path. */
+  moveFile: (from: string, to: string) => boolean;
   setSelection: (selection: Selection) => void;
   addMessage: (message: ChatMessage) => void;
   patchMessage: (id: string, patch: Partial<ChatMessage>) => void;
@@ -711,6 +713,30 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const dirtyPaths = get().dirtyPaths.filter((p) => p !== path);
       set({ files, fileList: keepFileList(get().fileList, files), openTabs, activePath: active, pinned, previewPath, dirtyPaths, chunks: buildIndex(files) });
       schedulePersist();
+    },
+
+    moveFile: (from, to) => {
+      const clean = safeRelPath(to);
+      const text = get().files[from];
+      if (!clean || isSecretPath(clean) || text === undefined || get().files[clean] !== undefined) return false;
+      const files = { ...get().files, [clean]: text };
+      delete files[from];
+      const swap = (path: string) => (path === from ? clean : path);
+      const previewPath = get().previewPath === from ? clean : get().previewPath;
+      const activePath = get().activePath === from ? clean : get().activePath;
+      set({
+        files,
+        fileList: keepFileList(get().fileList, files),
+        openTabs: get().openTabs.map(swap),
+        pinned: get().pinned.map(swap),
+        recentPaths: get().recentPaths.map(swap),
+        activePath,
+        previewPath,
+        dirtyPaths: withPath(get().dirtyPaths.filter((p) => p !== from), clean),
+        chunks: buildIndex(files),
+      });
+      schedulePersist();
+      return true;
     },
 
     setSelection: (selection) => {

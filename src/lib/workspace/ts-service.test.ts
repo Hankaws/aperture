@@ -495,3 +495,49 @@ test("an added import is written the way the project writes its imports", () => 
     /^import \{ listTasks \} from "\.\/store\.ts";/,
   );
 });
+
+test("fileRenameEdits keeps every import of a moved file working, and the file's own", () => {
+  const files = {
+    "src/store.ts": 'import { clamp } from "./util";\n\nexport const size = clamp(3);\n',
+    "src/util.ts": "export const clamp = (n: number) => Math.min(n, 10);\n",
+    "src/routes/home.ts": 'import { size } from "../store";\n\nexport const twice = size * 2;\n',
+    "src/routes/other.ts": 'export { size as count } from "../store";\n',
+    "src/notes.ts": "// ../store is mentioned here, not imported.\nexport const n = 1;\n",
+  };
+  const { service } = serviceFor(files);
+  const changes = service.fileRenameEdits("src/store.ts", "src/lib/tasks.ts");
+  assert.ok(changes);
+  const after = applyFileChanges(files, changes);
+  assert.ok(after);
+  assert.deepEqual(Object.keys(after).sort(), [
+    "src/routes/home.ts",
+    "src/routes/other.ts",
+    "src/store.ts",
+  ]);
+  assert.match(after["src/routes/home.ts"]!, /from "\.\.\/lib\/tasks"/);
+  assert.match(after["src/routes/other.ts"]!, /from "\.\.\/lib\/tasks"/);
+  // Its own import, from its new folder.
+  assert.match(after["src/store.ts"]!, /from "\.\.\/util"/);
+
+  // Written where it lands, the project has no errors.
+  const moved: Record<string, string> = { ...files, ...after };
+  moved["src/lib/tasks.ts"] = moved["src/store.ts"]!;
+  delete moved["src/store.ts"];
+  const check = serviceFor(moved).service;
+  for (const path of Object.keys(moved)) assert.deepEqual(check.problems(path), [], path);
+});
+
+test("fileRenameEdits keeps the project's .ts extensions, and knows no file it does not have", () => {
+  const files = {
+    "src/a.ts": "export const a = 1;\n",
+    "src/b.ts": 'import { a } from "./a.ts";\n\nexport const b = a + 1;\n',
+    "tsconfig.json":
+      '{ "compilerOptions": { "allowImportingTsExtensions": true, "noEmit": true } }',
+  };
+  const { service } = serviceFor(files);
+  const changes = service.fileRenameEdits("src/a.ts", "src/first.ts");
+  assert.ok(changes);
+  const after = applyFileChanges(files, changes);
+  assert.equal(after?.["src/b.ts"], 'import { a } from "./first.ts";\n\nexport const b = a + 1;\n');
+  assert.equal(service.fileRenameEdits("src/missing.ts", "src/x.ts"), null);
+});

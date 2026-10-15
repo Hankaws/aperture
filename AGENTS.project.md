@@ -395,8 +395,8 @@ used in the sidebar's References view (`references-panel.tsx`).
 `src/lib/agent/loop.ts` is the loop, with no server imports: what it needs from
 where it runs comes in a `LoopHost` (model calls, a sandbox script runner, MCP
 tools). `loop.server.ts` passes the server's; `local-run.ts` passes a model
-client for Ollama or LM Studio on `localhost` (`local-model.ts`) and nothing
-else, and runs the loop in the browser tab when the model source is `local`.
+client for Ollama or LM Studio on `localhost` (`local-model.ts`) and the tab's
+compiler for the TypeScript tools (`askCode`, below), and runs the loop in the browser tab when the model source is `local`.
 Keep `loop.ts` free of `*.server` imports, `process`, and Node built-ins, or the
 browser build breaks or ships server code. The local model's address lives in
 the browser's storage (`aperture-local-model`); the server refuses the `local`
@@ -408,12 +408,24 @@ to probe the network.
 
 `find_references` and `rename_symbol` (`tools.ts`) and the recap's
 "Elsewhere:" line (`verify.ts`) use the editor's language service
-(`ts-service.ts`) through `src/lib/agent/code-intel.ts`. A host that has the
-compiler passes `LoopHost.language`: the server (`loop.server.ts`, library
-files from `ts-libs.server.ts`, shared with `check_change`) and the bot
-(`packages/aperture-bot/src/model.ts`, library files from Agent Check's
-`libReader`). The browser's local-model host does not, so there the tools
-answer that TypeScript is not available and the recap uses text search.
+(`ts-service.ts`) through `src/lib/agent/code-intel.ts`. The loop asks a
+`CodeQuestion` (`references`, `rename`, or `elsewhere` for the recap's names,
+all in one message) and `answerCode` answers it from a service; where the
+service lives is the host's:
+
+- In the process, from `LoopHost.language`: the server (`loop.server.ts`,
+  library files from `ts-libs.server.ts`, shared with `check_change`) and the
+  bot (`packages/aperture-bot/src/model.ts`, library files from Agent Check's
+  `libReader`). `askInProcess` loads the compiler on the first question.
+- In the tab's compiler worker, from `LoopHost.askCode`: a run on a model on the
+  person's own machine (`local-run.ts` passes `askCode` from `tsc.ts`). The
+  worker answers on the editor's service, so the compiler is downloaded once;
+  the agent's files differ from the editor's only in what the run staged, so
+  switching between them re-reads just those files. Keep the compiler off the
+  main thread: a project's references can take seconds.
+
+A host with neither gets "TypeScript is not available here" from the tools,
+and the recap uses text search.
 
 - The service is made once per run and loaded on first use: the first
   `find_references`/`rename_symbol`, or the recap of a turn whose edits touch a
@@ -441,6 +453,28 @@ actions TypeScript lists as applicable at that range are applied: asked for
 one that is not, `getEditsForRefactor` throws a Debug failure, which
 `refactorEdits` turns into null. Refactors pass `allowTextChangesInNewFiles`,
 without which "Move to a new file" is never offered.
+
+## Renaming and moving a file
+
+The pencil on a file's row in the tree opens `RenameFileDialog`
+(`overlays.tsx`, state `renamePath` in `ui-store.ts`); the whole path is
+editable, so a new folder in it moves the file. `renameFile`
+(`src/lib/workspace/rename-file.ts`) checks the path (`moveTarget` in
+`file-move.ts`: inside the workspace, not taken, not a secret file), then, for
+a TypeScript file, asks the worker for `fileRename`: TypeScript's
+`getEditsForFileRename`, which edits every importer (re-exports included) and
+the moved file's own relative imports, in the project's import style
+(`.ts` extensions kept). It refuses when the file or an importer has a staged
+change, or when the code changed while TypeScript worked; otherwise it takes
+one checkpoint over the old path, the new path and the importers, moves the
+file with the store's `moveFile` (tabs, pins and the recent list follow), and
+writes the edits (`movedTexts`). Undo puts all of it back.
+
+- Only TypeScript files get their imports updated: the worker holds only
+  those, so moving a `.css` or `.json` file leaves its imports as they were.
+  When TypeScript cannot answer, the file still moves and the toast says the
+  imports were not updated, and why.
+- Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
 
 ## The editor tour
 

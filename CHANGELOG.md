@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The checks read as a list. Each check has its own row with what it found,
+  and a red or amber row gives its reason in full (the separate "why" list
+  is gone). On a phone, the rows that passed fold away behind "Show all", so
+  the diff gets the room, and the verdict and Apply sit in a bar under the
+  code, in reach of a thumb. The editor page has a main landmark and a
+  heading for screen readers.
+  ([#103](https://github.com/Hankaws/aperture/pull/103))
 - A 404 page with the site's own bar and a way back, in place of a bare "Not
   Found". Every page now has its own title (and description) in the tab,
   history and search results, instead of one shared title.

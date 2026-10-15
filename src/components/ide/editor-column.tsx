@@ -1,9 +1,10 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { FileText } from "lucide-react";
 import { TabBar } from "./tab-bar";
 import { Breadcrumbs } from "./breadcrumbs";
 import { CodePane } from "./code-pane";
+import { ApplyDockContext } from "./apply-dock";
 import { ReviewStrip } from "./review-strip";
 import { GenerateOverlay } from "./generate-overlay";
 import { SelectionActions } from "./selection-actions";
@@ -28,13 +29,18 @@ function CodeStage() {
 }
 
 function CodeChrome() {
+  // On a phone, the verdict and Apply sit under the code, in reach of a thumb (review-strip.tsx).
+  const [dock, setDock] = useState<HTMLDivElement | null>(null);
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <TabBar />
-      <Breadcrumbs />
-      <ReviewStrip />
-      <CodeStage />
-    </div>
+    <ApplyDockContext.Provider value={dock}>
+      <div className="flex h-full min-h-0 min-w-0 flex-col">
+        <TabBar />
+        <Breadcrumbs />
+        <ReviewStrip />
+        <CodeStage />
+        <div ref={setDock} className="shrink-0 md:hidden" />
+      </div>
+    </ApplyDockContext.Provider>
   );
 }
 

@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Check, FileDiff, LoaderCircle, MessageSquare, X } from "lucide-react";
 import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,54 @@ import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report"
 import { lineOfIssue } from "@/lib/editor/marks";
 import { useWorkspace } from "@/lib/workspace/store";
 import { applyBlockReason, applyLabel, type Verdict } from "@/lib/workspace/verdict";
+import { ApplyDockContext } from "./apply-dock";
 import { CheckResults } from "./check-results";
 
 /**
+ * The verdict and the one Apply, pinned under the code on a phone, so the
+ * check rows can fold away and Apply stays in reach while the diff scrolls.
+ * The same button as the one beside the diff on a wider screen, which hides
+ * there.
+ */
+function ApplyDock({
+  verdict,
+  label,
+  blocked,
+  onApply,
+}: {
+  verdict: Verdict;
+  label: string;
+  blocked: string | null;
+  onApply: () => void;
+}) {
+  const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
+  return (
+    <div className="flex items-center gap-2 border-t border-border bg-elevated px-3 py-2" aria-label="Verdict and Apply" role="group">
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "flex items-start gap-1.5 text-[13px] leading-tight font-medium",
+            verdict.state === "safe" && "text-ok",
+            verdict.state === "held" && "text-danger",
+            verdict.state === "checking" && "text-fg",
+          )}
+        >
+          <Icon className={cn("mt-px size-3.5 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
+          <span className="line-clamp-2">{verdict.headline}</span>
+        </p>
+        {blocked && <p className="truncate text-[11px] text-muted">{blocked}</p>}
+      </div>
+      <Button size="sm" className="h-11 shrink-0 px-4" disabled={blocked !== null} data-apply="dock" onClick={onApply}>
+        <Check className="size-3.5" />
+        {label}
+      </Button>
+    </div>
+  );
+}
+
+/**
  * The answer first: one sentence that says whether the change is safe, then
- * the one Apply. The chips under it are the evidence for the sentence.
+ * the one Apply. The check rows under it are the evidence for the sentence.
  */
 function VerdictBar({
   verdict,
@@ -42,6 +86,8 @@ function VerdictBar({
 }) {
   const blocked = applyBlockReason({ agentRunning: running, checks: checkState, notes: noteCount });
   const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
+  const dock = useContext(ApplyDockContext);
+  const label = applyLabel(fileCount, copyCount);
   const sub = [
     `${fileCount} ${fileCount === 1 ? "file" : "files"} staged${running ? " · still writing" : ""}`,
     noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"}` : "",
@@ -53,7 +99,9 @@ function VerdictBar({
         <p
           role="status"
           className={cn(
+            // On a phone the bar under the code shows the headline; this copy stays for screen readers.
             "flex items-center gap-1.5 text-sm font-medium",
+            dock && "max-md:sr-only",
             verdict.state === "safe" && "text-ok",
             verdict.state === "held" && "text-danger",
             verdict.state === "checking" && "text-fg",
@@ -80,7 +128,8 @@ function VerdictBar({
       </Button>
       <Button
         size="sm"
-        className="ml-auto h-8 px-3 pointer-coarse:h-11"
+        // With the phone's bar under the code, this one hides there: one Apply on screen.
+        className={cn("ml-auto h-8 px-3 pointer-coarse:h-11", dock && "max-md:hidden")}
         disabled={blocked !== null}
         title={blocked ?? `${modSymbol()}+Enter`}
         aria-keyshortcuts="Control+Enter Meta+Enter"
@@ -88,8 +137,9 @@ function VerdictBar({
         onClick={onApply}
       >
         <Check className="size-3.5" />
-        {applyLabel(fileCount, copyCount)}
+        {label}
       </Button>
+      {dock && createPortal(<ApplyDock verdict={verdict} label={label} blocked={blocked} onApply={onApply} />, dock)}
     </div>
   );
 }

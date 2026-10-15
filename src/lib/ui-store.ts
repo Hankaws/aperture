@@ -85,6 +85,8 @@ type IdeUiState = {
   commandOpen: boolean;
   helpOpen: boolean;
   newFileOpen: boolean;
+  /** The file the Rename dialog is open for. */
+  renamePath: string | null;
   githubOpen: boolean;
   inlineOpen: boolean;
   historyOpen: boolean;
@@ -132,6 +134,7 @@ type IdeUiState = {
   setCommandOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setNewFileOpen: (open: boolean) => void;
+  setRenamePath: (path: string | null) => void;
   setGithubOpen: (open: boolean) => void;
   setInlineOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
@@ -183,6 +186,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   commandOpen: false,
   helpOpen: false,
   newFileOpen: false,
+  renamePath: null,
   githubOpen: false,
   inlineOpen: false,
   historyOpen: false,
@@ -219,6 +223,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   setCommandOpen: (open) => set({ commandOpen: open }),
   setHelpOpen: (open) => set({ helpOpen: open }),
   setNewFileOpen: (open) => set({ newFileOpen: open }),
+  setRenamePath: (path) => set({ renamePath: path }),
   setGithubOpen: (open) => set({ githubOpen: open }),
   setInlineOpen: (open) => set({ inlineOpen: open }),
   setHistoryOpen: (open) => set({ historyOpen: open }),

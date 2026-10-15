@@ -223,6 +223,12 @@ export type TsService = {
   signatureHelp(path: string, offset: number): SignatureHelp | null;
   /** The edits that remove the file's unused imports and sort the rest; none when they already are. */
   organizeImports(path: string): FileChange[];
+  /**
+   * The edits that keep the project's imports working once `from` is `to`: in
+   * the files that import it, and in its own relative imports. Null when
+   * TypeScript cannot work them out.
+   */
+  fileRenameEdits(from: string, to: string): FileChange[] | null;
   /** The refactors TypeScript offers for `start`–`end` (a cursor when equal). */
   refactors(path: string, start: number, end: number): RefactorAction[];
   /** What one of them writes; null when it no longer applies there. */
@@ -568,6 +574,28 @@ export function createTsService(ts: Ts): TsService {
         if (after !== undefined && after !== text) changes.push({ path: file, edits });
       }
       return changes;
+    },
+
+    fileRenameEdits(from, to) {
+      const name = `/${from}`;
+      if (!texts.has(name)) return null;
+      let found: readonly ts.FileTextChanges[];
+      try {
+        found = service.getEditsForFileRename(name, `/${to}`, format, preferences);
+      } catch {
+        return null;
+      }
+      return found
+        .filter((change) => inProject(change.fileName) && texts.has(change.fileName))
+        .map((change) => ({
+          path: change.fileName.slice(1),
+          edits: change.textChanges.map((t) => ({
+            start: t.span.start,
+            length: t.span.length,
+            newText: t.newText,
+          })),
+        }))
+        .filter((change) => change.edits.length > 0);
     },
 
     refactors(path, start, end) {

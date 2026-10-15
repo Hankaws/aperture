@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Rename or move a file from the file tree, and its imports follow. The pencil
+  on a file's row opens its path with the name selected; a new folder in the
+  path moves it. TypeScript rewrites every import of the file, re-exports
+  included, and the file's own relative imports, in the project's import
+  style. One Undo puts the file and the imports back.
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - The agent's TypeScript tools work with a model on your own computer. With
   Settings → Models → This computer, the agent now finds references, renames a
   name everywhere, and checks where a changed name is still used, from the

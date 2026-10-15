@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
+import { renameFile } from "@/lib/workspace/rename-file";
 import { modSymbol } from "@/lib/utils";
 
 export function NewFileDialog() {
@@ -42,6 +43,79 @@ export function NewFileDialog() {
           </Button>
           <Button type="submit" size="sm">
             Create
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Rename or move a file: the whole path is editable, with the name selected.
+ * TypeScript updates every import of it (rename-file.ts).
+ */
+export function RenameFileDialog() {
+  const from = useIdeUi((s) => s.renamePath);
+  if (!from) return null;
+  return <RenameForm key={from} from={from} />;
+}
+
+function RenameForm({ from }: { from: string }) {
+  const setFrom = useIdeUi((s) => s.setRenamePath);
+  const [path, setPath] = useState(from);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-bg/70" onClick={() => setFrom(null)} />
+      <form
+        aria-label="Rename file"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (busy) return;
+          setBusy(true);
+          const problem = await renameFile(from, path);
+          setBusy(false);
+          if (problem) return setError(problem);
+          setFrom(null);
+        }}
+      >
+        <h2 className="text-base font-medium">Rename or move</h2>
+        <p className="mt-1 text-sm text-muted">
+          A new folder in the path moves it. TypeScript updates every import of it.
+        </p>
+        <Input
+          autoFocus
+          value={path}
+          onFocus={(e) => {
+            // The name without its extension, as an editor selects it.
+            const slash = from.lastIndexOf("/") + 1;
+            const dot = from.lastIndexOf(".");
+            if (e.currentTarget.value === from)
+              e.currentTarget.setSelectionRange(slash, dot > slash ? dot : from.length);
+          }}
+          onChange={(e) => {
+            setPath(e.target.value);
+            setError("");
+          }}
+          className="mt-4 font-mono"
+          aria-label="New path"
+          aria-invalid={Boolean(error)}
+          spellCheck={false}
+        />
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {error}
+          </p>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setFrom(null)}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={busy}>
+            {busy ? "Updating imports…" : "Rename"}
           </Button>
         </div>
       </form>

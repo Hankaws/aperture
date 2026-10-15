@@ -165,7 +165,7 @@ function askTs(
   text: string,
   offset: number,
   signal?: AbortSignal,
-  extra: Pick<TsAsk, "end" | "refactor"> = {},
+  extra: Pick<TsAsk, "end" | "refactor" | "to"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
     if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
@@ -331,6 +331,18 @@ export async function tsRefactorEdits(
     refactor: { name: refactor.refactor, action: refactor.action },
   });
   return answer && "refactor" in answer ? answer.refactor : null;
+}
+
+/** The edits that keep every import working once `from` moves to `to`; why not, when TypeScript cannot say. */
+export async function tsFileRenameEdits(
+  files: Record<string, string>,
+  from: string,
+  to: string,
+): Promise<FileChange[] | { unavailable: string }> {
+  const answer = await askTs("fileRename", files, from, files[from] ?? "", 0, undefined, { to });
+  if (answer && "unavailable" in answer) return { unavailable: answer.unavailable };
+  if (answer && "fileRename" in answer && answer.fileRename) return answer.fileRename;
+  return { unavailable: "TypeScript could not work out the imports." };
 }
 
 /**

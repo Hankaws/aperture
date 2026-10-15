@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, CircleAlert, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, CircleAlert, Download, FileArchive, FileCode, FileJson, FileText, Folder, FolderOpen, Github, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -129,6 +129,20 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
             />
           )}
         </button>
+        {!isFolder && (
+          <button
+            type="button"
+            aria-label={`Rename ${node.name}`}
+            title="Rename or move (updates its imports)"
+            className={cn(
+              "flex size-9 items-center justify-center rounded-md text-subtle hover:text-fg md:size-7 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100",
+              active ? "max-md:flex" : "max-md:hidden",
+            )}
+            onClick={() => useIdeUi.getState().setRenamePath(node.path)}
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        )}
         {!isFolder && (
           <button
             type="button"

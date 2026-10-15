@@ -10,7 +10,7 @@ import { StatusBar } from "./status-bar";
 import { AgentPanel } from "./agent-panel";
 import { CommandPalette } from "./command-palette";
 import { InlineEdit } from "./inline-edit";
-import { HelpDialog, NewFileDialog } from "./overlays";
+import { HelpDialog, NewFileDialog, RenameFileDialog } from "./overlays";
 import { HistoryDialog } from "./history-dialog";
 import { AgentBoard } from "./agent-board";
 import { runSaveHooks } from "./save-hooks";
@@ -318,6 +318,10 @@ export function IdeShell() {
           ui.setNewFileOpen(false);
           return;
         }
+        if (ui.renamePath) {
+          ui.setRenamePath(null);
+          return;
+        }
         if (ui.githubOpen) {
           ui.setGithubOpen(false);
           return;
@@ -489,6 +493,7 @@ export function IdeShell() {
       <CommandPalette />
       <InlineEdit />
       <NewFileDialog />
+      <RenameFileDialog />
       <HelpDialog />
       <HistoryDialog />
       <AgentBoard />

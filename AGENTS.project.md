@@ -454,6 +454,28 @@ one that is not, `getEditsForRefactor` throws a Debug failure, which
 `refactorEdits` turns into null. Refactors pass `allowTextChangesInNewFiles`,
 without which "Move to a new file" is never offered.
 
+## Renaming and moving a file
+
+The pencil on a file's row in the tree opens `RenameFileDialog`
+(`overlays.tsx`, state `renamePath` in `ui-store.ts`); the whole path is
+editable, so a new folder in it moves the file. `renameFile`
+(`src/lib/workspace/rename-file.ts`) checks the path (`moveTarget` in
+`file-move.ts`: inside the workspace, not taken, not a secret file), then, for
+a TypeScript file, asks the worker for `fileRename`: TypeScript's
+`getEditsForFileRename`, which edits every importer (re-exports included) and
+the moved file's own relative imports, in the project's import style
+(`.ts` extensions kept). It refuses when the file or an importer has a staged
+change, or when the code changed while TypeScript worked; otherwise it takes
+one checkpoint over the old path, the new path and the importers, moves the
+file with the store's `moveFile` (tabs, pins and the recent list follow), and
+writes the edits (`movedTexts`). Undo puts all of it back.
+
+- Only TypeScript files get their imports updated: the worker holds only
+  those, so moving a `.css` or `.json` file leaves its imports as they were.
+  When TypeScript cannot answer, the file still moves and the toast says the
+  imports were not updated, and why.
+- Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
+
 ## The editor tour
 
 `src/components/site/editor-features.ts` lists the editor's TypeScript help

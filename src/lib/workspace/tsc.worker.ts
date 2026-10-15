@@ -58,7 +58,8 @@ export type TsAsk = {
     | "signature"
     | "organize"
     | "refactors"
-    | "refactor";
+    | "refactor"
+    | "fileRename";
   id: number;
   path: string;
   text: string;
@@ -67,6 +68,8 @@ export type TsAsk = {
   end?: number;
   /** Which refactor to write, for "refactor". */
   refactor?: { name: string; action: string };
+  /** Where `path` is moving, for "fileRename". */
+  to?: string;
 };
 
 /** The agent's question about the project as its run has it, staged edits included. */
@@ -89,6 +92,7 @@ export type TsAnswer =
   | { id: number; organize: FileChange[] }
   | { id: number; refactors: RefactorAction[] }
   | { id: number; refactor: RefactorEdit | null }
+  | { id: number; fileRename: FileChange[] | null }
   | { id: number; code: AnswerTo<CodeQuestion> }
   | { id: number; unavailable: string };
 
@@ -135,6 +139,8 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "project") return { id: ask.id, project: service.projectProblems() };
   if (ask.type === "signature") return { id: ask.id, signature: service.signatureHelp(ask.path, ask.offset) };
   if (ask.type === "organize") return { id: ask.id, organize: service.organizeImports(ask.path) };
+  if (ask.type === "fileRename")
+    return { id: ask.id, fileRename: ask.to ? service.fileRenameEdits(ask.path, ask.to) : null };
   const end = ask.end ?? ask.offset;
   if (ask.type === "refactors")
     return { id: ask.id, refactors: service.refactors(ask.path, ask.offset, end) };
@@ -187,7 +193,8 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "signature" ||
     event.data.type === "organize" ||
     event.data.type === "refactors" ||
-    event.data.type === "refactor"
+    event.data.type === "refactor" ||
+    event.data.type === "fileRename"
   ) {
     const ask = event.data;
     try {

@@ -12,7 +12,7 @@ release notes are every line from there down to the previous version.
 - A 404 page with the site's own bar and a way back, in place of a bare "Not
   Found". Every page now has its own title (and description) in the tab,
   history and search results, instead of one shared title.
-  ([#100](https://github.com/Hankaws/aperture/pull/100))
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - A Refactor menu in the editor. Ctrl/⌘+Shift+R lists TypeScript's
   refactors for the selection or the cursor, extracts first: extract to a
   function or a constant, inline a variable, move to a new file, convert an
@@ -291,7 +291,7 @@ release notes are every line from there down to the previous version.
   button that says how many files it writes, in place of Apply now, Apply all
   and Apply. The amber "Already failing before this change" line wraps in full
   instead of being cut off, and every red or amber check explains itself.
-  ([#100](https://github.com/Hankaws/aperture/pull/100))
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - Aperture's MCP server lets an agent or a registry such as Smithery see
   what it offers without a token: `initialize`, `ping` and `tools/list`
   answer anyone, with the same `check_change` description for everyone and
@@ -371,7 +371,7 @@ release notes are every line from there down to the previous version.
   otherwise indents); the sign-in fields have labels, the Sign in and Create
   account switch says which is on, and a sign-in error is announced; code
   comments are light enough to read (4.5:1).
-  ([#100](https://github.com/Hankaws/aperture/pull/100))
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - The unsaved dot means what it says. Ctrl/⌘+S showed "Saved" but left the
   dot on the file and the count in the status bar until a reload, and
   applying a change marked its file unsaved. Now Ctrl/⌘+S runs the file's

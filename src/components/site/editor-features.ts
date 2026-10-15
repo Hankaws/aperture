@@ -70,6 +70,11 @@ export const EDITOR_FEATURES: EditorFeature[] = [
     },
   },
   {
+    key: "Ctrl/⌘+Shift+R",
+    title: "Refactor",
+    body: "Extract the selection to a function or a constant, move code to a new file, convert an arrow function, and TypeScript's other refactors. One Undo puts it back.",
+  },
+  {
     key: "Shift+Alt+O",
     title: "Organize imports",
     body: "Drops the imports nothing uses and sorts the rest.",

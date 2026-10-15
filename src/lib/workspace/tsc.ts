@@ -14,6 +14,8 @@ import type {
   Problem,
   FileChange,
   ProjectProblems,
+  RefactorAction,
+  RefactorEdit,
   ReferencesResult,
   RenameResult,
   SignatureHelp,
@@ -162,6 +164,7 @@ function askTs(
   text: string,
   offset: number,
   signal?: AbortSignal,
+  extra: Pick<TsAsk, "end" | "refactor"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
     if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
@@ -186,7 +189,7 @@ function askTs(
       if (!("error" in reply)) answered = true;
       done("error" in reply ? null : (reply as TsAnswer));
     });
-    running.postMessage({ type, id, path, text, offset } satisfies TsAsk);
+    running.postMessage({ type, id, path, text, offset, ...extra } satisfies TsAsk);
   });
 }
 
@@ -297,4 +300,34 @@ export async function tsOrganizeImports(
   if (!answer) return null;
   if ("unavailable" in answer) return { unavailable: answer.unavailable };
   return "organize" in answer ? answer.organize : null;
+}
+
+/** The refactors TypeScript offers for `start`–`end` in `path`; why not, when it cannot say. */
+export async function tsRefactors(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  start: number,
+  end: number,
+): Promise<RefactorAction[] | { unavailable: string } | null> {
+  const answer = await askTs("refactors", files, path, text, start, undefined, { end });
+  if (!answer) return null;
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "refactors" in answer ? answer.refactors : null;
+}
+
+/** What one refactor writes; null when it no longer applies or the compiler cannot say. */
+export async function tsRefactorEdits(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  start: number,
+  end: number,
+  refactor: RefactorAction,
+): Promise<RefactorEdit | null> {
+  const answer = await askTs("refactor", files, path, text, start, undefined, {
+    end,
+    refactor: { name: refactor.refactor, action: refactor.action },
+  });
+  return answer && "refactor" in answer ? answer.refactor : null;
 }

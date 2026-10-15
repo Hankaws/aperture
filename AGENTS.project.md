@@ -430,6 +430,18 @@ answer that TypeScript is not available and the recap uses text search.
   with an error naming it count ("is gone but still used in"). Past
   `MAX_GONE_FILES`, or when the compiler cannot say, it is text search as before.
 
+## The Refactor menu
+
+Ctrl/⌘+Shift+R (`ts-intel.ts`) asks the worker for `refactors` at the
+selection and opens `refactor-menu.tsx`; picking one asks `refactor` for its
+edits and writes them with `applyRefactor` (`quick-fix.ts`): one checkpoint
+covering edited and created files, so Undo also removes a file "Move to a new
+file" made, and the name TypeScript invented is selected via `setReveal`. Only
+actions TypeScript lists as applicable at that range are applied: asked for
+one that is not, `getEditsForRefactor` throws a Debug failure, which
+`refactorEdits` turns into null. Refactors pass `allowTextChangesInNewFiles`,
+without which "Move to a new file" is never offered.
+
 ## The editor tour
 
 `src/components/site/editor-features.ts` lists the editor's TypeScript help

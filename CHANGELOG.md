@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A Refactor menu in the editor. Ctrl/⌘+Shift+R lists TypeScript's
+  refactors for the selection or the cursor, extracts first: extract to a
+  function or a constant, inline a variable, move to a new file, convert an
+  arrow function, convert an export, and the rest. Each is written with one
+  Undo; a name it makes up (`newLocal`) is selected, ready for F2, and Move to a
+  new file updates the files that import what moved, in the project's import
+  style. The editor tour lists it.
+  ([#99](https://github.com/Hankaws/aperture/pull/99))
 - The site says what the editor knows. The landing page has an Editor section
   (a parameter hint, and the keys for rename, references, quick fixes,
   Problems and hints), and `/editor` tours it all: types on hover, parameter

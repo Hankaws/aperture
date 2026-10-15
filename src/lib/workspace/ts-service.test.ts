@@ -374,6 +374,64 @@ test("organize imports drops what is unused and sorts the rest; a tidy file need
   assert.deepEqual(service.organizeImports("src/missing.ts"), []);
 });
 
+test("refactors: what TypeScript offers at a selection, and the edits one writes", () => {
+  const text = [
+    "export function add(a: number, b: number) {",
+    "  const total = a + b * 2;",
+    "  return total;",
+    "}",
+    "export const double = (n: number) => n * 2;",
+    "",
+  ].join("\n");
+  const { service } = serviceFor({ ...files, "src/math.ts": text });
+  const from = text.indexOf("a + b");
+  const to = from + "a + b * 2".length;
+  const offered = service.refactors("src/math.ts", from, to);
+  const constant = offered.find((r) => /Extract to constant/.test(r.description));
+  assert.ok(constant, JSON.stringify(offered.map((r) => r.description)));
+  assert.ok(offered.some((r) => /Extract to function in module scope/.test(r.description)));
+
+  const edit = service.refactorEdits("src/math.ts", from, to, constant.refactor, constant.action);
+  assert.ok(edit);
+  assert.deepEqual(Object.keys(edit.created), []);
+  const after = applyFileChanges({ "src/math.ts": text }, edit.changes)!["src/math.ts"]!;
+  assert.match(after, /const newLocal = a \+ b \* 2;/);
+  assert.match(after, /const total = newLocal;/);
+  assert.equal(edit.rename?.path, "src/math.ts");
+  assert.equal(
+    after.slice(edit.rename!.offset, edit.rename!.offset + "newLocal".length),
+    "newLocal",
+  );
+
+  const arrow = service.refactors(
+    "src/math.ts",
+    text.indexOf("(n: number)") + 1,
+    text.indexOf("(n: number)") + 1,
+  );
+  assert.ok(arrow.some((r) => r.description === "Add braces to arrow function"));
+  assert.deepEqual(service.refactors("src/missing.ts", 0, 0), []);
+  assert.equal(service.refactorEdits("src/math.ts", 0, 0, "No such refactor", "nothing"), null);
+});
+
+test("a refactor that makes a file returns it whole, apart from the edits to existing ones", () => {
+  const text = "export const one = 1;\nexport const two = one + 1;\n";
+  const { service } = serviceFor({ ...files, "src/nums.ts": text });
+  const start = text.indexOf("export const two");
+  const end = text.length - 1;
+  const move = service
+    .refactors("src/nums.ts", start, end)
+    .find((r) => r.refactor === "Move to a new file");
+  assert.ok(move, "Move to a new file is offered for a whole statement");
+  const edit = service.refactorEdits("src/nums.ts", start, end, move.refactor, move.action);
+  assert.ok(edit);
+  const [path, created] = Object.entries(edit.created)[0]!;
+  assert.match(path, /^src\/two\.ts$/);
+  assert.match(created, /import \{ one \} from "\.\/nums";/);
+  assert.match(created, /export const two = one \+ 1;/);
+  const after = applyFileChanges({ "src/nums.ts": text }, edit.changes)!["src/nums.ts"]!;
+  assert.doesNotMatch(after, /two/);
+});
+
 test("a syntax error is a problem too, where the parser stopped", () => {
   const text = "export const a = (1 + ;\n";
   const { service } = serviceFor({ "src/a.ts": text });

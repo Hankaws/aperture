@@ -71,6 +71,7 @@ export function HelpDialog() {
     [`${mod}⇧M`, "Problems: every type error in the project"],
     [`${mod}⇧Space`, "Parameter hints for the call you are in (they also open on ( and ,)"],
     ["Shift+Alt+O", "Organize imports: drop unused ones and sort the rest"],
+    [`${mod}⇧R`, "Refactor the selection: extract a function or constant, move to a new file, and more"],
     [`${mod}I`, "Focus Composer"],
     [`${mod}J`, "Agent board: every run, and compare two"],
     [`${mod}K`, "Inline edit on the selection"],

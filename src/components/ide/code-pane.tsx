@@ -24,8 +24,9 @@ import { applyHeldBecause } from "@/lib/workspace/checks";
 import { collectMarks, lineMarkEffect, lineMarkExtension, placeMark, shownMarks } from "@/lib/editor/marks";
 import { firstHunkPos, pendingDiff } from "@/lib/editor/pending-diff";
 import { gotoImport } from "@/lib/editor/goto-import";
-import { tsCompletesHere, tsIntel, type RenameAsk } from "@/lib/editor/ts-intel";
+import { tsCompletesHere, tsIntel, type RefactorAsk, type RenameAsk } from "@/lib/editor/ts-intel";
 import { RenameBox } from "./rename-box";
+import { RefactorMenu } from "./refactor-menu";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import { applyQuickFix } from "@/lib/workspace/quick-fix";
 import { jumpReview } from "@/lib/editor/review-jump";
@@ -202,6 +203,7 @@ export function CodePane() {
   const wrapConf = useRef(new Compartment()).current;
   const narrowRef = useRef(false);
   const [renameAsk, setRenameAsk] = useState<RenameAsk | null>(null);
+  const [refactorAsk, setRefactorAsk] = useState<RefactorAsk | null>(null);
   const scrolledFor = useRef<string | null>(null);
   const jumpedFor = useRef<string | null>(null);
   const langKeyRef = useRef("");
@@ -303,6 +305,7 @@ export function CodePane() {
             (count) => useIdeUi.setState({ typeErrors: count }),
             applyQuickFix,
             (found) => useIdeUi.getState().openReferences(found),
+            setRefactorAsk,
           ),
           keymap.of([
             ...closeBracketsKeymap,
@@ -609,6 +612,15 @@ export function CodePane() {
         </div>
       )}
       <div ref={parentRef} className={activePath ? "h-full min-h-0 min-w-0 flex-1" : "hidden"} />
+      {refactorAsk && (
+        <RefactorMenu
+          ask={refactorAsk}
+          onClose={() => {
+            setRefactorAsk(null);
+            viewRef.current?.focus();
+          }}
+        />
+      )}
       {renameAsk && (
         <RenameBox
           ask={renameAsk}

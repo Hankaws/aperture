@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { cn } from "@/lib/utils";
@@ -7,7 +8,7 @@ import repo from "@/lib/bench/large-repo.json";
 import { SCALE, largeRepoVerdict, type LargeRepo } from "@/lib/bench/scale";
 import type { BenchResults, CaseResult } from "@/lib/bench/run";
 
-export const Route = createFileRoute("/benchmark")({ component: BenchmarkPage });
+export const Route = createFileRoute("/benchmark")({ head: () => pageHead("benchmark"), component: BenchmarkPage });
 
 const results = data as BenchResults;
 const CASES_URL = "https://github.com/Hankaws/aperture/blob/main/src/lib/bench/cases.ts";
@@ -143,11 +144,11 @@ function BenchmarkPage() {
         <h2 className="mt-12 text-lg font-medium tracking-tight">Large repositories</h2>
         <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
           These four projects are small on purpose.{" "}
-          <a href={large.url} className="text-fg underline-offset-2 hover:underline">
+          <a href={large.url} className="text-fg underline underline-offset-2">
             {large.name}
           </a>{" "}
           at{" "}
-          <a href={commitUrl} className="font-mono text-fg underline-offset-2 hover:underline">
+          <a href={commitUrl} className="font-mono text-fg underline underline-offset-2">
             {large.commit.slice(0, 7)}
           </a>{" "}
           ({repoWhen(large.commitDate)}) is a years-old TypeScript repository:{" "}
@@ -204,7 +205,7 @@ function BenchmarkPage() {
           </li>
           <li>
             We wrote the cases, so they are not a random sample of agent mistakes. They are listed in{" "}
-            <a href={CASES_URL} className="text-fg underline-offset-2 hover:underline">
+            <a href={CASES_URL} className="text-fg underline underline-offset-2">
               src/lib/bench/cases.ts
             </a>
             . Run <code className="font-mono text-fg">npm run bench</code> to reproduce this page. A test in CI fails
@@ -269,7 +270,7 @@ function BenchmarkPage() {
             Raw results live in{" "}
             <a
               href="https://github.com/Hankaws/aperture/blob/main/src/lib/bench/results.json"
-              className="text-fg underline-offset-2 hover:underline"
+              className="text-fg underline underline-offset-2"
             >
               src/lib/bench/results.json
             </a>
@@ -303,7 +304,7 @@ function BenchmarkPage() {
         </ul>
 
         <p className="mt-10 text-sm text-muted">
-          <Link to="/app" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/app" className="text-fg underline underline-offset-2">
             Try the checks in the editor
           </Link>{" "}
           · no key needed for the demo.

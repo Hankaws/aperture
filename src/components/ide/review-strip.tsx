@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { Check, FileDiff, MessageSquare, X } from "lucide-react";
+import { Check, FileDiff, LoaderCircle, MessageSquare, X } from "lucide-react";
 import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
-import { basename, cn } from "@/lib/utils";
+import { basename, cn, modSymbol } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
 import { activeCopyOf, openCopyIds } from "@/lib/workspace/copies";
 import { editsUnderCheck } from "@/lib/workspace/edits";
@@ -10,7 +10,89 @@ import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { lineOfIssue } from "@/lib/editor/marks";
 import { useWorkspace } from "@/lib/workspace/store";
+import { applyBlockReason, applyLabel, type Verdict } from "@/lib/workspace/verdict";
 import { CheckResults } from "./check-results";
+
+/**
+ * The answer first: one sentence that says whether the change is safe, then
+ * the one Apply. The chips under it are the evidence for the sentence.
+ */
+function VerdictBar({
+  verdict,
+  fileCount,
+  copyCount,
+  noteCount,
+  running,
+  checkState,
+  onApply,
+  onRejectAll,
+  onDismissNotes,
+  onReport,
+}: {
+  verdict: Verdict;
+  fileCount: number;
+  copyCount: number;
+  noteCount: number;
+  running: boolean;
+  checkState: "running" | "clear" | "failed" | undefined;
+  onApply: () => void;
+  onRejectAll: () => void;
+  onDismissNotes: () => void;
+  onReport: () => void;
+}) {
+  const blocked = applyBlockReason({ agentRunning: running, checks: checkState, notes: noteCount });
+  const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
+  const sub = [
+    `${fileCount} ${fileCount === 1 ? "file" : "files"} staged${running ? " · still writing" : ""}`,
+    noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"}` : "",
+    verdict.detail,
+  ].filter(Boolean);
+  return (
+    <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
+        <p
+          role="status"
+          className={cn(
+            "flex items-center gap-1.5 text-sm font-medium",
+            verdict.state === "safe" && "text-ok",
+            verdict.state === "held" && "text-danger",
+            verdict.state === "checking" && "text-fg",
+          )}
+        >
+          <Icon className={cn("size-4 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
+          {verdict.headline}
+        </p>
+        <p className="mt-0.5 text-[12px] leading-snug text-muted">{sub.join(" · ")}</p>
+      </div>
+      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onReport}>
+        <FileDiff className="size-3.5" />
+        Report
+      </Button>
+      {noteCount > 0 && (
+        <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onDismissNotes}>
+          <MessageSquare className="size-3.5" />
+          Dismiss notes
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onRejectAll}>
+        <X className="size-3.5" />
+        Reject all
+      </Button>
+      <Button
+        size="sm"
+        className="ml-auto h-8 px-3 pointer-coarse:h-11"
+        disabled={blocked !== null}
+        title={blocked ?? `${modSymbol()}+Enter`}
+        aria-keyshortcuts="Control+Enter Meta+Enter"
+        data-apply="primary"
+        onClick={onApply}
+      >
+        <Check className="size-3.5" />
+        {applyLabel(fileCount, copyCount)}
+      </Button>
+    </div>
+  );
+}
 
 export function ReviewStrip() {
   const messages = useWorkspace((s) => s.messages);
@@ -78,62 +160,32 @@ export function ReviewStrip() {
           })}
         </div>
       )}
-      <div className="flex items-center gap-2 px-2.5 py-1.5">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted">
-          <span className="text-fg">Review</span>
-          <span className="text-subtle">
-            {" "}
-            · {rows.length} {rows.length === 1 ? "file" : "files"} · F8 next hunk{running ? " · still writing" : ""}
-            {noteCount > 0 ? ` · ${noteCount} notes` : ""}
-          </span>
-        </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2"
-          onClick={() =>
-            downloadDiffReport({
-              title: rows[0]?.description || "Staged diffs",
-              workspace: name,
-              files: filesFromEdits(rows),
-            })
-          }
-        >
-          <FileDiff className="size-3.5" />
-          Report
-        </Button>
-        {noteCount > 0 && (
-          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => rows.forEach((edit) => clearPendingNotes(edit.id))}>
-            <MessageSquare className="size-3.5" />
-            Dismiss notes
-          </Button>
+      <CheckResults
+        files={files}
+        edits={rows}
+        verify={verify}
+        onOpen={jump}
+        header={(verdict) => (
+          <VerdictBar
+            verdict={verdict}
+            fileCount={rows.length}
+            copyCount={openIds.length}
+            noteCount={noteCount}
+            running={running}
+            checkState={checkState}
+            onApply={() => applyAllPending()}
+            onRejectAll={() => rejectAllPending()}
+            onDismissNotes={() => rows.forEach((edit) => clearPendingNotes(edit.id))}
+            onReport={() =>
+              downloadDiffReport({
+                title: rows[0]?.description || "Staged diffs",
+                workspace: name,
+                files: filesFromEdits(rows),
+              })
+            }
+          />
         )}
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => rejectAllPending()}>
-          <X className="size-3.5" />
-          Reject all
-        </Button>
-        <Button
-          size="sm"
-          className="h-7 px-2.5"
-          disabled={running || !checksOpen || noteCount > 0}
-          title={
-            running
-              ? "Wait until this turn finishes"
-              : !checkState || checkState === "running"
-              ? "Waiting for the checks"
-              : checkState === "failed"
-                ? "A check is red"
-                : noteCount > 0
-                  ? "Send or dismiss notes first"
-                  : undefined
-          }
-          onClick={() => applyAllPending()}
-        >
-          <Check className="size-3.5" />
-          {openIds.length > 1 ? "Keep this" : "Apply all"}
-        </Button>
-      </div>
-      <CheckResults files={files} edits={rows} verify={verify} onOpen={jump} />
+      />
       <ul className="max-h-28 overflow-y-auto border-t border-border">
         {rows.map((edit) => {
           const stats = diffStats(edit.oldText, edit.newText);
@@ -173,9 +225,19 @@ export function ReviewStrip() {
                   Dismiss
                 </Button>
               ) : (
-                <Button size="sm" className="h-7 px-2" disabled={running || !checksOpen} title={running ? "Wait until this turn finishes" : checksOpen ? undefined : "Waiting for the checks"} onClick={() => applyEdit(edit)}>
-                  Apply
-                </Button>
+                // The one Apply is in the verdict above. With several files, this applies just this one.
+                rows.length > 1 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    disabled={running || !checksOpen}
+                    title={running ? "Wait until this turn finishes" : checksOpen ? undefined : "Waiting for the checks"}
+                    onClick={() => applyEdit(edit)}
+                  >
+                    Apply only this
+                  </Button>
+                )
               )}
             </li>
           );

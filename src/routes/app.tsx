@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { IdeShell } from "@/components/ide/ide-shell";
 import { authEnabled } from "@/lib/auth/client";
 import { ensureVisitor } from "@/lib/auth/visitor.api";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/app")({
   },
   // Code-split like every other route: the editor is most of the client
   // code, and the landing page must not download it.
+  head: () => pageHead("app"),
   component: AppEditor,
 });
 

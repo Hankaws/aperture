@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 
-export const Route = createFileRoute("/privacy")({ component: PrivacyPage });
+export const Route = createFileRoute("/privacy")({ head: () => pageHead("privacy"), component: PrivacyPage });
 
 const SEES = [
   ["Your Grok key", "xAI", "api.x.ai"],
@@ -40,7 +41,7 @@ function PrivacyPage() {
           your account as you edit, and each send uploads a snapshot through Aperture's server before the provider
           you picked is called. Checks and the in-tab test sandbox stay in the browser. Threat model and disclosure
           are on the{" "}
-          <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/security" className="text-fg underline underline-offset-2">
             security page
           </Link>
           .
@@ -147,11 +148,11 @@ function PrivacyPage() {
 
         <p className="mt-10 text-sm text-muted">
           Keys are added under{" "}
-          <Link to="/settings" search={{ tab: "models" }} className="text-fg underline-offset-2 hover:underline">
+          <Link to="/settings" search={{ tab: "models" }} className="text-fg underline underline-offset-2">
             Settings → Models
           </Link>
           . Sandbox limits and how to report a vulnerability are on the{" "}
-          <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+          <Link to="/security" className="text-fg underline underline-offset-2">
             security page
           </Link>
           .

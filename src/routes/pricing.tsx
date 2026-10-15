@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import { PricingTable } from "@/components/site/pricing-table";
@@ -7,7 +8,7 @@ import { showPricing } from "@/lib/billing/pricing-visible";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/pricing")({ component: PricingPage });
+export const Route = createFileRoute("/pricing")({ head: () => pageHead("pricing"), component: PricingPage });
 
 function PricingPage() {
   const { account } = useAccount();

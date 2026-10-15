@@ -9,6 +9,10 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A 404 page with the site's own bar and a way back, in place of a bare "Not
+  Found". Every page now has its own title (and description) in the tab,
+  history and search results, instead of one shared title.
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - Rename or move a file from the file tree, and its imports follow. The pencil
   on a file's row opens its path with the name selected; a new folder in the
   path moves it. TypeScript rewrites every import of the file, re-exports
@@ -292,6 +296,14 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- "Open the editor" goes straight to the editor instead of the sign-in page.
+  The demo needs no account; you sign in only to send to a model or save.
+  The result of a check now opens with one sentence, "Safe to apply: 4 of 5
+  checks passed" or "Held back: 1 of 5 checks failed", and has one Apply
+  button that says how many files it writes, in place of Apply now, Apply all
+  and Apply. The amber "Already failing before this change" line wraps in full
+  instead of being cut off, and every red or amber check explains itself.
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - Aperture's MCP server lets an agent or a registry such as Smithery see
   what it offers without a token: `initialize`, `ping` and `tools/list`
   answer anyone, with the same `check_change` description for everyone and
@@ -365,6 +377,13 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Accessibility: links inside text are underlined, not only coloured; the
+  version link in the footer is named by what it shows; the code editor has a
+  name for screen readers and says that Escape, then Tab, leaves it (Tab
+  otherwise indents); the sign-in fields have labels, the Sign in and Create
+  account switch says which is on, and a sign-in error is announced; code
+  comments are light enough to read (4.5:1).
+  ([#101](https://github.com/Hankaws/aperture/pull/101))
 - The unsaved dot means what it says. Ctrl/⌘+S showed "Saved" but left the
   dot on the file and the count in the status bar until a reload, and
   applying a change marked its file unsaved. Now Ctrl/⌘+S runs the file's

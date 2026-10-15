@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { ArrowRight, Bot, PlugZap, ShieldCheck, type LucideIcon } from "lucide-react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
@@ -25,6 +26,7 @@ type BotTab = "team" | "check" | "agents";
 export const Route = createFileRoute("/bot")({
   validateSearch: (s: Record<string, unknown>): { tab?: "check" | "agents" } =>
     s.tab === "check" || s.tab === "agents" ? { tab: s.tab } : {},
+  head: ({ match }) => pageHead(match.search.tab === "check" ? "botCheck" : match.search.tab === "agents" ? "botAgents" : "bot"),
   component: BotPage,
 });
 
@@ -93,7 +95,7 @@ function BotPage() {
                       <Link
                         to="/login"
                         search={{ next: "/settings" }}
-                        className="text-accent hover:underline"
+                        className="text-accent underline underline-offset-2"
                       >
                         Sign in
                       </Link>{" "}
@@ -251,7 +253,7 @@ function ByHand() {
           Settings, Secrets and variables, Actions, New repository secret. The workflow below reads{" "}
           <code className="font-mono text-xs">XAI_API_KEY</code>, for Grok; for another provider,
           set <code className="font-mono text-xs">provider</code> (
-          <a href={`${BOT_REPO}#settings`} className="text-accent hover:underline">
+          <a href={`${BOT_REPO}#settings`} className="text-accent underline underline-offset-2">
             the action&apos;s settings
           </a>
           ).
@@ -293,11 +295,11 @@ function HowItWorks() {
         the code stay on GitHub. The bot never touches{" "}
         <code className="font-mono text-xs">.github/</code>, secrets files or lockfiles, never
         merges, and stops at its token budget.{" "}
-        <a href={BOT_REPO} className="text-accent hover:underline">
+        <a href={BOT_REPO} className="text-accent underline underline-offset-2">
           The action on GitHub
         </a>{" "}
         ·{" "}
-        <Link to="/bot" search={{ tab: "check" }} className="text-accent hover:underline">
+        <Link to="/bot" search={{ tab: "check" }} className="text-accent underline underline-offset-2">
           Aperture Agent Check
         </Link>
       </p>

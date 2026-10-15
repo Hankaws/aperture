@@ -92,7 +92,7 @@ export function AgentsGuide({ children }: { children?: ReactNode }) {
             your agent can only add an MCP server that signs in with OAuth,{" "}
             <a
               href="https://github.com/Hankaws/aperture/issues/new"
-              className="text-fg underline-offset-2 hover:underline"
+              className="text-fg underline underline-offset-2"
             >
               open an issue
             </a>{" "}
@@ -134,7 +134,7 @@ export function AgentsGuide({ children }: { children?: ReactNode }) {
       </h3>
       <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
         Of the {bench.bad} bad edits in the{" "}
-        <Link to="/benchmark" className="text-fg underline-offset-2 hover:underline">
+        <Link to="/benchmark" className="text-fg underline underline-offset-2">
           benchmark
         </Link>
         , <span className="text-fg">check_change</span> stops {AGENT_STOPS} without running
@@ -164,16 +164,16 @@ export function AgentsGuide({ children }: { children?: ReactNode }) {
         <Link
           to="/bot"
           search={{ tab: "check" }}
-          className="text-fg underline-offset-2 hover:underline"
+          className="text-fg underline underline-offset-2"
         >
           Aperture Agent Check
         </Link>
         , with the bot or as a GitHub Action. What the server keeps and why is on the{" "}
-        <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+        <Link to="/privacy" className="text-fg underline underline-offset-2">
           privacy
         </Link>{" "}
         and{" "}
-        <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+        <Link to="/security" className="text-fg underline underline-offset-2">
           security
         </Link>{" "}
         pages.

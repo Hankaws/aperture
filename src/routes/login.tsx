@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { useHydratedUserState } from "@/lib/use-hydrated-user";
 import { ApertureMark } from "@/components/ide/logo";
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/login")({
     next: parseNext(s.next),
     ...(typeof s.error === "string" && s.error ? { error: s.error } : {}),
   }),
+  head: () => pageHead("login"),
   component: Login,
 });
 
@@ -88,15 +90,15 @@ function Login() {
           <p className="mt-1 text-sm text-muted">One account for the editor and your API keys.</p>
           <p className="mt-3 text-sm leading-relaxed text-muted">
             Before you open a repo or add a key, read{" "}
-            <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+            <Link to="/privacy" className="text-fg underline-offset-2 underline">
               what code leaves the browser
             </Link>{" "}
             (after sign-in the project is saved and each send goes through Aperture&apos;s server) and the{" "}
-            <Link to="/security" className="text-fg underline-offset-2 hover:underline">
+            <Link to="/security" className="text-fg underline-offset-2 underline">
               security page
             </Link>{" "}
             and the{" "}
-            <Link to="/terms" className="text-fg underline-offset-2 hover:underline">
+            <Link to="/terms" className="text-fg underline-offset-2 underline">
               terms
             </Link>
             .
@@ -111,7 +113,7 @@ function Login() {
                   Didn&apos;t make that account? Someone else may have used your email.{" "}
                   <a
                     href={REPORT_URL}
-                    className="underline underline-offset-2 hover:text-accent"
+                    className="underline-offset-2 hover:text-accent"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -149,6 +151,7 @@ function Login() {
           <div className="mb-3 flex rounded-lg border border-border p-0.5">
             <button
               type="button"
+              aria-pressed={mode === "in"}
               className={`h-10 flex-1 rounded-md text-sm ${mode === "in" ? "bg-elevated text-fg" : "text-muted"}`}
               onClick={() => setMode("in")}
             >
@@ -156,6 +159,7 @@ function Login() {
             </button>
             <button
               type="button"
+              aria-pressed={mode === "up"}
               className={`h-10 flex-1 rounded-md text-sm ${mode === "up" ? "bg-elevated text-fg" : "text-muted"}`}
               onClick={() => setMode("up")}
             >
@@ -165,26 +169,53 @@ function Login() {
 
           <form className="space-y-3" onSubmit={(event) => void onEmail(event)}>
             {mode === "up" && (
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" />
+              <div>
+                <label htmlFor="login-name" className="mb-1 block text-xs text-muted">
+                  Name
+                </label>
+                <Input
+                  id="login-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Name"
+                  autoComplete="name"
+                />
+              </div>
             )}
-            <Input
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@studio.dev"
-              autoComplete="email"
-            />
-            <Input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-              autoComplete={mode === "up" ? "new-password" : "current-password"}
-            />
-            {error && <p className="text-sm text-danger">{error}</p>}
+            <div>
+              <label htmlFor="login-email" className="mb-1 block text-xs text-muted">
+                Email
+              </label>
+              <Input
+                id="login-email"
+                type="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@studio.dev"
+                autoComplete="email"
+              />
+            </div>
+            <div>
+              <label htmlFor="login-password" className="mb-1 block text-xs text-muted">
+                Password{mode === "up" ? " (at least 8 characters)" : ""}
+              </label>
+              <Input
+                id="login-password"
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+                autoComplete={mode === "up" ? "new-password" : "current-password"}
+              />
+            </div>
+            {error && (
+              <p role="alert" className="text-sm text-danger">
+                {error}
+              </p>
+            )}
             <Button type="submit" className="h-11 w-full" disabled={busy}>
               {busy ? "Working…" : mode === "up" ? "Create account" : "Sign in with email"}
             </Button>
@@ -192,7 +223,7 @@ function Login() {
 
           <p className="mt-4 text-center text-xs text-subtle">
             New accounts start on Hobby, which is free. Paid plans are{" "}
-            <Link to="/pricing" className="text-muted hover:text-fg">
+            <Link to="/pricing" className="text-muted underline underline-offset-2 hover:text-fg">
               coming soon
             </Link>
             .

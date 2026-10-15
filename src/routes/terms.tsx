@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { pageHead } from "@/lib/page-head";
 import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 
-export const Route = createFileRoute("/terms")({ component: TermsPage });
+export const Route = createFileRoute("/terms")({ head: () => pageHead("terms"), component: TermsPage });
 
 const SECTIONS: Array<{ title: string; body: ReactNode }> = [
   {
@@ -14,7 +15,7 @@ const SECTIONS: Array<{ title: string; body: ReactNode }> = [
         separate: it is under the{" "}
         <a
           href="https://github.com/Hankaws/aperture/blob/main/LICENSE"
-          className="text-fg underline-offset-2 hover:underline"
+          className="text-fg underline underline-offset-2"
         >
           MIT license
         </a>
@@ -49,7 +50,7 @@ const SECTIONS: Array<{ title: string; body: ReactNode }> = [
         You choose the folder, zip, or repository you open. You need the right to put that code into the editor and,
         when you send, to pass it to the provider you picked. Do not open a repository you are not allowed to send.
         Aperture does not claim your code. What a send includes, and what stays in the tab, is on the{" "}
-        <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+        <Link to="/privacy" className="text-fg underline underline-offset-2">
           privacy page
         </Link>
         .
@@ -130,7 +131,7 @@ const SECTIONS: Array<{ title: string; body: ReactNode }> = [
     body: (
       <>
         Questions about these terms go to the public repository:{" "}
-        <a href="https://github.com/Hankaws/aperture" className="text-fg underline-offset-2 hover:underline">
+        <a href="https://github.com/Hankaws/aperture" className="text-fg underline underline-offset-2">
           github.com/Hankaws/aperture
         </a>
         .

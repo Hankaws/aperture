@@ -25,8 +25,9 @@ export function AuthSlot({ compact = false, plain = false }: { compact?: boolean
     );
   }
   if (plain) {
+    // The editor needs no account: "Open" goes straight there. Sign-in is for sending and saving.
     return (
-      <Link to="/login" search={{ next: "/app" }} className="shrink-0 text-sm text-fg hover:text-muted">
+      <Link to="/app" className="shrink-0 text-sm text-fg hover:text-muted">
         Open →
       </Link>
     );

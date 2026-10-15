@@ -222,7 +222,7 @@ export function CheckGuide({ children }: { children?: ReactNode }) {
       <h3 className="mt-14 text-xl font-medium tracking-tight">How good is it</h3>
       <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
         These are the checks the{" "}
-        <Link to="/benchmark" className="text-fg underline-offset-2 hover:underline">
+        <Link to="/benchmark" className="text-fg underline underline-offset-2">
           benchmark
         </Link>{" "}
         measures on {bench.bad + bench.good} edits an agent might make. With the tests run, they
@@ -241,14 +241,14 @@ export function CheckGuide({ children }: { children?: ReactNode }) {
         <Link
           to="/bot"
           search={{ tab: "agents" }}
-          className="text-fg underline-offset-2 hover:underline"
+          className="text-fg underline underline-offset-2"
         >
           Connect it to Aperture
         </Link>
         . The source is in{" "}
         <a
           href="https://github.com/Hankaws/aperture/tree/main/packages/agent-check"
-          className="text-fg underline-offset-2 hover:underline"
+          className="text-fg underline underline-offset-2"
         >
           Hankaws/aperture
         </a>

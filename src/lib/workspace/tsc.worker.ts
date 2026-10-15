@@ -7,8 +7,11 @@
  * The same worker answers the editor's questions (hover, go to definition,
  * completions, rename, the open file's problems and their fixes, references)
  * from TypeScript's language service, so the compiler is downloaded once.
+ * It also answers the agent's questions (find_references, rename_symbol, the
+ * recap's uses) when the agent runs on a model on the person's own machine.
  */
 import ts from "typescript";
+import { answerCode, type AnswerTo, type CodeQuestion } from "../agent/code-intel";
 import { checkProject, compilerOptions, loadLibFiles, type TscCache, type TscResult } from "./tsc-core";
 import {
   createTsService,
@@ -66,6 +69,14 @@ export type TsAsk = {
   refactor?: { name: string; action: string };
 };
 
+/** The agent's question about the project as its run has it, staged edits included. */
+export type TsCodeAsk = {
+  type: "code";
+  id: number;
+  files: Record<string, string>;
+  question: CodeQuestion;
+};
+
 export type TsAnswer =
   | { id: number; hover: HoverInfo | null }
   | { id: number; definition: DefinitionResult }
@@ -78,6 +89,7 @@ export type TsAnswer =
   | { id: number; organize: FileChange[] }
   | { id: number; refactors: RefactorAction[] }
   | { id: number; refactor: RefactorEdit | null }
+  | { id: number; code: AnswerTo<CodeQuestion> }
   | { id: number; unavailable: string };
 
 export type TscReply =
@@ -136,9 +148,32 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   return { id: ask.id, definition: service.definition(ask.path, ask.offset) };
 }
 
-self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsAsk>) => {
+/**
+ * The agent's question, on the editor's service: the agent's files differ from
+ * the editor's only in what the run staged, so each side's next update
+ * re-reads just those files.
+ */
+async function answerAgent(ask: TsCodeAsk): Promise<TsAnswer> {
+  const tooBig = serviceUnavailable(ask.files);
+  if (tooBig) return { id: ask.id, unavailable: tooBig };
+  const options = compilerOptions(ts, ask.files);
+  service ??= createTsService(ts);
+  service.update(ask.files, await loadLibs(options), options);
+  return { id: ask.id, code: answerCode(service, ask.files, ask.question) };
+}
+
+self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsAsk | TsCodeAsk>) => {
   if (event.data.type === "files") {
     projectFiles = event.data.files;
+    return;
+  }
+  if (event.data.type === "code") {
+    const ask = event.data;
+    try {
+      self.postMessage(await answerAgent(ask) satisfies TsAnswer);
+    } catch {
+      self.postMessage({ id: ask.id, unavailable: "TypeScript could not read this project." } satisfies TsAnswer);
+    }
     return;
   }
   if (

@@ -89,6 +89,20 @@ function byFile(at: string[]): string {
   return `${files.slice(0, 2).join(", ")}${more > 0 ? ` and ${more} more ${more === 1 ? "file" : "files"}` : ""}`;
 }
 
+/** The names the recap looks up, each with the file it changed in: the first five. */
+export function recapNames(edits: ProposedEdit[]): Array<{ path: string; name: string }> {
+  const out: Array<{ path: string; name: string }> = [];
+  const seen = new Set<string>();
+  for (const edit of edits) {
+    for (const name of symbolsFromEdit(edit)) {
+      if (seen.has(name) || seen.size >= 5) continue;
+      seen.add(name);
+      out.push({ path: edit.path, name });
+    }
+  }
+  return out;
+}
+
 /**
  * Recap: what changed, what code still references it, what the plan left open.
  * The last line only appears once some step has moved off "pending": a plan
@@ -112,29 +126,25 @@ export function verifyRecap(
   const line1 = `Changed: ${changed.slice(0, 4).join("; ")}`;
 
   const leftover: string[] = [];
-  const seen = new Set<string>();
+  const names = recapNames(edits);
   let exact = true;
-  for (const edit of edits) {
-    for (const symbol of symbolsFromEdit(edit)) {
-      if (seen.has(symbol) || seen.size >= 5) continue;
-      seen.add(symbol);
-      // The compiler's answer, where it has one: real uses, by line, and not the same word in unrelated code.
-      const found = usedIn?.(edit.path, symbol, skip) ?? null;
-      if (found) {
-        if ("uses" in found && found.uses.length) leftover.push(`${symbol} is used in ${byFile(found.uses)}`);
-        if ("broken" in found && found.broken.length)
-          leftover.push(`${symbol} is gone but still used in ${byFile(found.broken)}`);
-        continue;
-      }
-      exact = false;
-      const hits = filesMentioning(files, symbol, skip);
-      if (hits.length) leftover.push(`${symbol} also appears in ${hits.slice(0, 2).join(", ")}`);
+  for (const { path, name: symbol } of names) {
+    // The compiler's answer, where it has one: real uses, by line, and not the same word in unrelated code.
+    const found = usedIn?.(path, symbol, skip) ?? null;
+    if (found) {
+      if ("uses" in found && found.uses.length) leftover.push(`${symbol} is used in ${byFile(found.uses)}`);
+      if ("broken" in found && found.broken.length)
+        leftover.push(`${symbol} is gone but still used in ${byFile(found.broken)}`);
+      continue;
     }
+    exact = false;
+    const hits = filesMentioning(files, symbol, skip);
+    if (hits.length) leftover.push(`${symbol} also appears in ${hits.slice(0, 2).join(", ")}`);
   }
   // Where else the changed names appear, to look at before applying: a note, not a failure.
   const line2 = leftover.length
     ? `Elsewhere: ${leftover.slice(0, 2).join("; ")}`
-    : exact && seen.size > 0
+    : exact && names.length > 0
       ? "Elsewhere: no other file uses the changed names."
       : "Elsewhere: no other file mentions the changed names.";
 

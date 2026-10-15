@@ -116,6 +116,26 @@ export type Reference = {
 export type ReferencesResult = { name: string; references: Reference[] };
 
 /** One problem in the Problems panel: where it is, by line, and what TypeScript says. */
+/** The call around the cursor: what it takes, and which argument is being typed. */
+export type SignatureHelp = {
+  /** Before the parameters: `listTasks(`. */
+  prefix: string;
+  params: Array<{ label: string; doc: string }>;
+  /** Between parameters: `, `. */
+  separator: string;
+  /** After them: `): Task[]`. */
+  suffix: string;
+  /** The function's own doc comment and tags. */
+  doc: string;
+  /** The parameter the cursor is on; past the last for a rest parameter, the last. -1 when there are none. */
+  active: number;
+  /** Which overload this is, and how many there are. */
+  overload: number;
+  overloads: number;
+  /** Where the arguments start, to place the tip. */
+  start: number;
+};
+
 export type ProjectProblem = {
   start: number;
   length: number;
@@ -187,6 +207,10 @@ export type TsService = {
   references(path: string, offset: number): ReferencesResult | null;
   /** Every file's syntax and type errors, as the "Types" check would report them, without fixes. */
   projectProblems(): ProjectProblems;
+  /** The call the cursor is in, with the argument being typed. Null outside a call. */
+  signatureHelp(path: string, offset: number): SignatureHelp | null;
+  /** The edits that remove the file's unused imports and sort the rest; none when they already are. */
+  organizeImports(path: string): FileChange[];
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -457,6 +481,65 @@ export function createTsService(ts: Ts): TsService {
             return fixes.length ? { fixes } : {};
           })(),
         }));
+    },
+
+    signatureHelp(path, offset) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return null;
+      const found = service.getSignatureHelpItems(name, offset, undefined);
+      if (!found || found.items.length === 0) return null;
+      const index = Math.min(Math.max(found.selectedItemIndex, 0), found.items.length - 1);
+      const item = found.items[index]!;
+      const text = (parts: ts.SymbolDisplayPart[] | undefined) =>
+        parts ? ts.displayPartsToString(parts) : "";
+      const params = item.parameters.map((p) => ({
+        label: text(p.displayParts),
+        doc: text(p.documentation).trim(),
+      }));
+      const tags = (item.tags ?? [])
+        .filter((tag) => tag.name !== "param")
+        .map((tag) => `@${tag.name}${tag.text ? ` ${text(tag.text)}` : ""}`);
+      const active =
+        params.length === 0
+          ? -1
+          : item.isVariadic
+            ? Math.min(found.argumentIndex, params.length - 1)
+            : found.argumentIndex;
+      return {
+        prefix: text(item.prefixDisplayParts),
+        params,
+        separator: text(item.separatorDisplayParts),
+        suffix: text(item.suffixDisplayParts),
+        doc: [text(item.documentation).trim(), ...tags].filter(Boolean).join("\n"),
+        active: active < params.length ? active : -1,
+        overload: index + 1,
+        overloads: found.items.length,
+        start: found.applicableSpan.start,
+      };
+    },
+
+    organizeImports(path) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return [];
+      const changes: FileChange[] = [];
+      for (const change of service.organizeImports(
+        { type: "file", fileName: name },
+        format,
+        preferences,
+      )) {
+        if (!inProject(change.fileName)) continue;
+        const file = change.fileName.slice(1);
+        const edits = change.textChanges.map((t) => ({
+          start: t.span.start,
+          length: t.span.length,
+          newText: t.newText,
+        }));
+        // TypeScript rewrites the import block even when nothing in it moves: no change, no edits.
+        const text = texts.get(change.fileName)?.text ?? "";
+        const after = applyFileChanges({ [file]: text }, [{ path: file, edits }])?.[file];
+        if (after !== undefined && after !== text) changes.push({ path: file, edits });
+      }
+      return changes;
     },
 
     projectProblems() {

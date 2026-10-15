@@ -17,7 +17,9 @@ import {
   type DefinitionResult,
   type HoverInfo,
   type Problem,
+  type FileChange,
   type ProjectProblems,
+  type SignatureHelp,
   type ReferencesResult,
   type RenameResult,
   type TsService,
@@ -40,7 +42,16 @@ export type TsFiles = { type: "files"; files: Record<string, string> };
 
 /** A question about the name at `offset` in `path`, whose text is `text` (the editor's, unsaved typing included). */
 export type TsAsk = {
-  type: "hover" | "definition" | "completions" | "rename" | "problems" | "references" | "project";
+  type:
+    | "hover"
+    | "definition"
+    | "completions"
+    | "rename"
+    | "problems"
+    | "references"
+    | "project"
+    | "signature"
+    | "organize";
   id: number;
   path: string;
   text: string;
@@ -55,6 +66,8 @@ export type TsAnswer =
   | { id: number; problems: Problem[] }
   | { id: number; references: ReferencesResult | null }
   | { id: number; project: ProjectProblems }
+  | { id: number; signature: SignatureHelp | null }
+  | { id: number; organize: FileChange[] }
   | { id: number; unavailable: string };
 
 export type TscReply =
@@ -98,6 +111,8 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "problems") return { id: ask.id, problems: service.problems(ask.path) };
   if (ask.type === "references") return { id: ask.id, references: service.references(ask.path, ask.offset) };
   if (ask.type === "project") return { id: ask.id, project: service.projectProblems() };
+  if (ask.type === "signature") return { id: ask.id, signature: service.signatureHelp(ask.path, ask.offset) };
+  if (ask.type === "organize") return { id: ask.id, organize: service.organizeImports(ask.path) };
   return { id: ask.id, definition: service.definition(ask.path, ask.offset) };
 }
 
@@ -113,7 +128,9 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "rename" ||
     event.data.type === "problems" ||
     event.data.type === "references" ||
-    event.data.type === "project"
+    event.data.type === "project" ||
+    event.data.type === "signature" ||
+    event.data.type === "organize"
   ) {
     const ask = event.data;
     try {

@@ -430,6 +430,19 @@ answer that TypeScript is not available and the recap uses text search.
   with an error naming it count ("is gone but still used in"). Past
   `MAX_GONE_FILES`, or when the compiler cannot say, it is text search as before.
 
+## Parameter hints and Organize Imports
+
+`ts-intel.ts` keeps the hint in a `StateField` shown with `showTooltip`,
+anchored where the call's arguments start (`SignatureHelp.start`). Typing
+`(`, `,` or `<` asks the worker (`signature`) at once; while a hint is up, any
+edit or move asks again after 120 ms, and an answer of null closes it. Like
+completions, typing never waits on the compiler's download: until it is loaded
+the ask only starts it (Ctrl/⌘+Shift+Space does wait). Organize Imports
+(Shift+Alt+O) asks `organize`, which returns `FileChange[]` (empty when the
+file would not change: TypeScript rewrites the block even then, so
+`organizeImports` compares the whole file) and applies them through
+`applyQuickFix`, so it gets one checkpoint and Undo like a quick fix.
+
 ## The Problems panel
 
 `problems-panel.tsx` is a sidebar view (`sidebarView: "problems"`, opened by

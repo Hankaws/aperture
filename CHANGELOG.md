@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Parameter hints and Organize Imports in the editor. Typing `(` or `,` in a
+  TypeScript call shows the function's parameters above it, with the one you
+  are on underlined, its doc, and which overload it is; it follows the cursor
+  and closes when you leave the call or press Escape, and Ctrl/⌘+Shift+Space
+  brings it back. Shift+Alt+O removes the file's unused imports and sorts the
+  rest, keeping the project's `.ts` extensions, with one Undo; on a tidy file it
+  says so and changes nothing.
+  ([#97](https://github.com/Hankaws/aperture/pull/97))
 - Add Aperture to Cursor or VS Code in one click. After you make an agent
   token in Settings → Agents (or on the Bot page's Agents tab), Add to Cursor
   and Add to VS Code open the editor with Aperture's MCP server and the token

@@ -12,9 +12,11 @@ import type {
   DefinitionResult,
   HoverInfo,
   Problem,
+  FileChange,
   ProjectProblems,
   ReferencesResult,
   RenameResult,
+  SignatureHelp,
 } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
@@ -271,4 +273,28 @@ export async function tsProjectProblems(
   if (!answer) return null;
   if ("unavailable" in answer) return { unavailable: answer.unavailable };
   return "project" in answer ? answer.project : null;
+}
+
+/** The call around `offset`, with the argument being typed; null outside a call or without an answer. */
+export async function tsSignatureHelp(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<SignatureHelp | null> {
+  const answer = await askTs("signature", files, path, text, offset, signal);
+  return answer && "signature" in answer ? answer.signature : null;
+}
+
+/** The edits that organize the file's imports (none: they already are); why not, when the compiler cannot say. */
+export async function tsOrganizeImports(
+  files: Record<string, string>,
+  path: string,
+  text: string,
+): Promise<FileChange[] | { unavailable: string } | null> {
+  const answer = await askTs("organize", files, path, text, 0);
+  if (!answer) return null;
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "organize" in answer ? answer.organize : null;
 }

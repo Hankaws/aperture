@@ -9,6 +9,14 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A Problems panel for the whole project. Ctrl/⌘+Shift+M, the Problems button
+  in the file sidebar, or the status bar's type-error count lists every
+  TypeScript error in the project by file, with its code and line, and checks
+  again as you edit. A row opens the file at the problem, where the
+  underline's quick fixes are. TypeScript no longer reports a package whose
+  types are not installed in the browser (`node:http`, `process`, `vitest`) as
+  an error, in the panel or as you type, matching the Types check.
+  ([#95](https://github.com/Hankaws/aperture/pull/95))
 - The agent asks TypeScript, not a text search. Composer, Aperture Bot and
   background runs can call `find_references`, which lists every place a name
   is declared or used, following an import under another name and skipping

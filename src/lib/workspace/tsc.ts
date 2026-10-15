@@ -7,7 +7,15 @@
  */
 import { isTsPath, parseErrorsOf, tscIssue, type TscResult } from "./tsc-core";
 import type { TsAnswer, TsAsk, TscReply, TscRequest, TscWarm, TsFiles } from "./tsc.worker";
-import type { CompletionList, DefinitionResult, HoverInfo, Problem, ReferencesResult, RenameResult } from "./ts-service";
+import type {
+  CompletionList,
+  DefinitionResult,
+  HoverInfo,
+  Problem,
+  ProjectProblems,
+  ReferencesResult,
+  RenameResult,
+} from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
 
@@ -154,7 +162,7 @@ function askTs(
   signal?: AbortSignal,
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
-    if (signal?.aborted || !isTsPath(path)) return resolve(null);
+    if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
     let running: Worker;
     try {
       running = startWorker();
@@ -252,4 +260,15 @@ export async function tsReferences(
   if (!answer) return { unavailable: "TypeScript could not answer here." };
   if ("unavailable" in answer) return { unavailable: answer.unavailable };
   return "references" in answer ? answer.references : null;
+}
+
+/** Every TypeScript file's problems, for the Problems panel; why not, when the compiler cannot say. */
+export async function tsProjectProblems(
+  files: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<ProjectProblems | { unavailable: string } | null> {
+  const answer = await askTs("project", files, "", "", 0, signal);
+  if (!answer) return null;
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "project" in answer ? answer.project : null;
 }

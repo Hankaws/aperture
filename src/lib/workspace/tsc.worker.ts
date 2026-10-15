@@ -17,6 +17,7 @@ import {
   type DefinitionResult,
   type HoverInfo,
   type Problem,
+  type ProjectProblems,
   type ReferencesResult,
   type RenameResult,
   type TsService,
@@ -39,7 +40,7 @@ export type TsFiles = { type: "files"; files: Record<string, string> };
 
 /** A question about the name at `offset` in `path`, whose text is `text` (the editor's, unsaved typing included). */
 export type TsAsk = {
-  type: "hover" | "definition" | "completions" | "rename" | "problems" | "references";
+  type: "hover" | "definition" | "completions" | "rename" | "problems" | "references" | "project";
   id: number;
   path: string;
   text: string;
@@ -53,6 +54,7 @@ export type TsAnswer =
   | { id: number; rename: RenameResult }
   | { id: number; problems: Problem[] }
   | { id: number; references: ReferencesResult | null }
+  | { id: number; project: ProjectProblems }
   | { id: number; unavailable: string };
 
 export type TscReply =
@@ -83,7 +85,8 @@ let projectFiles: Record<string, string> = {};
 let service: TsService | null = null;
 
 async function answer(ask: TsAsk): Promise<TsAnswer> {
-  const files = { ...projectFiles, [ask.path]: ask.text };
+  // The whole project is asked about as it was last sent; any other question, with its file as typed.
+  const files = ask.type === "project" ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
   const tooBig = serviceUnavailable(files);
   if (tooBig) return { id: ask.id, unavailable: tooBig };
   const options = compilerOptions(ts, files);
@@ -94,6 +97,7 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "rename") return { id: ask.id, rename: service.rename(ask.path, ask.offset) };
   if (ask.type === "problems") return { id: ask.id, problems: service.problems(ask.path) };
   if (ask.type === "references") return { id: ask.id, references: service.references(ask.path, ask.offset) };
+  if (ask.type === "project") return { id: ask.id, project: service.projectProblems() };
   return { id: ask.id, definition: service.definition(ask.path, ask.offset) };
 }
 
@@ -108,7 +112,8 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "completions" ||
     event.data.type === "rename" ||
     event.data.type === "problems" ||
-    event.data.type === "references"
+    event.data.type === "references" ||
+    event.data.type === "project"
   ) {
     const ask = event.data;
     try {

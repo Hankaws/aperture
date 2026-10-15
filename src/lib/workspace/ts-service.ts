@@ -11,7 +11,14 @@
  * the library files, so it runs the same in the worker and in Node tests.
  */
 import type ts from "typescript";
-import { isTsPath, SHIM, SHIM_PATH, TSC_LIMITS, type TscLimits } from "./tsc-core.ts";
+import {
+  isTsPath,
+  missingPackageTypes,
+  SHIM,
+  SHIM_PATH,
+  TSC_LIMITS,
+  type TscLimits,
+} from "./tsc-core.ts";
 
 type Ts = typeof ts;
 
@@ -108,6 +115,31 @@ export type Reference = {
 
 export type ReferencesResult = { name: string; references: Reference[] };
 
+/** One problem in the Problems panel: where it is, by line, and what TypeScript says. */
+export type ProjectProblem = {
+  start: number;
+  length: number;
+  /** 1-based, as the editor numbers lines. */
+  line: number;
+  /** 0-based column in its line. */
+  col: number;
+  message: string;
+  severity: "error" | "warning";
+  code: string;
+};
+
+export type ProjectProblems = {
+  /** Files with problems, in path order; each file's problems in the order they appear. */
+  files: Array<{ path: string; problems: ProjectProblem[] }>;
+  errors: number;
+  warnings: number;
+  /** Past `MAX_PROJECT_PROBLEMS`, the counts are whole but the list stops. */
+  truncated: boolean;
+};
+
+/** The most problems listed for the whole project; the counts go on past it. */
+export const MAX_PROJECT_PROBLEMS = 500;
+
 /**
  * The files `changes` touch, with their new text: each file's edits applied
  * from the end, so earlier offsets still hold. Null when an edit no longer
@@ -153,6 +185,8 @@ export type TsService = {
   problems(path: string): Problem[];
   /** Every place the name at `offset` is declared or used in the project. Null when it is not a name. */
   references(path: string, offset: number): ReferencesResult | null;
+  /** Every file's syntax and type errors, as the "Types" check would report them, without fixes. */
+  projectProblems(): ProjectProblems;
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -305,6 +339,23 @@ export function createTsService(ts: Ts): TsService {
     );
   }
 
+  /**
+   * A file's syntax and type errors (and warnings), as the "Types" check reports
+   * them: not the ones that only say a package's types are not installed here.
+   */
+  function diagnosticsOf(name: string): ts.Diagnostic[] {
+    return [
+      ...service.getSyntacticDiagnostics(name),
+      ...service.getSemanticDiagnostics(name),
+    ].filter(
+      (d) =>
+        d.start !== undefined &&
+        d.category !== ts.DiagnosticCategory.Suggestion &&
+        d.category !== ts.DiagnosticCategory.Message &&
+        !missingPackageTypes(d, ts.flattenDiagnosticMessageText(d.messageText, " ")),
+    );
+  }
+
   return {
     update(files, libs, next) {
       options = next;
@@ -389,17 +440,7 @@ export function createTsService(ts: Ts): TsService {
     problems(path) {
       const name = `/${path}`;
       if (!texts.has(name)) return [];
-      const found = [
-        ...service.getSyntacticDiagnostics(name),
-        ...service.getSemanticDiagnostics(name),
-      ];
-      return found
-        .filter(
-          (d) =>
-            d.start !== undefined &&
-            d.category !== ts.DiagnosticCategory.Suggestion &&
-            d.category !== ts.DiagnosticCategory.Message,
-        )
+      return diagnosticsOf(name)
         .slice(0, MAX_PROBLEMS)
         .map((d, i) => ({
           start: d.start!,
@@ -416,6 +457,40 @@ export function createTsService(ts: Ts): TsService {
             return fixes.length ? { fixes } : {};
           })(),
         }));
+    },
+
+    projectProblems() {
+      const program = service.getProgram();
+      const out: ProjectProblems = { files: [], errors: 0, warnings: 0, truncated: false };
+      let listed = 0;
+      for (const name of [...roots].sort()) {
+        const found = diagnosticsOf(name);
+        if (found.length === 0) continue;
+        const file = program?.getSourceFile(name);
+        const problems: ProjectProblem[] = [];
+        for (const d of found) {
+          const severity = d.category === ts.DiagnosticCategory.Warning ? "warning" : "error";
+          if (severity === "error") out.errors += 1;
+          else out.warnings += 1;
+          if (listed >= MAX_PROJECT_PROBLEMS || !file) {
+            out.truncated ||= listed >= MAX_PROJECT_PROBLEMS;
+            continue;
+          }
+          listed += 1;
+          const at = file.getLineAndCharacterOfPosition(d.start!);
+          problems.push({
+            start: d.start!,
+            length: Math.max(1, d.length ?? 1),
+            line: at.line + 1,
+            col: at.character,
+            message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+            severity,
+            code: `TS${d.code}`,
+          });
+        }
+        if (problems.length) out.files.push({ path: name.slice(1), problems });
+      }
+      return out;
     },
 
     references(path, offset) {

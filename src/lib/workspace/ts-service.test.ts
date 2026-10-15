@@ -10,6 +10,7 @@ import {
   applyRename,
   createTsService,
   importsKeepExtension,
+  MAX_PROJECT_PROBLEMS,
   renameProblem,
   serviceUnavailable,
 } from "./ts-service.ts";
@@ -214,6 +215,83 @@ test("the open file's problems are the type errors the check would report, at th
   assert.ok(problems.every((p) => p.severity === "error"));
   assert.deepEqual(service.problems("src/store.ts"), [], "a clean file has none");
   assert.deepEqual(service.problems("src/missing.ts"), []);
+});
+
+test("the project's problems: every file with errors, by line, and a clean project has none", () => {
+  const use =
+    'import { listTasks } from "./store";\n\nexport const n: number = listTasks(0, 10);\nlistTasks("a");\n';
+  const broken = "export const a = (1 + ;\n";
+  const { service, update } = serviceFor({ ...files, "src/use.ts": use, "src/broken.ts": broken });
+  const found = service.projectProblems();
+  assert.deepEqual(
+    found.files.map((f) => [f.path, f.problems.map((p) => [p.code, p.line, p.col])]),
+    [
+      ["src/broken.ts", [["TS1109", 1, 22]]],
+      [
+        "src/use.ts",
+        [
+          ["TS2322", 3, 13],
+          ["TS2554", 4, 0],
+        ],
+      ],
+    ],
+  );
+  assert.equal(found.errors, 3);
+  assert.equal(found.warnings, 0);
+  assert.equal(found.truncated, false);
+  assert.match(
+    found.files[1]!.problems[0]!.message,
+    /Type 'Task\[\]' is not assignable to type 'number'/,
+  );
+  assert.ok(!("fixes" in found.files[1]!.problems[0]!), "the panel does not work out fixes");
+
+  update(files);
+  assert.deepEqual(service.projectProblems(), {
+    files: [],
+    errors: 0,
+    warnings: 0,
+    truncated: false,
+  });
+});
+
+test("a package whose types are not installed here is not a problem, as in the Types check; a missing file is", () => {
+  const server = [
+    'import { createServer } from "node:http";',
+    'import { describe } from "vitest";',
+    'import { gone } from "./gone";',
+    "",
+    "export const port = Number(process.env.PORT ?? 3000);",
+    "export const s = createServer();",
+    "describe;",
+    "gone;",
+    "",
+  ].join("\n");
+  const { service } = serviceFor({ ...files, "src/server.ts": server });
+  assert.deepEqual(
+    service.problems("src/server.ts").map((p) => p.code),
+    ["TS2307"],
+  );
+  assert.match(service.problems("src/server.ts")[0]!.message, /'\.\/gone'/);
+  const found = service.projectProblems();
+  assert.equal(found.errors, 1);
+  assert.deepEqual(
+    found.files.map((f) => f.path),
+    ["src/server.ts"],
+  );
+});
+
+test("past the listing cap, the counts stay whole and the list says it stopped", () => {
+  const many = Array.from({ length: 260 }, (_, i) => `export const v${i}: number = "x";`).join(
+    "\n",
+  );
+  const { service } = serviceFor({ ...files, "src/a.ts": many, "src/b.ts": many });
+  const found = service.projectProblems();
+  assert.equal(found.errors, 520);
+  assert.equal(found.truncated, true);
+  assert.equal(
+    found.files.reduce((n, f) => n + f.problems.length, 0),
+    MAX_PROJECT_PROBLEMS,
+  );
 });
 
 test("a syntax error is a problem too, where the parser stopped", () => {

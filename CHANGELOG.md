@@ -9,6 +9,13 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Add Aperture to Cursor or VS Code in one click. After you make an agent
+  token in Settings → Agents (or on the Bot page's Agents tab), Add to Cursor
+  and Add to VS Code open the editor with Aperture's MCP server and the token
+  filled in, for you to confirm. They are the editors' own links, so the token
+  goes straight to the app on your computer and never to a website. The setups
+  below now include VS Code's `.vscode/mcp.json` too.
+  ([#96](https://github.com/Hankaws/aperture/pull/96))
 - A Problems panel for the whole project. Ctrl/⌘+Shift+M, the Problems button
   in the file sidebar, or the status bar's type-error count lists every
   TypeScript error in the project by file, with its code and line, and checks

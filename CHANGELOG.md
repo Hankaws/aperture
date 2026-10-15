@@ -250,6 +250,13 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- Aperture's MCP server lets an agent or a registry such as Smithery see
+  what it offers without a token: `initialize`, `ping` and `tools/list`
+  answer anyone, with the same `check_change` description for everyone and
+  nothing from any account. `tools/call` still needs an agent token, and
+  without one gets a 401 with a JSON-RPC error that says where to make one; a
+  revoked or mistyped token is told it is not valid instead.
+  ([#93](https://github.com/Hankaws/aperture/pull/93))
 - The Agent Check workflow on the Bot page's Check tab, on the landing page
   and in the action's README uses `hankaws/aperture-agent-check@v1.2`, the
   release with `baseline` and `baseline-dir`. Both say that a GitHub-hosted

@@ -5,6 +5,11 @@
  *
  * Pure: the route (`src/routes/api/mcp.ts`) signs the caller in and passes the
  * checker and the rate limit in, so tests drive this directly.
+ *
+ * Discovery is open: `initialize`, `ping` and `tools/list` answer without a
+ * token, so a registry can list the tool. They return the same static text
+ * for everyone and touch no account. Everything else, `tools/call` above all,
+ * needs an agent token (see `needsToken`).
  */
 import type { CheckRow } from "../workspace/checks.ts";
 
@@ -106,6 +111,21 @@ export const CHECK_TOOL = {
 
 const NOT_RUN = ["tests: run the project's tests yourself", "page preview"];
 
+/**
+ * Methods anyone may call without a token. Each answers from constants in this
+ * file and never reads an account; the list methods Aperture has no use for
+ * just answer "Method not found". Anything not named here needs a token.
+ */
+export const OPEN_METHODS: ReadonlySet<string> = new Set([
+  "initialize",
+  "notifications/initialized",
+  "ping",
+  "tools/list",
+  "prompts/list",
+  "resources/list",
+  "resources/templates/list",
+]);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -204,6 +224,37 @@ export function checkResult(rows: CheckRow[], changed: number) {
   };
 }
 
+/**
+ * Whether a request body (one message or a batch) needs an agent token: true
+ * when any message in it names a method outside `OPEN_METHODS`. A batch is
+ * judged whole, so an open method cannot carry a `tools/call` in with it.
+ * Messages with no method (garbage, responses) do no work and need none.
+ */
+export function needsToken(body: unknown): boolean {
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.some(
+    (message) =>
+      isRecord(message) && typeof message.method === "string" && !OPEN_METHODS.has(message.method),
+  );
+}
+
+/**
+ * The JSON-RPC error a 401 carries: id of the message, or null for a batch.
+ * `presented` says a Bearer token was sent but matched no account (revoked,
+ * mistyped, or from another Aperture), which is a different fix from sending none.
+ */
+export function tokenRequired(body: unknown, presented = false): RpcResponse {
+  const id =
+    isRecord(body) && (typeof body.id === "string" || typeof body.id === "number") ? body.id : null;
+  return failure(
+    id,
+    -32001,
+    presented
+      ? "That agent token is not valid: it was revoked, or it is mistyped. Make a new one in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>."
+      : "This call needs an agent token. Make one in Aperture under Settings → Agents → Connect an agent, and send it as Authorization: Bearer <token>. initialize, ping and tools/list work without one.",
+  );
+}
+
 function toolError(message: string) {
   return { content: [{ type: "text", text: message }], isError: true };
 }
@@ -275,4 +326,37 @@ export async function handleMessage(
     default:
       return failure(id, -32601, `Method not found: ${message.method.slice(0, 80)}`);
   }
+}
+
+/** What the route sends back: a status and a JSON body, or no body (202). */
+export type Served = { status: number; body: unknown };
+
+/**
+ * Answers a parsed request body, single or batch. `signIn` resolves the
+ * caller's agent token to an account and is only asked when the body needs
+ * one; `contextFor` builds the server context for that account (null when
+ * the body is all open methods). Without an account, a body that needs one
+ * gets 401 and nothing in it runs, so a batch cannot mix a `tools/call` in.
+ * `presented` (a Bearer token was sent) picks the 401's wording.
+ */
+export async function serve(
+  body: unknown,
+  signIn: () => Promise<string | null>,
+  contextFor: (userId: string | null) => ServerContext,
+  presented = false,
+): Promise<Served> {
+  let userId: string | null = null;
+  if (needsToken(body)) {
+    userId = await signIn();
+    if (!userId) return { status: 401, body: tokenRequired(body, presented) };
+  }
+  const ctx = contextFor(userId);
+  if (Array.isArray(body)) {
+    const replies = (
+      await Promise.all(body.slice(0, 20).map((message) => handleMessage(message, ctx)))
+    ).filter(Boolean);
+    return replies.length > 0 ? { status: 200, body: replies } : { status: 202, body: null };
+  }
+  const answer = await handleMessage(body, ctx);
+  return answer ? { status: 200, body: answer } : { status: 202, body: null };
 }

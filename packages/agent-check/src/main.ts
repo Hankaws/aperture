@@ -58,7 +58,7 @@ function hereDir(): string {
 }
 
 /** The compiler's library files: beside the bundle in the action, from node_modules otherwise. */
-function libReader(): (name: string) => string | undefined {
+export function libReader(): (name: string) => string | undefined {
   const bundled = join(hereDir(), "lib");
   let dir = bundled;
   if (!existsSync(join(bundled, "lib.d.ts"))) {

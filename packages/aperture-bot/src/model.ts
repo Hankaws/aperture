@@ -12,6 +12,8 @@ import {
 import type { LoopHost, ScriptOutcome } from "../../../src/lib/agent/loop.ts";
 import type { AgentToolDef } from "../../../src/lib/agent/tools.ts";
 import { tsParseCheck } from "../../../src/lib/workspace/ts-parse.ts";
+import { libFilesFor } from "../../../src/lib/workspace/tsc-core.ts";
+import { libReader, RUNNER_TSC_LIMITS } from "../../agent-check/src/main.ts";
 import { retryBusy, retryStale } from "./retry.ts";
 
 export type Model = (
@@ -86,6 +88,16 @@ export function runnerHost(
     parser: async () => {
       const mod = await import("typescript");
       return tsParseCheck(mod.default ?? mod);
+    },
+    language: async () => {
+      const mod = await import("typescript");
+      const ts = mod.default ?? mod;
+      const readLib = libReader();
+      return {
+        ts,
+        libs: async (options) => libFilesFor(ts, options, readLib),
+        limits: RUNNER_TSC_LIMITS,
+      };
     },
   };
 }

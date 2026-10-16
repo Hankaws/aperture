@@ -228,7 +228,12 @@ function useStageHooks(files: Record<string, string>, edits: ProposedEdit[]): Ho
 const ICON = { pass: Check, fail: X, warn: TriangleAlert, skip: Minus, running: LoaderCircle } as const;
 const SPOKEN = { pass: "passed", fail: "failed", warn: "failing before this change", skip: "not run", running: "running" } as const;
 
-function Chip({
+/**
+ * One check, one row: what it checked and what it found. A red or amber row's
+ * reason is written out in full; the others keep to one line (all of it on
+ * hover). A row with output or a file to open is a button.
+ */
+function CheckRowItem({
   row,
   expanded,
   onClick,
@@ -238,27 +243,56 @@ function Chip({
   onClick?: () => void;
 }) {
   const Icon = ICON[row.status];
+  const problem = row.status === "fail" || row.status === "warn";
   return (
-    <li>
+    // On a phone, passing and skipped rows wait behind "Show all": the diff needs the room.
+    <li className={cn(!problem && row.status !== "running" && "max-md:group-data-[all=off]:hidden")}>
       <button
         type="button"
         disabled={!onClick}
-        title={row.detail}
+        title={problem ? undefined : row.detail}
         aria-label={`${row.label}: ${SPOKEN[row.status]}. ${row.detail}`}
         aria-expanded={expanded}
         data-check={row.id}
         data-status={row.status}
         onClick={onClick}
         className={cn(
-          "flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] disabled:cursor-default",
-          row.status === "pass" && "border-ok/30 bg-ok/10 text-ok",
-          row.status === "fail" && "border-danger/40 bg-danger/10 text-danger enabled:hover:bg-danger/15",
-          row.status === "warn" && "border-warn/40 bg-warn/10 text-warn enabled:hover:bg-warn/15",
-          (row.status === "skip" || row.status === "running") && "border-border text-subtle",
+          "grid w-full grid-cols-[0.875rem_minmax(0,1fr)] items-baseline gap-x-2 rounded-sm px-1 py-0.5 text-left text-[12px] leading-snug disabled:cursor-default md:grid-cols-[0.875rem_8.5rem_minmax(0,1fr)]",
+          "enabled:hover:bg-bg",
         )}
       >
-        <Icon className={cn("size-3 shrink-0", row.status === "running" && "animate-spin")} aria-hidden />
-        <span className="whitespace-nowrap">{row.label}</span>
+        <Icon
+          className={cn(
+            "size-3.5 translate-y-0.5 self-start",
+            row.status === "pass" && "text-ok",
+            row.status === "fail" && "text-danger",
+            row.status === "warn" && "text-warn",
+            (row.status === "skip" || row.status === "running") && "text-subtle",
+            row.status === "running" && "animate-spin",
+          )}
+          aria-hidden
+        />
+        <span
+          className={cn(
+            "truncate font-medium",
+            row.status === "fail" ? "text-danger" : row.status === "warn" ? "text-warn" : "text-fg",
+          )}
+        >
+          {row.label}
+          {expanded !== undefined && (
+            <span className="ml-1 font-normal text-subtle">{expanded ? "· hide output" : "· output"}</span>
+          )}
+        </span>
+        <span
+          className={cn(
+            "col-start-2 md:col-start-3",
+            problem
+              ? cn("font-mono break-words", row.status === "fail" ? "text-danger" : "text-warn", onClick && "underline-offset-2 hover:underline")
+              : "truncate text-muted",
+          )}
+        >
+          {row.detail}
+        </span>
       </button>
     </li>
   );
@@ -394,11 +428,9 @@ export function CheckResults({
     if (checkState === "clear" && useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(null);
   }, [checkState]);
   useEffect(() => () => useIdeUi.getState().setFailedAttempt(null), []);
-  // Every red and amber row says why, in full: the amber line is the most useful sentence on the screen.
-  const problems = useMemo(
-    () => [...rows.filter((r) => r.status === "fail"), ...rows.filter((r) => r.status === "warn")],
-    [rows],
-  );
+  // On a phone, the rows that passed or could not run fold away until asked for.
+  const [showAll, setShowAll] = useState(false);
+  const quiet = rows.filter((r) => r.status === "pass" || r.status === "skip").length;
   const outputs = useMemo(() => {
     const byRow: Record<string, string> = {};
     if (output.trim()) byRow.tests = output;
@@ -430,28 +462,45 @@ export function CheckResults({
   return (
     <div className="border-t border-border px-2.5 py-1.5">
       {header?.(verdict)}
-      <ul aria-label="Check results" className="flex flex-wrap items-center gap-1">
-        {rows.map((row) => (
-          <Chip
-            key={row.id}
-            row={row}
-            expanded={outputs[row.id] ? openOutput === row.id : undefined}
-            onClick={
-              outputs[row.id]
-                ? () => setOpenOutput((open) => (open === row.id ? null : row.id))
-                : row.status === "fail" && row.path
-                  ? () => {
-                      useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
-                      onOpen(row.path!, row.detail);
-                    }
-                  : undefined
-            }
-          />
-        ))}
-        <li className="font-mono text-[10px] text-subtle" title="Verification id. Apply recomputes this and waits if the files moved.">
-          {liveId.slice(0, 8)}
-        </li>
-      </ul>
+      <div className="group" data-all={showAll ? "on" : "off"}>
+        <ul aria-label="Check results" className="space-y-px">
+          {rows.map((row) => (
+            <CheckRowItem
+              key={row.id}
+              row={row}
+              expanded={outputs[row.id] ? openOutput === row.id : undefined}
+              onClick={
+                outputs[row.id]
+                  ? () => setOpenOutput((open) => (open === row.id ? null : row.id))
+                  : (row.status === "fail" || row.status === "warn") && row.path
+                    ? () => {
+                        useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
+                        onOpen(row.path!, row.detail);
+                      }
+                    : undefined
+              }
+            />
+          ))}
+        </ul>
+        <div className="mt-0.5 flex items-center gap-2 px-1 text-[11px] text-subtle">
+          {quiet > 0 && (
+            <button
+              type="button"
+              className="h-8 rounded-sm underline-offset-2 hover:text-fg hover:underline md:hidden"
+              aria-expanded={showAll}
+              onClick={() => setShowAll((on) => !on)}
+            >
+              {showAll ? "Show only what needs a look" : `Show all ${rows.length} checks`}
+            </button>
+          )}
+          <span
+            className="ml-auto font-mono text-[10px]"
+            title="Verification id. Apply recomputes this and waits if the files moved."
+          >
+            {liveId.slice(0, 8)}
+          </span>
+        </div>
+      </div>
       {compare && failedAttempt && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2" aria-label="Attempt 1 and this fix">
           <AttemptPane title="Attempt 1" rows={failedAttempt.rows} edits={failedAttempt.edits} />
@@ -459,42 +508,6 @@ export function CheckResults({
         </div>
       )}
       <ChecksExplainer />
-      {problems.length > 0 && (
-        <ul aria-label="Why" className="mt-1.5 space-y-1">
-          {problems.map((row) => {
-            const text = (
-              <>
-                <span className="font-medium">{row.label}</span>
-                <span aria-hidden> · </span>
-                {row.status === "fail" && <span className="sr-only">failed: </span>}
-                {row.detail}
-              </>
-            );
-            const tone = cn(
-              "block w-full text-left font-mono text-[12px] leading-snug break-words",
-              row.status === "warn" ? "text-warn" : "text-danger",
-            );
-            return (
-              <li key={row.id}>
-                {row.path ? (
-                  <button
-                    type="button"
-                    className={cn(tone, "cursor-pointer rounded-sm underline-offset-2 hover:underline")}
-                    onClick={() => {
-                      useIdeUi.getState().setLastCheck({ label: row.label, detail: row.detail });
-                      onOpen(row.path!, row.detail);
-                    }}
-                  >
-                    {text}
-                  </button>
-                ) : (
-                  <p className={tone}>{text}</p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
       {shownOutput && (
         <pre
           aria-label={openOutput === "tests" ? "Test output" : `Output of ${rows.find((row) => row.id === openOutput)?.label ?? "the hook"}`}

@@ -234,6 +234,7 @@ const WORKSPACE_SIZES = { files: 18, editor: 54, agent: 28 } as const;
 const WORKSPACE_ORDER = ["files", "editor", "agent"] as const;
 
 export function IdeShell() {
+  const workspaceName = useWorkspace((s) => s.name);
   const sidebarOpen = useIdeUi((s) => s.sidebarOpen);
   const chatOpen = useIdeUi((s) => s.chatOpen);
   const mobilePane = useIdeUi((s) => s.mobilePane);
@@ -405,13 +406,15 @@ export function IdeShell() {
       <div className="ide-shell">
         <TitleBar />
 
-        <div
+        <main
           className="ide-workspace"
           data-pane={mobilePane}
           data-files={sidebarOpen ? "on" : "off"}
           data-agent={chatOpen ? "on" : "off"}
           style={!desktop && keyboardInset ? { paddingBottom: keyboardInset } : undefined}
         >
+          {/* The page's one heading, for screen readers: the title bar already shows the project. */}
+          <h1 className="sr-only">{workspaceName} in the Aperture editor</h1>
           {/* Mounted in the browser only, once the saved layout is known: the
               panel library can't reorder panels as they first mount, so they
               start in the saved order at the saved sizes. Nothing in them works
@@ -485,7 +488,7 @@ export function IdeShell() {
               </button>
             ))}
           </nav>
-        </div>
+        </main>
 
         <StatusBar aiLabel={aiLabel} />
       </div>

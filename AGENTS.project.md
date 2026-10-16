@@ -454,6 +454,25 @@ one that is not, `getEditsForRefactor` throws a Debug failure, which
 `refactorEdits` turns into null. Refactors pass `allowTextChangesInNewFiles`,
 without which "Move to a new file" is never offered.
 
+## The check strip: verdict, rows, and the phone's Apply bar
+
+Above the diff, `review-strip.tsx`'s `VerdictBar` says the verdict first
+(`checkVerdict` in `verdict.ts`) with the one Apply; under it,
+`check-results.tsx` lists one row per check (`CheckRowItem`): label and its
+detail, a red or amber row's reason in full. Each row keeps `data-check`,
+`data-status` and the spoken `aria-label` ("Types: passed. …"), which
+`scripts/e2e-demo.mjs` and `scripts/demo-clip.mjs` read.
+
+- On a phone (below 768px) rows that passed or could not run hide until
+  "Show all N checks" (`data-all` on the list's wrapper, a Tailwind group
+  variant), and `VerdictBar` portals `ApplyDock` into the slot `CodeChrome`
+  puts under the code (`ApplyDockContext`, `apply-dock.ts`). The top Apply
+  hides there and the top headline turns `sr-only`, so the page has one
+  visible Apply and one status. The slot is `md:hidden`, so wider screens
+  keep the Apply beside the diff.
+- `/app`'s workspace is the page's `<main>`, with an `sr-only` `<h1>` naming
+  the project.
+
 ## Renaming and moving a file
 
 The pencil on a file's row in the tree opens `RenameFileDialog`

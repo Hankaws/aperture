@@ -130,8 +130,8 @@ try {
     for (const button of applyButtons) if (await button.isVisible()) visibleApply += 1;
     check(visibleApply === 1, `one Apply on screen, not three (${visibleApply})`);
     check(
-      /Already failing before this change: [^\n]{80,}/.test(await page.locator('ul[aria-label="Why"]').innerText()),
-      "the amber explanation is shown in full, not cut to one line",
+      /Already failing before this change: [^\n]{80,}/.test(await page.locator('[data-check="tests"]').innerText()),
+      "the amber explanation is shown in full on its row, not cut to one line",
     );
     await page.getByRole("button", { name: /^(Apply \d+ files?|Keep this copy|Apply anyway)$/ }).first().click();
     const revert = page.getByRole("button", { name: "Revert" }).first();

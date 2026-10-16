@@ -495,6 +495,12 @@ writes the edits (`movedTexts`). Undo puts all of it back.
   imports were not updated, and why.
 - Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
 
+Deleting from the tree goes through `deleteFileWithUndo`
+(`src/lib/workspace/delete-file.ts`): one checkpoint, then the store's
+`deleteFile`, then a toast with Undo (which reopens the tab if it was open).
+It refuses a file with a staged change. The store's `deleteFile` itself takes
+no checkpoint: call it directly only for files Aperture manages itself.
+
 ## The editor tour
 
 `src/components/site/editor-features.ts` lists the editor's TypeScript help

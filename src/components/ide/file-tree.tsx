@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn, extOf } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pendingPathKey } from "@/lib/workspace/edits";
+import { deleteFileWithUndo } from "@/lib/workspace/delete-file";
 import { useIdeUi } from "@/lib/ui-store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
@@ -70,7 +71,6 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
   const dirtyPaths = useWorkspace((s) => s.dirtyPaths);
   const openPreview = useWorkspace((s) => s.openPreview);
   const openFile = useWorkspace((s) => s.openFile);
-  const deleteFile = useWorkspace((s) => s.deleteFile);
   const [open, setOpen] = useState(depth < 1);
   const isFolder = Boolean(node.children);
   const active = activePath === node.path;
@@ -151,7 +151,7 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
               "flex size-9 items-center justify-center rounded-md text-subtle hover:text-danger md:size-7 md:opacity-0 md:group-hover:opacity-100",
               active ? "max-md:flex" : "max-md:hidden",
             )}
-            onClick={() => deleteFile(node.path)}
+            onClick={() => deleteFileWithUndo(node.path)}
           >
             <Trash2 className="size-3.5" />
           </button>

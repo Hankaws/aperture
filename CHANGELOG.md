@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Deleting a file can be undone. The trash icon in the file tree used to
+  delete at once with no way back; now the toast says what went and offers
+  Undo, and "Undo last" takes it back too, with its text and its tab. A file
+  with a staged change is not deleted until the change is applied or
+  rejected.
+  ([#104](https://github.com/Hankaws/aperture/pull/104))
 - The checks read as a list. Each check has its own row with what it found,
   and a red or amber row gives its reason in full (the separate "why" list
   is gone). On a phone, the rows that passed fold away behind "Show all", so

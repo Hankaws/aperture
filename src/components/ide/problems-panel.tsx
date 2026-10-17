@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleCheck, CircleX, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { CircleCheck, CircleX, LoaderCircle, TriangleAlert, Wand2, X } from "lucide-react";
+import { toast } from "sonner";
 import { useIdeUi } from "@/lib/ui-store";
 import { scheduleKeyedRun } from "@/lib/use-keyed-async";
 import { useWorkspace } from "@/lib/workspace/store";
-import type { ProjectProblem, ProjectProblems } from "@/lib/workspace/ts-service";
+import { applyQuickFix } from "@/lib/workspace/quick-fix";
+import type { FixAllAction, ProjectProblem, ProjectProblems } from "@/lib/workspace/ts-service";
 
 type Found = ProjectProblems | { unavailable: string } | null;
 
@@ -42,6 +44,40 @@ function ProblemRow({ path, problem }: { path: string; problem: ProjectProblem }
         </span>
       </button>
     </li>
+  );
+}
+
+/**
+ * One of TypeScript's "fix all" actions for a file, such as adding every
+ * missing import: written like a quick fix, with one Undo.
+ */
+function FixAllButton({ path, action }: { path: string; action: FixAllAction }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      title={`${action.description} (${action.count} problems in this file), with one Undo`}
+      onClick={async () => {
+        setBusy(true);
+        const basis = useWorkspace.getState().files;
+        const { tsFixAll } = await import("@/lib/workspace/tsc");
+        const changes = await tsFixAll(basis, path, action.fixId);
+        setBusy(false);
+        if ("unavailable" in changes) return toast.info(changes.unavailable);
+        applyQuickFix({ description: `${action.description} in ${path}`, changes }, basis);
+      }}
+      className="ml-3 flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-left text-[11px] text-accent hover:bg-elevated disabled:opacity-60"
+    >
+      {busy ? (
+        <LoaderCircle className="size-3 shrink-0 animate-spin" aria-hidden />
+      ) : (
+        <Wand2 className="size-3 shrink-0" aria-hidden />
+      )}
+      <span className="truncate">
+        {action.description} ({action.count})
+      </span>
+    </button>
   );
 }
 
@@ -125,7 +161,7 @@ export function ProblemsPanel() {
         </div>
       )}
       <ul className="aperture-scroll min-h-0 overflow-y-auto p-1" aria-label="Problems by file">
-        {result?.files.map(({ path, problems }) => {
+        {result?.files.map(({ path, problems, fixAll }) => {
           const slash = path.lastIndexOf("/");
           return (
             <li key={path} className="mb-1">
@@ -138,6 +174,9 @@ export function ProblemsPanel() {
                   {problems.length}
                 </span>
               </p>
+              {fixAll?.map((action) => (
+                <FixAllButton key={action.fixId} path={path} action={action} />
+              ))}
               <ul>
                 {problems.map((problem) => (
                   <ProblemRow

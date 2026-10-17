@@ -165,7 +165,7 @@ function askTs(
   text: string,
   offset: number,
   signal?: AbortSignal,
-  extra: Pick<TsAsk, "end" | "refactor" | "to"> = {},
+  extra: Pick<TsAsk, "end" | "refactor" | "to" | "fixId"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
     if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
@@ -331,6 +331,18 @@ export async function tsRefactorEdits(
     refactor: { name: refactor.refactor, action: refactor.action },
   });
   return answer && "refactor" in answer ? answer.refactor : null;
+}
+
+/** Every fix of one kind in `path` at once (Problems' "Fix all"); why not, when TypeScript cannot. */
+export async function tsFixAll(
+  files: Record<string, string>,
+  path: string,
+  fixId: string,
+): Promise<FileChange[] | { unavailable: string }> {
+  const answer = await askTs("fixAll", files, path, files[path] ?? "", 0, undefined, { fixId });
+  if (answer && "unavailable" in answer) return { unavailable: answer.unavailable };
+  if (answer && "fixAll" in answer && answer.fixAll) return answer.fixAll;
+  return { unavailable: "TypeScript could not fix these here any more." };
 }
 
 /** The edits that keep every import working once `from` moves to `to`; why not, when TypeScript cannot say. */

@@ -541,3 +541,28 @@ test("fileRenameEdits keeps the project's .ts extensions, and knows no file it d
   assert.equal(after?.["src/b.ts"], 'import { a } from "./first.ts";\n\nexport const b = a + 1;\n');
   assert.equal(service.fileRenameEdits("src/missing.ts", "src/x.ts"), null);
 });
+
+test("Problems offer Fix all for a kind of error that turns up twice, and it fixes every one", () => {
+  const files = {
+    "src/util.ts":
+      "export const clamp = (n: number) => Math.min(n, 10);\nexport const twice = (n: number) => n * 2;\n",
+    "src/main.ts": "export const a = clamp(12);\nexport const b = twice(3);\n",
+    "src/one.ts": "export const c = clamp(1);\n",
+  };
+  const { service } = serviceFor(files);
+  const found = service.projectProblems();
+  const main = found.files.find((f) => f.path === "src/main.ts");
+  assert.equal(main?.problems.length, 2);
+  const action = main?.fixAll?.find((a) => /missing imports/i.test(a.description));
+  assert.ok(action, JSON.stringify(main?.fixAll));
+  assert.equal(action.count, 2);
+  // One missing import is a quick fix, not a "fix all".
+  assert.equal(found.files.find((f) => f.path === "src/one.ts")?.fixAll, undefined);
+
+  const changes = service.fixAllEdits("src/main.ts", action.fixId);
+  assert.ok(changes);
+  const after = { ...files, ...applyFileChanges(files, changes) };
+  assert.match(after["src/main.ts"], /import \{ clamp, twice \} from "\.\/util";/);
+  assert.deepEqual(serviceFor(after).service.problems("src/main.ts"), []);
+  assert.equal(service.fixAllEdits("src/missing.ts", action.fixId), null);
+});

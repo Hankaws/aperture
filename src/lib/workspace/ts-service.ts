@@ -160,9 +160,15 @@ export type ProjectProblem = {
   code: string;
 };
 
+/** One of TypeScript's "fix all" actions for a file: "Add all missing imports", applying to `count` problems. */
+export type FixAllAction = { fixId: string; description: string; count: number };
+
 export type ProjectProblems = {
-  /** Files with problems, in path order; each file's problems in the order they appear. */
-  files: Array<{ path: string; problems: ProjectProblem[] }>;
+  /**
+   * Files with problems, in path order; each file's problems in the order they
+   * appear, and the fix-all actions that apply to two or more of them.
+   */
+  files: Array<{ path: string; problems: ProjectProblem[]; fixAll?: FixAllAction[] }>;
   errors: number;
   warnings: number;
   /** Past `MAX_PROJECT_PROBLEMS`, the counts are whole but the list stops. */
@@ -171,6 +177,9 @@ export type ProjectProblems = {
 
 /** The most problems listed for the whole project; the counts go on past it. */
 export const MAX_PROJECT_PROBLEMS = 500;
+
+/** The most fix lookups one Problems answer makes, to find what "Fix all" can do: each costs a type check of a spot. */
+export const MAX_FIX_ALL_LOOKUPS = 40;
 
 /**
  * The files `changes` touch, with their new text: each file's edits applied
@@ -223,6 +232,8 @@ export type TsService = {
   signatureHelp(path: string, offset: number): SignatureHelp | null;
   /** The edits that remove the file's unused imports and sort the rest; none when they already are. */
   organizeImports(path: string): FileChange[];
+  /** Every fix of one kind in the file at once (a `FixAllAction`'s `fixId`); null when TypeScript cannot. */
+  fixAllEdits(path: string, fixId: string): FileChange[] | null;
   /**
    * The edits that keep the project's imports working once `from` is `to`: in
    * the files that import it, and in its own relative imports. Null when
@@ -576,6 +587,38 @@ export function createTsService(ts: Ts): TsService {
       return changes;
     },
 
+    fixAllEdits(path, fixId) {
+      const name = `/${path}`;
+      if (!texts.has(name)) return null;
+      let found: ts.CombinedCodeActions;
+      try {
+        found = service.getCombinedCodeFix(
+          { type: "file", fileName: name },
+          fixId,
+          format,
+          preferences,
+        );
+      } catch {
+        return null;
+      }
+      // Only edits to files already in the project: one that makes a file is left to the person.
+      if (
+        found.changes.some((c) => c.isNewFile || !inProject(c.fileName) || !texts.has(c.fileName))
+      )
+        return null;
+      const changes = found.changes
+        .map((c) => ({
+          path: c.fileName.slice(1),
+          edits: c.textChanges.map((t) => ({
+            start: t.span.start,
+            length: t.span.length,
+            newText: t.newText,
+          })),
+        }))
+        .filter((c) => c.edits.length > 0);
+      return changes.length ? changes : null;
+    },
+
     fileRenameEdits(from, to) {
       const name = `/${from}`;
       if (!texts.has(name)) return null;
@@ -673,6 +716,8 @@ export function createTsService(ts: Ts): TsService {
       const program = service.getProgram();
       const out: ProjectProblems = { files: [], errors: 0, warnings: 0, truncated: false };
       let listed = 0;
+      let lookups = 0;
+      const fixable = new Set(ts.getSupportedCodeFixes());
       for (const name of [...roots].sort()) {
         const found = diagnosticsOf(name);
         if (found.length === 0) continue;
@@ -698,7 +743,46 @@ export function createTsService(ts: Ts): TsService {
             code: `TS${d.code}`,
           });
         }
-        if (problems.length) out.files.push({ path: name.slice(1), problems });
+        if (problems.length === 0) continue;
+        // What "Fix all" can do here: asked once per kind of problem that turns up twice or more.
+        const byCode = new Map<string, ProjectProblem[]>();
+        for (const p of problems) byCode.set(p.code, [...(byCode.get(p.code) ?? []), p]);
+        const actions = new Map<string, FixAllAction>();
+        for (const [code, same] of byCode) {
+          const number = Number(code.slice(2));
+          if (same.length < 2 || !fixable.has(String(number)) || lookups >= MAX_FIX_ALL_LOOKUPS)
+            continue;
+          lookups += 1;
+          const first = same[0]!;
+          let found: readonly ts.CodeFixAction[] = [];
+          try {
+            found = service.getCodeFixesAtPosition(
+              name,
+              first.start,
+              first.start + first.length,
+              [number],
+              format,
+              preferences,
+            );
+          } catch {
+            continue;
+          }
+          for (const fix of found) {
+            if (!fix.fixId || !fix.fixAllDescription) continue;
+            const id = String(fix.fixId);
+            const known = actions.get(id);
+            actions.set(id, {
+              fixId: id,
+              description: fix.fixAllDescription,
+              count: (known?.count ?? 0) + same.length,
+            });
+          }
+        }
+        out.files.push({
+          path: name.slice(1),
+          problems,
+          ...(actions.size ? { fixAll: [...actions.values()] } : {}),
+        });
       }
       return out;
     },

@@ -9,6 +9,10 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Fix all in the Problems panel. When a kind of error turns up two or more
+  times in a file, its group offers TypeScript's "fix all" for it, such as
+  "Add all missing imports (5)", and writes every fix at once with one Undo.
+  ([#105](https://github.com/Hankaws/aperture/pull/105))
 - Deleting a file can be undone. The trash icon in the file tree used to
   delete at once with no way back; now the toast says what went and offers
   Undo, and "Undo last" takes it back too, with its text and its tab. A file

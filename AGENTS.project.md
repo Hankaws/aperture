@@ -535,6 +535,14 @@ changing. `MAX_PROJECT_PROBLEMS` caps the list; the counts stay whole.
 `diagnosticsOf` in `ts-service.ts` drops `missingPackageTypes` exactly as
 `checkProject` does, so the panel, the underlines and the Types check agree.
 
+- **Fix all.** For each file, `projectProblems` asks `getCodeFixesAtPosition`
+  once per error code that turns up twice or more (and that TypeScript has
+  fixes for, `getSupportedCodeFixes`), at most `MAX_FIX_ALL_LOOKUPS` per answer,
+  and lists the actions with a `fixId` as `fixAll` ("Add all missing imports",
+  with how many problems it covers). The button asks the worker `fixAll`
+  (`fixAllEdits`: `getCombinedCodeFix` on the file; null when it would make a
+  file) and writes it with `applyQuickFix`: one checkpoint, Undo on the toast.
+
 ## Runs and the agent board
 
 A run is a request and every turn that answers it. `submitAgent` stamps each

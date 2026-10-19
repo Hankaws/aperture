@@ -6,6 +6,7 @@ import type { CompletionCfg } from "./complete.server";
 import type { ModelSource } from "@/lib/billing/plans";
 import type { WorkerSpec } from "./crew";
 import type { ProposedEdit } from "@/lib/workspace/types";
+import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
 
 /** `userId` lets a worker run the project's scripts, counted against that account. */
 export type WorkerCfg = CompletionCfg & { hosted: boolean; cents: number; userId?: string };
@@ -118,10 +119,8 @@ export async function runComposerStreaming(
   let text = merged.text;
 
   if (reviewers.length) {
-    const files = input.files.map((file) => {
-      const edit = edits.find((row) => row.path === file.path);
-      return edit ? { ...file, content: edit.newText } : file;
-    });
+    const staged = overlayEdits(Object.fromEntries(input.files.map((file) => [file.path, file.content])), edits);
+    const files = Object.entries(staged).map(([path, content]) => ({ path, content }));
     for (let i = 0; i < reviewers.length; i += 1) {
       if (signal?.aborted) break;
       const worker = reviewers[i]!;

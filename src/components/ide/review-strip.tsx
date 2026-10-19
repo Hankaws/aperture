@@ -251,6 +251,12 @@ export function ReviewStrip() {
                 <span className={cn("truncate font-mono text-[12px]", active ? "text-fg" : "text-muted")}>
                   {basename(edit.path)}
                 </span>
+                {/* A move is two rows with one name: say which one goes and which one comes. */}
+                {edit.deleted ? (
+                  <span className="shrink-0 text-[10px] text-subtle">removed</span>
+                ) : (
+                  files[edit.path] === undefined && <span className="shrink-0 text-[10px] text-subtle">new file</span>
+                )}
                 <span className="hidden truncate text-[11px] text-subtle sm:inline">{edit.description}</span>
                 {blocked && (
                   <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-accent">

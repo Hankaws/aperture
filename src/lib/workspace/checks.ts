@@ -235,7 +235,8 @@ export function changeChecks(input: {
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
-  const checkable = [...new Set(edits.map((e) => e.path).filter(isCheckablePath))];
+  // A removed file has no text to check; what imported it is judged in the files that do.
+  const checkable = [...new Set(edits.filter((e) => !e.deleted).map((e) => e.path).filter(isCheckablePath))];
   const scripts = checkable.filter(isScriptPath);
   const parse = input.parse ?? (input.tsc?.state === "done" ? tscParseCheck(input.tsc) : undefined);
 

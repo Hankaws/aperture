@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cssIssues, htmlIssues, previewNotesForEdit } from "./preview-check.ts";
+import { cssIssues, htmlIssues, mergeEdits, previewIssues, previewNotesForEdit } from "./preview-check.ts";
 
 test("htmlIssues flags unclosed tags", () => {
   const issues = htmlIssues("<div><p>hi");
@@ -106,4 +106,14 @@ test("a page edit that fixes a broken page gets no notes", () => {
   assert.deepEqual(previewNotesForEdit(edit, files), []);
   // The edit, the files, and TypeScript's parser where it is loaded: no live-error parameter to pass stale errors through.
   assert.equal(previewNotesForEdit.length, 3, "no live-error parameter to pass stale errors through");
+});
+
+test("a removed file leaves the staged project, and is not checked as an empty file", () => {
+  const files = { "a.json": '{"x":1}', "b.ts": "export const b = 1;\n" };
+  const edits = [
+    { id: "1", path: "a.json", oldText: files["a.json"], newText: "", description: "Move", status: "pending" as const, deleted: true },
+    { id: "2", path: "c.json", oldText: "", newText: '{"x":1}', description: "Move", status: "pending" as const },
+  ];
+  assert.deepEqual(Object.keys(mergeEdits(files, edits)).sort(), ["b.ts", "c.json"]);
+  assert.deepEqual(previewIssues(files, edits), []);
 });

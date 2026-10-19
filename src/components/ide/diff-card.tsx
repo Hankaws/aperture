@@ -16,6 +16,7 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
   const [open, setOpen] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const pending = edit.status === "pending";
+  const created = useWorkspace((s) => pending && s.files[edit.path] === undefined);
   const checksOpen = useIdeUi((s) => s.checkHint?.state) === "clear";
   const running = useWorkspace((s) => s.agentRunning);
   const lines = lineDiff(edit.oldText, edit.newText).filter((l, i, arr) => {
@@ -62,6 +63,11 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
         >
           <FileDiff className="size-3.5 shrink-0 text-accent" />
           <span className="truncate font-mono text-[12px] text-fg">{edit.path}</span>
+          {edit.deleted ? (
+            <span className="shrink-0 text-[10px] text-subtle">removed</span>
+          ) : (
+            created && <span className="shrink-0 text-[10px] text-subtle">new file</span>
+          )}
           {notes.length > 0 && (
             <span className="flex items-center gap-1 text-[10px] text-accent">
               <MessageSquare className="size-3" />

@@ -99,7 +99,10 @@ export function issuesForText(path: string, text: string, parse?: ParseCheck): s
 
 export function mergeEdits(files: Record<string, string>, edits: ProposedEdit[]): Record<string, string> {
   const next = { ...files };
-  for (const edit of edits) next[edit.path] = edit.newText;
+  for (const edit of edits) {
+    if (edit.deleted) delete next[edit.path];
+    else next[edit.path] = edit.newText;
+  }
   return next;
 }
 
@@ -110,7 +113,7 @@ export function previewIssues(
 ): Array<{ path: string; issues: string[] }> {
   const snapshot = mergeEdits(files, edits);
   const out: Array<{ path: string; issues: string[] }> = [];
-  const paths = new Set(edits.filter((e) => isCheckablePath(e.path)).map((e) => e.path));
+  const paths = new Set(edits.filter((e) => !e.deleted && isCheckablePath(e.path)).map((e) => e.path));
   for (const path of paths) {
     const issues = issuesForText(path, snapshot[path] ?? "", parse);
     // Only worth resolving imports once the file itself parses: a broken parse

@@ -410,11 +410,11 @@ to probe the network.
 
 ## The agent asks TypeScript
 
-`find_references`, `find_symbol` and `rename_symbol` (`tools.ts`) and the recap's
+`find_references`, `find_symbol`, `rename_symbol` and `move_file` (`tools.ts`) and the recap's
 "Elsewhere:" line (`verify.ts`) use the editor's language service
 (`ts-service.ts`) through `src/lib/agent/code-intel.ts`. The loop asks a
-`CodeQuestion` (`references`, `rename`, or `elsewhere` for the recap's names,
-all in one message) and `answerCode` answers it from a service; where the
+`CodeQuestion` (`references`, `rename`, `symbols`, `move`, or `elsewhere` for
+the recap's names, all in one message) and `answerCode` answers it from a service; where the
 service lives is the host's:
 
 - In the process, from `LoopHost.language`: the server (`loop.server.ts`,
@@ -507,6 +507,31 @@ writes the edits (`movedTexts`). Undo puts all of it back.
   When TypeScript cannot answer, the file still moves and the toast says the
   imports were not updated, and why.
 - Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
+
+The agent moves a file with `move_file`, which stages what the tree's Rename
+writes instead of writing it: `planMove` (`code-intel.ts`, the `move`
+question) gives the moved file under its new path and every importer fixed,
+and the tool stages those as edits plus one for the old path with
+`deleted: true` (`ProposedEdit`). A non-TypeScript file, or a host without
+the compiler, moves with nothing else changed and the tool says so.
+
+- `deleted` is the only way a staged edit removes a file, and only
+  `move_file` sets it. Whatever reads staged edits must honour it: the
+  overlay (`mergeEdits` in `preview-check.ts`, which the checks, tsc and the
+  verify id use) drops the path, `applyOne` calls `deleteFile`, the loop's
+  `mergeEdits` drops a file created and moved on in the same run, saving
+  (`persist.ts`) and the server's guard keep it, a background run's rebase
+  calls a removed file changed since a conflict, and the bot removes the
+  file (`finalTexts` gives null; `commitFiles` adds with `-A`; `diffOf`
+  marks only files that are there, so git shows a rename).
+- The move's new path is the editor's only staged new file: `propose_edit`
+  still creates files only for the bot (`newFiles`). Apply all checks each
+  file among the rest of the change, so an import of the new path resolves.
+- The test-tampering rule pairs a removed test file with one the change
+  creates (`movedTests`) and judges the pair as one edit, so a move is not
+  "deletes … and its tests" but dropping a test on the way still is.
+- The diff card and the review strip mark the two halves "removed" and
+  "new file", and the recap lists the old path as removed.
 
 Deleting from the tree goes through `deleteFileWithUndo`
 (`src/lib/workspace/delete-file.ts`): one checkpoint, then the store's

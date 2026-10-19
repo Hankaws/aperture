@@ -98,12 +98,41 @@ export function widensTestScript(was: string, now: string): boolean {
   return added.length > 0 && added.every(isPathArg);
 }
 
+/**
+ * Test files the change moves: each one it removes, paired with a test file it
+ * creates, the same name first. The pair is judged as one edit, so a move is
+ * not read as deleting the tests.
+ */
+function movedTests(files: Record<string, string>, edits: Edit[]): Map<string, string> {
+  const created = edits
+    .filter((e) => files[e.path] === undefined && e.newText !== "" && isTestPath(e.path))
+    .map((e) => e.path);
+  const moves = new Map<string, string>();
+  const name = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+  for (const { path, newText } of edits) {
+    if (newText !== "" || !files[path] || !isTestPath(path) || !created.length) continue;
+    const at = Math.max(
+      0,
+      created.findIndex((other) => name(other) === name(path)),
+    );
+    moves.set(path, created.splice(at, 1)[0]!);
+  }
+  return moves;
+}
+
 /** What the change does to the tests, one clause each ("skips 1 test in tests/a.test.ts"); empty when nothing. */
 export function testTampering(files: Record<string, string>, edits: Edit[]): string[] {
   const found: string[] = [];
   const entryPoints = executables(files);
-  for (const { path, newText } of edits) {
-    const before = files[path] ?? "";
+  const moves = movedTests(files, edits);
+  const movedTo = new Set(moves.values());
+  for (const edit of edits) {
+    if (movedTo.has(edit.path)) continue;
+    // A test file moved is judged at its new path, against the text it had.
+    const to = moves.get(edit.path);
+    const path = to ?? edit.path;
+    const newText = to ? edits.find((e) => e.path === to)!.newText : edit.newText;
+    const before = files[edit.path] ?? "";
     if (path === "package.json" || path.endsWith("/package.json")) {
       const was = testScript(before);
       const now = testScript(newText);

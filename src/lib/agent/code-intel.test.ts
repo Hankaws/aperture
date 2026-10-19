@@ -10,6 +10,7 @@ import {
   askInProcess,
   codeIntel,
   nameOffsets,
+  planMove,
   planRename,
   referencesAnswer,
   symbolsAnswer,
@@ -284,4 +285,42 @@ test("askInProcess answers find_symbol too", async () => {
   const found = await ask(PROJECT, { kind: "symbols", query: "doubled" });
   assert.ok("answer" in found);
   assert.match(found.answer, /src\/local\.ts:2: const doubled/);
+});
+
+test("planMove gives the moved file under its new path and fixes every import of it", async () => {
+  const service = await serviceFor(PROJECT);
+  const plan = planMove(service, PROJECT, "src/tasks.ts", "src/lib/tasks.ts");
+  assert.ok(plan.ok);
+  assert.deepEqual(Object.keys(plan.changed).sort(), [
+    "src/lib/tasks.ts",
+    "src/routes/home.ts",
+    "src/routes/other.ts",
+  ]);
+  assert.equal(plan.changed["src/lib/tasks.ts"], PROJECT["src/tasks.ts"]);
+  assert.match(plan.changed["src/routes/home.ts"]!, /from "\.\.\/lib\/tasks"/);
+  assert.match(
+    plan.changed["src/routes/other.ts"]!,
+    /import \{ listTasks as lt \} from "\.\.\/lib\/tasks"/,
+  );
+});
+
+test("planMove refuses a file that is not there or not TypeScript, and askInProcess answers it", async () => {
+  const service = await serviceFor(PROJECT);
+  const gone = planMove(service, PROJECT, "src/nope.ts", "src/b.ts");
+  assert.ok(!gone.ok && /File not found/.test(gone.reason));
+  const md = planMove(service, PROJECT, "README.md", "docs/README.md");
+  assert.ok(!md.ok && /not a TypeScript file/.test(md.reason));
+
+  const ask = askInProcess(async () => ({
+    ts,
+    libs: async (options) => libFilesFor(ts, options, readLib),
+  }));
+  const moved = await ask(PROJECT, {
+    kind: "move",
+    from: "src/routes/home.ts",
+    to: "src/pages/home.ts",
+  });
+  assert.ok("answer" in moved && moved.answer.ok);
+  // The moved file's own relative import is fixed for where it now lives.
+  assert.match(moved.answer.changed["src/pages/home.ts"]!, /from "\.\.\/tasks"/);
 });

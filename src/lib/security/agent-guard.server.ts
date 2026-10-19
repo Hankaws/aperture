@@ -125,8 +125,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
       if (!row || typeof row !== "object") continue;
       const rec = row as Record<string, unknown>;
       const path = typeof rec.path === "string" ? safeRelPath(rec.path) : null;
-      if (!path || !known.has(path)) continue;
-      if (typeof rec.oldText !== "string" || typeof rec.newText !== "string") continue;
+      if (!path || typeof rec.oldText !== "string" || typeof rec.newText !== "string") continue;
+      // A file the run created (a move's new path) is not in the project yet.
+      if (!known.has(path) && rec.oldText !== "") continue;
       pendingEdits.push({
         id: typeof rec.id === "string" ? rec.id.slice(0, 80) : `pending_${pendingEdits.length}_${path}`,
         path,
@@ -134,6 +135,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
         newText: rec.newText.slice(0, 20_000),
         description: typeof rec.description === "string" ? rec.description.slice(0, 200) : path,
         status: "pending",
+        ...(rec.deleted === true ? { deleted: true } : {}),
         notes: Array.isArray(rec.notes)
           ? rec.notes.slice(0, 12).flatMap((note) => {
               if (!note || typeof note !== "object") return [];

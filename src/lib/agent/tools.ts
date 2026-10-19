@@ -3,6 +3,8 @@ import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { safeRelPath } from "@/lib/security/redact";
+import { moveTarget } from "@/lib/workspace/file-move";
+import { isTsPath } from "@/lib/workspace/tsc-core";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
@@ -151,6 +153,23 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "move_file",
+      description:
+        "Move or rename a file, as the editor's file tree does, and stage the move: the file under its new path and the old path removed. For TypeScript the compiler also updates every import of it and its own relative imports, so do not fix those by hand. Same locks and confidence rule as propose_edit.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: { type: "string", description: "The file's path now." },
+          to: { type: "string", description: "Its new path, file name included." },
+          confidence: { type: "number", description: "0 to 1. How sure this move is right. Below 0.8 it is dropped." },
+        },
+        required: ["from", "to", "confidence"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_edit",
       description:
         "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
@@ -229,6 +248,7 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
       (t) =>
         t.function.name !== "propose_edit" &&
         t.function.name !== "rename_symbol" &&
+        t.function.name !== "move_file" &&
         t.function.name !== "set_plan" &&
         t.function.name !== "note_diff" &&
         t.function.name !== "run_script" &&
@@ -237,7 +257,11 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
   }
   if (kind === "plan") {
     return AGENT_TOOLS.filter(
-      (t) => t.function.name !== "propose_edit" && t.function.name !== "rename_symbol" && t.function.name !== "note_diff",
+      (t) =>
+        t.function.name !== "propose_edit" &&
+        t.function.name !== "rename_symbol" &&
+        t.function.name !== "move_file" &&
+        t.function.name !== "note_diff",
     );
   }
   if (kind === "review") {
@@ -445,6 +469,53 @@ export async function executeTool(
     }
     const files = paths.length === 1 ? "1 file" : `${paths.length} files`;
     return `Edit staged for ${files}: ${symbol} renamed to ${next} in ${plan.places} ${plan.places === 1 ? "place" : "places"} (${paths.slice(0, 6).join(", ")}${paths.length > 6 ? ", …" : ""}). Comments and strings keep the old name; grep for it if they should change too.`;
+  }
+
+  if (name === "move_file") {
+    const locked = editLock(ctx);
+    if (locked) return locked;
+    if (!keepEdit(parseConfidence(args.confidence))) {
+      return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
+    }
+    const from = safeRelPath(String(args.from ?? "")) ?? "";
+    const typed = String(args.to ?? "");
+    if (!from || !typed.trim()) return "move_file needs from and to.";
+    const target = moveTarget(ctx.files, from, typed);
+    if (!target) return `${from} is already at that path.`;
+    if ("error" in target) return `Move not staged: ${target.error}`;
+    const { to } = target;
+    if (from === LESSONS_PATH || to === LESSONS_PATH) return "The lessons file stays where it is.";
+    let basis = ctx.files;
+    let changed: Record<string, string> = { [to]: ctx.files[from]! };
+    let unchecked = "";
+    if (isTsPath(from)) {
+      const found = ctx.intel ? await ctx.intel({ kind: "move", from, to }) : "TypeScript is not available here.";
+      if (typeof found === "string") unchecked = found;
+      else if (!found.answer.ok) return `Move not staged: ${found.answer.reason}`;
+      else {
+        basis = found.files;
+        changed = found.answer.changed;
+      }
+    }
+    const description = `Move ${from} to ${to}`;
+    const stage = (edit: Omit<ProposedEdit, "id" | "description" | "status">) =>
+      ctx.edits.push({ id: `edit_${ctx.edits.length + 1}_${edit.path}`, description, status: "pending", ...edit });
+    stage({ path: from, oldText: basis[from]!, newText: "", deleted: true });
+    for (const path of Object.keys(changed).sort()) {
+      stage({ path, oldText: path === to ? "" : basis[path]!, newText: changed[path]! });
+    }
+    delete ctx.files[from];
+    Object.assign(ctx.files, changed);
+    const importers = Object.keys(changed).filter((path) => path !== to);
+    const fixed = importers.length
+      ? ` Imports updated in ${importers.length} ${importers.length === 1 ? "file" : "files"} (${importers.slice(0, 6).join(", ")}${importers.length > 6 ? ", …" : ""}).`
+      : "";
+    const note = unchecked
+      ? ` Imports were not updated: ${unchecked} grep for ${from} and fix them with propose_edit.`
+      : isTsPath(from)
+        ? fixed || " Nothing imported it."
+        : ` Not a TypeScript file, so nothing was updated to point at it: grep for ${from} if something refers to it.`;
+    return `Edit staged: ${from} moved to ${to}.${note}`;
   }
 
   if (name === "propose_edit") {

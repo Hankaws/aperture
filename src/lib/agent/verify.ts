@@ -93,7 +93,8 @@ function byFile(at: string[]): string {
 export function recapNames(edits: ProposedEdit[]): Array<{ path: string; name: string }> {
   const out: Array<{ path: string; name: string }> = [];
   const seen = new Set<string>();
-  for (const edit of edits) {
+  // A removed file's names went with it to its new path, which is asked about instead.
+  for (const edit of edits.filter((e) => !e.deleted)) {
     for (const name of symbolsFromEdit(edit)) {
       if (seen.has(name) || seen.size >= 5) continue;
       seen.add(name);
@@ -119,7 +120,9 @@ export function verifyRecap(
   if (edits.length === 0) return "";
   const paths = [...new Set(edits.map((e) => e.path))];
   const skip = new Set(paths);
+  const removed = new Set(edits.filter((e) => e.deleted).map((e) => e.path));
   const changed = paths.map((path) => {
+    if (removed.has(path)) return `${path} (removed)`;
     const names = [...new Set(edits.filter((e) => e.path === path).flatMap(symbolsFromEdit))];
     return names.length ? `${path} (${names.slice(0, 3).join(", ")})` : path;
   });

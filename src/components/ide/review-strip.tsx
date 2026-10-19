@@ -7,6 +7,7 @@ import { basename, cn, modSymbol } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
 import { activeCopyOf, openCopyIds } from "@/lib/workspace/copies";
 import { editsUnderCheck } from "@/lib/workspace/edits";
+import { needsTheRest } from "@/lib/workspace/preview-check";
 import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { lineOfIssue } from "@/lib/editor/marks";
@@ -163,6 +164,11 @@ export function ReviewStrip() {
     () => editsUnderCheck(messages, activeCopyId),
     [messages, activeCopyId],
   );
+  // Rows that only work with the rest of the change: their own Apply waits for the whole.
+  const together = useMemo(
+    () => new Map(rows.map((edit) => [edit.id, needsTheRest(files, edit, rows)])),
+    [files, rows],
+  );
   const verify = useMemo(() => {
     const ids = new Set(rows.map((edit) => edit.id));
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -287,8 +293,14 @@ export function ReviewStrip() {
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2"
-                    disabled={running || !checksOpen}
-                    title={running ? "Wait until this turn finishes" : checksOpen ? undefined : "Waiting for the checks"}
+                    disabled={running || !checksOpen || !!together.get(edit.id)}
+                    title={
+                      running
+                        ? "Wait until this turn finishes"
+                        : !checksOpen
+                          ? "Waiting for the checks"
+                          : (together.get(edit.id) ?? undefined)
+                    }
                     onClick={() => applyEdit(edit)}
                   >
                     Apply only this

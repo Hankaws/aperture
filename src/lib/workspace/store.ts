@@ -11,7 +11,7 @@ import { validCheckpoints, validFiles, validMessages } from "./persist";
 import { copyLabel, keepSet, type RunCopy } from "./copies";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
-import { mergeEdits as overlayEdits, previewNotesForEdit } from "./preview-check";
+import { mergeEdits as overlayEdits, needsTheRest, previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
 import { canApply } from "./checks";
 import { checksMatch } from "./verify-id";
@@ -790,6 +790,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const live = get().messages.flatMap((m) => m.edits ?? []).find((row) => row.id === edit.id);
       if (live && live.status !== "pending") return;
       if (edit.notes?.length) return;
+      // Part of a change that only works whole (a move, a rename across files): never on its own.
+      if (needsTheRest(get().files, edit, judged)) return;
       if (!previewForce.has(edit.id)) {
         // Only what the staged text itself shows (parse, markup, imports). The
         // live preview's errors belong to the applied page, so a fix for the

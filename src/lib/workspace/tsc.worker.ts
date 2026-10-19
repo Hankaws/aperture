@@ -12,6 +12,7 @@
  */
 import ts from "typescript";
 import { answerCode, type AnswerTo, type CodeQuestion } from "../agent/code-intel";
+import { tsParseCheck } from "./ts-parse";
 import { checkProject, compilerOptions, loadLibFiles, type TscCache, type TscResult } from "./tsc-core";
 import {
   createTsService,
@@ -62,7 +63,8 @@ export type TsAsk = {
     | "refactor"
     | "fileRename"
     | "fixAll"
-    | "symbols";
+    | "symbols"
+    | "parse";
   id: number;
   path: string;
   text: string;
@@ -102,6 +104,7 @@ export type TsAnswer =
   | { id: number; fileRename: FileChange[] | null }
   | { id: number; fixAll: FileChange[] | null }
   | { id: number; symbols: SymbolHit[] }
+  | { id: number; parse: string[] | null }
   | { id: number; code: AnswerTo<CodeQuestion> }
   | { id: number; unavailable: string };
 
@@ -132,7 +135,11 @@ function loadLibs(options: ts.CompilerOptions): Promise<Map<string, string>> {
 let projectFiles: Record<string, string> = {};
 let service: TsService | null = null;
 
+/** TypeScript's parser alone, for the agent's edits: no project, no type check. */
+const parseCheck = tsParseCheck(ts);
+
 async function answer(ask: TsAsk): Promise<TsAnswer> {
+  if (ask.type === "parse") return { id: ask.id, parse: parseCheck(ask.path, ask.text) };
   // The whole project is asked about as it was last sent; any other question, with its file as typed.
   const files =
     ask.type === "project" || ask.type === "symbols" ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
@@ -209,7 +216,8 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "refactor" ||
     event.data.type === "fileRename" ||
     event.data.type === "fixAll" ||
-    event.data.type === "symbols"
+    event.data.type === "symbols" ||
+    event.data.type === "parse"
   ) {
     const ask = event.data;
     try {

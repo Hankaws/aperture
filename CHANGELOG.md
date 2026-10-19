@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A model on your own machine no longer gets a false "parse error" on a valid TypeScript edit: the tab's compiler checks it before the note can hold Apply. (#108)
 - The agent can find a declaration by name. A new tool, `find_symbol`, asks
   the TypeScript compiler where a function, class, type or constant is
   declared, with its file, line and kind, instead of grepping and wading

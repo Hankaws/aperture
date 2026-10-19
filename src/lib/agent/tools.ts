@@ -6,6 +6,7 @@ import { safeRelPath } from "@/lib/security/redact";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
+import type { ParseLoader } from "./parse-host";
 import type { AnswerTo, CodeQuestion } from "./code-intel";
 import type { IndexedChunk, PlanEntry, ProposedEdit } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
@@ -271,7 +272,7 @@ export type ToolContext = {
   /** TypeScript's parser, once loaded: it overrules a parse error Lezer gets wrong. */
   parse?: ParseCheck;
   /** Loads `parse`, where the host can; only asked once an edit looks like it does not parse. */
-  loadParse?: () => Promise<ParseCheck | undefined>;
+  loadParse?: ParseLoader;
   /**
    * TypeScript's answer about the whole project as staged so far, and the
    * files it saw, where the host has the compiler; a string says why not.
@@ -499,9 +500,13 @@ export async function executeTool(
       status: "pending",
     };
     let notes = previewNotesForEdit(edit, ctx.files, ctx.parse);
-    if (notes.length && !ctx.parse && ctx.loadParse) {
-      ctx.parse = await ctx.loadParse();
-      if (ctx.parse) notes = previewNotesForEdit(edit, ctx.files, ctx.parse);
+    if (notes.length && ctx.loadParse) {
+      // A second opinion on the text this edit stages, before its notes hold Apply.
+      const parse = await ctx.loadParse(path, edit.newText);
+      if (parse) {
+        ctx.parse = parse;
+        notes = previewNotesForEdit(edit, ctx.files, parse);
+      }
     }
     if (notes.length) edit.notes = notes;
     ctx.edits.push(edit);

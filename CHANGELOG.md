@@ -9,6 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The agent can find a declaration by name. A new tool, `find_symbol`, asks
+  the TypeScript compiler where a function, class, type or constant is
+  declared, with its file, line and kind, instead of grepping and wading
+  through comments, strings and calls. It works wherever the agent runs: on
+  Aperture's server, on a model on your own computer, and in Aperture Bot.
+  ([#107](https://github.com/Hankaws/aperture/pull/107))
 - Go to any symbol. In Ctrl/⌘+P, type `#` and part of a name: every function,
   class, type and constant in the project that fits, with its kind and file;
   Enter opens it at the line. "Go to symbol…" in the palette starts it. (Not

@@ -14,6 +14,7 @@ import {
   createTsService,
   renameProblem,
   serviceUnavailable,
+  MAX_SYMBOLS,
   type Reference,
   type TsService,
 } from "../workspace/ts-service.ts";
@@ -129,6 +130,28 @@ export function referencesAnswer(
   return [head, ...rows, ...more].join("\n");
 }
 
+/** The most declarations listed in one `find_symbol` answer. */
+export const MAX_LISTED_SYMBOLS = 30;
+
+/**
+ * `find_symbol`'s answer: the project's declarations whose names fit `query`,
+ * as `file:line: kind Container.name`, best match first.
+ */
+export function symbolsAnswer(service: TsService, query: string): string {
+  const q = query.trim();
+  if (!q) return "find_symbol needs a name, or part of one.";
+  const hits = service.symbols(q);
+  if (!hits.length)
+    return `TypeScript finds no declaration named like ${q} in the project. Try part of the name, or grep.`;
+  const many = hits.length >= MAX_SYMBOLS ? `${hits.length}+` : String(hits.length);
+  const head = `${many} ${hits.length === 1 ? "declaration" : "declarations"} named like ${q}, from the TypeScript compiler (the project's own files):`;
+  const rows = hits
+    .slice(0, MAX_LISTED_SYMBOLS)
+    .map((h) => `${h.path}:${h.line}: ${h.kind} ${h.container ? `${h.container}.` : ""}${h.name}`);
+  const more = hits.length > MAX_LISTED_SYMBOLS ? [`… and more; narrow the name to see them`] : [];
+  return [head, ...rows, ...more].join("\n");
+}
+
 export type RenamePlan =
   | { ok: true; name: string; changed: Record<string, string>; places: number }
   | { ok: false; reason: string };
@@ -216,12 +239,14 @@ export function usedElsewhere(
 export type CodeQuestion =
   | { kind: "references"; path: string; name: string; line?: number }
   | { kind: "rename"; path: string; name: string; next: string; line?: number }
-  | { kind: "elsewhere"; names: Array<{ path: string; name: string }>; skip: string[] };
+  | { kind: "elsewhere"; names: Array<{ path: string; name: string }>; skip: string[] }
+  | { kind: "symbols"; query: string };
 
 type Answers = {
   references: string;
   rename: RenamePlan;
   elsewhere: Array<Elsewhere | null>;
+  symbols: string;
 };
 export type AnswerTo<Q extends CodeQuestion> = Answers[Q["kind"]];
 export type CodeAnswer<Q extends CodeQuestion> = { answer: AnswerTo<Q> } | { unavailable: string };
@@ -246,6 +271,7 @@ export function answerCode<Q extends CodeQuestion>(
     return referencesAnswer(service, files, q.path, q.name, q.line) as AnswerTo<Q>;
   if (q.kind === "rename")
     return planRename(service, files, q.path, q.name, q.next, q.line) as AnswerTo<Q>;
+  if (q.kind === "symbols") return symbolsAnswer(service, q.query) as AnswerTo<Q>;
   const skip = new Set(q.skip);
   return q.names.map(({ path, name }) => {
     try {

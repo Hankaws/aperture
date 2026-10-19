@@ -116,6 +116,21 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "find_symbol",
+      description:
+        "Where a TypeScript name is declared, from the TypeScript compiler: functions, classes, types, interfaces, constants and methods whose names fit the query, with file, line and kind. Use it to find a definition by name when you do not know the file; unlike grep it skips comments, strings and calls. Then read_file at that line, or find_references for its uses.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The name or part of it, e.g. listTasks or TaskSt." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "rename_symbol",
       description:
         "Rename a TypeScript name everywhere it is used, as the editor's F2 does, and stage one edit per file it changes. Safer than editing each use by hand: imports, re-exports and shorthand properties stay right. Comments and strings keep the old name. Same locks and confidence rule as propose_edit.",
@@ -386,6 +401,14 @@ export async function executeTool(
     const found = ctx.intel
       ? await ctx.intel({ kind: "references", path, name: symbol, line: lineArg(args.line) })
       : "TypeScript is not available here.";
+    if (typeof found === "string") return `${found} Use grep instead.`;
+    return found.answer;
+  }
+
+  if (name === "find_symbol") {
+    const query = String(args.query ?? "").trim();
+    if (!query) return "find_symbol needs query.";
+    const found = ctx.intel ? await ctx.intel({ kind: "symbols", query }) : "TypeScript is not available here.";
     if (typeof found === "string") return `${found} Use grep instead.`;
     return found.answer;
   }

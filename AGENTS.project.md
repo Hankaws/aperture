@@ -524,9 +524,11 @@ the compiler, moves with nothing else changed and the tool says so.
   calls a removed file changed since a conflict, and the bot removes the
   file (`finalTexts` gives null; `commitFiles` adds with `-A`; `diffOf`
   marks only files that are there, so git shows a rename).
-- The move's new path is the editor's only staged new file: `propose_edit`
-  still creates files only for the bot (`newFiles`). Apply all checks each
-  file among the rest of the change, so an import of the new path resolves.
+- A staged new file (a move's new path, or `propose_edit` with an empty
+  search on a path that is not there) is applied like any edit and labelled
+  "new file"; Apply all checks each file among the rest of the change, so an
+  import of a new path resolves. `propose_edit` refuses secrets files
+  (`isSecretPath`), and the lessons file keeps its own one-bullet rule.
 - The test-tampering rule pairs a removed test file with one the change
   creates (`movedTests`) and judges the pair as one edit, so a move is not
   "deletes … and its tests" but dropping a test on the way still is.
@@ -828,8 +830,9 @@ page (`/bot`).
 - **The same agent.** `runLoop` from `src/lib/agent/loop.ts` with a runner
   `LoopHost` (`model.ts`): one plan turn, then build turns with the plan
   approved. The bot's rules ride in `standing` (`BOT_RULES` in `run.ts`).
-  `newFiles` on `AgentInput` lets `propose_edit` create a file from an
-  empty search; the editor does not set it.
+  `propose_edit` creates a file from an empty search here as in the editor;
+  the bot still refuses to write workflows, secrets and lockfiles
+  (`refusedReason`).
 - **Every model call is the plain `complete`**, counted by `Budget`: the
   providers' `usage` is read in `src/lib/agent/usage.ts`. The budget is
   checked before each call, so a run stops at the call that would start past

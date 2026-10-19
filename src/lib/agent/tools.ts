@@ -2,7 +2,7 @@ import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search"
 import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
-import { safeRelPath } from "@/lib/security/redact";
+import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { moveTarget } from "@/lib/workspace/file-move";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
@@ -172,7 +172,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "propose_edit",
       description:
-        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
+        "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file, or creates it when the path does not exist yet. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
       parameters: {
         type: "object",
         properties: {
@@ -291,8 +291,6 @@ export type ToolContext = {
   handOff?: (script: string) => string | null;
   /** Set when this account has MCP servers. Returns the tool text. */
   mcpCall?: (server: string, tool: string, args: string) => Promise<string>;
-  /** When set, an edit with an empty search on a path that does not exist creates the file. */
-  newFiles?: boolean;
   /** TypeScript's parser, once loaded: it overrules a parse error Lezer gets wrong. */
   parse?: ParseCheck;
   /** Loads `parse`, where the host can; only asked once an edit looks like it does not parse. */
@@ -529,7 +527,8 @@ export async function executeTool(
     const replace = String(args.replace ?? "");
     const description = String(args.description ?? "Update file");
     const current = ctx.files[path];
-    if (current === undefined && ctx.newFiles && path && path !== LESSONS_PATH && !search) {
+    if (current === undefined && path && path !== LESSONS_PATH && !search) {
+      if (isSecretPath(path)) return `Not staged: ${path} is a secrets file, which Aperture does not keep.`;
       ctx.files[path] = replace;
       ctx.edits.push({
         id: `edit_${ctx.edits.length + 1}_${path}`,
@@ -542,7 +541,8 @@ export async function executeTool(
       return `Edit staged for ${path}: a new file.`;
     }
     if (current === undefined) {
-      if (path !== LESSONS_PATH || search.trim()) return `File not found: ${path}`;
+      if (path !== LESSONS_PATH || search.trim())
+        return `File not found: ${path}. To create it, pass an empty search and the whole file as replace.`;
       const line = replace.replace(/^- /, "").trim();
       if (!line) return "A new lessons file needs one bullet.";
       const next = upsertLesson("", `grow_${ctx.edits.length + 1}`, "down", line);

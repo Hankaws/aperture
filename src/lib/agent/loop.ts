@@ -362,7 +362,6 @@ export async function runLoop(
     edits: (input.pendingEdits ?? []).map((edit) => ({ ...edit, notes: [...(edit.notes ?? [])] })),
     plan: approved,
     requirePlan,
-    newFiles: input.newFiles,
     loadParse: parseLoader(host),
     intel,
     phase,
@@ -671,7 +670,10 @@ export async function runLoop(
           traces.push(trace);
           emit({ type: "trace", trace });
           if (outcome.call.name === "set_plan") emit({ type: "plan", entries: ctx.plan });
-          const edited = outcome.call.name === "propose_edit" || outcome.call.name === "rename_symbol";
+          const edited =
+            outcome.call.name === "propose_edit" ||
+            outcome.call.name === "rename_symbol" ||
+            outcome.call.name === "move_file";
           if (edited || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
           if (edited) editResults.push(outcome.result);
           messages.push({

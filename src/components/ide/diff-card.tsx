@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Check, FileDiff, MessageSquare, X } from "lucide-react";
 import { lineDiff } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIdeUi } from "@/lib/ui-store";
+import { editsUnderCheck } from "@/lib/workspace/edits";
+import { needsTheRest } from "@/lib/workspace/preview-check";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { DiffNote, ProposedEdit } from "@/lib/workspace/types";
 
@@ -17,6 +19,14 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
   const [draft, setDraft] = useState("");
   const pending = edit.status === "pending";
   const created = useWorkspace((s) => pending && s.files[edit.path] === undefined);
+  const files = useWorkspace((s) => s.files);
+  const messages = useWorkspace((s) => s.messages);
+  const activeCopyId = useWorkspace((s) => s.activeCopyId);
+  // Part of a change that only works whole: this card's Apply waits for the whole.
+  const together = useMemo(
+    () => (pending ? needsTheRest(files, edit, editsUnderCheck(messages, activeCopyId)) : null),
+    [pending, files, edit, messages, activeCopyId],
+  );
   const checksOpen = useIdeUi((s) => s.checkHint?.state) === "clear";
   const running = useWorkspace((s) => s.agentRunning);
   const lines = lineDiff(edit.oldText, edit.newText).filter((l, i, arr) => {
@@ -83,8 +93,8 @@ export function DiffCard({ edit }: { edit: ProposedEdit }) {
             <Button
               size="sm"
               className="h-7 px-2.5"
-              disabled={running || notes.length > 0 || !checksOpen}
-              title={running ? "Wait until this turn finishes" : notes.length > 0 ? "Send or dismiss notes first" : !checksOpen ? "Waiting for the checks" : undefined}
+              disabled={running || notes.length > 0 || !checksOpen || !!together}
+              title={running ? "Wait until this turn finishes" : notes.length > 0 ? "Send or dismiss notes first" : !checksOpen ? "Waiting for the checks" : (together ?? undefined)}
               onClick={() => applyEdit(edit)}
             >
               <Check className="size-3.5" />

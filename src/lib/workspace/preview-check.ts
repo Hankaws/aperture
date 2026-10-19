@@ -1,6 +1,6 @@
 import type { DiffNote, ProposedEdit } from "./types";
 import { isJsonPath, isScriptPath, jsonIssues, scriptIssues } from "./syntax-check.ts";
-import { importIssues } from "./module-graph.ts";
+import { importersOf, importIssues } from "./module-graph.ts";
 import type { ParseCheck } from "./ts-parse.ts";
 
 const VOID = new Set([
@@ -122,6 +122,33 @@ export function previewIssues(
     if (issues.length) out.push({ path, issues });
   }
   return out;
+}
+
+/**
+ * Why `edit` cannot be applied on its own, or null when it can: applying it
+ * alone breaks an import that the rest of the change (`pending`) puts right.
+ * A move's halves, a rename across files, a removal with its importers fixed
+ * are one change; breakage the rest does not fix is left to the checks.
+ */
+export function needsTheRest(files: Record<string, string>, edit: ProposedEdit, pending: ProposedEdit[]): string | null {
+  const others = pending.filter((e) => e.id !== edit.id && e.status === "pending");
+  if (!others.length) return null;
+  const name = edit.path.slice(edit.path.lastIndexOf("/") + 1);
+  // Its own imports need a file the rest of the change writes.
+  if (previewNotesForEdit(edit, files).length && !previewNotesForEdit(edit, mergeEdits(files, others)).length) {
+    return `${name} needs the rest of this change: apply it all together.`;
+  }
+  // It breaks a file that imports it, and the rest of the change fixes that file.
+  const alone = mergeEdits(files, [edit]);
+  const edited = new Set(others.map((e) => e.path));
+  for (const importer of importersOf(files, alone, [edit.path])) {
+    if (!edited.has(importer)) continue;
+    const was = new Set(importIssues(importer, files));
+    if (importIssues(importer, alone).some((issue) => !was.has(issue))) {
+      return `Applying only ${name} breaks ${importer}, which the rest of this change fixes: apply it all together.`;
+    }
+  }
+  return null;
 }
 
 export function notesFromPreviewIssues(path: string, issues: string[]): DiffNote[] {

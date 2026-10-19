@@ -535,6 +535,13 @@ the compiler, moves with nothing else changed and the tool says so.
   "new file"; Apply all checks each file among the rest of the change, so an
   import of a new path resolves. `propose_edit` refuses secrets files
   (`isSecretPath`), and the lessons file keeps its own one-bullet rule.
+- A change that only works whole is applied whole: `needsTheRest`
+  (`preview-check.ts`) refuses one file's own Apply ("Apply only this", the
+  diff card's Apply, and `applyEdit` itself) when applying it alone breaks
+  an import the rest of the pending change puts right, either its own (a
+  move's importer, a test of a new file) or another file's (a move's removed
+  half, a rename's declaring file). The button is disabled with that reason.
+  Breakage the rest of the change does not fix is left to the checks.
 - The test-tampering rule pairs a removed test file with one the change
   creates (`movedTests`) and judges the pair as one edit, so a move is not
   "deletes … and its tests" but dropping a test on the way still is.

@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- "Apply only this" waits for the rest of a change that only works whole: one half of a move, or the declaring file of a rename, can no longer be applied alone and break the files the rest of the change fixes. The button says why. (#112)
 - The agent can delete a file the change no longer needs: `delete_file` stages the removal for you to apply or reject, and names what still imports it. The checks hold Apply while anything does, and Undo brings the file back. (#111)
 - Composer can add files: an edit to a path that is not there yet stages a new file, labelled as one, for you to check and apply with the rest of the change. Secrets files such as `.env` are refused. (#110)
 - The agent can move and rename files: `move_file` stages the file under its new path, the old one removed, and every import of it updated by TypeScript, for you to check and apply in one go. (#109)

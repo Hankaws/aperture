@@ -20,6 +20,7 @@ import type {
   ReferencesResult,
   RenameResult,
   SignatureHelp,
+  SymbolHit,
 } from "./ts-service";
 
 export { pathsToCheck } from "./tsc-paths";
@@ -165,10 +166,10 @@ function askTs(
   text: string,
   offset: number,
   signal?: AbortSignal,
-  extra: Pick<TsAsk, "end" | "refactor" | "to" | "fixId"> = {},
+  extra: Pick<TsAsk, "end" | "refactor" | "to" | "fixId" | "query"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
-    if (signal?.aborted || (type !== "project" && !isTsPath(path))) return resolve(null);
+    if (signal?.aborted || (type !== "project" && type !== "symbols" && !isTsPath(path))) return resolve(null);
     let running: Worker;
     try {
       running = startWorker();
@@ -331,6 +332,18 @@ export async function tsRefactorEdits(
     refactor: { name: refactor.refactor, action: refactor.action },
   });
   return answer && "refactor" in answer ? answer.refactor : null;
+}
+
+/** Declarations across the project whose names match `query` (Ctrl/⌘+P, then #); why not, when TypeScript cannot say. */
+export async function tsSymbols(
+  files: Record<string, string>,
+  query: string,
+  signal?: AbortSignal,
+): Promise<SymbolHit[] | { unavailable: string } | null> {
+  const answer = await askTs("symbols", files, "", "", 0, signal, { query });
+  if (!answer) return null;
+  if ("unavailable" in answer) return { unavailable: answer.unavailable };
+  return "symbols" in answer ? answer.symbols : null;
 }
 
 /** Every fix of one kind in `path` at once (Problems' "Fix all"); why not, when TypeScript cannot. */

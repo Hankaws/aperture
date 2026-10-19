@@ -137,6 +137,7 @@ export function HelpDialog() {
 
   const rows = [
     [`${mod}P`, "Go to file"],
+    [`${mod}P, then #`, "Go to a symbol: any function, class, type or constant in the project"],
     [`${mod}⇧F`, "Search and replace in every file"],
     [`F12 · ${mod}click`, "Go to definition (TypeScript) · hover a name for its type"],
     ["F2", "Rename a TypeScript name everywhere it is used"],

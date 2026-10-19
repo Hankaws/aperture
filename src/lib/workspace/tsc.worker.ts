@@ -25,6 +25,7 @@ import {
   type RefactorAction,
   type RefactorEdit,
   type SignatureHelp,
+  type SymbolHit,
   type ReferencesResult,
   type RenameResult,
   type TsService,
@@ -60,7 +61,8 @@ export type TsAsk = {
     | "refactors"
     | "refactor"
     | "fileRename"
-    | "fixAll";
+    | "fixAll"
+    | "symbols";
   id: number;
   path: string;
   text: string;
@@ -73,6 +75,8 @@ export type TsAsk = {
   to?: string;
   /** Which kind of fix, for "fixAll". */
   fixId?: string;
+  /** What to search for, for "symbols". */
+  query?: string;
 };
 
 /** The agent's question about the project as its run has it, staged edits included. */
@@ -97,6 +101,7 @@ export type TsAnswer =
   | { id: number; refactor: RefactorEdit | null }
   | { id: number; fileRename: FileChange[] | null }
   | { id: number; fixAll: FileChange[] | null }
+  | { id: number; symbols: SymbolHit[] }
   | { id: number; code: AnswerTo<CodeQuestion> }
   | { id: number; unavailable: string };
 
@@ -129,7 +134,8 @@ let service: TsService | null = null;
 
 async function answer(ask: TsAsk): Promise<TsAnswer> {
   // The whole project is asked about as it was last sent; any other question, with its file as typed.
-  const files = ask.type === "project" ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
+  const files =
+    ask.type === "project" || ask.type === "symbols" ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
   const tooBig = serviceUnavailable(files);
   if (tooBig) return { id: ask.id, unavailable: tooBig };
   const options = compilerOptions(ts, files);
@@ -143,6 +149,7 @@ async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "project") return { id: ask.id, project: service.projectProblems() };
   if (ask.type === "signature") return { id: ask.id, signature: service.signatureHelp(ask.path, ask.offset) };
   if (ask.type === "organize") return { id: ask.id, organize: service.organizeImports(ask.path) };
+  if (ask.type === "symbols") return { id: ask.id, symbols: service.symbols(ask.query ?? "") };
   if (ask.type === "fixAll")
     return { id: ask.id, fixAll: ask.fixId ? service.fixAllEdits(ask.path, ask.fixId) : null };
   if (ask.type === "fileRename")
@@ -201,7 +208,8 @@ self.onmessage = async (event: MessageEvent<TscRequest | TscWarm | TsFiles | TsA
     event.data.type === "refactors" ||
     event.data.type === "refactor" ||
     event.data.type === "fileRename" ||
-    event.data.type === "fixAll"
+    event.data.type === "fixAll" ||
+    event.data.type === "symbols"
   ) {
     const ask = event.data;
     try {

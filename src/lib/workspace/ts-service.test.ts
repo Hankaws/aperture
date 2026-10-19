@@ -566,3 +566,26 @@ test("Problems offer Fix all for a kind of error that turns up twice, and it fix
   assert.deepEqual(serviceFor(after).service.problems("src/main.ts"), []);
   assert.equal(service.fixAllEdits("src/missing.ts", action.fixId), null);
 });
+
+test("symbols finds declarations across the project by name, with where they are", () => {
+  const files = {
+    "src/store.ts":
+      "export function listTasks(page: number) {\n  return [page];\n}\nexport class TaskStore {\n  listAll() {\n    return [];\n  }\n}\n",
+    "src/types.ts": "export interface Task {\n  id: string;\n}\nexport type TaskId = string;\n",
+    "src/main.ts": 'import { listTasks } from "./store";\nexport const first = listTasks(0);\n',
+  };
+  const { service } = serviceFor(files);
+  const tasks = service.symbols("listTasks");
+  assert.deepEqual(
+    tasks.map((s) => [s.name, s.kind, s.path, s.line]),
+    [["listTasks", "function", "src/store.ts", 1]],
+  );
+  const method = service.symbols("listAll")[0];
+  assert.equal(method?.kind, "method");
+  assert.equal(method?.container, "TaskStore");
+  // A fuzzy word finds every declaration it fits, from every file, and none from the standard library.
+  const task = service.symbols("Task").map((s) => s.name);
+  for (const name of ["TaskStore", "Task", "TaskId"]) assert.ok(task.includes(name), name);
+  assert.ok(service.symbols("Promise").every((s) => !s.path.includes("lib.")));
+  assert.deepEqual(service.symbols("  "), []);
+});

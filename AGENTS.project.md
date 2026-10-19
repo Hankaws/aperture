@@ -473,6 +473,15 @@ detail, a red or amber row's reason in full. Each row keeps `data-check`,
 - `/app`'s workspace is the page's `<main>`, with an `sr-only` `<h1>` naming
   the project.
 
+## Go to symbol
+
+A Ctrl/⌘+P query that starts with `#` (`command-palette.tsx`) searches
+declarations instead of files: `useSymbolSearch` asks the worker `symbols`
+120 ms after typing pauses, which answers `TsService.symbols`
+(`getNavigateToItems`, the project's own files only, at most `MAX_SYMBOLS`).
+A hit opens its file and `setReveal`s the name. It is not on Ctrl/⌘+T on
+purpose: browsers do not let a page take that key (new tab).
+
 ## Renaming and moving a file
 
 The pencil on a file's row in the tree opens `RenameFileDialog`

@@ -9,6 +9,11 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Go to any symbol. In Ctrl/⌘+P, type `#` and part of a name: every function,
+  class, type and constant in the project that fits, with its kind and file;
+  Enter opens it at the line. "Go to symbol…" in the palette starts it. (Not
+  Ctrl+T: browsers keep that key for a new tab.)
+  ([#106](https://github.com/Hankaws/aperture/pull/106))
 - Fix all in the Problems panel. When a kind of error turns up two or more
   times in a file, its group offers TypeScript's "fix all" for it, such as
   "Add all missing imports (5)", and writes every fix at once with one Undo.

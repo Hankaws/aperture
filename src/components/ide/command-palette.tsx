@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowLeftRight, Bug, Clock, Download, FileCheck, ListChecks, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Braces, Bug, Clock, Download, FileCheck, ListChecks, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
@@ -12,6 +12,8 @@ import { RULES_DIR, RULE_TEMPLATE } from "@/lib/workspace/scoped-rules";
 import { openHooksFile, runSaveHooks } from "./save-hooks";
 import { parseGoto, resolveGotoPath } from "@/lib/editor/goto";
 import { fuzzyMatch } from "@/lib/utils";
+import { scheduleKeyedRun } from "@/lib/use-keyed-async";
+import type { SymbolHit } from "@/lib/workspace/ts-service";
 import type { EditorTheme } from "@/lib/appearance";
 
 const THEME_CHOICES: Array<{ id: EditorTheme; label: string }> = [
@@ -20,6 +22,36 @@ const THEME_CHOICES: Array<{ id: EditorTheme; label: string }> = [
   { id: "light", label: "Light" },
   { id: "system", label: "Match system" },
 ];
+
+type SymbolSearch =
+  | { state: "idle" }
+  | { state: "searching"; query: string }
+  | { state: "done"; query: string; hits: SymbolHit[] }
+  | { state: "unavailable"; query: string; reason: string };
+
+/**
+ * `#name` in the palette: TypeScript's declarations across the project, as the
+ * worker's language service finds them. Asked again 120 ms after typing pauses.
+ */
+function useSymbolSearch(query: string | null): SymbolSearch {
+  const [found, setFound] = useState<SymbolSearch>({ state: "idle" });
+  useEffect(() => {
+    if (query === null || !query.trim()) {
+      setFound({ state: "idle" });
+      return;
+    }
+    setFound((prev) => (prev.state === "done" ? prev : { state: "searching", query }));
+    return scheduleKeyedRun(async (signal) => {
+      const { tsSymbols } = await import("@/lib/workspace/tsc");
+      const hits = await tsSymbols(useWorkspace.getState().files, query, signal);
+      if (signal.aborted) return;
+      if (!hits) setFound({ state: "unavailable", query, reason: "TypeScript did not answer. Try again." });
+      else if ("unavailable" in hits) setFound({ state: "unavailable", query, reason: hits.unavailable });
+      else setFound({ state: "done", query, hits });
+    }, 120);
+  }, [query]);
+  return found;
+}
 
 export function CommandPalette() {
   const open = useIdeUi((s) => s.commandOpen);
@@ -40,6 +72,7 @@ export function CommandPalette() {
   const reindex = useWorkspace((s) => s.reindex);
   const checkpoints = useWorkspace((s) => s.checkpoints);
   const [query, setQuery] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,6 +84,9 @@ export function CommandPalette() {
     [files, query],
   );
   const fileList = files;
+  // "#name" searches the project's declarations instead of files and commands.
+  const symbolQuery = query.startsWith("#") ? query.slice(1).trim() : null;
+  const symbols = useSymbolSearch(symbolQuery);
   const goto = parseGoto(query);
   const gotoPath = goto ? resolveGotoPath(fileList, goto.path, activePath) : null;
 
@@ -76,17 +112,62 @@ export function CommandPalette() {
         <div className="flex items-center gap-2 border-b border-border px-3">
           <Search className="size-4 text-subtle" />
           <Command.Input
+            ref={input}
             // Ctrl+P is usually pressed with the cursor in the code: without
             // taking focus, the query was typed into the open file.
             autoFocus
             value={query}
             onValueChange={setQuery}
-            placeholder="Go to file or run a command"
+            placeholder="Go to file, # for a symbol, or run a command"
             className="h-12 w-full bg-transparent text-sm text-fg outline-none placeholder:text-subtle md:h-12"
           />
         </div>
         <Command.List className="aperture-scroll max-h-80 overflow-y-auto p-2 max-md:max-h-[min(70dvh,28rem)]">
-          <Command.Empty className="px-3 py-6 text-center text-sm text-muted">No matches</Command.Empty>
+          {symbolQuery === null || (symbols.state === "done" && symbolQuery) ? (
+            <Command.Empty className="px-3 py-6 text-center text-sm text-muted">No matches</Command.Empty>
+          ) : null}
+          {symbolQuery !== null ? (
+            <Command.Group heading="Symbols" className="px-1 pb-2 text-[11px] text-subtle">
+              {!symbolQuery && (
+                <p className="px-2 py-3 text-sm text-muted">
+                  Type a name: a function, class, type or constant anywhere in the project.
+                </p>
+              )}
+              {symbolQuery && symbols.state === "searching" && (
+                <p className="px-2 py-3 text-sm text-muted">Searching. The first time loads TypeScript.</p>
+              )}
+              {symbolQuery && symbols.state === "unavailable" && (
+                <p className="px-2 py-3 text-sm text-muted">{symbols.reason}</p>
+              )}
+              {symbols.state === "done" &&
+                symbols.hits.map((hit) => (
+                  <Command.Item
+                    key={`${hit.path}:${hit.line}:${hit.col}:${hit.name}`}
+                    value={`symbol:${hit.path}:${hit.line}:${hit.col}:${hit.name}`}
+                    onSelect={() => {
+                      openFile(hit.path);
+                      useIdeUi.getState().setReveal({ path: hit.path, line: hit.line, col: hit.col, length: hit.length });
+                      setMobilePane("editor");
+                      close();
+                    }}
+                    className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg max-md:min-h-11"
+                  >
+                    <Braces className="size-3.5 shrink-0 text-subtle" />
+                    <span className="min-w-0 truncate">
+                      <span className="font-mono text-[13px]">{hit.name}</span>
+                      <span className="ml-2 text-[12px] text-subtle">
+                        {hit.kind}
+                        {hit.container ? ` in ${hit.container}` : ""}
+                      </span>
+                    </span>
+                    <span className="ml-auto shrink-0 font-mono text-[11px] text-subtle">
+                      {hit.path}:{hit.line}
+                    </span>
+                  </Command.Item>
+                ))}
+            </Command.Group>
+          ) : (
+          <>
           {goto && gotoPath && (
             <Command.Group heading="Go to" className="px-1 pb-2 text-[11px] text-subtle">
               <Command.Item
@@ -124,6 +205,17 @@ export function CommandPalette() {
             ))}
           </Command.Group>
           <Command.Group heading="Workspace" className="px-1 text-[11px] text-subtle">
+            <Command.Item
+              onSelect={() => {
+                setQuery("#");
+                // Picked with the mouse, the item took focus: the name is typed into the box.
+                requestAnimationFrame(() => input.current?.focus());
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <Braces className="size-3.5 text-subtle" />
+              Go to symbol… (type # then a name)
+            </Command.Item>
             <Command.Item
               onSelect={() => {
                 useIdeUi.getState().requestFind();
@@ -370,6 +462,8 @@ export function CommandPalette() {
               Reset layout
             </Command.Item>
           </Command.Group>
+          </>
+          )}
         </Command.List>
       </Command>
     </div>

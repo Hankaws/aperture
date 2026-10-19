@@ -160,6 +160,24 @@ export type ProjectProblem = {
   code: string;
 };
 
+/** A declaration in the project whose name matches a search: for "Go to symbol" (`#` in Ctrl/⌘+P). */
+export type SymbolHit = {
+  name: string;
+  /** TypeScript's kind: "function", "class", "interface", "type", "const", "method", … */
+  kind: string;
+  /** What it is declared in, such as the class of a method; empty at the top of a file. */
+  container: string;
+  path: string;
+  /** 1-based, as the editor numbers lines. */
+  line: number;
+  /** 0-based column in its line. */
+  col: number;
+  length: number;
+};
+
+/** The most symbols one search lists. */
+export const MAX_SYMBOLS = 50;
+
 /** One of TypeScript's "fix all" actions for a file: "Add all missing imports", applying to `count` problems. */
 export type FixAllAction = { fixId: string; description: string; count: number };
 
@@ -232,6 +250,8 @@ export type TsService = {
   signatureHelp(path: string, offset: number): SignatureHelp | null;
   /** The edits that remove the file's unused imports and sort the rest; none when they already are. */
   organizeImports(path: string): FileChange[];
+  /** Declarations in the project's own files whose names match `query`, best match first. */
+  symbols(query: string): SymbolHit[];
   /** Every fix of one kind in the file at once (a `FixAllAction`'s `fixId`); null when TypeScript cannot. */
   fixAllEdits(path: string, fixId: string): FileChange[] | null;
   /**
@@ -585,6 +605,36 @@ export function createTsService(ts: Ts): TsService {
         if (after !== undefined && after !== text) changes.push({ path: file, edits });
       }
       return changes;
+    },
+
+    symbols(query) {
+      const q = query.trim();
+      if (!q) return [];
+      let found: readonly ts.NavigateToItem[];
+      try {
+        found = service.getNavigateToItems(q, MAX_SYMBOLS * 2, undefined, true);
+      } catch {
+        return [];
+      }
+      const program = service.getProgram();
+      const hits: SymbolHit[] = [];
+      for (const item of found) {
+        if (!inProject(item.fileName) || !texts.has(item.fileName)) continue;
+        const file = program?.getSourceFile(item.fileName);
+        if (!file) continue;
+        const at = file.getLineAndCharacterOfPosition(item.textSpan.start);
+        hits.push({
+          name: item.name,
+          kind: item.kind,
+          container: item.containerName,
+          path: item.fileName.slice(1),
+          line: at.line + 1,
+          col: at.character,
+          length: item.textSpan.length,
+        });
+        if (hits.length >= MAX_SYMBOLS) break;
+      }
+      return hits;
     },
 
     fixAllEdits(path, fixId) {

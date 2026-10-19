@@ -37,6 +37,11 @@ export const EDITOR_FEATURES: EditorFeature[] = [
     body: "F12 or Ctrl/⌘+click opens the file where a name is declared, at the line.",
   },
   {
+    key: "Ctrl/⌘+P, then #",
+    title: "Go to any symbol",
+    body: "Type # and part of a name: every function, class, type and constant in the project that fits, with its file. Enter opens it at the line.",
+  },
+  {
     key: "F2",
     title: "Rename everywhere",
     body: "Every use, in every file, in one step. Comments and strings keep the old name. One Undo puts it back.",

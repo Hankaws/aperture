@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, applyHeldBecause, canApply, changeChecks, checksReady, checkStripState, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, applyHeldBecause, canApply, changeChecks, checksReady, checkStripState, importersOfRemoved, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -371,4 +371,16 @@ test("an amber row sends no evidence: it was failing before, and is not this cha
   const browser: BrowserTests = { state: "done", script: "test", passed: false, detail: "x", preexisting: true, evidence: "old stack" };
   const rows = changeChecks({ files: {}, edits: [], render: null, browser });
   assert.doesNotMatch(lookPrompt(rows), /old stack/);
+});
+
+test("a removed file still imported fails Imports in the file that imports it, though that file is not edited", () => {
+  const removal: ProposedEdit = { ...edit("src/b.ts", "", FILES["src/b.ts"]), deleted: true };
+  assert.deepEqual(importersOfRemoved(FILES, [removal]), ["src/a.ts"]);
+  const rows = changeChecks({ files: FILES, edits: [removal], render: null });
+  assert.equal(row(rows, "imports").status, "fail");
+  assert.equal(row(rows, "imports").path, "src/a.ts");
+  // Fixed in the same change, the importer is the change's own and nothing else is added.
+  const fixed = edit("src/a.ts", "export const a = 2;\n", FILES["src/a.ts"]);
+  assert.deepEqual(importersOfRemoved(FILES, [removal, fixed]), []);
+  assert.equal(row(changeChecks({ files: FILES, edits: [removal, fixed], render: null }), "imports").status, "pass");
 });

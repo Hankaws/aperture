@@ -1,5 +1,6 @@
 import { lineDiff } from "./apply-edit.ts";
 import type { PlanEntry, ProposedEdit } from "../workspace/types.ts";
+import { importersOf } from "../workspace/module-graph.ts";
 import { previewIssues } from "../workspace/preview-check.ts";
 import type { ParseCheck } from "../workspace/ts-parse.ts";
 
@@ -129,6 +130,15 @@ export function verifyRecap(
   const line1 = `Changed: ${changed.slice(0, 4).join("; ")}`;
 
   const leftover: string[] = [];
+  // A removed file that something still imports: first, since it fails the checks.
+  if (removed.size) {
+    const before = { ...files };
+    for (const edit of edits) if (edit.deleted) before[edit.path] = edit.oldText;
+    for (const path of removed) {
+      const importers = importersOf(before, files, [path]);
+      if (importers.length) leftover.push(`${path} is removed but still imported by ${importers.slice(0, 3).join(", ")}${importers.length > 3 ? ", …" : ""}`);
+    }
+  }
   const names = recapNames(edits);
   let exact = true;
   for (const { path, name: symbol } of names) {

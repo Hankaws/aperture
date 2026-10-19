@@ -137,3 +137,21 @@ test("recapNames: the first five changed names, each with the file it first chan
     { path: "src/b.ts", name: "epsilon" },
   ]);
 });
+
+test("a removed file still imported is named first in Elsewhere; one nothing imports is not", () => {
+  const files = { "src/a.ts": 'import { b } from "./b";\nexport const a = b;\n' };
+  const removal: ProposedEdit = {
+    id: "r",
+    path: "src/b.ts",
+    oldText: "export const b = 1;\n",
+    newText: "",
+    description: "Remove src/b.ts",
+    status: "pending",
+    deleted: true,
+  };
+  const recap = verifyRecap([removal], files);
+  assert.match(recap, /^Changed: src\/b\.ts \(removed\)/);
+  assert.match(recap, /Elsewhere: src\/b\.ts is removed but still imported by src\/a\.ts/);
+  const unused = verifyRecap([{ ...removal, path: "src/c.ts" }], files);
+  assert.doesNotMatch(unused, /still imported/);
+});

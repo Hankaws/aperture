@@ -33,7 +33,10 @@ export const shop = {
     'import { formatPrice } from "./price";\n\nexport const label = formatPrice(100);\n',
 };
 
-export type Edit = { path: string; search: string; replace: string } | { from: string; to: string };
+export type Edit =
+  | { path: string; search: string; replace: string }
+  | { from: string; to: string }
+  | { remove: string };
 
 const call = (name: string, args: unknown, id: string) => ({
   id,
@@ -80,8 +83,8 @@ export function scripted(builds: Edit[][], options: { runTests?: boolean } = {})
       return { content: "Plan ready.", usage };
     }
     const proposed = thisTurn.some((m) =>
-      m.tool_calls!.some(
-        (c) => c.function.name === "propose_edit" || c.function.name === "move_file",
+      m.tool_calls!.some((c) =>
+        ["propose_edit", "move_file", "delete_file"].includes(c.function.name),
       ),
     );
     if (!proposed) {
@@ -92,11 +95,13 @@ export function scripted(builds: Edit[][], options: { runTests?: boolean } = {})
       const calls = edits.map((e, i) =>
         "from" in e
           ? call("move_file", { ...e, confidence: 0.95 }, `move_${build}_${i}`)
-          : call(
-              "propose_edit",
-              { ...e, description: "edit", confidence: 0.95 },
-              `edit_${build}_${i}`,
-            ),
+          : "remove" in e
+            ? call("delete_file", { path: e.remove, confidence: 0.95 }, `remove_${build}_${i}`)
+            : call(
+                "propose_edit",
+                { ...e, description: "edit", confidence: 0.95 },
+                `edit_${build}_${i}`,
+              ),
       );
       if (options.runTests) calls.push(call("run_script", { script: "test" }, `run_${build}`));
       return { content: "", usage, tool_calls: calls };

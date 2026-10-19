@@ -4,6 +4,7 @@ import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { moveTarget } from "@/lib/workspace/file-move";
+import { importersOf } from "@/lib/workspace/module-graph";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
 import { normalizePlan } from "@/lib/workspace/plan";
@@ -170,6 +171,23 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "delete_file",
+      description:
+        "Remove a file the change no longer needs, staged for the user to accept like an edit. The answer names the files that still import it: fix or remove those too, or the checks fail. Same locks and confidence rule as propose_edit.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The file to remove." },
+          reason: { type: "string", description: "One line on why it can go." },
+          confidence: { type: "number", description: "0 to 1. How sure this file can go. Below 0.8 it is dropped." },
+        },
+        required: ["path", "confidence"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_edit",
       description:
         "Propose a focused edit. `search` must uniquely identify the text to replace. Empty search replaces the whole file, or creates it when the path does not exist yet. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops. Do not apply edits yourself — the user will accept them in the UI. Locked in Plan mode until the user clicks Build it.",
@@ -249,6 +267,7 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
         t.function.name !== "propose_edit" &&
         t.function.name !== "rename_symbol" &&
         t.function.name !== "move_file" &&
+        t.function.name !== "delete_file" &&
         t.function.name !== "set_plan" &&
         t.function.name !== "note_diff" &&
         t.function.name !== "run_script" &&
@@ -261,6 +280,7 @@ export function toolsForStep(kind: "read" | "plan" | "edit" | "review"): AgentTo
         t.function.name !== "propose_edit" &&
         t.function.name !== "rename_symbol" &&
         t.function.name !== "move_file" &&
+        t.function.name !== "delete_file" &&
         t.function.name !== "note_diff",
     );
   }
@@ -514,6 +534,34 @@ export async function executeTool(
         ? fixed || " Nothing imported it."
         : ` Not a TypeScript file, so nothing was updated to point at it: grep for ${from} if something refers to it.`;
     return `Edit staged: ${from} moved to ${to}.${note}`;
+  }
+
+  if (name === "delete_file") {
+    const locked = editLock(ctx);
+    if (locked) return locked;
+    if (!keepEdit(parseConfidence(args.confidence))) {
+      return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
+    }
+    const path = safeRelPath(String(args.path ?? "")) ?? "";
+    const current = ctx.files[path];
+    if (!path || current === undefined) return `File not found: ${path}`;
+    if (path === LESSONS_PATH) return "The lessons file stays; edit it with propose_edit instead.";
+    const reason = String(args.reason ?? "").trim().slice(0, 120);
+    const before = { ...ctx.files };
+    delete ctx.files[path];
+    ctx.edits.push({
+      id: `edit_${ctx.edits.length + 1}_${path}`,
+      path,
+      oldText: current,
+      newText: "",
+      description: reason ? `Remove ${path}: ${reason}` : `Remove ${path}`,
+      status: "pending",
+      deleted: true,
+    });
+    const importers = importersOf(before, ctx.files, [path]);
+    return importers.length
+      ? `Edit staged: ${path} removed. Still imported by ${importers.slice(0, 8).join(", ")}${importers.length > 8 ? ", …" : ""}: fix those imports with propose_edit, or the checks fail.`
+      : `Edit staged: ${path} removed. Nothing imports it.`;
   }
 
   if (name === "propose_edit") {

@@ -10,8 +10,9 @@
 import type ts from "typescript";
 import { isTestPath } from "../runner/tampering.ts";
 import { changeChecks, type BrowserTests, type CheckRow, type TscCheck } from "./checks.ts";
-import { collectImports, importIssues, resolveSpecifier } from "./module-graph.ts";
-import { isScriptPath } from "./syntax-check.ts";
+import { importersOf, importIssues } from "./module-graph.ts";
+
+export { importersOf };
 import {
   checkProject,
   compilerOptions,
@@ -104,24 +105,6 @@ export function editsFor(
       description,
       status: "pending" as const,
     }));
-}
-
-/** Files that still exist after the change and imported one of `deleted` before it. */
-export function importersOf(
-  before: Record<string, string>,
-  after: Record<string, string>,
-  deleted: string[],
-): string[] {
-  const gone = new Set(deleted);
-  return Object.keys(before)
-    .filter((path) => after[path] !== undefined && isScriptPath(path))
-    .filter((path) =>
-      collectImports(path, before[path]!).some((ref) => {
-        const hit = resolveSpecifier(path, ref.spec, before);
-        return hit.kind === "file" && gone.has(hit.path);
-      }),
-    )
-    .sort();
 }
 
 /**

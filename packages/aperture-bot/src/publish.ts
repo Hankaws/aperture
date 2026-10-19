@@ -3,6 +3,8 @@
  * after a clear one, a commit of exactly the files the bot wrote, pushed with
  * the token actions/checkout left in the repository's git config.
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { git } from "../../agent-check/src/git.ts";
 
 export type Author = { name: string; email: string };
@@ -68,7 +70,8 @@ export function commitFiles(
   message: string,
   author: Author = BOT_AUTHOR,
 ): string {
-  git(["add", "--", ...paths], cwd);
+  // -A stages a path the run removed (a moved file) as well as one it wrote.
+  git(["add", "-A", "--", ...paths], cwd);
   git(
     [
       "-c",
@@ -92,7 +95,9 @@ export function push(cwd: string, branch: string): void {
 /** The change to `paths` as a diff, new files included, for a reply on the thread. */
 export function diffOf(cwd: string, paths: string[], max = 30_000): string {
   if (paths.length === 0) return "";
-  git(["add", "--intent-to-add", "--", ...paths], cwd);
+  // Only files that are there: marking a removed one would stage its removal and drop it from the diff.
+  const present = paths.filter((path) => existsSync(join(cwd, path)));
+  if (present.length) git(["add", "--intent-to-add", "--", ...present], cwd);
   const diff = git(["diff", "--no-color", "--", ...paths], cwd);
   return diff.length <= max ? diff : `${diff.slice(0, max)}\n… (cut at ${max} characters)`;
 }

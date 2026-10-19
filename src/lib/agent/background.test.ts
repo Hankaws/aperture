@@ -148,3 +148,20 @@ test("runsToKeep keeps every live run and the latest finished ones", () => {
   assert.ok(kept.some((r) => r.id === "live"));
   assert.ok(!kept.some((r) => r.id === "f0"), "the oldest finished run goes first");
 });
+
+test("rebaseEdits keeps a move away from an unchanged file, drops one already gone, refuses one changed since", () => {
+  const removal = {
+    id: "m",
+    path: "src/a.ts",
+    oldText: "export const a = 1;\n",
+    newText: "",
+    description: "Move src/a.ts to src/b.ts",
+    status: "pending" as const,
+    deleted: true,
+  };
+  assert.deepEqual(rebaseEdits([removal], { "src/a.ts": removal.oldText }).edits, [removal]);
+  assert.deepEqual(rebaseEdits([removal], {}), { edits: [], merged: [], conflicts: [] });
+  assert.deepEqual(rebaseEdits([removal], { "src/a.ts": "export const a = 2;\n" }).conflicts, [
+    "src/a.ts",
+  ]);
+});

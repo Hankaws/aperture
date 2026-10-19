@@ -54,6 +54,7 @@ function validEdit(value: unknown): ProposedEdit | null {
     ...(notes && notes.length > 0 ? { notes } : {}),
     ...(edit.reviewed === true ? { reviewed: true } : {}),
     ...(typeof edit.copyId === "string" ? { copyId: edit.copyId } : {}),
+    ...(edit.deleted === true ? { deleted: true } : {}),
   };
 }
 

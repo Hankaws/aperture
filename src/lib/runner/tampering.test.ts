@@ -148,3 +148,26 @@ test("a test script that only adds test paths to the paths it already named is w
   const narrowed = JSON.stringify({ scripts: { test: "node --test 'src/**/*.test.ts'" } });
   assert.equal(testTampering(files, [{ path: "package.json", newText: narrowed }]).length, 1);
 });
+
+test("a test file moved is judged at its new path, not as deleted", () => {
+  const moved = [
+    { path: "tests/math.test.ts", newText: "" },
+    { path: "tests/unit/math.test.ts", newText: TESTS },
+  ];
+  assert.deepEqual(testTampering(files, moved), []);
+  // A move that drops a test on the way is still named, at the new path.
+  const dropped = [
+    { path: "tests/math.test.ts", newText: "" },
+    {
+      path: "tests/unit/math.test.ts",
+      newText: TESTS.split("\n")
+        .filter((l) => !l.includes("subtracts"))
+        .join("\n"),
+    },
+  ];
+  assert.deepEqual(testTampering(files, dropped), ["removes 1 test from tests/unit/math.test.ts"]);
+  // Removing a test file with nothing in its place is still deleting it.
+  assert.deepEqual(testTampering(files, [{ path: "tests/math.test.ts", newText: "" }]), [
+    "deletes tests/math.test.ts and its 2 tests",
+  ]);
+});

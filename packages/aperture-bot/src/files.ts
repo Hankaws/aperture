@@ -3,7 +3,7 @@
  * reads the tracked files under the working directory; it writes edited text
  * back to disk, never under `.github/`, never a secrets file or a lockfile.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { git } from "../../agent-check/src/git.ts";
 import { isSecretPath, safeRelPath } from "../../../src/lib/security/redact.ts";
@@ -70,17 +70,21 @@ export function refusedReason(path: string): string | null {
   return null;
 }
 
-/** Each file's text after the run: the last pending edit to it wins, since each builds on the one before. */
-export function finalTexts(edits: ProposedEdit[]): Map<string, string> {
-  const texts = new Map<string, string>();
-  for (const edit of edits) if (edit.status === "pending") texts.set(edit.path, edit.newText);
+/**
+ * Each file's text after the run, null for a file moved away: the last
+ * pending edit to it wins, since each builds on the one before.
+ */
+export function finalTexts(edits: ProposedEdit[]): Map<string, string | null> {
+  const texts = new Map<string, string | null>();
+  for (const edit of edits)
+    if (edit.status === "pending") texts.set(edit.path, edit.deleted ? null : edit.newText);
   return texts;
 }
 
 export type Written = { written: string[]; refused: Array<{ path: string; reason: string }> };
 
-/** Writes the files the bot may write and lists the ones it refused. */
-export function writeTexts(cwd: string, texts: Map<string, string>): Written {
+/** Writes (or removes) the files the bot may write and lists the ones it refused. */
+export function writeTexts(cwd: string, texts: Map<string, string | null>): Written {
   const out: Written = { written: [], refused: [] };
   for (const [path, text] of texts) {
     const reason = refusedReason(path);
@@ -88,8 +92,11 @@ export function writeTexts(cwd: string, texts: Map<string, string>): Written {
       out.refused.push({ path, reason });
       continue;
     }
-    mkdirSync(dirname(join(cwd, path)), { recursive: true });
-    writeFileSync(join(cwd, path), text);
+    if (text === null) rmSync(join(cwd, path), { force: true });
+    else {
+      mkdirSync(dirname(join(cwd, path)), { recursive: true });
+      writeFileSync(join(cwd, path), text);
+    }
     out.written.push(path);
   }
   return out;

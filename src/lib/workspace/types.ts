@@ -47,6 +47,8 @@ export type ProposedEdit = {
   reviewed?: boolean;
   /** Set when this edit belongs to one composer's copy of the project. */
   copyId?: string;
+  /** Applying removes the file at `path` (`newText` is empty): the agent moved it. */
+  deleted?: boolean;
 };
 
 export type JsonScalar = string | number | boolean | null;

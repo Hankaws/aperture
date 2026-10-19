@@ -133,6 +133,13 @@ export function rebaseEdits(edits: ProposedEdit[], files: Record<string, string>
   const conflicts: string[] = [];
   for (const edit of edits) {
     if (edit.status !== "pending") continue;
+    if (edit.deleted) {
+      // A file moved away: gone already is done, changed since is the person's to keep.
+      if (files[edit.path] === undefined) continue;
+      if (files[edit.path] === edit.oldText) out.push(edit);
+      else if (!conflicts.includes(edit.path)) conflicts.push(edit.path);
+      continue;
+    }
     const now = files[edit.path] ?? "";
     if (now === edit.oldText) {
       out.push(edit);

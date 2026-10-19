@@ -82,8 +82,8 @@ export function fixInstruction(report: string): string {
 }
 
 /** Only files whose text the run actually changed. */
-function changedFrom(texts: Map<string, string>, before: Record<string, string>) {
-  return new Map([...texts].filter(([path, text]) => before[path] !== text));
+function changedFrom(texts: Map<string, string | null>, before: Record<string, string>) {
+  return new Map([...texts].filter(([path, text]) => (before[path] ?? null) !== text));
 }
 
 export async function runTask(

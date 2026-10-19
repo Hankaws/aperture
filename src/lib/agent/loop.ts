@@ -161,6 +161,12 @@ function mergeEdits(edits: ProposedEdit[]): ProposedEdit[] {
       byPath.set(edit.path, { ...edit });
       continue;
     }
+    // The last edit says whether the file is there at the end: a file written
+    // again after a move away is a change, one created and moved on is nothing.
+    if (edit.deleted && prev.oldText === "" && !prev.deleted) {
+      byPath.delete(edit.path);
+      continue;
+    }
     byPath.set(edit.path, {
       ...edit,
       oldText: prev.oldText,

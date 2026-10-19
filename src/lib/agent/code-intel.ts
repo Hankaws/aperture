@@ -8,6 +8,7 @@
  * `LanguageHost`; the rest leave the tools answering that they cannot.
  */
 import type ts from "typescript";
+import { movedTexts } from "../workspace/file-move.ts";
 import { compilerOptions, isTsPath, TSC_LIMITS, type TscLimits } from "../workspace/tsc-core.ts";
 import {
   applyRename,
@@ -190,6 +191,30 @@ export function planRename(
   };
 }
 
+export type MovePlan =
+  { ok: true; changed: Record<string, string> } | { ok: false; reason: string };
+
+/**
+ * What moving `from` to `to` writes, by the paths after the move: the moved
+ * file under `to` with its own relative imports fixed, and every file that
+ * imported it, as the file tree's Rename does (`movedTexts`).
+ */
+export function planMove(
+  service: TsService,
+  files: Record<string, string>,
+  from: string,
+  to: string,
+): MovePlan {
+  if (files[from] === undefined) return { ok: false, reason: `File not found: ${from}` };
+  if (!isTsPath(from)) return { ok: false, reason: notTs(from) };
+  const changes = service.fileRenameEdits(from, to);
+  if (!changes) return { ok: false, reason: `TypeScript cannot work out the imports of ${from}.` };
+  const changed = movedTexts(files, from, to, changes);
+  if (!changed) return { ok: false, reason: `${from} changed while moving. Try again.` };
+  // TypeScript lists the moved file only when its own imports change.
+  return { ok: true, changed: { [to]: files[from]!, ...changed } };
+}
+
 /** Files checked for a name that is gone: past that, the recap says nothing rather than hold the run up. */
 const MAX_GONE_FILES = 8;
 
@@ -240,13 +265,15 @@ export type CodeQuestion =
   | { kind: "references"; path: string; name: string; line?: number }
   | { kind: "rename"; path: string; name: string; next: string; line?: number }
   | { kind: "elsewhere"; names: Array<{ path: string; name: string }>; skip: string[] }
-  | { kind: "symbols"; query: string };
+  | { kind: "symbols"; query: string }
+  | { kind: "move"; from: string; to: string };
 
 type Answers = {
   references: string;
   rename: RenamePlan;
   elsewhere: Array<Elsewhere | null>;
   symbols: string;
+  move: MovePlan;
 };
 export type AnswerTo<Q extends CodeQuestion> = Answers[Q["kind"]];
 export type CodeAnswer<Q extends CodeQuestion> = { answer: AnswerTo<Q> } | { unavailable: string };
@@ -272,6 +299,7 @@ export function answerCode<Q extends CodeQuestion>(
   if (q.kind === "rename")
     return planRename(service, files, q.path, q.name, q.next, q.line) as AnswerTo<Q>;
   if (q.kind === "symbols") return symbolsAnswer(service, q.query) as AnswerTo<Q>;
+  if (q.kind === "move") return planMove(service, files, q.from, q.to) as AnswerTo<Q>;
   const skip = new Set(q.skip);
   return q.names.map(({ path, name }) => {
     try {

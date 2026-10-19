@@ -11,7 +11,7 @@ import { validCheckpoints, validFiles, validMessages } from "./persist";
 import { copyLabel, keepSet, type RunCopy } from "./copies";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
-import { previewNotesForEdit } from "./preview-check";
+import { mergeEdits as overlayEdits, previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
 import { canApply } from "./checks";
 import { checksMatch } from "./verify-id";
@@ -361,6 +361,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
   }
 
   function applyOne(edit: ProposedEdit) {
+    if (edit.deleted) {
+      get().deleteFile(edit.path);
+      set({
+        messages: get().messages.map((m) => ({
+          ...m,
+          edits: m.edits?.map((e) => (e.id === edit.id ? { ...e, status: "applied" as const } : e)),
+        })),
+      });
+      return;
+    }
     let files = { ...get().files, [edit.path]: edit.newText };
     const rules = findRules(files);
     if (!rules || rules.path !== edit.path) files = applyStackMemory(files, get().name);
@@ -843,10 +853,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       if (pending.length === 0) return;
       if (pending.some((e) => (e.notes?.length ?? 0) > 0)) return;
       const bounced: Record<string, ProposedEdit["notes"]> = {};
+      // Each file as it will be among the rest of this change: an import of a file the
+      // change moves resolves once the moved file is written too.
+      const together = overlayEdits(get().files, pending);
       for (const edit of pending) {
         if (previewForce.has(edit.id)) continue;
         // Static checks only; see applyEdit. The staged page's own render is in the check results.
-        const notes = previewNotesForEdit(edit, get().files);
+        const notes = previewNotesForEdit(edit, together);
         if (notes.length) bounced[edit.id] = notes;
       }
       if (Object.keys(bounced).length) {

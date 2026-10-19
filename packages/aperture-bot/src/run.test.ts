@@ -20,6 +20,21 @@ const options = (cwd: string, more: Partial<BotOptions> = {}): BotOptions => ({
   ...more,
 });
 
+test("a moved file is written under its new path, its importer fixed and the old path removed", async () => {
+  const { run } = await bundled();
+  const dir = repo(shop);
+  const { model } = scripted([[{ from: "src/price.ts", to: "src/money/price.ts" }]]);
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.deepEqual(result.written.sort(), ["src/cart.ts", "src/money/price.ts", "src/price.ts"]);
+  assert.equal(existsSync(join(dir, "src/price.ts")), false);
+  assert.match(
+    readFileSync(join(dir, "src/money/price.ts"), "utf8"),
+    /export function formatPrice/,
+  );
+  assert.match(readFileSync(join(dir, "src/cart.ts"), "utf8"), /from "\.\/money\/price"/);
+});
+
 test("a change Agent Check clears is written to disk and reported clear", async () => {
   const { run } = await bundled();
   const dir = repo(shop);

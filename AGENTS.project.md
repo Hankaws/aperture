@@ -406,7 +406,7 @@ to probe the network.
 
 ## The agent asks TypeScript
 
-`find_references` and `rename_symbol` (`tools.ts`) and the recap's
+`find_references`, `find_symbol` and `rename_symbol` (`tools.ts`) and the recap's
 "Elsewhere:" line (`verify.ts`) use the editor's language service
 (`ts-service.ts`) through `src/lib/agent/code-intel.ts`. The loop asks a
 `CodeQuestion` (`references`, `rename`, or `elsewhere` for the recap's names,
@@ -428,7 +428,7 @@ A host with neither gets "TypeScript is not available here" from the tools,
 and the recap uses text search.
 
 - The service is made once per run and loaded on first use: the first
-  `find_references`/`rename_symbol`, or the recap of a turn whose edits touch a
+  `find_references`/`find_symbol`/`rename_symbol`, or the recap of a turn whose edits touch a
   TypeScript file. It sees the whole project as sent (`fileMap`), with what the
   run has staged since; the prompt's capped `files` would miss or clip files.
 - The model names a symbol by `path` + `name` (+ optional `line`), not an

@@ -12,6 +12,7 @@ import {
   nameOffsets,
   planRename,
   referencesAnswer,
+  symbolsAnswer,
   usedElsewhere,
 } from "./code-intel.ts";
 
@@ -261,4 +262,26 @@ test("answerCode gives the same answer as the function it stands for", async () 
     answerCode(service, PROJECT, { kind: "references", path: "src/tasks.ts", name: "listTasks" }),
     referencesAnswer(service, PROJECT, "src/tasks.ts", "listTasks"),
   );
+});
+
+test("find_symbol lists where names like the query are declared, not where they are used", async () => {
+  const service = await serviceFor(PROJECT);
+  const answer = symbolsAnswer(service, "listTasks");
+  const lines = answer.split("\n");
+  assert.match(lines[0]!, /^\d+ declarations? named like listTasks, from the TypeScript compiler/);
+  assert.ok(lines.includes("src/tasks.ts:2: function listTasks"), answer);
+  // Its uses are not declarations: the import and the calls are not listed.
+  assert.ok(!lines.some((l) => l.startsWith("src/routes/home.ts")), answer);
+  assert.match(symbolsAnswer(service, "zzqqxx"), /finds no declaration named like zzqqxx/);
+  assert.match(symbolsAnswer(service, "  "), /needs a name/);
+});
+
+test("askInProcess answers find_symbol too", async () => {
+  const ask = askInProcess(async () => ({
+    ts,
+    libs: async (options) => libFilesFor(ts, options, readLib),
+  }));
+  const found = await ask(PROJECT, { kind: "symbols", query: "doubled" });
+  assert.ok("answer" in found);
+  assert.match(found.answer, /src\/local\.ts:2: const doubled/);
 });

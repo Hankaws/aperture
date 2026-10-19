@@ -173,7 +173,6 @@ export async function runTask(
         mode: "composer",
         history: [],
         standing: BOT_RULES,
-        newFiles: true,
         instruction,
         files: working.files,
         ...input,

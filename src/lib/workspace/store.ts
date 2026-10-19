@@ -931,7 +931,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const hunks = hunksFromDiff(edit.oldText, edit.newText);
       const hunk = hunks[index];
       if (!hunk) return;
-      if (hunks.length <= 1) {
+      // A removed file is one change: dropping any of it keeps the file.
+      if (hunks.length <= 1 || edit.deleted) {
         get().rejectEdit(editId);
         return;
       }

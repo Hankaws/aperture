@@ -103,6 +103,8 @@ test("workflows, secrets files and lockfiles are never written", async () => {
       dollars,
       { path: ".github/workflows/ci.yml", search: "", replace: "on: push\n" },
       { path: "package-lock.json", search: "", replace: '{"lockfileVersion":3}\n' },
+      // A new secrets file is refused before it is staged, so it never reaches the write.
+      { path: ".env.local", search: "", replace: "KEY=2\n" },
     ],
   ]);
   const result = await run.runTask(options(dir), { model });
@@ -113,6 +115,7 @@ test("workflows, secrets files and lockfiles are never written", async () => {
   ]);
   assert.equal(existsSync(join(dir, ".github")), false);
   assert.equal(readFileSync(join(dir, "package-lock.json"), "utf8"), "{}\n");
+  assert.equal(existsSync(join(dir, ".env.local")), false);
 });
 
 test("the bot can add a file", async () => {

@@ -169,11 +169,13 @@ function askTs(
   extra: Pick<TsAsk, "end" | "refactor" | "to" | "fixId" | "query"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
-    if (signal?.aborted || (type !== "project" && type !== "symbols" && !isTsPath(path))) return resolve(null);
+    if (signal?.aborted || (type !== "project" && type !== "symbols" && type !== "parse" && !isTsPath(path)))
+      return resolve(null);
     let running: Worker;
     try {
       running = startWorker();
-      syncFiles(running, files);
+      // A parse question is about its own text: the project the editor sent stays as it is.
+      if (type !== "parse") syncFiles(running, files);
     } catch {
       return resolve(null);
     }
@@ -332,6 +334,16 @@ export async function tsRefactorEdits(
     refactor: { name: refactor.refactor, action: refactor.action },
   });
   return answer && "refactor" in answer ? answer.refactor : null;
+}
+
+/**
+ * TypeScript's parse errors in `text`, for an agent edit the fast parser says
+ * does not parse: a run on a model on this machine has no other TypeScript.
+ * Null when the worker cannot say, which leaves the fast parser's answer.
+ */
+export async function tsParse(path: string, text: string): Promise<string[] | null> {
+  const answer = await askTs("parse", {}, path, text, 0);
+  return answer && "parse" in answer ? answer.parse : null;
 }
 
 /** Declarations across the project whose names match `query` (Ctrl/⌘+P, then #); why not, when TypeScript cannot say. */

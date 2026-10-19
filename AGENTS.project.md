@@ -180,7 +180,10 @@ that did not run reads "not run" with the reason and never counts as a pass.
   `ParseCheck`): `staticChangeChecks` (Agent Check, the MCP check, the
   benchmark) passes it; the agent loop's host loads it on the first edit
   Lezer flags (`LoopHost.parser`, so the server only pays for the compiler
-  then); and a finished tsc run carries each file's parse errors (`parse` on
+  then), or, on a model on the person's own machine, asks the tab's compiler
+  worker about each flagged edit's text (`LoopHost.parseAsync`, `tsParse` in
+  `tsc.ts`, a `parse` question that leaves the worker's project alone;
+  `parse-host.ts` turns either into the tools' `loadParse`); and a finished tsc run carries each file's parse errors (`parse` on
   the done outcome, from `getSyntacticDiagnostics`) for the check strip and
   the margin, which is why the editor now runs tsc on a file Lezer flags.
   Only the editor's Apply gate (`previewNotesForEdit` in the store, which is
@@ -396,7 +399,8 @@ used in the sidebar's References view (`references-panel.tsx`).
 where it runs comes in a `LoopHost` (model calls, a sandbox script runner, MCP
 tools). `loop.server.ts` passes the server's; `local-run.ts` passes a model
 client for Ollama or LM Studio on `localhost` (`local-model.ts`) and the tab's
-compiler for the TypeScript tools (`askCode`, below), and runs the loop in the browser tab when the model source is `local`.
+compiler for the TypeScript tools (`askCode`, below) and for the parser's
+second opinion on an edit (`parseAsync`), and runs the loop in the browser tab when the model source is `local`.
 Keep `loop.ts` free of `*.server` imports, `process`, and Node built-ins, or the
 browser build breaks or ships server code. The local model's address lives in
 the browser's storage (`aperture-local-model`); the server refuses the `local`

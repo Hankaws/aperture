@@ -3,7 +3,7 @@
  * The same loop the server runs, with this tab's model client: events go to
  * the same handler a server stream feeds, so the chat cannot tell them apart.
  */
-import { askCode } from "@/lib/workspace/tsc";
+import { askCode, tsParse } from "@/lib/workspace/tsc";
 import type { AgentStreamEvent } from "./events";
 import { localFailure, localHost, readLocalModel } from "./local-model";
 import { runLoop } from "./loop";
@@ -29,7 +29,8 @@ export async function runLocalResult(
       emit,
       signal,
       // The agent's TypeScript tools ask this tab's compiler, the one the editor uses.
-      { ...localHost(model), askCode },
+      // The parser's second opinion comes from the same worker.
+      { ...localHost(model), askCode, parseAsync: tsParse },
     );
   } catch (error) {
     if (signal?.aborted) throw error;

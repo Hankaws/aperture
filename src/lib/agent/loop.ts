@@ -24,6 +24,7 @@ import type { AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyRep
 import { planReadyText, resolveAgentPhase, shouldAwaitBuild, toolKindFor } from "./phase";
 import { appendVerify, recapNames, type UsedIn } from "./verify";
 import { askInProcess, type CodeAsk, type LanguageHost } from "./code-intel";
+import { parseLoader } from "./parse-host";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import type { ParseCheck } from "@/lib/workspace/ts-parse";
 import { alreadyScheduledText, canHandOff, handoffToolText } from "./browser-handoff";
@@ -262,6 +263,8 @@ export type LoopHost = {
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
   /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
   parser?: () => Promise<ParseCheck>;
+  /** Or asks it elsewhere, about one text: the tab's worker, for a model on this machine. */
+  parseAsync?: (path: string, text: string) => Promise<string[] | null>;
   /**
    * The compiler and its library files, where the host has them: the agent's
    * find_references and rename_symbol, and the recap's "Elsewhere:" line.
@@ -354,7 +357,7 @@ export async function runLoop(
     plan: approved,
     requirePlan,
     newFiles: input.newFiles,
-    loadParse: host.parser,
+    loadParse: parseLoader(host),
     intel,
     phase,
     mode: input.mode,

@@ -542,6 +542,26 @@ test("fileRenameEdits keeps the project's .ts extensions, and knows no file it d
   assert.equal(service.fileRenameEdits("src/missing.ts", "src/x.ts"), null);
 });
 
+test("fileRenameEdits moves a folder: imports into and out of it change, imports inside it do not", () => {
+  const files = {
+    "src/lib/a.ts":
+      'import { b } from "./b";\nimport { c } from "../c";\n\nexport const a = b + c;\n',
+    "src/lib/b.ts": "export const b = 1;\n",
+    "src/c.ts": "export const c = 2;\n",
+    "src/main.ts": 'import { a } from "./lib/a";\n\nexport const m = a;\n',
+  };
+  const { service } = serviceFor(files);
+  const changes = service.fileRenameEdits("src/lib", "src/util/lib");
+  assert.ok(changes);
+  const after = applyFileChanges(files, changes);
+  assert.ok(after);
+  assert.deepEqual(Object.keys(after).sort(), ["src/lib/a.ts", "src/main.ts"]);
+  assert.match(after["src/lib/a.ts"]!, /from "\.\/b";\nimport \{ c \} from "\.\.\/\.\.\/c"/);
+  assert.match(after["src/main.ts"]!, /from "\.\/util\/lib\/a"/);
+  // A path with neither a file nor files under it is not a folder to move.
+  assert.equal(service.fileRenameEdits("src/nothing", "src/else"), null);
+});
+
 test("Problems offer Fix all for a kind of error that turns up twice, and it fixes every one", () => {
   const files = {
     "src/util.ts":

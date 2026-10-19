@@ -671,7 +671,9 @@ export function createTsService(ts: Ts): TsService {
 
     fileRenameEdits(from, to) {
       const name = `/${from}`;
-      if (!texts.has(name)) return null;
+      // A file, or a folder with files in it: TypeScript moves every path under it.
+      if (!texts.has(name) && ![...texts.keys()].some((path) => path.startsWith(`${name}/`)))
+        return null;
       let found: readonly ts.FileTextChanges[];
       try {
         found = service.getEditsForFileRename(name, `/${to}`, format, preferences);

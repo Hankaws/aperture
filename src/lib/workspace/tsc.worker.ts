@@ -140,9 +140,13 @@ const parseCheck = tsParseCheck(ts);
 
 async function answer(ask: TsAsk): Promise<TsAnswer> {
   if (ask.type === "parse") return { id: ask.id, parse: parseCheck(ask.path, ask.text) };
-  // The whole project is asked about as it was last sent; any other question, with its file as typed.
-  const files =
-    ask.type === "project" || ask.type === "symbols" ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
+  // The whole project is asked about as it was last sent; any other question, with its file as
+  // typed. A folder being moved is not a file, so the project stays as sent for it.
+  const whole =
+    ask.type === "project" ||
+    ask.type === "symbols" ||
+    (ask.type === "fileRename" && projectFiles[ask.path] === undefined);
+  const files = whole ? projectFiles : { ...projectFiles, [ask.path]: ask.text };
   const tooBig = serviceUnavailable(files);
   if (tooBig) return { id: ask.id, unavailable: tooBig };
   const options = compilerOptions(ts, files);

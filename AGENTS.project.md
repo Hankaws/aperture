@@ -507,6 +507,15 @@ writes the edits (`movedTexts`). Undo puts all of it back.
   When TypeScript cannot answer, the file still moves and the toast says the
   imports were not updated, and why.
 - Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
+- A folder row has the same pencil; the dialog sees no file at the path and
+  calls `renameFolder` (`rename-file.ts`). `folderTarget` checks the path
+  (not taken, not inside itself), the worker asks TypeScript for the
+  folder's `fileRename` (`fileRenameEdits` takes a folder with files in it;
+  the worker leaves the project as sent rather than add the folder as a
+  file), and `movedFolderTexts` puts every file under its new path with the
+  edits to imports into and out of it. Imports between files inside the
+  folder are not touched. One checkpoint covers the old paths, the new ones
+  and the importers, so Undo puts all of it back.
 
 The agent moves a file with `move_file`, which stages what the tree's Rename
 writes instead of writing it: `planMove` (`code-intel.ts`, the `move`

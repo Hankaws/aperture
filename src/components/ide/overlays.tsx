@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
-import { renameFile } from "@/lib/workspace/rename-file";
+import { renameFile, renameFolder } from "@/lib/workspace/rename-file";
 import { modSymbol } from "@/lib/utils";
 
 export function NewFileDialog() {
@@ -51,8 +51,8 @@ export function NewFileDialog() {
 }
 
 /**
- * Rename or move a file: the whole path is editable, with the name selected.
- * TypeScript updates every import of it (rename-file.ts).
+ * Rename or move a file or a folder: the whole path is editable, with the
+ * name selected. TypeScript updates the imports (rename-file.ts).
  */
 export function RenameFileDialog() {
   const from = useIdeUi((s) => s.renamePath);
@@ -62,6 +62,8 @@ export function RenameFileDialog() {
 
 function RenameForm({ from }: { from: string }) {
   const setFrom = useIdeUi((s) => s.setRenamePath);
+  // The tree's folders are not files: a path with no file of its own is a folder.
+  const folder = useWorkspace((s) => s.files[from] === undefined);
   const [path, setPath] = useState(from);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,21 +72,23 @@ function RenameForm({ from }: { from: string }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-bg/70" onClick={() => setFrom(null)} />
       <form
-        aria-label="Rename file"
+        aria-label={folder ? "Rename folder" : "Rename file"}
         className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-4"
         onSubmit={async (e) => {
           e.preventDefault();
           if (busy) return;
           setBusy(true);
-          const problem = await renameFile(from, path);
+          const problem = await (folder ? renameFolder : renameFile)(from, path);
           setBusy(false);
           if (problem) return setError(problem);
           setFrom(null);
         }}
       >
-        <h2 className="text-base font-medium">Rename or move</h2>
+        <h2 className="text-base font-medium">{folder ? "Rename or move folder" : "Rename or move"}</h2>
         <p className="mt-1 text-sm text-muted">
-          A new folder in the path moves it. TypeScript updates every import of it.
+          {folder
+            ? "Every file in it moves. TypeScript updates the imports into and out of it."
+            : "A new folder in the path moves it. TypeScript updates every import of it."}
         </p>
         <Input
           autoFocus
@@ -92,7 +96,7 @@ function RenameForm({ from }: { from: string }) {
           onFocus={(e) => {
             // The name without its extension, as an editor selects it.
             const slash = from.lastIndexOf("/") + 1;
-            const dot = from.lastIndexOf(".");
+            const dot = folder ? -1 : from.lastIndexOf(".");
             if (e.currentTarget.value === from)
               e.currentTarget.setSelectionRange(slash, dot > slash ? dot : from.length);
           }}

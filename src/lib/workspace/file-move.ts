@@ -24,6 +24,50 @@ export function moveTarget(
   return { to };
 }
 
+/** The files under `folder`. */
+export function filesIn(files: Record<string, string>, folder: string): string[] {
+  return Object.keys(files).filter((path) => path.startsWith(`${folder}/`));
+}
+
+/** Where the folder `from` goes for the path typed; null when it stays where it is. */
+export function folderTarget(
+  files: Record<string, string>,
+  from: string,
+  typed: string,
+): { to: string } | { error: string } | null {
+  const raw = typed.trim().replace(/\/+$/, "");
+  if (!raw) return { error: "Give the folder a path." };
+  const to = safeRelPath(raw);
+  if (!to) return { error: "That path is outside the workspace." };
+  if (to === from) return null;
+  if (!filesIn(files, from).length) return { error: `${from} has no files any more.` };
+  if (to.startsWith(`${from}/`)) return { error: "A folder cannot move into itself." };
+  if (files[to] !== undefined || filesIn(files, to).length)
+    return { error: `${to} already exists.` };
+  return { to };
+}
+
+/**
+ * What moving the folder `from` to `to` writes, by the paths after it: every
+ * file under it at its new path, with TypeScript's edits to them and to the
+ * files that import them. Null when an edit no longer fits.
+ */
+export function movedFolderTexts(
+  basis: Record<string, string>,
+  from: string,
+  to: string,
+  changes: FileChange[],
+): Record<string, string> | null {
+  const changed = applyFileChanges(basis, changes);
+  if (!changed) return null;
+  const out: Record<string, string> = {};
+  for (const [path, text] of Object.entries(changed))
+    if (!path.startsWith(`${from}/`)) out[path] = text;
+  for (const path of filesIn(basis, from))
+    out[`${to}${path.slice(from.length)}`] = changed[path] ?? basis[path]!;
+  return out;
+}
+
 /**
  * The files the move writes, by their paths after it: the importers with
  * TypeScript's edits, and the moved file under `to` with its own imports

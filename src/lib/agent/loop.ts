@@ -673,7 +673,8 @@ export async function runLoop(
           const edited =
             outcome.call.name === "propose_edit" ||
             outcome.call.name === "rename_symbol" ||
-            outcome.call.name === "move_file";
+            outcome.call.name === "move_file" ||
+            outcome.call.name === "delete_file";
           if (edited || outcome.call.name === "note_diff") emit({ type: "edits", edits: mergeEdits(ctx.edits) });
           if (edited) editResults.push(outcome.result);
           messages.push({

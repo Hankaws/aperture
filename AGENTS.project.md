@@ -515,8 +515,14 @@ and the tool stages those as edits plus one for the old path with
 `deleted: true` (`ProposedEdit`). A non-TypeScript file, or a host without
 the compiler, moves with nothing else changed and the tool says so.
 
-- `deleted` is the only way a staged edit removes a file, and only
-  `move_file` sets it. Whatever reads staged edits must honour it: the
+- `deleted` is the only way a staged edit removes a file; `move_file` and
+  `delete_file` set it. `delete_file` stages one removal and answers with
+  the files that still import it (`importersOf`, now in `module-graph.ts`),
+  so the agent fixes them in the same change. The editor's checks add those
+  importers too (`importersOfRemoved` in `checks.ts`: Parses, Imports and
+  tsc look at them though their text is unchanged, as Agent Check already
+  did), so a removal that breaks an import holds Apply, and the recap names
+  them first under "Elsewhere:". Whatever reads staged edits must honour it: the
   overlay (`mergeEdits` in `preview-check.ts`, which the checks, tsc and the
   verify id use) drops the path, `applyOne` calls `deleteFile`, the loop's
   `mergeEdits` drops a file created and moved on in the same run, saving

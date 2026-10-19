@@ -7,7 +7,7 @@
  * green row nobody earned is worse than no row at all.
  */
 import type { ProposedEdit, VerifyReport } from "./types";
-import { importIssues } from "./module-graph.ts";
+import { importersOf, importIssues } from "./module-graph.ts";
 import { issuesForText, isCheckablePath, isPreviewPath, mergeEdits } from "./preview-check.ts";
 import type { ParseCheck } from "./ts-parse.ts";
 import { isScriptPath } from "./syntax-check.ts";
@@ -218,6 +218,17 @@ function tscParseCheck(tsc: Extract<TscCheck, { state: "done" }>): ParseCheck {
   return (path) => tsc.parse?.[path] ?? null;
 }
 
+/**
+ * Files the change leaves alone that import a file it removes: their text is
+ * the same, but the import now points at nothing, so they are checked too.
+ */
+export function importersOfRemoved(files: Record<string, string>, edits: ProposedEdit[]): string[] {
+  const removed = edits.filter((e) => e.deleted).map((e) => e.path);
+  if (!removed.length) return [];
+  const edited = new Set(edits.map((e) => e.path));
+  return importersOf(files, mergeEdits(files, edits), removed).filter((path) => !edited.has(path));
+}
+
 export function changeChecks(input: {
   files: Record<string, string>;
   edits: ProposedEdit[];
@@ -235,8 +246,14 @@ export function changeChecks(input: {
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
-  // A removed file has no text to check; what imported it is judged in the files that do.
-  const checkable = [...new Set(edits.filter((e) => !e.deleted).map((e) => e.path).filter(isCheckablePath))];
+  // A removed file has no text to check; what imported it is judged in the files that still do.
+  const checkable = [
+    ...new Set(
+      [...edits.filter((e) => !e.deleted).map((e) => e.path), ...importersOfRemoved(files, edits)].filter(
+        isCheckablePath,
+      ),
+    ),
+  ];
   const scripts = checkable.filter(isScriptPath);
   const parse = input.parse ?? (input.tsc?.state === "done" ? tscParseCheck(input.tsc) : undefined);
 

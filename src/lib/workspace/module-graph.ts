@@ -328,3 +328,21 @@ export function importIssues(path: string, files: Record<string, string>): strin
   }
   return [...new Set(issues)].slice(0, MAX_ISSUES);
 }
+
+/** Files that still exist after the change and imported one of `deleted` before it. */
+export function importersOf(
+  before: Record<string, string>,
+  after: Record<string, string>,
+  deleted: string[],
+): string[] {
+  const gone = new Set(deleted);
+  return Object.keys(before)
+    .filter((path) => after[path] !== undefined && isScriptPath(path))
+    .filter((path) =>
+      collectImports(path, before[path]!).some((ref) => {
+        const hit = resolveSpecifier(path, ref.spec, before);
+        return hit.kind === "file" && gone.has(hit.path);
+      }),
+    )
+    .sort();
+}

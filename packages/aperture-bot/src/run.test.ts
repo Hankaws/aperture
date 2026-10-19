@@ -35,6 +35,16 @@ test("a moved file is written under its new path, its importer fixed and the old
   assert.match(readFileSync(join(dir, "src/cart.ts"), "utf8"), /from "\.\/money\/price"/);
 });
 
+test("a file the change no longer needs is removed, and the change clears", async () => {
+  const { run } = await bundled();
+  const dir = repo({ ...shop, "src/unused.ts": "export const old = 1;\n" });
+  const { model } = scripted([[{ remove: "src/unused.ts" }]]);
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.deepEqual(result.written, ["src/unused.ts"]);
+  assert.equal(existsSync(join(dir, "src/unused.ts")), false);
+});
+
 test("a change Agent Check clears is written to disk and reported clear", async () => {
   const { run } = await bundled();
   const dir = repo(shop);

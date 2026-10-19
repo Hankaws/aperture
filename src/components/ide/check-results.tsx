@@ -12,6 +12,7 @@ import {
   changeChecks,
   checksReady,
   checkStripState,
+  importersOfRemoved,
   lookPrompt,
   pendingSource,
   renderEntry,
@@ -155,8 +156,13 @@ function useBrowserTests(files: Record<string, string>, edits: ProposedEdit[], v
  */
 function useTypeCheck(files: Record<string, string>, edits: ProposedEdit[]): TscCheck {
   const tsPaths = useMemo(
-    () => [...new Set(edits.filter((e) => isTsPath(e.path) && e.newText !== "").map((e) => e.path))],
-    [edits],
+    () => [
+      ...new Set([
+        ...edits.filter((e) => isTsPath(e.path) && e.newText !== "").map((e) => e.path),
+        ...importersOfRemoved(files, edits).filter(isTsPath),
+      ]),
+    ],
+    [files, edits],
   );
   const merged = useMemo(() => mergeEdits(files, edits), [files, edits]);
   const key = verificationId({ runtime: "browser", files, edits });

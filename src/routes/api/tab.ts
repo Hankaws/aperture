@@ -48,8 +48,9 @@ export const Route = createFileRoute("/api/tab")({
           return Response.json({ text: "" });
         }
 
-        const { tabCacheGet, tabCacheKey, tabCacheSet, completeTab } = await import("@/lib/agent/tab.server");
-        const cacheKey = tabCacheKey(path, prefix, suffix);
+        const { completeTab } = await import("@/lib/agent/tab.server");
+        const { tabCacheGet, tabCacheKey, tabCacheSet } = await import("@/lib/agent/tab-cache");
+        const cacheKey = tabCacheKey(userId, path, prefix, suffix);
         const cached = tabCacheGet(cacheKey);
         if (cached !== null) {
           return Response.json({ text: cached });

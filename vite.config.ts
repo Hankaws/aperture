@@ -184,6 +184,28 @@ export default defineConfig(({ command, isPreview }) => ({
             // into an ES module it crashes on load (it reads __filename), so it
             // ships as its own CommonJS package next to the function.
             traceDeps: ["typescript"],
+            // Only this app and Grok may frame it. Other *.grok.me apps are
+            // same-site (the session cookie rides along) but untrusted, and
+            // could otherwise frame a signed-in editor and steer its clicks.
+            // No X-Frame-Options: it cannot allow Grok's origins.
+            // A Vercel route, not a routeRule: Nitro writes header routeRules
+            // without `continue`, and a matched route without it ends routing,
+            // so "/**" would never reach the server function.
+            vercel: {
+              config: {
+                version: 3,
+                routes: [
+                  {
+                    src: "/(.*)",
+                    headers: {
+                      "Content-Security-Policy":
+                        "frame-ancestors 'self' https://grok.com https://*.grok.com https://grok-sandbox.com https://*.grok-sandbox.com",
+                    },
+                    continue: true,
+                  },
+                ],
+              },
+            },
           }),
         ]
       : []),

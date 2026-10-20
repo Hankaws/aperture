@@ -740,6 +740,13 @@ were checked by hand; if you change the code beneath them, re-check the same way
 - **Persistence end to end** — that work survives cleared site data was proven by
   driving a browser: edit, "Saved", clear storage, reload.
 - **The preview Scripts toggle** — security-relevant, verified by clicking it.
+- **Who may frame the deployed app** — `vite.config.ts` gives Vercel a route
+  sending `Content-Security-Policy: frame-ancestors` for the app itself and
+  Grok's origins, with `continue: true` (a header `routeRule` would end
+  routing before the server function). `vite preview` does not run Vercel's
+  routes, so check it on a deployment: the app still shows in Grok, and
+  `.vercel/output/config.json` lists the route first. A new origin that must
+  frame the app is added there.
 - **`src/lib/sandbox/vercel.server.ts` has never run at all.** Its request shapes
   come from API docs, not from a successful call.
 

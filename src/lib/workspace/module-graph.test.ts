@@ -310,3 +310,20 @@ test("an exported function whose body says from \"…\" in a string is not a re-
     ],
   );
 });
+
+test("collectImports reads a file once while its text is the same, and again when it changes", () => {
+  const text = 'import { a } from "./a";\n';
+  const first = collectImports("src/memo-x.ts", text);
+  assert.equal(collectImports("src/memo-x.ts", text), first);
+  const changed = collectImports("src/memo-x.ts", 'import { b } from "./b";\n');
+  assert.notEqual(changed, first);
+  assert.deepEqual(changed.map((r) => r.spec), ["./b"]);
+  // The same text at another path is read for that path.
+  assert.notEqual(collectImports("src/memo-y.ts", text), first);
+});
+
+test("collectExports is kept per path and text too", () => {
+  const text = "export const x = 1;\n";
+  assert.equal(collectExports("src/memo-e.ts", text), collectExports("src/memo-e.ts", text));
+  assert.ok(collectExports("src/memo-e.ts", "export const y = 2;\n").names.has("y"));
+});

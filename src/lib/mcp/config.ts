@@ -49,6 +49,34 @@ export function mcpReadOnly(name: string, hint?: boolean): boolean {
   return /^(get|list|search|read|fetch|find|query)([-_]|$)/i.test(name);
 }
 
+/**
+ * A call that carries a URL waits for the user even to a read-only tool: a
+ * fetch-style tool given a URL can send what the agent read to any host.
+ * Arguments are checked as parsed, so an escaped slash (`https:\/\/`) still counts.
+ */
+export function mcpArgsNeedConfirm(argsText: string): boolean {
+  let text = argsText;
+  try {
+    text = JSON.stringify(JSON.parse(argsText));
+  } catch {
+    // Not JSON: the call fails later anyway; check the text as it is.
+  }
+  return /\b[a-z][a-z0-9+.-]*:\/\//i.test(text);
+}
+
+/**
+ * The agent's note about servers a project's MCP file lists. They are never
+ * connected from the file: a cloned repository could otherwise bring its own
+ * server and mark every tool read-only. The user adds one in Settings → MCP.
+ */
+export function projectServersNote(project: ProjectMcpServer[], accountUrls: string[]): string {
+  const known = new Set(accountUrls.map((url) => url.toLowerCase()));
+  const listed = project.filter((server) => !known.has(server.url.toLowerCase()));
+  if (listed.length === 0) return "";
+  const names = listed.map((server) => `${server.name} (${server.url})`).join(", ");
+  return `The project's MCP file lists ${names}. It is not connected: the user can add it in Settings → MCP to let you use it.`;
+}
+
 export function parseMcpPayload(text: string): { result?: unknown; error?: string } | null {
   const body = text.trim();
   const jsonText = body.startsWith("{")
@@ -141,8 +169,8 @@ function oneServer(name: string, value: unknown): { server: ProjectMcpServer | n
 
 /**
  * Remote HTTPS servers declared by the project. A local `command` server is
- * skipped: this editor does not start processes from a repo file.
- * Account servers with the same name win later, when the two lists merge.
+ * skipped: this editor does not start processes from a repo file. They are
+ * only named to the agent (projectServersNote), never connected.
  */
 export function projectMcpServers(files: Record<string, string>): { servers: ProjectMcpServer[]; skipped: string[] } {
   const path = PROJECT_MCP_PATHS.find((candidate) => typeof files[candidate] === "string");

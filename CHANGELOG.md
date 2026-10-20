@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Tab completions are kept per account: one person's cached suggestion is never shown to another. (#117)
 - The editor stays responsive while a change is staged in a large project: each file's imports are read once until it changes. (#116)
 - Folders can be renamed on a phone too: open a folder in the file tree and its Rename button appears, as a file's does once selected. (#115)
 - The agent can move a whole folder: `move_file` stages every file in it at its new path, with the imports into and out of it updated by TypeScript, as one change. (#114)

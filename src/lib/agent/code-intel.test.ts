@@ -324,3 +324,27 @@ test("planMove refuses a file that is not there or not TypeScript, and askInProc
   // The moved file's own relative import is fixed for where it now lives.
   assert.match(moved.answer.changed["src/pages/home.ts"]!, /from "\.\.\/tasks"/);
 });
+
+test("planMove moves a folder: every file under its new path, imports into and out of it fixed", async () => {
+  const files = {
+    ...PROJECT,
+    "src/lib/fmt.ts":
+      'import { listTasks } from "../tasks";\nimport { pad } from "./pad";\n\nexport const first = pad(listTasks(1)[0]!);\n',
+    "src/lib/pad.ts": "export const pad = (s: string) => ` ${s}`;\n",
+    "src/use.ts": 'import { first } from "./lib/fmt";\n\nexport const shown = first;\n',
+  };
+  const service = await serviceFor(files);
+  const plan = planMove(service, files, "src/lib", "src/util/lib");
+  assert.ok(plan.ok);
+  assert.deepEqual(Object.keys(plan.changed).sort(), [
+    "src/use.ts",
+    "src/util/lib/fmt.ts",
+    "src/util/lib/pad.ts",
+  ]);
+  // Out of the folder: one level deeper now. Inside it: unchanged.
+  assert.match(
+    plan.changed["src/util/lib/fmt.ts"]!,
+    /from "\.\.\/\.\.\/tasks";\nimport \{ pad \} from "\.\/pad"/,
+  );
+  assert.match(plan.changed["src/use.ts"]!, /from "\.\/util\/lib\/fmt"/);
+});

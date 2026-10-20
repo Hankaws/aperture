@@ -3,7 +3,7 @@ import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
-import { moveTarget } from "@/lib/workspace/file-move";
+import { filesIn, folderTarget, moveTarget } from "@/lib/workspace/file-move";
 import { importersOf } from "@/lib/workspace/module-graph";
 import { isTsPath } from "@/lib/workspace/tsc-core";
 import { LESSONS_PATH, upsertLesson } from "@/lib/workspace/lessons";
@@ -156,12 +156,12 @@ export const AGENT_TOOLS = [
     function: {
       name: "move_file",
       description:
-        "Move or rename a file, as the editor's file tree does, and stage the move: the file under its new path and the old path removed. For TypeScript the compiler also updates every import of it and its own relative imports, so do not fix those by hand. Same locks and confidence rule as propose_edit.",
+        "Move or rename a file or a folder, as the editor's file tree does, and stage the move: each file under its new path and the old paths removed. For TypeScript the compiler also updates every import of it, and its own relative imports (for a folder, the imports into and out of it), so do not fix those by hand. Same locks and confidence rule as propose_edit.",
       parameters: {
         type: "object",
         properties: {
-          from: { type: "string", description: "The file's path now." },
-          to: { type: "string", description: "Its new path, file name included." },
+          from: { type: "string", description: "The file's or folder's path now." },
+          to: { type: "string", description: "Its new path: for a file, file name included." },
           confidence: { type: "number", description: "0 to 1. How sure this move is right. Below 0.8 it is dropped." },
         },
         required: ["from", "to", "confidence"],
@@ -373,6 +373,9 @@ function lineArg(value: unknown): number | undefined {
   return Number.isInteger(line) && line > 0 ? line : undefined;
 }
 
+/** The most files one move_file stages: a bigger folder is moved in parts, or from the file tree. */
+export const MAX_MOVED_FILES = 40;
+
 export async function executeTool(
   name: string,
   args: Record<string, unknown>,
@@ -498,15 +501,23 @@ export async function executeTool(
     const from = safeRelPath(String(args.from ?? "")) ?? "";
     const typed = String(args.to ?? "");
     if (!from || !typed.trim()) return "move_file needs from and to.";
-    const target = moveTarget(ctx.files, from, typed);
+    // A path with no file of its own but files under it is a folder: every file in it moves.
+    const folder = ctx.files[from] === undefined && filesIn(ctx.files, from).length > 0;
+    const target = folder ? folderTarget(ctx.files, from, typed) : moveTarget(ctx.files, from, typed);
     if (!target) return `${from} is already at that path.`;
     if ("error" in target) return `Move not staged: ${target.error}`;
     const { to } = target;
-    if (from === LESSONS_PATH || to === LESSONS_PATH) return "The lessons file stays where it is.";
+    const moving = folder ? filesIn(ctx.files, from) : [from];
+    if (moving.length > MAX_MOVED_FILES)
+      return `Move not staged: ${from} has ${moving.length} files; move at most ${MAX_MOVED_FILES} at once.`;
+    const newPath = (path: string) => (folder ? `${to}${path.slice(from.length)}` : to);
+    if (moving.includes(LESSONS_PATH) || moving.map(newPath).includes(LESSONS_PATH))
+      return "The lessons file stays where it is.";
     let basis = ctx.files;
-    let changed: Record<string, string> = { [to]: ctx.files[from]! };
+    let changed: Record<string, string> = Object.fromEntries(moving.map((path) => [newPath(path), ctx.files[path]!]));
     let unchecked = "";
-    if (isTsPath(from)) {
+    const typescript = moving.some(isTsPath);
+    if (typescript) {
       const found = ctx.intel ? await ctx.intel({ kind: "move", from, to }) : "TypeScript is not available here.";
       if (typeof found === "string") unchecked = found;
       else if (!found.answer.ok) return `Move not staged: ${found.answer.reason}`;
@@ -518,22 +529,24 @@ export async function executeTool(
     const description = `Move ${from} to ${to}`;
     const stage = (edit: Omit<ProposedEdit, "id" | "description" | "status">) =>
       ctx.edits.push({ id: `edit_${ctx.edits.length + 1}_${edit.path}`, description, status: "pending", ...edit });
-    stage({ path: from, oldText: basis[from]!, newText: "", deleted: true });
+    const arrived = new Set(moving.map(newPath));
+    for (const path of moving) stage({ path, oldText: basis[path]!, newText: "", deleted: true });
     for (const path of Object.keys(changed).sort()) {
-      stage({ path, oldText: path === to ? "" : basis[path]!, newText: changed[path]! });
+      stage({ path, oldText: arrived.has(path) ? "" : basis[path]!, newText: changed[path]! });
     }
-    delete ctx.files[from];
+    for (const path of moving) delete ctx.files[path];
     Object.assign(ctx.files, changed);
-    const importers = Object.keys(changed).filter((path) => path !== to);
+    const importers = Object.keys(changed).filter((path) => !arrived.has(path));
     const fixed = importers.length
       ? ` Imports updated in ${importers.length} ${importers.length === 1 ? "file" : "files"} (${importers.slice(0, 6).join(", ")}${importers.length > 6 ? ", …" : ""}).`
       : "";
     const note = unchecked
       ? ` Imports were not updated: ${unchecked} grep for ${from} and fix them with propose_edit.`
-      : isTsPath(from)
+      : typescript
         ? fixed || " Nothing imported it."
-        : ` Not a TypeScript file, so nothing was updated to point at it: grep for ${from} if something refers to it.`;
-    return `Edit staged: ${from} moved to ${to}.${note}`;
+        : ` Not TypeScript, so nothing was updated to point at it: grep for ${from} if something refers to it.`;
+    const count = folder ? ` (${moving.length} ${moving.length === 1 ? "file" : "files"})` : "";
+    return `Edit staged: ${from} moved to ${to}${count}.${note}`;
   }
 
   if (name === "delete_file") {

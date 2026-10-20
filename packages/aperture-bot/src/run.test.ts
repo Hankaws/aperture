@@ -35,6 +35,27 @@ test("a moved file is written under its new path, its importer fixed and the old
   assert.match(readFileSync(join(dir, "src/cart.ts"), "utf8"), /from "\.\/money\/price"/);
 });
 
+test("a moved folder is written under its new path, its importers fixed and its old files removed", async () => {
+  const { run } = await bundled();
+  const dir = repo({
+    ...shop,
+    "src/lib/fmt.ts":
+      'import { formatPrice } from "../price";\n\nexport const show = (n: number) => formatPrice(n);\n',
+    "src/total.ts": 'import { show } from "./lib/fmt";\n\nexport const total = show(5);\n',
+  });
+  const { model } = scripted([[{ from: "src/lib", to: "src/util/lib" }]]);
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.deepEqual(result.written.sort(), [
+    "src/lib/fmt.ts",
+    "src/total.ts",
+    "src/util/lib/fmt.ts",
+  ]);
+  assert.equal(existsSync(join(dir, "src/lib/fmt.ts")), false);
+  assert.match(readFileSync(join(dir, "src/util/lib/fmt.ts"), "utf8"), /from "\.\.\/\.\.\/price"/);
+  assert.match(readFileSync(join(dir, "src/total.ts"), "utf8"), /from "\.\/util\/lib\/fmt"/);
+});
+
 test("a file the change no longer needs is removed, and the change clears", async () => {
   const { run } = await bundled();
   const dir = repo({ ...shop, "src/unused.ts": "export const old = 1;\n" });

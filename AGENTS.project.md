@@ -522,7 +522,13 @@ writes instead of writing it: `planMove` (`code-intel.ts`, the `move`
 question) gives the moved file under its new path and every importer fixed,
 and the tool stages those as edits plus one for the old path with
 `deleted: true` (`ProposedEdit`). A non-TypeScript file, or a host without
-the compiler, moves with nothing else changed and the tool says so.
+the compiler, moves with nothing else changed and the tool says so. `from`
+may be a folder (a path with no file but files under it): `folderTarget`
+checks the path, `planMove` asks for the folder's edits and lays them out
+with `movedFolderTexts` as the tree's folder Rename does, and the tool stages
+one removal per old path, so the whole folder is one change that
+`needsTheRest` keeps together. At most `MAX_MOVED_FILES` (40) files move in
+one call.
 
 - `deleted` is the only way a staged edit removes a file; `move_file` and
   `delete_file` set it. `delete_file` stages one removal and answers with

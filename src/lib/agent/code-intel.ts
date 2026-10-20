@@ -8,7 +8,7 @@
  * `LanguageHost`; the rest leave the tools answering that they cannot.
  */
 import type ts from "typescript";
-import { movedTexts } from "../workspace/file-move.ts";
+import { filesIn, movedFolderTexts, movedTexts } from "../workspace/file-move.ts";
 import { compilerOptions, isTsPath, TSC_LIMITS, type TscLimits } from "../workspace/tsc-core.ts";
 import {
   applyRename,
@@ -197,7 +197,9 @@ export type MovePlan =
 /**
  * What moving `from` to `to` writes, by the paths after the move: the moved
  * file under `to` with its own relative imports fixed, and every file that
- * imported it, as the file tree's Rename does (`movedTexts`).
+ * imported it, as the file tree's Rename does (`movedTexts`). `from` may be a
+ * folder: then every file under it, with the imports into and out of it
+ * (`movedFolderTexts`), as the tree's folder Rename does.
  */
 export function planMove(
   service: TsService,
@@ -205,6 +207,14 @@ export function planMove(
   from: string,
   to: string,
 ): MovePlan {
+  if (files[from] === undefined && filesIn(files, from).length) {
+    const changes = service.fileRenameEdits(from, to);
+    if (!changes)
+      return { ok: false, reason: `TypeScript cannot work out the imports of ${from}.` };
+    const changed = movedFolderTexts(files, from, to, changes);
+    if (!changed) return { ok: false, reason: `${from} changed while moving. Try again.` };
+    return { ok: true, changed };
+  }
   if (files[from] === undefined) return { ok: false, reason: `File not found: ${from}` };
   if (!isTsPath(from)) return { ok: false, reason: notTs(from) };
   const changes = service.fileRenameEdits(from, to);

@@ -14,6 +14,29 @@ import { jsParserFor } from "../parser/lezer.ts";
 import { isScriptPath, stripJsonc } from "./syntax-check.ts";
 
 const MAX_PARSE_CHARS = 400_000;
+
+/**
+ * The last answer per file path, for as long as the file's text is the same
+ * string. The editor asks about every unchanged file again on each keystroke;
+ * parsing them all again froze it on real projects.
+ */
+const MEMO_MAX = 4000;
+function memoByText<T>(
+  memo: Map<string, { text: string; value: T }>,
+  path: string,
+  text: string,
+  read: () => T,
+): T {
+  const hit = memo.get(path);
+  if (hit && hit.text === text) return hit.value;
+  const value = read();
+  memo.delete(path);
+  memo.set(path, { text, value });
+  if (memo.size > MEMO_MAX) memo.delete(memo.keys().next().value!);
+  return value;
+}
+const importsMemo = new Map<string, { text: string; value: ImportRef[] }>();
+const exportsMemo = new Map<string, { text: string; value: ExportSet }>();
 const MAX_ISSUES = 4;
 
 /** Tried in order against a relative specifier, longest-lived conventions first. */
@@ -80,7 +103,12 @@ function groupNames(text: string, side: "left" | "right"): string[] {
     .filter((name) => /^[A-Za-z_$][\w$]*$/.test(name));
 }
 
+/** The file's imports. Callers must not change the array: it is shared while the text is unchanged. */
 export function collectImports(path: string, text: string): ImportRef[] {
+  return memoByText(importsMemo, path, text, () => readImports(path, text));
+}
+
+function readImports(path: string, text: string): ImportRef[] {
   if (text.length > MAX_PARSE_CHARS) return [];
   let tree;
   try {
@@ -149,7 +177,12 @@ export type ExportSet = {
   unknown: boolean;
 };
 
+/** The file's exports. Callers must not change the set: it is shared while the text is unchanged. */
 export function collectExports(path: string, text: string): ExportSet {
+  return memoByText(exportsMemo, path, text, () => readExports(path, text));
+}
+
+function readExports(path: string, text: string): ExportSet {
   const names = new Set<string>();
   if (text.length > MAX_PARSE_CHARS) return { names, unknown: true };
   // `export * from …` forwards names this file never spells, and an object

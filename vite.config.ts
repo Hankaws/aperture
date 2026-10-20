@@ -193,6 +193,7 @@ export default defineConfig(({ command, isPreview }) => ({
             // so "/**" would never reach the server function.
             vercel: {
               config: {
+                version: 3,
                 routes: [
                   {
                     src: "/(.*)",

@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { checkCooldown } from "@/lib/sandbox/check-cooldown";
 
 /**
  * One real run through the agent's sandbox path, for checking a deployment's
  * wiring: sign-in, file upload, the package-registry allowlist and the
  * command runner. Hidden (404) unless the deployment sets
- * `APERTURE_SANDBOX_CHECK=1`; each call starts a real, billed sandbox.
+ * `APERTURE_SANDBOX_CHECK=1`. A real check starts a billed sandbox, so one
+ * runs at most every ten minutes; calls in between get the last answer, with
+ * `cached: true`.
  *
  * The project installs one small package (the registry must be reachable) and
  * then tries a host outside the allowlist (which must be blocked), so a pass
@@ -38,6 +41,8 @@ const CHECK_FILES: Record<string, string> = {
   ].join("\n"),
 };
 
+const throttled = checkCooldown();
+
 export const Route = createFileRoute("/api/sandbox-check")({
   server: {
     handlers: {
@@ -52,18 +57,21 @@ export const Route = createFileRoute("/api/sandbox-check")({
           return Response.json({ ok: false, mode: null, error: "No sandbox is configured." }, { status: 503, headers });
         }
 
-        const { planRun, sandboxEnv, clampTimeout } = await import("@/lib/sandbox/policy");
-        const plan = planRun(CHECK_FILES, "test");
-        if (!plan.ok) return Response.json({ ok: false, mode: mode.kind, error: plan.error }, { status: 500, headers });
+        const { status, body, cached } = await throttled(async () => {
+          const { planRun, sandboxEnv, clampTimeout } = await import("@/lib/sandbox/policy");
+          const plan = planRun(CHECK_FILES, "test");
+          if (!plan.ok) return { status: 500, body: { ok: false, mode: mode.kind, error: plan.error } };
 
-        const outcome = await new VercelSandboxRunner().run({
-          files: CHECK_FILES,
-          steps: plan.steps,
-          env: sandboxEnv(),
-          timeoutMs: clampTimeout(120_000),
+          const outcome = await new VercelSandboxRunner().run({
+            files: CHECK_FILES,
+            steps: plan.steps,
+            env: sandboxEnv(),
+            timeoutMs: clampTimeout(120_000),
+          });
+          const passed = outcome.ok && outcome.passed;
+          return { status: passed ? 200 : 502, body: { ok: passed, mode: mode.kind, outcome } };
         });
-        const passed = outcome.ok && outcome.passed;
-        return Response.json({ ok: passed, mode: mode.kind, outcome }, { status: passed ? 200 : 502, headers });
+        return Response.json({ ...body, cached }, { status, headers });
       },
     },
   },

@@ -1,4 +1,4 @@
-import { cleanMcpName, cleanMcpToken, formatMcpTools, mergeMcpServers, mcpReadOnly, projectMcpServers, type McpServerView, type McpToolInfo } from "./config";
+import { cleanMcpName, cleanMcpToken, formatMcpTools, mcpArgsNeedConfirm, mcpReadOnly, projectMcpServers, projectServersNote, type McpServerView, type McpToolInfo } from "./config";
 import { assertMcpUrl, callServerTool, listServerTools, type StoredMcpServer } from "./client.server";
 
 const MAX_SERVERS = 8;
@@ -103,20 +103,13 @@ export async function mcpToolsFor(
   files?: Record<string, string>,
 ): Promise<{ servers: StoredMcpServer[]; tools: McpToolInfo[]; note: string }> {
   const account = userId ? await readServers(userId) : [];
+  // Only servers the user added in Settings connect. A project's MCP file is
+  // repo content, so its servers are named to the agent and never called.
   const project = projectMcpServers(files ?? {});
-  const fromProject: StoredMcpServer[] = [];
-  const skipped = [...project.skipped];
-  for (const server of project.servers) {
-    try {
-      const url = await assertMcpUrl(server.url);
-      fromProject.push({ ...server, url });
-    } catch {
-      skipped.push(server.name);
-    }
-  }
-  const servers = mergeMcpServers(account, fromProject);
-  const skipNote = skipped.length > 0 ? `Skipped local MCP (${skipped.join(", ")}): only HTTPS servers load.` : "";
-  if (servers.length === 0) return { servers, tools: [], note: skipNote };
+  const servers = account.slice(0, MAX_SERVERS);
+  const skipNote = project.skipped.length > 0 ? `Skipped local MCP (${project.skipped.join(", ")}): only HTTPS servers load.` : "";
+  const projectNote = projectServersNote(project.servers, account.map((server) => server.url));
+  if (servers.length === 0) return { servers, tools: [], note: [projectNote, skipNote].filter(Boolean).join("\n") };
   const lists = await Promise.all(
     servers.map(async (server) => {
       try {
@@ -129,7 +122,7 @@ export async function mcpToolsFor(
   const tools = lists.flat().slice(0, 40);
   const named = servers.map((server) => server.name).join(", ");
   const listed = tools.length > 0 ? formatMcpTools(tools) : `MCP servers connected: ${named}. Their tool lists did not load.`;
-  const note = [listed, skipNote].filter(Boolean).join("\n");
+  const note = [listed, projectNote, skipNote].filter(Boolean).join("\n");
   return { servers, tools, note };
 }
 
@@ -144,7 +137,7 @@ export async function invokeMcp(
   if (!server) return { text: `No MCP server named ${serverName}.`, pending: false };
   if (!/^[A-Za-z0-9_.:-]{1,80}$/.test(toolName)) return { text: "That tool name is not valid.", pending: false };
   const known = tools.find((tool) => tool.server === server.name && tool.name === toolName);
-  const readOnly = known ? known.readOnly : mcpReadOnly(toolName);
+  const readOnly = (known ? known.readOnly : mcpReadOnly(toolName)) && !mcpArgsNeedConfirm(argsText);
   if (!readOnly) {
     return {
       text: `Staged ${server.name} / ${toolName}. The user confirms it before it runs, the same as a file edit.`,

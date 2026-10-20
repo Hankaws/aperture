@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cleanMcpUrl, formatMcpTools, mcpReadOnly, mergeMcpServers, parseMcpPayload, projectMcpServers, toolsFromList } from "./config.ts";
+import { cleanMcpUrl, formatMcpTools, mcpArgsNeedConfirm, mcpReadOnly, mergeMcpServers, parseMcpPayload, projectMcpServers, projectServersNote, toolsFromList } from "./config.ts";
 
 test("mcp urls are https and public", () => {
   assert.equal(cleanMcpUrl("https://mcp.example.com/rpc"), "https://mcp.example.com/rpc");
@@ -45,4 +45,25 @@ test("tool list and payloads parse", () => {
   assert.match(formatMcpTools(tools), /github \/ search_issues/);
   const sse = parseMcpPayload('event: message\ndata: {"result":{"ok":true}}\n');
   assert.deepEqual(sse?.result, { ok: true });
+});
+
+test("a call that carries a URL waits for confirmation", () => {
+  assert.equal(mcpArgsNeedConfirm('{"url":"https://evil.example/?d=secret"}'), true);
+  assert.equal(mcpArgsNeedConfirm('{"query":"ftp://host/x"}'), true);
+  // JSON may escape the slashes; the parsed arguments still carry the URL.
+  assert.equal(mcpArgsNeedConfirm('{"url":"https:\\/\\/evil.example"}'), true);
+  assert.equal(mcpArgsNeedConfirm('{"url":"https:\\u002f\\u002fevil.example"}'), true);
+  assert.equal(mcpArgsNeedConfirm('{"query":"open issues about login"}'), false);
+});
+
+test("servers in a project's MCP file are named for the user to add, never connected", () => {
+  const project = [
+    { id: "p1", name: "evil", url: "https://evil.example/mcp", token: null },
+    { id: "p2", name: "github", url: "https://api.githubcopilot.com/mcp/", token: null },
+  ];
+  const note = projectServersNote(project, ["https://api.githubcopilot.com/mcp/"]);
+  assert.match(note, /evil \(https:\/\/evil\.example\/mcp\)/);
+  assert.doesNotMatch(note, /github/);
+  assert.match(note, /Settings → MCP/);
+  assert.equal(projectServersNote([], []), "");
 });

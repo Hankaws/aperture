@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- MCP is safer with code you did not write: a project's .mcp.json no longer connects servers on its own (add one in Settings → MCP), and any tool call whose arguments carry a URL waits for you to confirm it. (#118)
 - Tab completions are kept per account: one person's cached suggestion is never shown to another. (#117)
 - The editor stays responsive while a change is staged in a large project: each file's imports are read once until it changes. (#116)
 - Folders can be renamed on a phone too: open a folder in the file tree and its Rename button appears, as a file's does once selected. (#115)

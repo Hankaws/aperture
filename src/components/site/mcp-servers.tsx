@@ -65,9 +65,9 @@ export function McpServersCard() {
     <div className="rounded-2xl border border-border bg-surface p-5">
       <p className="text-sm font-medium">MCP</p>
       <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-        Connect a remote MCP server over HTTPS. A `.mcp.json` in the open project is picked up as well. Local
-        command servers in that file are ignored. The agent can call the tools. Reads run immediately. Anything that
-        changes state waits for you to confirm, the same as a file edit.
+        Connect a remote MCP server over HTTPS. Servers listed in the open project&apos;s `.mcp.json` are not
+        connected on their own: add one here to use it. The agent can call the tools. Reads run immediately unless
+        they carry a URL. Anything that changes state waits for you to confirm, the same as a file edit.
       </p>
       {servers.length > 0 && (
         <ul className="mt-4 divide-y divide-border rounded-md border border-border">

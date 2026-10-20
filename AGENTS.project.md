@@ -507,7 +507,8 @@ writes the edits (`movedTexts`). Undo puts all of it back.
   When TypeScript cannot answer, the file still moves and the toast says the
   imports were not updated, and why.
 - Path-based settings (`.aperture/rules/*.md` globs, hooks) are not rewritten.
-- A folder row has the same pencil; the dialog sees no file at the path and
+- A folder row has the same pencil (on phones, which have no hover, it shows
+  on an opened folder, as a file's shows on the selected one); the dialog sees no file at the path and
   calls `renameFolder` (`rename-file.ts`). `folderTarget` checks the path
   (not taken, not inside itself), the worker asks TypeScript for the
   folder's `fileRename` (`fileRenameEdits` takes a folder with files in it;

@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Folders can be renamed on a phone too: open a folder in the file tree and its Rename button appears, as a file's does once selected. (#115)
 - The agent can move a whole folder: `move_file` stages every file in it at its new path, with the imports into and out of it updated by TypeScript, as one change. (#114)
 - Rename or move a folder from the file tree: every file in it moves, TypeScript updates the imports into and out of it, and Undo puts it all back. (#113)
 - "Apply only this" waits for the rest of a change that only works whole: one half of a move, or the declaring file of a rename, can no longer be applied alone and break the files the rest of the change fixes. The button says why. (#112)

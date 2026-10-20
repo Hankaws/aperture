@@ -139,7 +139,8 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
           }
           className={cn(
             "flex size-9 items-center justify-center rounded-md text-subtle hover:text-fg md:size-7 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100",
-            active ? "max-md:flex" : "max-md:hidden",
+            // Phones have no hover: a file shows it once selected, a folder once opened.
+            (isFolder ? open : active) ? "max-md:flex" : "max-md:hidden",
           )}
           onClick={() => useIdeUi.getState().setRenamePath(node.path)}
         >

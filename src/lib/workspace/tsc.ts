@@ -169,7 +169,9 @@ function askTs(
   extra: Pick<TsAsk, "end" | "refactor" | "to" | "fixId" | "query"> = {},
 ): Promise<TsAnswer | null> {
   return new Promise((resolve) => {
-    if (signal?.aborted || (type !== "project" && type !== "symbols" && type !== "parse" && !isTsPath(path)))
+    // A folder's move is asked by the folder's path.
+    const anyPath = type === "project" || type === "symbols" || type === "parse" || type === "fileRename";
+    if (signal?.aborted || (!anyPath && !isTsPath(path)))
       return resolve(null);
     let running: Worker;
     try {

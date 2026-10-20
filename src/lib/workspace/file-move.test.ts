@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { movedTexts, moveTarget } from "./file-move.ts";
+import { filesIn, folderTarget, movedFolderTexts, movedTexts, moveTarget } from "./file-move.ts";
 
 const files = { "src/a.ts": "export const a = 1;\n", "src/b.ts": 'import { a } from "./a";\n' };
 
@@ -33,6 +33,48 @@ test("movedTexts writes the importers and the moved file under its new path", ()
   assert.equal(
     movedTexts(files, "src/a.ts", "src/c.ts", [
       { path: "src/b.ts", edits: [{ start: 400, length: 1, newText: "" }] },
+    ]),
+    null,
+  );
+});
+
+test("folderTarget: a clean folder path, or why not", () => {
+  const tree = { ...files, "src/lib/c.ts": "export const c = 3;\n", "docs/x.md": "x" };
+  assert.deepEqual(folderTarget(tree, "src/lib", " src/util/ "), { to: "src/util" });
+  assert.equal(folderTarget(tree, "src/lib", "src/lib/"), null);
+  assert.deepEqual(folderTarget(tree, "src/lib", "src/lib/inner"), {
+    error: "A folder cannot move into itself.",
+  });
+  assert.deepEqual(folderTarget(tree, "src/lib", "docs"), { error: "docs already exists." });
+  assert.deepEqual(folderTarget(tree, "src/lib", "src/a.ts"), {
+    error: "src/a.ts already exists.",
+  });
+  assert.deepEqual(folderTarget(tree, "src/lib", "../x"), {
+    error: "That path is outside the workspace.",
+  });
+  assert.deepEqual(folderTarget(tree, "gone", "else"), { error: "gone has no files any more." });
+  assert.deepEqual(filesIn(tree, "src"), ["src/a.ts", "src/b.ts", "src/lib/c.ts"]);
+});
+
+test("movedFolderTexts: every file under its new path, edited where TypeScript said, and the importers", () => {
+  const tree = {
+    "src/lib/a.ts": 'import { c } from "../c";\n',
+    "src/lib/b.ts": "b\n",
+    "src/c.ts": "c\n",
+    "src/m.ts": 'import "./lib/a";\n',
+  };
+  const out = movedFolderTexts(tree, "src/lib", "src/x/lib", [
+    { path: "src/lib/a.ts", edits: [{ start: 19, length: 4, newText: "../../c" }] },
+    { path: "src/m.ts", edits: [{ start: 8, length: 7, newText: "./x/lib/a" }] },
+  ]);
+  assert.deepEqual(out, {
+    "src/x/lib/a.ts": 'import { c } from "../../c";\n',
+    "src/x/lib/b.ts": "b\n",
+    "src/m.ts": 'import "./x/lib/a";\n',
+  });
+  assert.equal(
+    movedFolderTexts(tree, "src/lib", "src/x", [
+      { path: "src/lib/a.ts", edits: [{ start: 999, length: 1, newText: "" }] },
     ]),
     null,
   );

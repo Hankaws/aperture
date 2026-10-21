@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A background job stopped just as it was starting stays stopped, instead of showing as running forever. (#122)
 - Stopping a background job checks that it is yours before anything stops. (#121)
 - The deployment's sandbox check starts at most one sandbox every ten minutes and answers from the last check in between. (#120)
 - Only Aperture and Grok can show the app inside a frame, so another site cannot trick a signed-in user into clicking in a hidden editor. (#119)

@@ -23,9 +23,16 @@ export async function runJob(id: string, userId: string, raw: AgentInput, agentI
   const ctrl = new AbortController();
   controllers().set(id, ctrl);
 
-  await sql`
-    update user_jobs set status = 'running' where id = ${id} and user_id = ${userId}
+  // Only a job still queued starts: one stopped before this point stays
+  // stopped, and its agent never runs.
+  const started = await sql<{ id: string }>`
+    update user_jobs set status = 'running' where id = ${id} and user_id = ${userId} and status = 'queued'
+    returning id
   `;
+  if (!started[0]) {
+    controllers().delete(id);
+    return;
+  }
 
   try {
     if (agentId) {
@@ -58,7 +65,7 @@ export async function runJob(id: string, userId: string, raw: AgentInput, agentI
       await sql`
         update user_jobs
         set status = 'failed', error = ${resolved.error}, finished_at = now()
-        where id = ${id} and user_id = ${userId}
+        where id = ${id} and user_id = ${userId} and status = 'running'
       `;
       return;
     }

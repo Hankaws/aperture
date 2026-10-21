@@ -171,14 +171,19 @@ export const cancelJob = createServerFn({ method: "POST" })
   .validator(idInput)
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }): Promise<JobRecord[]> => {
-    const { abortJob } = await import("./runner.server");
-    abortJob(id);
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    await sql`
+    // Only a job of the caller's is stopped: the run is aborted after the
+    // row says it was theirs.
+    const stopped = await sql<{ id: string }>`
       update user_jobs
       set status = 'stopped', error = 'Stopped.', finished_at = now()
       where id = ${id} and user_id = ${context.userId} and status in ('queued', 'running')
+      returning id
     `;
+    if (stopped[0]) {
+      const { abortJob } = await import("./runner.server");
+      abortJob(id);
+    }
     return loadJobs(context.userId);
   });

@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The deployment's sandbox check starts at most one sandbox every ten minutes and answers from the last check in between. (#120)
 - Only Aperture and Grok can show the app inside a frame, so another site cannot trick a signed-in user into clicking in a hidden editor. (#119)
 - MCP is safer with code you did not write: a project's .mcp.json no longer connects servers on its own (add one in Settings → MCP), and any tool call whose arguments carry a URL waits for you to confirm it. (#118)
 - Tab completions are kept per account: one person's cached suggestion is never shown to another. (#117)

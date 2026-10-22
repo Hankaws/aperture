@@ -198,6 +198,8 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
  * one pool (`spendOwnerId`), so clearing cookies never resets an allowance.
  */
 async function loadAccount(userId: string): Promise<SettingsRow> {
+  // Moves saved secrets under APERTURE_SECRETS_KEY once per instance, when it is set.
+  (await import("@/lib/security/reencrypt.server")).startSecretsSweep();
   const own = await loadSettings(userId);
   const payer = spendOwnerId(userId);
   if (payer === userId) return own;

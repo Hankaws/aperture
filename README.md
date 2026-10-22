@@ -219,6 +219,8 @@ environment settings, never in a committed file.
 | `VITE_AUTH_ENABLED=false` | No sign-in. Each browser gets its own anonymous workspace, settings and keys; the plan and usage limits are shared by all anonymous visitors |
 | `DATABASE_URL` | Postgres for accounts and saved work. Without it, an in-process PGlite database |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Session signing and the public URL when sign-in is on |
+| `APERTURE_SECRETS_KEY` | Encrypts saved API keys and tokens: any string of 32 or more characters, kept somewhere safe. Without it they are encrypted under `BETTER_AUTH_SECRET`, and changing that secret makes them unreadable. Set it in every environment that shares the database |
+| `APERTURE_SECRETS_KEY_PREVIOUS` | The old value while you rotate `APERTURE_SECRETS_KEY`: still read, and saved secrets move to the new key |
 | `GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET` | "Sign in with Grok". Only apps hosted by Grok App Builder have these; email and password sign-in works without them |
 | `APERTURE_LOCAL_ENDPOINTS` | `1` lets a custom model endpoint on `http://127.0.0.1` (Ollama, LM Studio) be called from a production server you run yourself. On by default in local dev, off when deployed: there, loopback is the server itself, not your machine |
 | `APERTURE_SANDBOX=vercel-oidc` | Lets the agent run projects in Vercel Sandbox, when deployed on Vercel |

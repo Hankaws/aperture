@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The editor downloads less to open: Markdown, Python, HTML and CSS highlighting load the first time you open such a file. (#123)
 - A background job stopped just as it was starting stays stopped, instead of showing as running forever. (#122)
 - Stopping a background job checks that it is yours before anything stops. (#121)
 - The deployment's sandbox check starts at most one sandbox every ten minutes and answers from the last check in between. (#120)

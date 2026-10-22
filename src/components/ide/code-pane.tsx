@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
-import { EditorState, Compartment, Annotation } from "@codemirror/state";
+import { EditorState, Compartment, Annotation, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab, temporarilySetTabFocusMode } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, indentOnInput, defaultHighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
@@ -8,10 +8,6 @@ import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codem
 import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { python } from "@codemirror/lang-python";
-import { html } from "@codemirror/lang-html";
-import { css } from "@codemirror/lang-css";
 import { languageFromPath } from "@/lib/parser/language";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pendingEditFor } from "@/lib/workspace/edits";
@@ -160,16 +156,41 @@ const highlight = HighlightStyle.define([
   { tag: t.invalid, color: SYN.invalid },
 ]);
 
-function languageExtension(path: string) {
+// Markdown, Python, HTML and CSS load the first time a file needs them: about
+// 150 KB of the editor's code that a TypeScript project never uses. Until one
+// arrives the file shows as plain text.
+const lazyLanguages: Record<string, () => Promise<Extension>> = {
+  markdown: () => import("@codemirror/lang-markdown").then((m) => m.markdown()),
+  python: () => import("@codemirror/lang-python").then((m) => m.python()),
+  html: () => import("@codemirror/lang-html").then((m) => m.html()),
+  css: () => import("@codemirror/lang-css").then((m) => m.css()),
+};
+const loadedLanguages = new Map<string, Extension>();
+
+function languageExtension(path: string): Extension {
   const lang = languageFromPath(path);
   if (lang === "typescript") return javascript({ typescript: true, jsx: path.endsWith("x") });
   if (lang === "javascript") return javascript({ jsx: path.endsWith("x") });
   if (lang === "json") return json();
-  if (lang === "markdown") return markdown();
-  if (lang === "python") return python();
-  if (lang === "html") return html();
-  if (lang === "css") return css();
-  return [];
+  return loadedLanguages.get(lang) ?? [];
+}
+
+/**
+ * Loads the path's language if it is a lazy one not loaded yet, and applies it
+ * to `view` if `stillShown()` says the editor still shows a file of that language.
+ */
+function applyLanguageWhenLoaded(view: EditorView, conf: Compartment, path: string, stillShown: () => boolean) {
+  const lang = languageFromPath(path);
+  const load = lazyLanguages[lang];
+  if (!load || loadedLanguages.has(lang)) return;
+  load().then(
+    (extension) => {
+      loadedLanguages.set(lang, extension);
+      if (stillShown()) view.dispatch({ effects: conf.reconfigure(extension) });
+    },
+    // Offline or a failed chunk: the file stays plain text, which is still editable.
+    () => undefined,
+  );
 }
 
 function languageKey(path: string) {
@@ -376,6 +397,8 @@ export function CodePane() {
     pathRef.current = activePath;
     langKeyRef.current = languageKey(activePath ?? "");
     narrowRef.current = (parentRef.current?.clientWidth ?? 9999) < 480;
+    const mountedKey = langKeyRef.current;
+    applyLanguageWhenLoaded(view, langConf, activePath ?? "", () => viewRef.current === view && langKeyRef.current === mountedKey);
     return () => {
       view.destroy();
       viewRef.current = null;
@@ -429,7 +452,10 @@ export function CodePane() {
     pathRef.current = activePath;
     const nextLang = languageKey(activePath);
     const langChanged = langKeyRef.current !== nextLang;
-    if (langChanged) langKeyRef.current = nextLang;
+    if (langChanged) {
+      langKeyRef.current = nextLang;
+      applyLanguageWhenLoaded(view, langConf, activePath, () => viewRef.current === view && langKeyRef.current === nextLang);
+    }
     const wrap =
       narrowRef.current || languageFromPath(activePath) === "markdown" ? EditorView.lineWrapping : [];
     const effects = langChanged

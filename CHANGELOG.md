@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Settings → Models says what protects your saved keys: the deployment's secrets key, or its sign-in secret. (#125)
 - Saved API keys and tokens can have their own encryption key (`APERTURE_SECRETS_KEY`), so changing the sign-in secret no longer makes them unreadable. Existing ones move to it after the next deploy. (#124)
 - The editor downloads less to open: Markdown, Python, HTML and CSS highlighting load the first time you open such a file. (#123)
 - A background job stopped just as it was starting stays stopped, instead of showing as running forever. (#122)

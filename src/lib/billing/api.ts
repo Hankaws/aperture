@@ -23,6 +23,7 @@ import {
   type ProviderId,
 } from "./plans";
 import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
+import type { SecretsProtection } from "@/lib/security/secret-box";
 import { customEndpointInput, modelSourceInput, planInput, providerInput, providerKeyInput, sessionCapInput } from "@/lib/security/inputs";
 
 export type KeyStatus = { set: boolean; last4: string | null };
@@ -45,6 +46,8 @@ export type AccountSnapshot = {
   acp: boolean;
   session: SessionSnapshot;
   custom: { base: string | null; model: string | null; keySet: boolean; last4: string | null };
+  /** What protects the keys saved here: shown in Settings so the owner can see APERTURE_SECRETS_KEY took effect. */
+  secrets: SecretsProtection;
 };
 
 const PROVIDER_COLS: Record<ProviderId, "grok_key" | "openai_key" | "anthropic_key" | "gemini_key" | "deepseek_key"> = {
@@ -238,7 +241,11 @@ async function migratePlaintextKeys(userId: string, row: SettingsRow) {
   }
 }
 
-function snapshot(row: SettingsRow, peekLast4: (stored: string | null) => string | null): AccountSnapshot {
+function snapshot(
+  row: SettingsRow,
+  peekLast4: (stored: string | null) => string | null,
+  secrets: SecretsProtection,
+): AccountSnapshot {
   const plan = planById(row.plan);
   const keys: Record<ProviderId, KeyStatus> = {
     grok: { set: Boolean(row.grok_key), last4: peekLast4(row.grok_key) },
@@ -288,12 +295,13 @@ function snapshot(row: SettingsRow, peekLast4: (stored: string | null) => string
       keySet: Boolean(row.custom_key),
       last4: peekLast4(row.custom_key),
     },
+    secrets,
   };
 }
 
 async function snapshotOf(row: SettingsRow): Promise<AccountSnapshot> {
-  const { peekLast4 } = await peek();
-  return snapshot(row, peekLast4);
+  const { peekLast4, protectionOf } = await peek();
+  return snapshot(row, peekLast4, protectionOf([...KEY_COLS.map((col) => row[col]), row.custom_key]));
 }
 
 async function applyModelSource(userId: string, source: ModelSource): Promise<AccountSnapshot> {

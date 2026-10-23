@@ -19,6 +19,13 @@ import { PROVIDERS, planById, type ProviderId } from "@/lib/billing/plans";
 import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 
+const SECRETS_NOTE: Record<AccountSnapshot["secrets"], string> = {
+  "secrets-key": "Protected by this deployment’s secrets key, so changing its sign-in secret will not erase them.",
+  moving: "Moving to this deployment’s secrets key. This finishes on its own.",
+  "sign-in-secret":
+    "Protected by this deployment’s sign-in secret: if that changes, keys have to be added again. Its owner can set APERTURE_SECRETS_KEY to prevent that.",
+};
+
 export function ModelKeys({
   account,
   onAccount,
@@ -45,6 +52,7 @@ export function ModelKeys({
               What that key’s provider can see.
             </Link>
           </p>
+          <p className="mt-2 max-w-xl text-xs text-pretty text-subtle">{SECRETS_NOTE[account.secrets]}</p>
         </div>
         <p className="text-sm tabular-nums text-subtle">
           {account.keyCount} / {account.byokSlots} keys

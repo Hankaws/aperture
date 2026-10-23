@@ -8,6 +8,7 @@ import {
   sealSecret,
   sealedLast4,
   secretsKey,
+  secretsProtection,
 } from "./secret-box.ts";
 
 // Written by the code on main before this change, under BETTER_AUTH_SECRET=fixture-sign-in-secret.
@@ -97,4 +98,12 @@ test("the sweep keeps current values, reseals the rest, and leaves unreadable on
     previous: null,
   });
   assert.deepEqual(planReseal(lost, keys), { kind: "unreadable" });
+});
+
+test("Settings says what protects the saved keys", () => {
+  const underCurrent = sealSecret("sk-current-0001", { legacy, current, previous: null });
+  assert.equal(secretsProtection([V1_KEY, null], null), "sign-in-secret");
+  assert.equal(secretsProtection([underCurrent, null, ""], current), "secrets-key");
+  assert.equal(secretsProtection([], current), "secrets-key");
+  assert.equal(secretsProtection([underCurrent, V1_KEY], current), "moving");
 });

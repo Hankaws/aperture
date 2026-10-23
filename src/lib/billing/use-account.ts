@@ -26,7 +26,8 @@ function sameAccount(a: AccountSnapshot, b: AccountSnapshot): boolean {
     a.keys.openai.set === b.keys.openai.set &&
     a.keys.anthropic.set === b.keys.anthropic.set &&
     a.keys.gemini.set === b.keys.gemini.set &&
-    a.keys.deepseek.set === b.keys.deepseek.set
+    a.keys.deepseek.set === b.keys.deepseek.set &&
+    a.secrets === b.secrets
   );
 }
 

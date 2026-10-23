@@ -115,6 +115,17 @@ export function isCurrent(stored: string, current: SecretsKey): boolean {
   return stored.startsWith(`${V2}:${current.kid}:`);
 }
 
+/** What protects saved values: the secrets key, the secrets key once they finish moving to it, or the sign-in secret. */
+export type SecretsProtection = "secrets-key" | "moving" | "sign-in-secret";
+
+export function secretsProtection(
+  stored: (string | null)[],
+  current: SecretsKey | null,
+): SecretsProtection {
+  if (!current) return "sign-in-secret";
+  return stored.every((value) => !value || isCurrent(value, current)) ? "secrets-key" : "moving";
+}
+
 export type Reseal = { kind: "keep" } | { kind: "unreadable" } | { kind: "reseal"; next: string };
 
 /** What the sweep does with one stored value once a current key is set. */

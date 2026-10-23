@@ -1,6 +1,16 @@
 import { randomBytes } from "node:crypto";
 import type { ProviderId } from "@/lib/billing/plans";
-import { isSealed, legacyKey, openSecret, sealSecret, sealedLast4, secretsKey, type SecretKeys } from "./secret-box";
+import {
+  isSealed,
+  legacyKey,
+  openSecret,
+  sealSecret,
+  sealedLast4,
+  secretsKey,
+  secretsProtection,
+  type SecretKeys,
+  type SecretsProtection,
+} from "./secret-box";
 
 /**
  * Saved secrets at rest (format in `secret-box.ts`). Never import this from
@@ -61,6 +71,11 @@ export function encryptSecret(plain: string): string {
 
 export function decryptSecret(stored: string | null): string | null {
   return openSecret(stored, secretKeys());
+}
+
+/** What protects these saved values, for Settings to show. */
+export function protectionOf(stored: (string | null)[]): SecretsProtection {
+  return secretsProtection(stored, secretKeys().current);
 }
 
 export function validateProviderKey(provider: ProviderId, key: string): string {

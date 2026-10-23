@@ -985,6 +985,24 @@ Run locally with `VITE_AUTH_ENABLED=false` and no `DATABASE_URL` to get the dev
 user and PGLite. Never set that flag false *and* a `DATABASE_URL` — the auth
 layer throws on that combination by design.
 
+## Saved secrets have their own key
+
+Saved model keys, the custom endpoint key, the GitHub token, MCP servers and
+ACP agent tokens are encrypted by `src/lib/security/secret-box.ts`. Values are
+written under `APERTURE_SECRETS_KEY` when it is set (`aperture.v2:<kid>:…`),
+otherwise under a key derived from `BETTER_AUTH_SECRET` (`aperture.v1:…`, read
+forever). `src/lib/security/reencrypt.ts` lists every encrypted column: a new
+one must be added there, or a rotation leaves it behind.
+
+- Re-encryption runs in the new deployment, once per server instance, started
+  from account loading (`reencrypt.server.ts`). Never move it to build time:
+  the old deployment still serves during a build, cannot read `v2`, and would
+  pass the value on as a plaintext key.
+- Rolling back past the deployment that first had `APERTURE_SECRETS_KEY`
+  makes saved secrets unreadable until you roll forward again. Nothing is lost.
+- Rotation: move the value to `APERTURE_SECRETS_KEY_PREVIOUS`, set a new
+  one, deploy. Remove `PREVIOUS` once the log shows nothing left to read.
+
 ## Search ranking has a benchmark — use it
 
 `semantic_search` is measured, not assumed. Before and after any change to

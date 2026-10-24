@@ -27,7 +27,15 @@ export function cleanPaths(raw: unknown, max = 50): string[] {
  * are dropped and secret-looking lines redacted.
  */
 export function pickAgentFiles(raw: unknown, first: string[]): AgentFile[] {
-  if (!Array.isArray(raw)) return [];
+  return pickAgentFileSet(raw, first).files;
+}
+
+/**
+ * As `pickAgentFiles`, with the project files that did not fit. A file goes
+ * whole or not at all: accepting an edit made on a cut copy would drop the rest.
+ */
+export function pickAgentFileSet(raw: unknown, first: string[]): { files: AgentFile[]; left: string[] } {
+  if (!Array.isArray(raw)) return { files: [], left: [] };
   const rows: AgentFile[] = [];
   const seen = new Set<string>();
   for (const row of raw.slice(0, MAX_ROWS_READ)) {
@@ -48,15 +56,33 @@ export function pickAgentFiles(raw: unknown, first: string[]): AgentFile[] {
     ...rows.filter((f) => !rank.has(f.path)),
   ];
   const files: AgentFile[] = [];
+  const left: string[] = [];
   let used = 0;
-  for (const file of ordered.slice(0, MAX_AGENT_FILES)) {
-    const room = MAX_AGENT_TOTAL_CHARS - used;
-    if (room <= 0) break;
-    const content = redactSecrets(file.content.slice(0, Math.min(MAX_AGENT_FILE_CHARS, room)), file.path);
-    files.push({ path: file.path, content });
-    used += content.length;
+  for (const file of ordered) {
+    const fits =
+      files.length < MAX_AGENT_FILES &&
+      file.content.length <= MAX_AGENT_FILE_CHARS &&
+      used + file.content.length <= MAX_AGENT_TOTAL_CHARS;
+    if (!fits) {
+      left.push(file.path);
+      continue;
+    }
+    // Counted as sent: redaction moves a length by a few characters at most.
+    used += file.content.length;
+    files.push({ path: file.path, content: redactSecrets(file.content, file.path) });
   }
-  return files;
+  return { files, left };
+}
+
+/** Why an edit to these paths is refused: a file the agent was not sent, or a folder holding one. */
+export function leftOutRefusal(leftOut: Set<string> | undefined, ...paths: string[]): string | null {
+  if (!leftOut?.size) return null;
+  for (const path of paths) {
+    if (!path) continue;
+    const hit = leftOut.has(path) ? path : [...leftOut].find((p) => p.startsWith(`${path}/`));
+    if (hit) return `Not staged: ${hit} is too large to send to the agent. Edit it by hand.`;
+  }
+  return null;
 }
 
 /**

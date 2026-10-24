@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MAX_SYNC_FILES } from "../workspace/sync.ts";
-import { cleanPaths, MAX_AGENT_FILES, pickAgentFiles, pickLoopFiles } from "./agent-files.ts";
+import {
+  cleanPaths,
+  leftOutRefusal,
+  MAX_AGENT_FILE_CHARS,
+  MAX_AGENT_FILES,
+  MAX_AGENT_TOTAL_CHARS,
+  pickAgentFiles,
+  pickAgentFileSet,
+  pickLoopFiles,
+} from "./agent-files.ts";
 
 const project = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -84,4 +93,58 @@ test("the loop puts the files being worked on first, and a smaller budget keeps 
   ];
   assert.equal(Object.keys(pickLoopFiles(files, ["z.ts"]))[0], "z.ts");
   assert.deepEqual(Object.keys(pickLoopFiles(files, ["z.ts"], 250)), ["z.ts", "src/f0.ts"]);
+});
+
+test("a file over the per-file limit is left out whole and named; the next one is kept", () => {
+  const big = { path: "src/big.json", content: "x".repeat(MAX_AGENT_FILE_CHARS + 50_000) };
+  const { files, left } = pickAgentFileSet(
+    [big, { path: "src/a.ts", content: "export const a = 1;\n" }],
+    [],
+  );
+  assert.deepEqual(
+    files.map((f) => f.path),
+    ["src/a.ts"],
+  );
+  assert.deepEqual(left, ["src/big.json"]);
+});
+
+test("the file that would cross the total is left out whole; a smaller one after it still fits", () => {
+  const chunk = MAX_AGENT_FILE_CHARS - 10;
+  const count = Math.floor(MAX_AGENT_TOTAL_CHARS / chunk);
+  const rows = Array.from({ length: count }, (_, i) => ({
+    path: `src/p${i}.txt`,
+    content: "y".repeat(chunk),
+  }));
+  const room = MAX_AGENT_TOTAL_CHARS - count * chunk;
+  rows.push({ path: "src/crosses.txt", content: "z".repeat(room + 1) });
+  rows.push({ path: "src/small.txt", content: "s".repeat(Math.min(room, 10)) });
+  const { files, left } = pickAgentFileSet(rows, []);
+  assert.deepEqual(left, ["src/crosses.txt"]);
+  assert.ok(files.some((f) => f.path === "src/small.txt"));
+  for (const file of files) {
+    assert.equal(
+      file.content.length,
+      rows.find((r) => r.path === file.path)!.content.length,
+      file.path,
+    );
+  }
+});
+
+test("files past the count are named as left out", () => {
+  const { files, left } = pickAgentFileSet(project(MAX_AGENT_FILES + 3), []);
+  assert.equal(files.length, MAX_AGENT_FILES);
+  assert.equal(left.length, 3);
+});
+
+test("an edit to a left-out file, or a move of a folder holding one, is refused", () => {
+  const leftOut = new Set(["src/data/big.json"]);
+  assert.match(
+    leftOutRefusal(leftOut, "src/data/big.json") ?? "",
+    /src\/data\/big\.json is too large/,
+  );
+  assert.match(leftOutRefusal(leftOut, "src/data") ?? "", /src\/data\/big\.json/);
+  assert.match(leftOutRefusal(leftOut, "src/a.ts", "src/data/big.json") ?? "", /too large/);
+  assert.equal(leftOutRefusal(leftOut, "src/dat"), null);
+  assert.equal(leftOutRefusal(leftOut, "src/a.ts", ""), null);
+  assert.equal(leftOutRefusal(undefined, "src/data/big.json"), null);
 });

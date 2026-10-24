@@ -5,7 +5,7 @@ import { parseAgentPhase } from "@/lib/agent/phase";
 import { isAgentRef } from "@/lib/acp/kinds";
 import { isModelSource } from "@/lib/billing/plans";
 import { redactSecrets, safeRelPath } from "./redact";
-import { cleanPaths, pickAgentFiles } from "./agent-files";
+import { cleanPaths, pickAgentFileSet } from "./agent-files";
 import { normalizePlan } from "@/lib/workspace/plan";
 
 // Under Vercel's 4.5 MB request limit, with room for JSON escaping of 2.5 MB of files.
@@ -13,6 +13,7 @@ export const MAX_AGENT_BODY = 4_000_000;
 export const MAX_INSTRUCTION = 8_000;
 export const MAX_HISTORY = 8;
 export const MAX_HISTORY_CHARS = 4_000;
+export const MAX_SELECTION_CHARS = 12_000;
 
 export { rateLimit } from "./rate-limit";
 
@@ -42,9 +43,15 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     const row = sel as Record<string, unknown>;
     const path = typeof row.path === "string" ? safeRelPath(row.path) : null;
     if (path && typeof row.text === "string") {
+      // Inline swaps the selected text for its rewrite: a cut selection would leave the rest behind it.
+      if (mode === "inline" && row.text.length > MAX_SELECTION_CHARS) {
+        return {
+          error: `That selection is too long for an inline edit (over ${MAX_SELECTION_CHARS.toLocaleString("en-US")} characters). Select less, or ask in Composer.`,
+        };
+      }
       selection = {
         path,
-        text: redactSecrets(row.text.slice(0, 12_000), path),
+        text: redactSecrets(row.text.slice(0, MAX_SELECTION_CHARS), path),
         fromLine: Math.max(1, Number(row.fromLine) || 1),
         toLine: Math.max(1, Number(row.toLine) || 1),
       };
@@ -58,7 +65,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
   const openTabs = cleanPaths(input.openTabs);
   const recentPaths = cleanPaths(input.recentPaths);
   // What the person is working on goes first, so a large project never loses it.
-  const files: AgentInput["files"] = pickAgentFiles(
+  const { files, left } = pickAgentFileSet(
     input.files,
     [activePath ?? "", selection?.path ?? "", ...focusPaths, ...openTabs, ...recentPaths].filter(Boolean),
   );
@@ -159,6 +166,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     focusPaths: focusPaths.length ? focusPaths : undefined,
     openTabs: openTabs.length ? openTabs : undefined,
     recentPaths: recentPaths.length ? recentPaths : undefined,
+    leftOut: left.length ? left.slice(0, 50) : undefined,
     source,
     agentId,
     phase,

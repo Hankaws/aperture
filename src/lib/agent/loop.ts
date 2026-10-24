@@ -165,6 +165,7 @@ function buildContextMessage(
   input: AgentInput,
   files: Record<string, string>,
   chunks: ReturnType<typeof indexFiles>,
+  leftOut: string[] = [],
 ): string {
   const mentioned = parseMentions(input.instruction, files);
   const extra = expandMentions(mentioned, files);
@@ -179,6 +180,9 @@ function buildContextMessage(
   ).filter((path) => files[path] !== undefined && !mentioned.includes(path));
   const parts = [
     `Workspace files:\n${fileTree(files)}`,
+    leftOut.length
+      ? `Too large to include (do not create, edit, move or delete these): ${leftOut.slice(0, 50).join(", ")}${leftOut.length > 50 ? ", …" : ""}`
+      : "",
     `Repo map:\n${repoMap(files) || "(no symbols)"}`,
     input.activePath ? `Active file: ${input.activePath}` : "",
     input.selection
@@ -301,6 +305,10 @@ export async function runLoop(
   const entries = Object.entries(fileMap).map(([path, content]) => ({ path, content }));
   const first = [...mentioned, ...auto];
   const files = reviewing ? {} : pickLoopFiles(entries, first);
+  // Too large to send, or to fit here: never written, since an edit on a missing file would replace it.
+  const leftOut = reviewing
+    ? []
+    : [...new Set([...(input.leftOut ?? []), ...entries.map((e) => e.path).filter((path) => files[path] === undefined)])];
   const chunks = reviewing ? [] : indexFiles(pickLoopFiles(entries, first, SEARCH_INDEX_CHARS));
   const phase = resolveAgentPhase(input.mode, input.phase);
   const requirePlan = (input.mode === "composer" || Boolean(flavor)) && phase !== "skip";
@@ -349,6 +357,7 @@ export async function runLoop(
     mode: input.mode,
     role: input.role,
     reviewTally,
+    leftOut: new Set(leftOut),
     // Only a request with a known owner may run code: the allowance is per
     // account, and an unattributed run cannot be counted or capped.
     runScript: cfg.userId && host.runScript
@@ -461,7 +470,7 @@ export async function runLoop(
   }));
   const userCtx = reviewing
     ? [reviewContext(shownEdits), input.userMove ?? ""].filter(Boolean).join("\n\n")
-    : [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
+    : [buildContextMessage(input, files, chunks, leftOut), mcpNote].filter(Boolean).join("\n\n");
   let messages: ChatMessage[] = [
     { role: "system", content: sys, cache: true },
     { role: "user", content: userCtx, cache: true },

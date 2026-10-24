@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Agent turns on a saved project upload only the files changed since the last save, not the whole project: a turn on a 1 MB project sends under 1 KB. (#134)
 - The agent never edits a cut-off copy: files too large to send are left out whole and named to it, and an inline edit on an over-long selection is refused. (#133)
 - The agent no longer sees ordinary code as [redacted]: only real-looking keys, tokens and passwords are hidden, and a hidden string keeps its quotes. (#132)
 - Accepting an agent edit keeps the real text of lines the agent was shown as [redacted], and the diff shows only what the agent changed. (#131)

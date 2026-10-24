@@ -15,7 +15,8 @@ import { JobsTray } from "./jobs-tray";
 import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
 import { McpCallList } from "@/components/ide/mcp-call";
-import { abortAgent, agentPayload, submitAgent } from "@/lib/agent/run";
+import { abortAgent, agentPayload, submitAgent, wirePayload } from "@/lib/agent/run";
+import { RESEND_FILES } from "@/lib/agent/wire";
 import { takeAttempt } from "@/lib/workspace/attempt";
 import { startBackgroundRun } from "@/lib/agent/background-runner";
 import { BackgroundTray } from "./background-runs";
@@ -285,8 +286,13 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       { phase: "skip" },
     );
     try {
-      const job = await startJob({
-        data: { ...payload, agentId: target.kind === "acp" ? target.id : null },
+      const agentId = target.kind === "acp" ? target.id : null;
+      // Only what changed since the saved copy, then everything if the server cannot use it.
+      const job = await startJob({ data: { ...wirePayload(payload, true), agentId } }).catch((error: unknown) => {
+        if (error instanceof Error && error.message === RESEND_FILES) {
+          return startJob({ data: { ...wirePayload(payload, false), agentId } });
+        }
+        throw error;
       });
       setJobs([job, ...jobs.filter((j) => j.id !== job.id)]);
       void refreshJobs();

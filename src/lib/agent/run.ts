@@ -20,6 +20,8 @@ import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { restoreRedacted } from "./unredact";
+import { compactFiles, RESEND_FILES } from "./wire";
+import { savedBaseline } from "@/lib/workspace/sync-controller";
 import { compareRuns } from "@/lib/runner/compare";
 import type { Spot } from "@/lib/workspace/lessons";
 
@@ -107,6 +109,22 @@ async function readSse(res: Response, onEvent: (event: AgentStreamEvent) => void
 }
 
 /**
+ * What goes over the network for a turn: only the files changed since the
+ * saved copy when this tab knows it (`compact`), else every file. The server
+ * answers RESEND_FILES when it cannot use the saved copy; then send it whole.
+ */
+export function wirePayload<T extends { files: Array<{ path: string; content: string }> }>(input: T, compact: boolean): T {
+  return { ...input, ...compactFiles(input.files, compact ? savedBaseline() : null) };
+}
+
+/** Inline's request: compact first, whole once if the server cannot use the saved copy. */
+async function runInlineRequest(input: ReturnType<typeof agentPayload>): Promise<AgentResult> {
+  const first = (await runAgent({ data: wirePayload(input, true) })) as AgentResult;
+  if (first.ok || first.error !== RESEND_FILES) return first;
+  return (await runAgent({ data: wirePayload(input, false) })) as AgentResult;
+}
+
+/**
  * Opens a Composer turn: the server's stream, or, for a model on the person's
  * own machine, the loop in this tab. Says why when the turn cannot start.
  */
@@ -125,16 +143,22 @@ export async function openAgentStream(
     };
   }
   const token = getBearerToken();
-  const res = await fetch("/api/agent", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    credentials: "include",
-    body: JSON.stringify(input),
-    signal,
-  });
+  const send = (compact: boolean) =>
+    fetch("/api/agent", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+      body: JSON.stringify(wirePayload(input, compact)),
+      signal,
+    });
+  let res = await send(true);
+  if (res.status === 409) {
+    const body = (await res.clone().json().catch(() => null)) as { resend?: boolean } | null;
+    if (body?.resend) res = await send(false);
+  }
   if (res.status === 401) return { ok: false, error: "Sign in to run Composer. Plans and API keys live on the account." };
   const contentType = res.headers.get("content-type") ?? "";
   if (!res.ok || !contentType.includes("text/event-stream")) {
@@ -368,7 +392,7 @@ export async function submitAgent(
       const result =
         source === "local"
           ? await (await import("./local-run")).runLocalResult(input, () => undefined)
-          : ((await runAgent({ data: input })) as AgentResult);
+          : await runInlineRequest(input);
       if (!result.ok) {
         useWorkspace.getState().patchMessage(asstId, { content: result.error, status: undefined });
         return;

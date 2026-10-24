@@ -50,7 +50,7 @@ export function restoreRedacted(
       if (!edit.deleted) working[edit.path] = edit.newText;
       return edit;
     }
-    const shown = redactSecrets(now);
+    const shown = redactSecrets(now, edit.path);
     // A follow-up's edit to a staged file starts from the file's real text: the loop
     // folds it into the staged edit, so only its new text is on the redacted copy.
     const folded = edit.oldText === files[edit.path] && now !== files[edit.path];

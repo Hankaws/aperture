@@ -13,8 +13,8 @@ export function tabContext(
   suffix: unknown,
 ): { prefix: string; suffix: string } | null {
   if (isSecretPath(path)) return null;
-  const before = redactSecrets(typeof prefix === "string" ? prefix.slice(-TAB_PREFIX_CHARS) : "");
-  const after = redactSecrets(typeof suffix === "string" ? suffix.slice(0, TAB_SUFFIX_CHARS) : "");
+  const before = redactSecrets(typeof prefix === "string" ? prefix.slice(-TAB_PREFIX_CHARS) : "", path);
+  const after = redactSecrets(typeof suffix === "string" ? suffix.slice(0, TAB_SUFFIX_CHARS) : "", path);
   // A private key cut by the window keeps one marker, and redaction needs both: send nothing.
   if (/PRIVATE KEY-----/.test(before + after)) return null;
   return { prefix: before, suffix: after };

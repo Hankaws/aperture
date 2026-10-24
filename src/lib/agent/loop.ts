@@ -454,8 +454,13 @@ export async function runLoop(
         .filter(Boolean)
         .join("\n\n");
   // Staged edits hold the real text (the browser restores redacted lines), so a review sees them redacted.
+  const shownEdits = ctx.edits.map((edit) => ({
+    ...edit,
+    oldText: redactSecrets(edit.oldText, edit.path),
+    newText: redactSecrets(edit.newText, edit.path),
+  }));
   const userCtx = reviewing
-    ? [redactSecrets(reviewContext(ctx.edits)), input.userMove ?? ""].filter(Boolean).join("\n\n")
+    ? [reviewContext(shownEdits), input.userMove ?? ""].filter(Boolean).join("\n\n")
     : [buildContextMessage(input, files, chunks), mcpNote].filter(Boolean).join("\n\n");
   let messages: ChatMessage[] = [
     { role: "system", content: sys, cache: true },

@@ -52,7 +52,7 @@ export function pickAgentFiles(raw: unknown, first: string[]): AgentFile[] {
   for (const file of ordered.slice(0, MAX_AGENT_FILES)) {
     const room = MAX_AGENT_TOTAL_CHARS - used;
     if (room <= 0) break;
-    const content = redactSecrets(file.content.slice(0, Math.min(MAX_AGENT_FILE_CHARS, room)));
+    const content = redactSecrets(file.content.slice(0, Math.min(MAX_AGENT_FILE_CHARS, room)), file.path);
     files.push({ path: file.path, content });
     used += content.length;
   }

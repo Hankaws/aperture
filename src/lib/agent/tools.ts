@@ -3,6 +3,7 @@ import { applySearchReplace } from "./apply-edit";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
+import { leftOutRefusal } from "@/lib/security/agent-files";
 import { filesIn, folderTarget, moveTarget } from "@/lib/workspace/file-move";
 import { importersOf } from "@/lib/workspace/module-graph";
 import { isTsPath } from "@/lib/workspace/tsc-core";
@@ -322,6 +323,8 @@ export type ToolContext = {
   intel?: <Q extends CodeQuestion>(
     question: Q,
   ) => Promise<{ answer: AnswerTo<Q>; files: Record<string, string> } | string>;
+  /** Project files the agent was not sent (too large): writing one would replace it. */
+  leftOut?: Set<string>;
 };
 
 function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
@@ -501,6 +504,8 @@ export async function executeTool(
     const from = safeRelPath(String(args.from ?? "")) ?? "";
     const typed = String(args.to ?? "");
     if (!from || !typed.trim()) return "move_file needs from and to.";
+    const tooLarge = leftOutRefusal(ctx.leftOut, from, safeRelPath(typed) ?? "");
+    if (tooLarge) return tooLarge;
     // A path with no file of its own but files under it is a folder: every file in it moves.
     const folder = ctx.files[from] === undefined && filesIn(ctx.files, from).length > 0;
     const target = folder ? folderTarget(ctx.files, from, typed) : moveTarget(ctx.files, from, typed);
@@ -556,6 +561,8 @@ export async function executeTool(
       return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
     }
     const path = safeRelPath(String(args.path ?? "")) ?? "";
+    const tooLarge = leftOutRefusal(ctx.leftOut, path);
+    if (tooLarge) return tooLarge;
     const current = ctx.files[path];
     if (!path || current === undefined) return `File not found: ${path}`;
     if (path === LESSONS_PATH) return "The lessons file stays; edit it with propose_edit instead.";
@@ -584,6 +591,8 @@ export async function executeTool(
       return "Edit dropped. Confidence is below 0.8, so nothing was staged.";
     }
     const path = safeRelPath(String(args.path ?? "")) ?? "";
+    const tooLarge = leftOutRefusal(ctx.leftOut, path);
+    if (tooLarge) return tooLarge;
     const search = String(args.search ?? "");
     const replace = String(args.replace ?? "");
     const description = String(args.description ?? "Update file");

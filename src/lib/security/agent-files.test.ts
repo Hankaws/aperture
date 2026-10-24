@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MAX_SYNC_FILES } from "../workspace/sync.ts";
-import { cleanPaths, MAX_AGENT_FILES, pickAgentFiles } from "./agent-files.ts";
+import { cleanPaths, MAX_AGENT_FILES, pickAgentFiles, pickLoopFiles } from "./agent-files.ts";
 
 const project = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -52,4 +52,36 @@ test("path lists are cleaned, deduplicated and capped", () => {
 
 test("the agent's file limit is the project's file limit", () => {
   assert.equal(MAX_AGENT_FILES, MAX_SYNC_FILES);
+});
+
+test("the loop keeps the whole project, past the old 220,000-character limit", () => {
+  const files = Array.from({ length: 150 }, (_, i) => ({
+    path: `src/f${i}.ts`,
+    content: "x".repeat(2000),
+  }));
+  const map = pickLoopFiles(files, []);
+  assert.equal(Object.keys(map).length, 150);
+  assert.ok(Object.values(map).every((content) => content.length === 2000));
+});
+
+test("a file that does not fit is left out whole, never cut", () => {
+  const map = pickLoopFiles(
+    [
+      { path: "a.ts", content: "a".repeat(2_400_000) },
+      { path: "b.ts", content: "b".repeat(200_000) },
+      { path: "c.ts", content: "c".repeat(10) },
+    ],
+    [],
+  );
+  assert.deepEqual(Object.keys(map), ["a.ts", "c.ts"]);
+  assert.equal(map["a.ts"]!.length, 2_400_000);
+});
+
+test("the loop puts the files being worked on first, and a smaller budget keeps them", () => {
+  const files = [
+    ...Array.from({ length: 20 }, (_, i) => ({ path: `src/f${i}.ts`, content: "y".repeat(100) })),
+    { path: "z.ts", content: "z".repeat(100) },
+  ];
+  assert.equal(Object.keys(pickLoopFiles(files, ["z.ts"]))[0], "z.ts");
+  assert.deepEqual(Object.keys(pickLoopFiles(files, ["z.ts"], 250)), ["z.ts", "src/f0.ts"]);
 });

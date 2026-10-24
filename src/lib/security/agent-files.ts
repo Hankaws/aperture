@@ -58,3 +58,35 @@ export function pickAgentFiles(raw: unknown, first: string[]): AgentFile[] {
   }
   return files;
 }
+
+/**
+ * The project the agent loop works on: `first` (mentioned and auto-context
+ * paths) ahead of the rest, within the same limits as a request. A file that
+ * does not fit is left out whole, never cut: a cut file reads as complete and
+ * runs as broken.
+ */
+export function pickLoopFiles(
+  files: AgentFile[],
+  first: string[],
+  maxChars = MAX_AGENT_TOTAL_CHARS,
+): Record<string, string> {
+  const rank = new Map<string, number>();
+  first.forEach((path, i) => {
+    if (!rank.has(path)) rank.set(path, i);
+  });
+  const ordered = [
+    ...files.filter((f) => rank.has(f.path)).sort((a, b) => rank.get(a.path)! - rank.get(b.path)!),
+    ...files.filter((f) => !rank.has(f.path)),
+  ];
+  const map: Record<string, string> = {};
+  let used = 0;
+  let count = 0;
+  for (const file of ordered) {
+    if (count >= MAX_AGENT_FILES) break;
+    if (used + file.content.length > maxChars) continue;
+    map[file.path] = file.content;
+    used += file.content.length;
+    count += 1;
+  }
+  return map;
+}

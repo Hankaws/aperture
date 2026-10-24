@@ -67,7 +67,8 @@ function PrivacyPage() {
           The rest of the project is saved on the account as you edit. It does not expire. Delete the account in
           Settings to remove it, with your keys and your GitHub token. That also removes the copy in this browser, so
           the next sign-in does not save it again. If a secret file was saved earlier, the next save removes it and
-          does not load it back.
+          does not load it back. A background job&apos;s instruction and reply are kept for 30 days, and only your 30
+          newest. Chats with your bots are kept until you remove the bot.
         </p>
 
         <h2 className="mt-10 text-lg font-medium tracking-tight">What a send includes</h2>

@@ -67,6 +67,19 @@ export function indexCacheStats() {
   return { files: fileCache.size, bytes: cachedBytes };
 }
 
+/**
+ * The chunks without embeddings: what the editor needs (symbol names for
+ * autocomplete), and nearly free once files are cached. Semantic search needs
+ * `indexFiles`.
+ */
+export function symbolIndex(files: Record<string, string>): IndexedChunk[] {
+  const out: IndexedChunk[] = [];
+  for (const [path, content] of Object.entries(files)) {
+    for (const chunk of fileChunks(path, content)) out.push({ ...chunk, embedding: [] });
+  }
+  return out;
+}
+
 export function indexFiles(files: Record<string, string>): IndexedChunk[] {
   const raw: RawChunk[] = [];
   for (const [path, content] of Object.entries(files)) raw.push(...fileChunks(path, content));

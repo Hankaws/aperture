@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Typing in a large project no longer pauses to rebuild search data the editor does not use: a 2 MB project re-indexes in 2 ms, not 229. (#136)
 - Importing a zip or a GitHub repository unpacks only the files it can keep: a small archive can no longer fill the server's memory. (#135)
 - Agent turns on a saved project upload only the files changed since the last save, not the whole project: a turn on a 1 MB project sends under 1 KB. (#134)
 - The agent never edits a cut-off copy: files too large to send are left out whole and named to it, and an inline edit on an over-long selection is refused. (#133)

@@ -7,6 +7,7 @@ import {
   indexCacheStats,
   indexFiles,
   semanticSearch,
+  symbolIndex,
 } from "./search.ts";
 
 test("a rare term outranks a common one (BM25 needs its IDF weight)", () => {
@@ -75,4 +76,25 @@ test("the cache stays inside its byte budget", () => {
   assert.ok(indexCacheStats().bytes <= INDEX_CACHE_BYTES, `cache holds ${indexCacheStats().bytes} bytes`);
   // The most recent file survives eviction.
   assert.ok(indexCacheStats().files >= 1);
+});
+
+test("the editor's index has the same chunks, without embeddings, and is cheap once cached", () => {
+  clearIndexCache();
+  const code = (i: number) =>
+    Array.from(
+      { length: 400 },
+      (_, j) => `export function fn${i}_${j}(a: number, b: number) {\n  return a + b * ${j};\n}\n`,
+    ).join("\n");
+  const files = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`src/m${i}.ts`, code(i)]));
+  const full = indexFiles(files);
+  const symbols = symbolIndex(files);
+  assert.deepEqual(
+    symbols.map((c) => [c.id, c.path, c.name, c.kind]),
+    full.map((c) => [c.id, c.path, c.name, c.kind]),
+  );
+  assert.ok(symbols.every((c) => c.embedding.length === 0));
+  const started = performance.now();
+  symbolIndex(files);
+  const ms = performance.now() - started;
+  assert.ok(ms < 30, `warm symbolIndex took ${Math.round(ms)} ms`);
 });

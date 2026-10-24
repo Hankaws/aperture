@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { stampFiles, type GithubOrigin, type GithubSource } from "@/lib/github/roundtrip";
-import { indexFiles } from "@/lib/indexer/search";
+import { symbolIndex } from "@/lib/indexer/search";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
 import { DEMO_FILES, DEMO_WORKSPACE_NAME } from "./demo-repo";
 import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./checkpoint";
@@ -218,8 +218,9 @@ function scheduleReindex() {
   }, 420);
 }
 
+// The editor reads only symbol names (autocomplete); semantic search runs in the agent loop on its own index.
 function buildIndex(files: Record<string, string>): IndexedChunk[] {
-  return indexFiles(files);
+  return symbolIndex(files);
 }
 
 function syncTabs(files: Record<string, string>, openTabs: string[], activePath: string | null) {

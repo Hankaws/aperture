@@ -1,13 +1,18 @@
 import { useWorkspace } from "@/lib/workspace/store";
+import { restoreRedacted } from "@/lib/agent/unredact";
 import type { JobRecord } from "./types";
 
 /** A finished background job's reply and staged edits, added to Composer as their own run. */
 export function openJobInComposer(job: JobRecord): void {
-  const edits = (job.edits ?? []).map((edit, i) => ({
-    ...edit,
-    id: `${job.id}_${i}_${edit.path}`,
-    status: "pending" as const,
-  }));
+  // The job's files were the workspace's when it started; the edits come back on their redacted copy.
+  const edits = restoreRedacted(
+    (job.edits ?? []).map((edit, i) => ({
+      ...edit,
+      id: `${job.id}_${i}_${edit.path}`,
+      status: "pending" as const,
+    })),
+    useWorkspace.getState().files,
+  );
   useWorkspace.getState().addMessage({
     id: `a_${job.id}`,
     runId: `a_${job.id}`,

@@ -42,11 +42,12 @@ export const Route = createFileRoute("/api/tab")({
 
         const { safeRelPath } = await import("@/lib/security/redact");
         const path = typeof body.path === "string" ? safeRelPath(body.path) : null;
-        const prefix = typeof body.prefix === "string" ? body.prefix.slice(-2800) : "";
-        const suffix = typeof body.suffix === "string" ? body.suffix.slice(0, 400) : "";
-        if (!path || prefix.length < 8) {
+        const { tabContext } = await import("@/lib/agent/tab-context");
+        const context = path ? tabContext(path, body.prefix, body.suffix) : null;
+        if (!path || !context || context.prefix.length < 8) {
           return Response.json({ text: "" });
         }
+        const { prefix, suffix } = context;
 
         const { completeTab } = await import("@/lib/agent/tab.server");
         const { tabCacheGet, tabCacheKey, tabCacheSet } = await import("@/lib/agent/tab-cache");

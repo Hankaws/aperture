@@ -192,6 +192,9 @@ export const agentInput = z
     instruction: z.string(),
     history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
     files: z.array(z.object({ path: z.string(), content: z.string() })),
+    /** The saved copy's revision when `files` holds only what changed since it. */
+    base: z.number().int().nonnegative().optional(),
+    removed: strings(500).optional(),
     activePath: z.string().nullish(),
     selection: object<NonNullable<AgentInput["selection"]>>().nullish(),
     openTabs: strings(500).optional(),

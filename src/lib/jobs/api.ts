@@ -118,8 +118,15 @@ export const startJob = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
 
+    // A request may carry only what changed since the saved copy: make it whole first.
+    const { expandAgentFiles } = await import("@/lib/workspace/agent-base");
+    const whole = await expandAgentFiles((text, params) => sql.query(text, params), data, context.userId);
+    if (!whole.ok) {
+      const { RESEND_FILES } = await import("@/lib/agent/wire");
+      throw new Error(RESEND_FILES);
+    }
     const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
-    const clean = sanitizeAgentInput(data);
+    const clean = sanitizeAgentInput(whole.raw);
     if ("error" in clean) throw new Error(clean.error);
 
     let agentName: string | null = null;

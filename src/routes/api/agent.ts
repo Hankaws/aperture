@@ -33,6 +33,20 @@ export const Route = createFileRoute("/api/agent")({
         } catch {
           return Response.json({ error: "Invalid request" }, { status: 400 });
         }
+        // A request may carry only what changed since the saved copy: make it whole first.
+        if (parsed && typeof parsed === "object" && "base" in parsed) {
+          const { expandAgentFiles } = await import("@/lib/workspace/agent-base");
+          const { RESEND_FILES } = await import("@/lib/agent/wire");
+          const { getSql } = await import("@/lib/db");
+          const sql = await getSql();
+          const whole = await expandAgentFiles(
+            (text, params) => sql.query(text, params),
+            parsed as Record<string, unknown>,
+            signedOut ? null : userId,
+          );
+          if (!whole.ok) return Response.json({ error: RESEND_FILES, resend: true }, { status: 409 });
+          parsed = whole.raw;
+        }
         const input = sanitizeAgentInput(parsed);
         if ("error" in input) {
           return Response.json({ error: input.error }, { status: 400 });

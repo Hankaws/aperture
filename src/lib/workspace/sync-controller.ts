@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { loadWorkspace, saveWorkspace } from "./sync.api";
 import { checkSyncLimits, decideSync, withoutSecrets, workspaceHash } from "./sync";
 import { DEMO_SYNC_HASH, useWorkspace } from "./store";
+import type { SavedCopy } from "@/lib/agent/wire";
 
 /** Long enough that a burst of keystrokes is one write, short enough to feel saved. */
 const SAVE_DEBOUNCE_MS = 2_500;
@@ -23,6 +24,13 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let inFlight = false;
 /** Set while a conflict is unresolved, so the loop stops writing over it. */
 let halted = false;
+/** The server's saved copy, as this tab last wrote or read it: agent requests send only what differs. */
+let savedCopy: SavedCopy | null = null;
+
+/** The saved copy at its revision, or null when this tab does not know it exactly. */
+export function savedBaseline(): SavedCopy | null {
+  return savedCopy;
+}
 
 async function pushNow(): Promise<void> {
   if (inFlight || halted) return;
@@ -41,8 +49,10 @@ async function pushNow(): Promise<void> {
     });
     if (result.ok) {
       useWorkspace.getState().markSynced(result.revision, workspaceHash(local.name, local.files));
+      savedCopy = { revision: result.revision, files: local.files };
       return;
     }
+    savedCopy = null;
     if (result.conflict) {
       halted = true;
       useWorkspace.getState().setSyncState("conflict");
@@ -56,6 +66,7 @@ async function pushNow(): Promise<void> {
     toast.error(result.error);
   } catch {
     // Offline or signed out mid-session: the local copy is still intact.
+    savedCopy = null;
     useWorkspace.getState().setSyncState("error");
   } finally {
     inFlight = false;
@@ -71,6 +82,7 @@ function scheduleSave() {
 /** Stop a save that is waiting. Called before the account is deleted. */
 export function haltWorkspaceSync(): void {
   halted = true;
+  savedCopy = null;
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -81,6 +93,7 @@ export async function adoptSavedCopy(): Promise<void> {
   if (!result.ok || !result.workspace) return;
   const { name, files, revision } = result.workspace;
   useWorkspace.getState().adoptRemote(name, files, revision);
+  savedCopy = { revision, files };
   halted = false;
 }
 
@@ -118,10 +131,12 @@ export function startWorkspaceSync(): () => void {
     const decision = decideSync(snapshot(), remote, DEMO_SYNC_HASH);
     if (decision.kind === "adopt" && remote) {
       useWorkspace.getState().adoptRemote(remote.name, remote.files, remote.revision);
+      savedCopy = { revision: remote.revision, files: remote.files };
     } else if (decision.kind === "push") {
       await pushNow();
     } else if (decision.kind === "conflict") {
       halted = true;
+      savedCopy = null;
       useWorkspace.getState().setSyncState("conflict");
       toast.warning("A different copy of this project is saved to your account.", {
         description: "Nothing has been overwritten. Choose which copy to keep from the status bar.",
@@ -129,6 +144,7 @@ export function startWorkspaceSync(): () => void {
       });
     } else if (remote) {
       useWorkspace.getState().markSynced(remote.revision, workspaceHash(remote.name, remote.files));
+      savedCopy = { revision: remote.revision, files: remote.files };
     }
 
     if (stopped) return;
@@ -144,6 +160,7 @@ export function startWorkspaceSync(): () => void {
 
   return () => {
     stopped = true;
+    savedCopy = null;
     teardown?.();
     if (saveTimer) clearTimeout(saveTimer);
   };

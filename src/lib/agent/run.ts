@@ -19,6 +19,7 @@ import { isUiTask, nearestUiFiles } from "./ui-graph";
 import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
+import { restoreRedacted } from "./unredact";
 import { compareRuns } from "@/lib/runner/compare";
 import type { Spot } from "@/lib/workspace/lessons";
 
@@ -357,6 +358,10 @@ export async function submitAgent(
     browserRuns,
     copyId,
   });
+  // The server hides secret-looking lines from the agent, so its edits come back on that
+  // copy: carry them onto the real text that was sent, or accepting one writes [redacted].
+  const sentFiles = Object.fromEntries(input.files.map((file) => [file.path, file.content]));
+  const unredact = (next: ProposedEdit[]) => restoreRedacted(next, sentFiles, input.pendingEdits ?? []);
 
   if (mode === "inline") {
     try {
@@ -371,7 +376,7 @@ export async function submitAgent(
       useWorkspace.getState().patchMessage(asstId, {
         content: result.text,
         traces: result.traces,
-        edits: result.edits,
+        edits: unredact(result.edits),
         plan: result.plan,
         status: undefined,
         debug: result.debug,
@@ -425,7 +430,7 @@ export async function submitAgent(
         return;
       }
       if (event.type === "edits") {
-        edits = tagCopy(event.edits);
+        edits = tagCopy(unredact(event.edits));
         ws.patchMessage(asstId, { content: text, traces, edits, plan });
         const last = edits[edits.length - 1];
         if (last?.path) ws.openFile(last.path);
@@ -434,7 +439,7 @@ export async function submitAgent(
       if (event.type === "done") {
         text = event.text;
         traces = event.traces;
-        edits = tagCopy(event.edits);
+        edits = tagCopy(unredact(event.edits));
         plan = event.plan ?? plan;
         const reviewOnly = Boolean(opts?.workers?.length && opts.workers.every((w) => w.role === "review"));
         const reviewing = opts?.role === "review" || reviewOnly;

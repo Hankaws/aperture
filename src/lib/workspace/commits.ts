@@ -10,7 +10,7 @@ export function commitMessage(descriptions: string[]): string {
   return subject.length > 72 ? `${subject.slice(0, 71)}…` : subject;
 }
 
-type Revertable = { id: string; path: string; status: string };
+type Revertable = { id: string; path: string; status: string; trimmed?: boolean };
 
 /**
  * Put a commit's edits back to pending.
@@ -33,7 +33,8 @@ export function editsAfterRevert<T extends Revertable>(
       (applied.has(edit.id) && edit.status === "applied") ||
       (dropped.has(edit.id) && edit.status === "rejected") ||
       (legacy && commit.paths.includes(edit.path) && edit.status === "applied");
-    return back ? { ...edit, status: "pending" } : edit;
+    // A trimmed edit (from this browser's saved copy) has no texts to stage again: the files still revert.
+    return back && !edit.trimmed ? { ...edit, status: "pending" } : edit;
   });
 }
 /** A stamp of what a commit left in each path, or null where it left no file. */

@@ -176,6 +176,7 @@ function JobCard({ job }: { job: JobRecord }) {
 
 function DiffBlock({ file }: { file: RunFile | null }) {
   if (!file) return <p className="px-3 py-2 text-xs text-subtle">Not changed in this run.</p>;
+  if (file.edit.trimmed) return <p className="px-3 py-2 text-xs text-subtle">Diff not kept after reload.</p>;
   const rows = diffRows(file.edit.oldText, file.edit.newText);
   return (
     <pre className="aperture-scroll max-h-72 overflow-auto px-0 py-1 font-mono text-[11px] leading-relaxed">

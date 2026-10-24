@@ -1,5 +1,7 @@
 import { safeRelPath } from "../security/redact.ts";
-import type { ChatMessage, Checkpoint, DiffNote, ProposedEdit } from "./types";
+import { diffStats } from "../agent/apply-edit.ts";
+import { editsAfterRevert } from "./commits.ts";
+import type { ChatMessage, Checkpoint, DiffNote, LocalCommit, ProposedEdit } from "./types";
 
 const EDIT_STATUS = new Set(["pending", "applied", "rejected"]);
 const NOTE_TYPE = new Set(["eq", "add", "del"]);
@@ -43,6 +45,8 @@ function validEdit(value: unknown): ProposedEdit | null {
     return null;
   }
   if (!EDIT_STATUS.has(edit.status)) return null;
+  // A pending edit applies its newText: one saved without it could only empty the file.
+  if (edit.trimmed === true && edit.status === "pending") return null;
   const notes = Array.isArray(edit.notes) ? edit.notes.map(validNote).filter((note) => note !== null) : undefined;
   return {
     id: edit.id,
@@ -55,7 +59,53 @@ function validEdit(value: unknown): ProposedEdit | null {
     ...(edit.reviewed === true ? { reviewed: true } : {}),
     ...(typeof edit.copyId === "string" ? { copyId: edit.copyId } : {}),
     ...(edit.deleted === true ? { deleted: true } : {}),
+    ...(edit.trimmed === true ? { trimmed: true as const } : {}),
+    ...(validStats(edit.stats) ? { stats: { added: edit.stats!.added, removed: edit.stats!.removed } } : {}),
   };
+}
+
+function validStats(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const { added, removed } = value as Record<string, unknown>;
+  return Number.isInteger(added) && Number.isInteger(removed) && (added as number) >= 0 && (removed as number) >= 0;
+}
+
+/** Counts per edit object: edits in the state are replaced, never changed, and a save runs at every pause. */
+const statsOf = new WeakMap<ProposedEdit, { added: number; removed: number }>();
+
+function countsOf(edit: ProposedEdit): { added: number; removed: number } {
+  let stats = statsOf.get(edit);
+  if (!stats) {
+    stats = diffStats(edit.oldText, edit.newText);
+    statsOf.set(edit, stats);
+  }
+  return stats;
+}
+
+/**
+ * Messages as this browser saves them: a finished edit keeps its line counts
+ * but not its two copies of the file, which grew the save past the storage
+ * quota. Pending edits, and the ones reverting the latest commit would stage
+ * again, stay whole.
+ */
+export function trimHistory(
+  messages: ChatMessage[],
+  commits: Array<Pick<LocalCommit, "paths" | "messageId" | "editIds" | "rejectedIds">>,
+): ChatMessage[] {
+  const last = commits[commits.length - 1];
+  return messages.map((message) => {
+    const edits = message.edits;
+    if (!edits?.length) return message;
+    const back = last ? editsAfterRevert(edits, last, message.id) : edits;
+    let changed = false;
+    const next = edits.map((edit, i) => {
+      const keep = edit.status === "pending" || edit.trimmed || back?.[i]?.status !== edit.status;
+      if (keep) return edit;
+      changed = true;
+      return { ...edit, oldText: "", newText: "", trimmed: true as const, stats: countsOf(edit) };
+    });
+    return changed ? { ...message, edits: next } : message;
+  });
 }
 
 /**

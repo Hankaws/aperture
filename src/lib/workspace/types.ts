@@ -49,6 +49,12 @@ export type ProposedEdit = {
   copyId?: string;
   /** Applying removes the file at `path` (`newText` is empty): the agent moved it. */
   deleted?: boolean;
+  /**
+   * A finished edit loaded from this browser's saved copy, which keeps only its
+   * line counts: its texts are empty. Edits that can still apply are kept whole.
+   */
+  trimmed?: true;
+  stats?: { added: number; removed: number };
 };
 
 export type JsonScalar = string | number | boolean | null;

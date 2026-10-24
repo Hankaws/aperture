@@ -7,7 +7,8 @@ import { checkpointLabel, pushCheckpoint, restoreFiles, snapshotPaths } from "./
 import { commitMessage, editsAfterRevert, revertConflicts, stampsAfter } from "./commits";
 import { LESSONS_PATH, lessonAfterKeep, lessonsForPrompt, rememberRefusal, refusalLine, removeLesson, upsertLesson } from "./lessons";
 import { useIdeUi } from "@/lib/ui-store";
-import { validCheckpoints, validFiles, validMessages } from "./persist";
+import { trimHistory, validCheckpoints, validFiles, validMessages } from "./persist";
+import { toast } from "sonner";
 import { copyLabel, keepSet, type RunCopy } from "./copies";
 import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
@@ -143,7 +144,8 @@ function persist(state: WorkspaceState) {
     previewPath: state.previewPath,
     pinned: state.pinned,
     dirtyPaths: state.dirtyPaths,
-    messages: state.messages.slice(-40),
+    // Finished edits keep their counts, not two copies of the file: those grew the save past the quota.
+    messages: trimHistory(state.messages.slice(-40), state.commits),
     revision: state.revision,
     syncedHash: state.syncedHash,
     github: state.github,
@@ -164,9 +166,23 @@ function persist(state: WorkspaceState) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
     } catch {
-      // quota — ignore
+      warnStorageFull(state.syncState === "local");
     }
   }
+}
+
+let warnedStorageFull = false;
+
+/** Once per page load: the browser's copy stopped updating, which nothing else would show. */
+function warnStorageFull(localOnly: boolean) {
+  if (warnedStorageFull) return;
+  warnedStorageFull = true;
+  toast.warning("This browser is out of room for the project.", {
+    description: localOnly
+      ? "Changes since then are only in this tab and are lost if it reloads. Use Download zip in the file tree to keep them."
+      : "Changes since then are only in this tab. Your account's saved copy is not affected.",
+    duration: 12_000,
+  });
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -405,7 +421,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       if (m.id !== ck.messageId) return m;
       return {
         ...m,
-        edits: m.edits?.map((e) => (e.status === "applied" ? { ...e, status: "pending" as const } : e)),
+        // A trimmed edit (from this browser's saved copy) has no texts to stage again: the files still restore.
+        edits: m.edits?.map((e) => (e.status === "applied" && !e.trimmed ? { ...e, status: "pending" as const } : e)),
       };
     });
     set({

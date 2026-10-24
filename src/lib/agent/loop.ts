@@ -1,5 +1,6 @@
 import { indexFiles, semanticSearch } from "@/lib/indexer/search";
 import { repoMap } from "@/lib/indexer/repo-map";
+import { pickLoopFiles } from "@/lib/security/agent-files";
 import { applySearchReplace } from "./apply-edit";
 import type { ChatMessage, Completion, CompletionCfg } from "./complete.server";
 import type { AgentToolDef } from "./tools";
@@ -41,8 +42,9 @@ import {
 
 const MAX_PLAN_STEPS = 8;
 const MAX_BUILD_STEPS = 12;
-const MAX_FILES = 120;
-const MAX_CHARS = 220_000;
+// The semantic index costs about 0.6 ms per KB (1.3 s for a 2.2 MB project, measured at 4dd8fcf):
+// it covers the files the person is working on first, within this budget. grep and read_file see everything.
+const SEARCH_INDEX_CHARS = 220_000;
 
 function flavorOf(input: AgentInput) {
   const id = input.agentId;
@@ -94,24 +96,6 @@ function systemPrompt(
   ].filter(Boolean).join(" ");
   if (!rules) return base;
   return `${base}\n\nProject rules (follow these):\n${rules.slice(0, 6000)}`;
-}
-
-function capFiles(files: AgentInput["files"], mentioned: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  let used = 0;
-  const mentionSet = new Set(mentioned);
-  const ordered = [
-    ...files.filter((f) => mentionSet.has(f.path)),
-    ...files.filter((f) => !mentionSet.has(f.path)),
-  ];
-  for (const file of ordered.slice(0, MAX_FILES)) {
-    const room = MAX_CHARS - used;
-    if (room <= 0) break;
-    const content = file.content.length > room ? file.content.slice(0, room) : file.content;
-    map[file.path] = content;
-    used += content.length;
-  }
-  return map;
 }
 
 function fileTree(files: Record<string, string>): string {
@@ -314,13 +298,10 @@ export async function runLoop(
           ? nearestUiFiles(fileMap, input.instruction, input.activePath ?? null, 3)
           : [],
       });
-  const files = reviewing
-    ? {}
-    : capFiles(
-        Object.entries(fileMap).map(([path, content]) => ({ path, content })),
-        [...mentioned, ...auto],
-      );
-  const chunks = reviewing ? [] : indexFiles(files);
+  const entries = Object.entries(fileMap).map(([path, content]) => ({ path, content }));
+  const first = [...mentioned, ...auto];
+  const files = reviewing ? {} : pickLoopFiles(entries, first);
+  const chunks = reviewing ? [] : indexFiles(pickLoopFiles(entries, first, SEARCH_INDEX_CHARS));
   const phase = resolveAgentPhase(input.mode, input.phase);
   const requirePlan = (input.mode === "composer" || Boolean(flavor)) && phase !== "skip";
   const approved = input.approvedPlan?.length ? input.approvedPlan : [];

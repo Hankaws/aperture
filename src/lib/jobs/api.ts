@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { builtinById, isBuiltinAgentId } from "@/lib/acp/kinds";
 import { planById } from "@/lib/billing/plans";
 import type { JobRecord } from "./types";
+import { JOB_KEEP_COUNT, pruneFinishedJobs } from "./retention";
 import { agentInput, idInput } from "@/lib/security/inputs";
 
 function asIso(value: unknown): string {
@@ -78,6 +79,8 @@ async function loadJobs(userId: string): Promise<JobRecord[]> {
   await failStaleJobs(userId);
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
+  // Finished jobs are kept for 30 days and only the newest 30: their replies hold the person's code.
+  await pruneFinishedJobs((text, params) => sql.query(text, params), userId);
   const rows = await sql<JobRow>`
     select j.id, j.kind, j.agent_id, j.instruction, j.status, j.result_text, j.result_edits,
            j.error, j.created_at, j.finished_at, a.name as agent_name
@@ -85,7 +88,7 @@ async function loadJobs(userId: string): Promise<JobRecord[]> {
     left join user_agents a on a.id = j.agent_id
     where j.user_id = ${userId}
     order by j.created_at desc
-    limit 30
+    limit ${JOB_KEEP_COUNT}
   `;
   return rows.map((row) => toRecord(row, row.agent_name ?? null));
 }

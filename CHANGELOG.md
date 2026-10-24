@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Finished background jobs are deleted after 30 days (the newest 30 are kept), and the privacy page says what jobs and bot chats keep. (#129)
 - Tab no longer sends keys, tokens or passwords it sees near the cursor: they are redacted, as in Composer. (#128)
 - On larger projects the agent can read every file and runs tests on the whole project, never a cut-off copy. (#127)
 - On larger projects the agent sees every file, with the ones you are working on first. (#126)

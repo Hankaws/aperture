@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- The agent no longer sees ordinary code as [redacted]: only real-looking keys, tokens and passwords are hidden, and a hidden string keeps its quotes. (#132)
 - Accepting an agent edit keeps the real text of lines the agent was shown as [redacted], and the diff shows only what the agent changed. (#131)
 - Background jobs started at the same moment can no longer go past your plan's limit: the database holds a numbered slot for each running job. (#130)
 - Finished background jobs are deleted after 30 days (the newest 30 are kept), and the privacy page says what jobs and bot chats keep. (#129)

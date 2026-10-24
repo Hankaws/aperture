@@ -44,7 +44,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     if (path && typeof row.text === "string") {
       selection = {
         path,
-        text: redactSecrets(row.text.slice(0, 12_000)),
+        text: redactSecrets(row.text.slice(0, 12_000), path),
         fromLine: Math.max(1, Number(row.fromLine) || 1),
         toLine: Math.max(1, Number(row.toLine) || 1),
       };

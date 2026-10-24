@@ -4,6 +4,7 @@ import { builtinById, isBuiltinAgentId } from "@/lib/acp/kinds";
 import { planById } from "@/lib/billing/plans";
 import type { JobRecord } from "./types";
 import { JOB_KEEP_COUNT, pruneFinishedJobs } from "./retention";
+import { insertQueuedJob } from "./slots";
 import { agentInput, idInput } from "@/lib/security/inputs";
 
 function asIso(value: unknown): string {
@@ -116,14 +117,6 @@ export const startJob = createServerFn({ method: "POST" })
     await failStaleJobs(context.userId);
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    const live = await sql<{ n: number }>`
-      select count(*)::int as n from user_jobs
-      where user_id = ${context.userId} and status in ('queued', 'running')
-    `;
-    const n = Number(live[0]?.n ?? 0);
-    if (n >= plan.backgroundJobs) {
-      throw new Error(`Queue full (${plan.backgroundJobs} of ${plan.backgroundJobs} background ${plan.backgroundJobs === 1 ? "job" : "jobs"} on ${plan.name}).`);
-    }
 
     const { sanitizeAgentInput } = await import("@/lib/security/agent-guard.server");
     const clean = sanitizeAgentInput(data);
@@ -145,10 +138,11 @@ export const startJob = createServerFn({ method: "POST" })
     }
 
     const id = `job_${crypto.randomUUID()}`;
-    await sql`
-      insert into user_jobs (id, user_id, kind, agent_id, instruction, status)
-      values (${id}, ${context.userId}, ${agentId ? "acp" : "composer"}, ${agentId}, ${clean.instruction}, 'queued')
-    `;
+    const job = { id, userId: context.userId, kind: agentId ? "acp" : "composer", agentId, instruction: clean.instruction } as const;
+    // The cap is checked by the insert itself, so two starts at once cannot both take the last slot.
+    if (!(await insertQueuedJob((text, params) => sql.query(text, params), job, plan.backgroundJobs))) {
+      throw new Error(`Queue full (${plan.backgroundJobs} of ${plan.backgroundJobs} background ${plan.backgroundJobs === 1 ? "job" : "jobs"} on ${plan.name}).`);
+    }
 
     const { runJob } = await import("./runner.server");
     const { keepAlive } = await import("./keep-alive.server");

@@ -4,16 +4,15 @@ import { parseWorkerRole } from "@/lib/agent/crew";
 import { parseAgentPhase } from "@/lib/agent/phase";
 import { isAgentRef } from "@/lib/acp/kinds";
 import { isModelSource } from "@/lib/billing/plans";
-import { redactSecrets, safeRelPath, isSecretPath } from "./redact";
+import { redactSecrets, safeRelPath } from "./redact";
+import { cleanPaths, pickAgentFiles } from "./agent-files";
 import { normalizePlan } from "@/lib/workspace/plan";
 
-export const MAX_AGENT_BODY = 2_800_000;
+// Under Vercel's 4.5 MB request limit, with room for JSON escaping of 2.5 MB of files.
+export const MAX_AGENT_BODY = 4_000_000;
 export const MAX_INSTRUCTION = 8_000;
 export const MAX_HISTORY = 8;
 export const MAX_HISTORY_CHARS = 4_000;
-export const MAX_FILES = 120;
-export const MAX_FILE_CHARS = 200_000;
-export const MAX_TOTAL_CHARS = 2_500_000;
 
 export { rateLimit } from "./rate-limit";
 
@@ -37,22 +36,6 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     history.push({ role, content: redactSecrets(row.content.slice(0, MAX_HISTORY_CHARS)) });
   }
 
-  const filesIn = Array.isArray(input.files) ? input.files.slice(0, MAX_FILES) : [];
-  const files: AgentInput["files"] = [];
-  let used = 0;
-  for (const file of filesIn) {
-    if (!file || typeof file !== "object") continue;
-    const row = file as Record<string, unknown>;
-    if (typeof row.path !== "string" || typeof row.content !== "string") continue;
-    const path = safeRelPath(row.path);
-    if (!path || isSecretPath(path)) continue;
-    const room = MAX_TOTAL_CHARS - used;
-    if (room <= 0) break;
-    const content = redactSecrets(row.content.slice(0, Math.min(MAX_FILE_CHARS, room)));
-    files.push({ path, content });
-    used += content.length;
-  }
-
   let selection: AgentInput["selection"] = null;
   const sel = input.selection;
   if (sel && typeof sel === "object") {
@@ -70,6 +53,15 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
 
   const activePath =
     typeof input.activePath === "string" ? safeRelPath(input.activePath) : input.activePath === null ? null : undefined;
+
+  const focusPaths = cleanPaths(input.focusPaths);
+  const openTabs = cleanPaths(input.openTabs);
+  const recentPaths = cleanPaths(input.recentPaths);
+  // What the person is working on goes first, so a large project never loses it.
+  const files: AgentInput["files"] = pickAgentFiles(
+    input.files,
+    [activePath ?? "", selection?.path ?? "", ...focusPaths, ...openTabs, ...recentPaths].filter(Boolean),
+  );
 
   let source: AgentInput["source"] = undefined;
   if (input.source === null || input.source === undefined || input.source === "") {
@@ -164,6 +156,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     files,
     activePath,
     selection,
+    focusPaths: focusPaths.length ? focusPaths : undefined,
+    openTabs: openTabs.length ? openTabs : undefined,
+    recentPaths: recentPaths.length ? recentPaths : undefined,
     source,
     agentId,
     phase,

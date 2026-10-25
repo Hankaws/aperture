@@ -36,6 +36,14 @@ function PricingPage() {
             <li>Or a custom OpenAI-compatible endpoint, such as Ollama, LM Studio, or OpenRouter.</li>
             <li>Session cap on by default (about $1 on your keys). Raise it in Settings.</li>
             <li>Tab ghost-text uses a fast model on your key, not grok-4.5 per keystroke.</li>
+            <li>
+              Tests run free in your browser on every plan: <code className="font-mono text-xs whitespace-nowrap">node --test</code>,
+              Vitest, or Jest, for projects without a build step or a DOM.
+            </li>
+            <li>
+              Tests that need real Node run in your own CI: Agent Check runs them on your GitHub Actions runner.
+              Pro adds a server sandbox for them.
+            </li>
             <li>The public demo plays recorded runs. It calls no model and uses no key.</li>
             <li>Your provider bill is theirs. We do not markup tokens on a key you attached.</li>
           </ul>
@@ -45,6 +53,9 @@ function PricingPage() {
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
           >
             Go to model settings
+          </Link>
+          <Link to="/bot" search={{ tab: "check" }} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mt-4 ml-2")}>
+            Set up Agent Check
           </Link>
         </div>
       </main>

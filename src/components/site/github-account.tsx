@@ -14,16 +14,25 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Until the status is known the card offers no token box: a connected
+  // account shown as "Not connected" invites pasting over a working token.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancel = false;
-    void githubStatus().then((next) => {
-      if (!cancel) setAccount(next);
-    });
+    setLoadFailed(false);
+    githubStatus()
+      .then((next) => {
+        if (!cancel) setAccount(next);
+      })
+      .catch(() => {
+        if (!cancel) setLoadFailed(true);
+      });
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     if (account) onAccount?.(account);
@@ -72,7 +81,11 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
             It needs repo access. It is encrypted and never sent back here.
           </p>
         </div>
-        {account?.connected ? (
+        {!account ? (
+          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-subtle">
+            {loadFailed ? "Unknown" : "Checking…"}
+          </span>
+        ) : account.connected ? (
           <span className="rounded-full border border-ok/30 bg-ok/10 px-2 py-0.5 text-xs text-ok">
             {account.login}
             {account.last4 ? ` ···${account.last4}` : ""}
@@ -81,7 +94,16 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
           <span className="rounded-full border border-border px-2 py-0.5 text-xs text-subtle">Not connected</span>
         )}
       </div>
-      {account?.connected ? (
+      {!account ? (
+        loadFailed && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-danger">Could not check the GitHub connection.</p>
+            <Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+              Retry
+            </Button>
+          </div>
+        )
+      ) : account.connected ? (
         <div className="mt-4">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => void remove()}>
             Disconnect
@@ -109,7 +131,7 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
           </Button>
         </form>
       )}
-      {!account?.connected && (
+      {account && !account.connected && (
         <p className="mt-2 text-xs text-subtle">
           No token yet?{" "}
           <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">

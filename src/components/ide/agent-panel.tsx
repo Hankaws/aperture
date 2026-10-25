@@ -271,11 +271,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       return;
     }
     if (account.backgroundJobs <= 0) {
-      toast.error("Background jobs are on Pro. Composer in the panel still runs on Hobby.");
+      toast.error("Background jobs are not on this plan. Composer in the panel still runs.");
       return;
     }
     if (target.kind === "acp" && !account.acp) {
-      toast.error("External agents are on Pro.");
+      toast.error("External agents are not on this plan.");
       return;
     }
     const payload = agentPayload(
@@ -331,7 +331,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       return;
     }
     if (target.kind === "acp" && !account?.acp) {
-      toast.error("ACP sessions are on Pro.");
+      toast.error("ACP sessions are not on this plan.");
       return;
     }
     if (blocked || acpBlocked) return;

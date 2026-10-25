@@ -112,7 +112,7 @@ export const startJob = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<JobRecord> => {
     const plan = await planOf(context.userId);
     if (plan.backgroundJobs <= 0) {
-      throw new Error("Background jobs are on Pro. Composer in the panel still runs on Hobby.");
+      throw new Error("Background jobs are not on this plan. Composer in the panel still runs.");
     }
     await failStaleJobs(context.userId);
     const { getSql } = await import("@/lib/db");
@@ -132,7 +132,7 @@ export const startJob = createServerFn({ method: "POST" })
     let agentName: string | null = null;
     const agentId = typeof data.agentId === "string" && data.agentId ? data.agentId : null;
     if (agentId) {
-      if (!plan.acp) throw new Error("External agents are on Pro.");
+      if (!plan.acp) throw new Error("External agents are not on this plan.");
       if (isBuiltinAgentId(agentId)) {
         agentName = builtinById(agentId)?.name ?? "ACP";
       } else {

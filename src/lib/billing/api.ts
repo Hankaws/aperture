@@ -375,7 +375,7 @@ export const saveProviderKey = createServerFn({ method: "POST" })
     const currentlySet = Boolean(row[col]);
     const keyCount = KEY_COLS.filter((c) => row[c]).length;
     if (trimmed && !currentlySet && keyCount >= plan.byokSlots) {
-      throw new Error(`Your ${plan.name} plan allows ${plan.byokSlots} key${plan.byokSlots === 1 ? "" : "s"}. Upgrade to add more.`);
+      throw new Error(`Your ${plan.name} plan allows ${plan.byokSlots} key${plan.byokSlots === 1 ? "" : "s"}. Remove one to add another.`);
     }
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
@@ -554,7 +554,7 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
   const row = await loadAccount(userId);
   const account = await snapshotOf(row);
   if (!account.tab) {
-    return { ok: false, error: "Tab ghost-text is on Pro." };
+    return { ok: false, error: "Tab ghost-text is not on this plan." };
   }
   const source = account.modelSource;
   if (source === "custom" && row.custom_base && row.custom_model) {

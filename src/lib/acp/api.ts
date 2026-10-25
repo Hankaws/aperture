@@ -63,7 +63,7 @@ export const saveAgent = createServerFn({ method: "POST" })
     const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(context.userId)}`;
     if (!planById(settings[0]?.plan ?? "hobby").acp) {
       throw new Error(
-        `External agents are on Pro. Upgrade to plug ${acpAgentNames("or")} into the same diff UI.`,
+        `External agents (${acpAgentNames("or")}) are not on this plan.`,
       );
     }
     if (!isAcpKind(data.kind)) throw new Error("Unknown agent kind.");

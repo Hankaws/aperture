@@ -30,8 +30,8 @@ export function ExternalAgents({ account }: { account: AccountSnapshot }) {
       <div className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="text-xl font-medium tracking-tight">External agents</h2>
         <p className="mt-2 max-w-xl text-sm text-pretty text-muted">
-          Pro runs {acpAgentNames("and")} as ACP sessions in Composer — plan, traces, and the same staged diffs.
-          Pro is coming soon. Hobby has Composer, Chat, and Inline.
+          Running {acpAgentNames("and")} as ACP sessions in Composer is not on this plan. Composer, Chat, and
+          Inline still run on your key.
         </p>
         {showPricing && (
           <Link to="/pricing" className={cn(buttonVariants(), "mt-4")}>

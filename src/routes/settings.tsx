@@ -99,7 +99,7 @@ function SettingsPage() {
                 <p className="text-xs text-subtle">
                   One send is one call on the key you picked, including the whole tool loop.{" "}
                   {account.keyCount} of {account.byokSlots} key slots used.
-                  {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is on Pro."}
+                  {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is not on this plan."}
                 </p>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">

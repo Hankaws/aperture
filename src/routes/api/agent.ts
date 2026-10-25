@@ -67,7 +67,7 @@ export const Route = createFileRoute("/api/agent")({
           if (!planById(settings[0]?.plan ?? "hobby").acp) {
             return Response.json(
               {
-                error: `External agents are on Pro. Upgrade to run ${acpAgentNames("or")} in this panel.`,
+                error: `External agents (${acpAgentNames("or")}) are not on this plan.`,
               },
               { status: 403 },
             );

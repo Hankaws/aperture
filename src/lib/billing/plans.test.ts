@@ -30,3 +30,12 @@ test("the free plan can always be chosen", () => {
   assert.equal(planChangeRefusal(planById("hobby"), true), null);
   assert.equal(planChangeRefusal(planById("hobby"), false), null);
 });
+
+test("Hobby, the plan anyone can choose, has a background job and external agents, but no server sandbox", () => {
+  const hobby = planById("hobby");
+  assert.equal(planAvailable(hobby), true);
+  assert.equal(hobby.backgroundJobs, 1);
+  assert.equal(hobby.acp, true);
+  // The sandbox is the one cost that is not the person's key: it stays on the paid plans.
+  assert.equal(hobby.sandboxRuns, 0);
+});

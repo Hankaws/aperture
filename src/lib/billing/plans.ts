@@ -35,15 +35,19 @@ export const PLANS: Plan[] = [
     byokSlots: 1,
     tab: false,
     tabDaily: 0,
-    backgroundJobs: 0,
+    // A job is one Composer turn run in the background, and an ACP agent a Composer flavour
+    // or the person's own endpoint: both on their key, at no cost a panel turn does not have.
+    backgroundJobs: 1,
     sandboxRuns: 0,
-    acp: false,
+    acp: true,
     cta: "Start free",
     features: [
       "Composer, Chat, and Inline — not gated",
       "Plan before the first diff",
       "One send = one call on your key",
       "One bring-your-own key",
+      "One background job",
+      `ACP: ${acpAgentNames()} in the same diffs`,
       "Session cap on by default",
       "Download a zip of the project",
     ],
@@ -67,8 +71,7 @@ export const PLANS: Plan[] = [
       "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
       "Tab ghost-text — fast model, on your key",
-      "One background job",
-      `ACP: ${acpAgentNames()} in the same diffs`,
+      "The agent runs your tests in a sandbox (40 a day)",
     ],
   },
   {

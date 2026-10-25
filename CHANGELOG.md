@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Messages no longer send you to a Pro plan you cannot buy. Without the server sandbox, the agent is told tests run free in your browser or in your own CI with Agent Check. (#144)
 - The session cap starts a new session 24 hours after the first send, by itself, so a few sends no longer block the free plan until you reset it. Settings → Limits says when. (#143)
 - A send blocked for a missing key links to Settings → Models, not Limits, and Settings no longer offers Pro for keys Hobby already has. (#142)
 - The pricing page says where tests run on each plan: free in your browser, in your own CI with Agent Check, or in the Pro sandbox. (#141)

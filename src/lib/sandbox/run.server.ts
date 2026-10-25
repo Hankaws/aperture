@@ -26,7 +26,7 @@ export function checkAllowance(
 ): RunGate {
   const cap = planById(plan).sandboxRuns;
   if (cap <= 0) {
-    return { ok: false, reason: "Verified runs are on Pro. Upgrade to have the agent run your tests." };
+    return { ok: false, reason: "The server sandbox is not on this plan. Tests run free in your browser, or in your own CI with Agent Check." };
   }
   const countedToday = day === today ? used : 0;
   if (countedToday >= cap) {

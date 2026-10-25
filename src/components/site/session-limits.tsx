@@ -108,7 +108,7 @@ export function SessionLimits({
             Fast model only — never grok-4.5 per keystroke. Tab uses your own key and is uncapped on that provider.
           </p>
         ) : (
-          <p className="mt-2 text-sm text-muted">Tab is on Pro. Composer, Chat, and Inline still run on Hobby.</p>
+          <p className="mt-2 text-sm text-muted">Tab is not on this plan. Composer, Chat, and Inline still run.</p>
         )}
       </div>
     </div>

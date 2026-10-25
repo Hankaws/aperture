@@ -222,8 +222,8 @@ function ProviderPanel({
 
       {locked ? (
         <p className="mt-4 text-sm text-muted">
-          {planById(account.plan).name} only allows {account.byokSlots} key. Remove the one you have, or upgrade to add{" "}
-          {label}.
+          {planById(account.plan).name} allows {account.byokSlots} {account.byokSlots === 1 ? "key" : "keys"}. Remove one
+          to add {label}.
         </p>
       ) : (
         <form

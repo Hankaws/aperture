@@ -108,11 +108,11 @@ test("reportFromRun tells a failing edit from a run that never happened", () => 
   });
   const noAllowance = reportFromRun(
     "test",
-    { text: "Verified runs are on Pro. Upgrade to have the agent run your tests.", passed: false, ran: false },
+    { text: "The server sandbox is not on this plan. Tests run free in your browser, or in your own CI with Agent Check.", passed: false, ran: false },
     1,
   );
   assert.equal(noAllowance.status, "not_run");
-  assert.equal(noAllowance.detail, "Verified runs are on Pro.");
+  assert.equal(noAllowance.detail, "The server sandbox is not on this plan.");
 });
 
 test("notRunReport says why nothing ran", () => {

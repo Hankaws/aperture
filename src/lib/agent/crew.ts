@@ -74,7 +74,7 @@ export function availableSeats(account: SeatAccount | null | undefined): CrewSea
       label: agent.name,
       agentId: agent.id,
       ready: Boolean(account?.acp),
-      hint: account?.acp ? "ACP · same diffs" : "ACP is on Pro",
+      hint: account?.acp ? "ACP · same diffs" : "ACP is not on this plan",
     });
   }
   return seats;

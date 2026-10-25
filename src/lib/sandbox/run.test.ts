@@ -4,10 +4,11 @@ import { checkAllowance } from "./run.server.ts";
 import { planRun, sandboxEnv, clampTimeout } from "./policy.ts";
 import { formatOutcome, outcomePassed, type RunOutcome, type RunRequest, type SandboxRunner } from "./runner.ts";
 
-test("a plan without runs is told to upgrade, not given a smaller number", () => {
+test("a plan without runs is told where tests can run, not given a smaller number", () => {
   const gate = checkAllowance("hobby", 0, "2026-09-22", "2026-09-22");
   assert.equal(gate.ok, false);
-  assert.match(gate.ok ? "" : gate.reason, /on Pro/);
+  assert.match(gate.ok ? "" : gate.reason, /not on this plan/);
+  assert.match(gate.ok ? "" : gate.reason, /Agent Check/);
 });
 
 test("the allowance counts down and then refuses", () => {

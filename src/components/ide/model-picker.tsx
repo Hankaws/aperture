@@ -73,7 +73,7 @@ export function ModelPicker({
         <option value="local" disabled={!local}>
           {local ? `This computer · ${local.model}` : "This computer (set up)"}
         </option>
-        <optgroup label={account.acp ? "ACP · same diff UI" : "ACP (Pro)"}>
+        <optgroup label={account.acp ? "ACP · same diff UI" : "ACP (not on this plan)"}>
           {BUILTIN_ACP.map((agent) => (
             <option key={agent.id} value={`acp:${agent.id}`} disabled={!account.acp}>
               {agent.name}

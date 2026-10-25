@@ -32,8 +32,9 @@ export const PLANS: Plan[] = [
     monthly: 0,
     yearlyMonthly: 0,
     hostedTurns: 50,
-    byokSlots: 1,
-    tab: false,
+    // Keys and Tab are the person's own: more of either costs the deployment nothing.
+    byokSlots: 5,
+    tab: true,
     tabDaily: 0,
     // A job is one Composer turn run in the background, and an ACP agent a Composer flavour
     // or the person's own endpoint: both on their key, at no cost a panel turn does not have.
@@ -45,7 +46,8 @@ export const PLANS: Plan[] = [
       "Composer, Chat, and Inline — not gated",
       "Plan before the first diff",
       "One send = one call on your key",
-      "One bring-your-own key",
+      "Up to five bring-your-own keys",
+      "Tab ghost-text — fast model, on your key",
       "One background job",
       `ACP: ${acpAgentNames()} in the same diffs`,
       "Session cap on by default",
@@ -55,7 +57,7 @@ export const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    blurb: "More keys, Tab, and unlimited agents on your keys.",
+    blurb: "Everything in Hobby, and the agent runs your tests.",
     monthly: 20,
     yearlyMonthly: 16,
     hostedTurns: 500,
@@ -70,7 +72,6 @@ export const PLANS: Plan[] = [
     features: [
       "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
-      "Tab ghost-text — fast model, on your key",
       "The agent runs your tests in a sandbox (40 a day)",
     ],
   },
@@ -90,7 +91,7 @@ export const PLANS: Plan[] = [
     cta: "Activate Team",
     features: [
       "Everything in Pro",
-      "Tab ghost-text on your key",
+      "The agent runs your tests in a sandbox (150 a day)",
       "Three concurrent background jobs",
       "Usage dashboard and session caps",
     ],

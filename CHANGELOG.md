@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Hobby includes Tab ghost-text and up to five of your own keys: both run on your key. (#140)
 - Hobby includes one background job and the external agents (Claude Code, Codex, OpenCode, Grok Build): both run on your own key, and no paid plan can be bought yet. (#139)
 - A running background job is no longer polled from a hidden tab, like the editor's other live lists. (#138)
 - The browser's copy of a project no longer grows with every past edit, so it keeps saving, and says so if it ever cannot; and diffs of large files take milliseconds, not seconds. (#137)

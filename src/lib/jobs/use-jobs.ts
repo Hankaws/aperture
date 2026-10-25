@@ -31,8 +31,9 @@ export function useJobs(enabled: boolean) {
   const live = jobs.some((j) => j.status === "queued" || j.status === "running");
   useEffect(() => {
     if (!enabled || !live) return;
+    // Never in a hidden tab, as the other pollers: each poll is a server call and three queries.
     const id = window.setInterval(() => {
-      void refresh();
+      if (document.visibilityState === "visible") void refresh();
     }, 2200);
     return () => window.clearInterval(id);
   }, [enabled, live, refresh]);

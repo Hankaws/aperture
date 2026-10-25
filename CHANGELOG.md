@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A running background job is no longer polled from a hidden tab, like the editor's other live lists. (#138)
 - The browser's copy of a project no longer grows with every past edit, so it keeps saving, and says so if it ever cannot; and diffs of large files take milliseconds, not seconds. (#137)
 - Typing in a large project no longer pauses to rebuild search data the editor does not use: a 2 MB project re-indexes in 2 ms, not 229. (#136)
 - Importing a zip or a GitHub repository unpacks only the files it can keep: a small archive can no longer fill the server's memory. (#135)

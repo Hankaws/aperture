@@ -24,7 +24,7 @@ const FAQ = [
   },
   {
     q: "Do the tests cost anything?",
-    a: "No. They run in your browser.",
+    a: "No. They run in your browser. Tests that need real Node run in your own CI with Agent Check.",
   },
   {
     q: "Can my own agent use the checks?",

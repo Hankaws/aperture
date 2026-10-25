@@ -78,3 +78,14 @@ test("a model on this computer is free, and blocked only until it is set up in t
     (globalThis as { localStorage?: unknown }).localStorage = realStorage;
   }
 });
+
+test("a cap block says so, so the editor links to Limits; a missing key links to Models", () => {
+  const spent = { ...hosted, session: { ...hosted.session, cents: 95 } };
+  assert.equal(quoteRun(spent, "hosted").capped, true);
+  assert.equal(quoteRuns(spent, "hosted", 3).capped, true);
+  assert.equal(quoteRuns({ ...hosted, session: { ...hosted.session, cents: 80 } }, "hosted", 3).capped, true);
+  const noKey = quoteRun({ ...hosted, keys: { ...hosted.keys, grok: { set: false, last4: null } } }, "hosted");
+  assert.equal(noKey.blocked, true);
+  assert.equal(noKey.capped, undefined);
+  assert.equal(quoteRun(hosted, "hosted").capped, undefined);
+});

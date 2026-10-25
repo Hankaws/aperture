@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { saveProviderKey, saveCustomEndpoint, setModelSource, type AccountSnapshot } from "@/lib/billing/api";
 import { CUSTOM_PRESETS } from "@/lib/agent/custom-endpoint";
@@ -16,7 +15,6 @@ import {
   saveLocalModel,
 } from "@/lib/agent/local-model";
 import { PROVIDERS, planById, type ProviderId } from "@/lib/billing/plans";
-import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 
 const SECRETS_NOTE: Record<AccountSnapshot["secrets"], string> = {
@@ -140,15 +138,6 @@ export function ModelKeys({
             />
           ) : null,
         )
-      )}
-
-      {account.plan === "hobby" && showPricing && (
-        <p className="text-sm text-muted">
-          Need GPT, Claude, Gemini, and DeepSeek together?{" "}
-          <Link to="/pricing" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-auto px-1")}>
-            Pro (coming soon)
-          </Link>
-        </p>
       )}
     </div>
   );

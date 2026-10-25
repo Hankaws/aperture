@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A file-tree row opens wherever you click it, indent and edges included, and two timing tests no longer fail on a busy machine. (#147)
 - A send that loses the connection says so plainly and offers Retry, and a request you are typing survives a reload or signing in. (#146)
 - Fix CI redacts tokens, keys and connection-string passwords from the job log before it goes to the model, and the GitHub card says "Checking…" or offers Retry instead of showing a connected account as not connected. (#145)
 - Messages no longer send you to a Pro plan you cannot buy. Without the server sandbox, the agent is told tests run free in your browser or in your own CI with Agent Check. (#144)

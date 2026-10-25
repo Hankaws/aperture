@@ -84,14 +84,15 @@ function TreeItem({ node, depth, pending }: { node: TreeNode; depth: number; pen
           "tree-row group relative flex h-11 items-center gap-1 rounded-sm pr-1 text-[15px] md:h-7 md:text-[13px]",
           active ? "is-active text-fg" : "text-muted",
         )}
-        style={{ paddingLeft: 8 + depth * 10 }}
       >
         {active && !isFolder && (
           <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" />
         )}
+        {/* The whole row, indent and full height included, is the target, not just the name. */}
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left"
+          style={{ paddingLeft: 8 + depth * 10 }}
           onClick={() => {
             if (isFolder) {
               setOpen((v) => !v);

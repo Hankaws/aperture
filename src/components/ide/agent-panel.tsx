@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore
 import { useLatest } from "@/lib/use-keyed-async";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUp, AtSign, Clock, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { ApertureMark } from "./logo";
@@ -15,7 +15,7 @@ import { JobsTray } from "./jobs-tray";
 import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
 import { McpCallList } from "@/components/ide/mcp-call";
-import { abortAgent, agentPayload, submitAgent, wirePayload } from "@/lib/agent/run";
+import { abortAgent, agentPayload, retrySend, submitAgent, wirePayload } from "@/lib/agent/run";
 import { RESEND_FILES } from "@/lib/agent/wire";
 import { takeAttempt } from "@/lib/workspace/attempt";
 import { startBackgroundRun } from "@/lib/agent/background-runner";
@@ -93,6 +93,26 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const { user, isPending } = useCurrentUserState();
   const { account, setAccount, refresh } = useAccount();
   const [draft, setDraft] = useState("");
+  const draftLoaded = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(DRAFT_KEY);
+      if (saved) setDraft((now) => now || saved);
+    } catch {
+      // Storage blocked: the draft lives in this page only.
+    }
+    draftLoaded.current = true;
+  }, []);
+  useEffect(() => {
+    // Not before the saved draft is read, or the empty first render would erase it.
+    if (!draftLoaded.current) return;
+    try {
+      if (draft.trim()) window.sessionStorage.setItem(DRAFT_KEY, draft.slice(0, 20_000));
+      else window.sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Storage blocked or full: nothing to keep.
+    }
+  }, [draft]);
   const [mode, setMode] = useState<AgentMode>("composer");
   // One choice instead of Plan / Build / Iterate: plan first (Composer follows the turn: a plan,
   // Build it, then iterating on the staged change), or edit straight away. Remembered per browser.
@@ -929,6 +949,8 @@ function EmptyComposer({
 }
 
 const PLAN_FIRST_KEY = "aperture-plan-first";
+// The request being typed, for this tab only: it survives a reload and the trip to sign in and back.
+const DRAFT_KEY = "aperture-composer-draft";
 const DEMO_NEXT_KEY = "aperture-demo-next-dismissed";
 
 /**
@@ -1508,8 +1530,20 @@ const MessageBlock = memo(function MessageBlock({
       {!empty && (
         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg">{content}</p>
       )}
-      {content.trim() && !message.automatic && !live && (
+      {content.trim() && !message.automatic && !live && !message.failed && (
         <LessonBar messageId={message.id} saved={message.lesson} disabled={running} />
+      )}
+      {message.failed && message.retry && !live && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          disabled={running}
+          onClick={() => void retrySend(message.id)}
+        >
+          <RotateCcw className="size-3.5" />
+          Retry
+        </Button>
       )}
       {waiting && (
         <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">

@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A send that loses the connection says so plainly and offers Retry, and a request you are typing survives a reload or signing in. (#146)
 - Fix CI redacts tokens, keys and connection-string passwords from the job log before it goes to the model, and the GitHub card says "Checking…" or offers Retry instead of showing a connected account as not connected. (#145)
 - Messages no longer send you to a Pro plan you cannot buy. Without the server sandbox, the agent is told tests run free in your browser or in your own CI with Agent Check. (#144)
 - The session cap starts a new session 24 hours after the first send, by itself, so a few sends no longer block the free plan until you reset it. Settings → Limits says when. (#143)

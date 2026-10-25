@@ -35,7 +35,7 @@ function PricingPage() {
             <li>You pick your Grok, GPT, Claude, Gemini, or DeepSeek key. No silent Auto.</li>
             <li>Or a custom OpenAI-compatible endpoint, such as Ollama, LM Studio, or OpenRouter.</li>
             <li>Session cap on by default (about $1 on your keys). Raise it in Settings.</li>
-            <li>Tab ghost-text on Pro uses a fast model on your key, not grok-4.5 per keystroke.</li>
+            <li>Tab ghost-text uses a fast model on your key, not grok-4.5 per keystroke.</li>
             <li>The public demo plays recorded runs. It calls no model and uses no key.</li>
             <li>Your provider bill is theirs. We do not markup tokens on a key you attached.</li>
           </ul>

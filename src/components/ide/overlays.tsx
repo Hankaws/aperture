@@ -158,7 +158,7 @@ export function HelpDialog() {
     ["F8", "Next review hunk · Shift previous · Alt next file"],
     ["F7", "Next check problem in the file · Shift previous"],
     ["/review /fix /explain", "Slash commands in Composer"],
-    ["Tab", "Accept ghost text (Pro)"],
+    ["Tab", "Accept ghost text"],
     [`${mod}→`, "Accept the next ghost word"],
     [`${mod}Space`, "Workspace symbols"],
     [`${mod}/`, "This guide"],

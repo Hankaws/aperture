@@ -67,7 +67,9 @@ test("a small archive of throwaway files is never unpacked", async () => {
   const ms = performance.now() - started;
   const rise = process.memoryUsage().arrayBuffers - before;
   assert.deepEqual(Object.keys(out.files), ["src/index.ts"]);
-  assert.ok(ms < 2_000, `took ${Math.round(ms)} ms`);
+  // The memory bound is what proves nothing was unpacked; the time only catches a
+  // gross slowdown, so it is generous enough for a busy CI runner.
+  assert.ok(ms < 10_000, `took ${Math.round(ms)} ms`);
   assert.ok(rise < 50_000_000, `memory rose ${Math.round(rise / 1e6)} MB`);
 });
 

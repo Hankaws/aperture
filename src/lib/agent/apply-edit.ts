@@ -20,9 +20,32 @@ export function applySearchReplace(
 
 export type DiffLine = { type: "eq" | "add" | "del"; text: string };
 
+/** Past this many line pairs the changed middle is shown removed then added, not matched line by line. */
+const MAX_DIFF_CELLS = 4_000_000;
+
 export function lineDiff(oldText: string, newText: string): DiffLine[] {
   const a = oldText.split("\n");
   const b = newText.split("\n");
+  // Lines the two share at the start and end are equal: only the middle needs
+  // the table, which was a full old × new table (a 5,000-line file: 1 s, 290 MB).
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head += 1;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail += 1;
+  const out: DiffLine[] = a.slice(0, head).map((text) => ({ type: "eq" as const, text }));
+  const midA = a.slice(head, a.length - tail);
+  const midB = b.slice(head, b.length - tail);
+  if (midA.length * midB.length > MAX_DIFF_CELLS) {
+    for (const text of midA) out.push({ type: "del", text });
+    for (const text of midB) out.push({ type: "add", text });
+  } else {
+    out.push(...middleDiff(midA, midB));
+  }
+  for (const text of a.slice(a.length - tail)) out.push({ type: "eq", text });
+  return out;
+}
+
+function middleDiff(a: string[], b: string[]): DiffLine[] {
   const n = a.length;
   const m = b.length;
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));

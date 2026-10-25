@@ -102,7 +102,8 @@ function latestFiles(messages: ChatMessage[]): RunFile[] {
   }
   return [...byPath.values()].map((edit) => ({
     path: edit.path,
-    ...diffStats(edit.oldText, edit.newText),
+    // A finished edit loaded from the saved copy keeps only its counts.
+    ...(edit.stats ?? diffStats(edit.oldText, edit.newText)),
     status: edit.status,
     edit,
   }));

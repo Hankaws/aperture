@@ -94,7 +94,7 @@ export const PLANS: Plan[] = [
       "Everything in Pro",
       "Tests that need real Node run in a sandbox (150 a day)",
       "Three concurrent background jobs",
-      "Usage dashboard and session caps",
+      "Usage dashboard",
     ],
   },
 ];

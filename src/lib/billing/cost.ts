@@ -44,6 +44,8 @@ export type RunQuote = {
   sub: string;
   blocked: boolean;
   blockReason: string | null;
+  /** Set when the session cap is what blocks: the fix is in Settings → Limits, not Models. */
+  capped?: true;
 };
 
 /**
@@ -125,6 +127,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
   const session = account.session;
   let blocked = false;
   let blockReason: string | null = null;
+  let capped = false;
   const key = account.keys[provider];
 
   if (!key?.set) {
@@ -136,6 +139,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
   } else if (session.on && session.cents + cents > session.capCents) {
     blocked = true;
     blockReason = `Session cap reached (${formatUsd(session.capCents)} on your keys). Raise it in Settings.`;
+    capped = true;
   }
 
   const name = providerShort(provider);
@@ -151,6 +155,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
       : `your provider bills this${last4 ? ` · ···${last4}` : ""}`,
     blocked,
     blockReason,
+    ...(capped ? { capped: true as const } : {}),
   };
 }
 
@@ -178,6 +183,7 @@ export function quoteRuns(
 
   let blocked = one.blocked;
   let blockReason = one.blockReason;
+  let capped = one.capped === true;
   if (one.hosted) {
     if (account.remaining < count) {
       blocked = true;
@@ -185,6 +191,7 @@ export function quoteRuns(
     } else if (account.session.on && account.session.turns + count > account.session.capTurns) {
       blocked = true;
       blockReason = `Need ${count} hosted turns; session cap is ${account.session.capTurns}.`;
+      capped = true;
     } else if (!one.blocked) {
       blocked = false;
       blockReason = null;
@@ -196,7 +203,8 @@ export function quoteRuns(
   ) {
     blocked = true;
     blockReason = `Need ~${formatUsd(cents)}; session cap is ${formatUsd(account.session.capCents)}.`;
+    capped = true;
   }
 
-  return { ...one, cents, label, blocked, blockReason };
+  return { ...one, cents, label, blocked, blockReason, ...(capped ? { capped: true as const } : {}) };
 }

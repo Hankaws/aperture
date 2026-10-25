@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A send blocked for a missing key links to Settings → Models, not Limits, and Settings no longer offers Pro for keys Hobby already has. (#142)
 - The pricing page says where tests run on each plan: free in your browser, in your own CI with Agent Check, or in the Pro sandbox. (#141)
 - Hobby includes Tab ghost-text and up to five of your own keys: both run on your key. (#140)
 - Hobby includes one background job and the external agents (Claude Code, Codex, OpenCode, Grok Build): both run on your own key, and no paid plan can be bought yet. (#139)

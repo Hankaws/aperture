@@ -30,12 +30,13 @@ export function CostMeter({
       {quote.blocked && quote.blockReason && (
         <p className="mt-0.5 text-[11px] leading-snug text-warn">
           {quote.blockReason}{" "}
+          {/* A cap is raised in Limits; a missing key or endpoint is added in Models. */}
           <Link
             to="/settings"
-            search={{ tab: "limits" }}
+            search={{ tab: quote.capped ? "limits" : "models" }}
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "inline h-auto px-0 text-[11px] text-accent")}
           >
-            Limits
+            {quote.capped ? "Limits" : "Models"}
           </Link>
         </p>
       )}

@@ -207,3 +207,43 @@ test("only failure annotations are kept, without the exit-code line every failed
   );
   assert.deepEqual(failureNotes("nope"), []);
 });
+
+test("the fix request redacts what a job printed, and keeps the failure", () => {
+  const log = [
+    "not ok 1 - listTasks",
+    "DATABASE_URL=postgres://app:hunter2secretpw@db.example.com/prod",
+    "Using token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123456789",
+    "AssertionError: expected tsk_100, got tsk_101",
+  ].join("\n");
+  const check: CiCheck = {
+    id: "1",
+    name: "test",
+    state: "failure",
+    url: null,
+    summary: "Failed with token ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA9876543210",
+    annotations: [
+      {
+        path: "src/db.ts",
+        line: 3,
+        message: "could not connect to mysql://root:toor-pass-123@10.0.0.5/app",
+      },
+    ],
+    log,
+  };
+  const prompt = ciFixPrompt(7, [check]);
+  for (const leaked of [
+    "hunter2secretpw",
+    "ghp_ABCDEFGHIJ",
+    "sk-proj-abcdef",
+    "ghp_ZYXWVUTSRQ",
+    "toor-pass-123",
+  ]) {
+    assert.ok(!prompt.includes(leaked), `${leaked} is not sent`);
+  }
+  assert.match(prompt, /postgres:\/\/app:\[redacted\]@db\.example\.com\/prod/);
+  assert.match(prompt, /not ok 1 - listTasks/);
+  assert.match(prompt, /expected tsk_100, got tsk_101/);
+  // The page shows the log as it came.
+  assert.equal(check.log, log);
+});

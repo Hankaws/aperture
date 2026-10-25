@@ -2,6 +2,7 @@
  * A pull request's CI, read from GitHub's check runs and commit statuses, and
  * what Composer is told when it fails. Nothing here fetches; api.ts does.
  */
+import { redactSecrets } from "../security/redact.ts";
 
 export type CiState = "pending" | "success" | "failure" | "neutral";
 
@@ -197,22 +198,30 @@ export function ciFixLabel(pull: number, failures: CiCheck[]): string {
 
 const PROMPT_CAP = 12_000;
 
-/** What Composer is told: each failing check, where GitHub pinned it, and the end of its log. */
+// The password in a connection string a job printed: `postgres://app:<password>@host`.
+const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi;
+
+/**
+ * What Composer is told: each failing check, where GitHub pinned it, and the end of its log.
+ * The prompt goes to the model as it is, and a log can print values GitHub does not mask,
+ * so what came from the run is redacted here. The page still shows the log in full.
+ */
 export function ciFixPrompt(pull: number, failures: CiCheck[]): string {
+  const clean = (text: string) => redactSecrets(text).replace(URL_PASSWORD, "$1[redacted]@");
   const parts = [
     `CI failed on pull request #${pull}. Fix only what makes these checks fail, with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.`,
     "Change a test only when the test itself is wrong, and say so.",
   ];
   for (const check of failures) {
     const lines = [`Check: ${check.name}`];
-    if (check.summary) lines.push(check.summary);
+    if (check.summary) lines.push(clean(check.summary));
     if (check.annotations.length > 0) {
       lines.push("Where GitHub pinned it:");
       for (const note of check.annotations.slice(0, 12)) {
-        lines.push(`- ${note.path}${note.line ? `:${note.line}` : ""} ${note.message}`);
+        lines.push(`- ${note.path}${note.line ? `:${note.line}` : ""} ${clean(note.message)}`);
       }
     }
-    if (check.log) lines.push("End of the log:", "```", check.log, "```");
+    if (check.log) lines.push("End of the log:", "```", clean(check.log), "```");
     parts.push(lines.join("\n"));
   }
   const text = parts.join("\n\n");

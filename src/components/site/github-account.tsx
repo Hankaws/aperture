@@ -7,6 +7,8 @@ import { clearGithubToken } from "@/lib/github/roundtrip";
 
 /** GitHub's new-token form with the scopes this card asks for already ticked. */
 const NEW_TOKEN_URL = "https://github.com/settings/tokens/new?scopes=repo,workflow&description=Aperture";
+/** GitHub's fine-grained token form: limited to the repositories the person picks. */
+const NEW_FINE_GRAINED_URL = "https://github.com/settings/personal-access-tokens/new";
 
 /** GitHub on the signed-in account. The token stays on the server. `onAccount` hears every change. */
 export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubAccount) => void } = {}) {
@@ -137,7 +139,19 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
           <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
             Make one on GitHub
           </a>
-          , with the repo and workflow scopes already ticked, then paste it here.
+          , with the repo and workflow scopes already ticked, then paste it here. That token reaches every
+          repository you have. To limit it to some,{" "}
+          <a
+            href={NEW_FINE_GRAINED_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline underline-offset-2"
+          >
+            make a fine-grained one
+          </a>{" "}
+          for those repositories: Contents, Pull requests, Issues and Workflows on Read and write; Actions, Checks
+          and Commit statuses on Read. The Bot's setup checks also read Secrets, Variables and Administration, and
+          say so when they cannot.
         </p>
       )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}

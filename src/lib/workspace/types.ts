@@ -136,6 +136,22 @@ export type ChatMessage = {
   runId?: string;
   /** Set when this turn was saved as a lesson for the next run. */
   lesson?: "up" | "down";
+  /** The turn stopped on an error before it finished: no rating, and Retry when `retry` is set. */
+  failed?: true;
+  /** What to send again, for a send the person made (not a follow-up the editor chained). */
+  retry?: RetrySend;
+};
+
+/** The arguments of a send, kept on its failed reply so Retry repeats it exactly. */
+export type RetrySend = {
+  instruction: string;
+  mode: AgentMode;
+  source?: ModelSource | null;
+  phase?: "plan" | "build" | "skip";
+  approvedPlan?: PlanEntry[];
+  apiInstruction?: string;
+  agentId?: string | null;
+  agentLabel?: string | null;
 };
 
 export type McpCall = {

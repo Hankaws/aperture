@@ -3,7 +3,7 @@ import { getBearerToken } from "@/lib/auth/client";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import type { ModelSource } from "@/lib/billing/plans";
-import type { AgentMode, ChatMessage, PlanEntry, ProposedEdit, ToolTrace } from "@/lib/workspace/types";
+import type { AgentMode, ChatMessage, PlanEntry, ProposedEdit, RetrySend, ToolTrace } from "@/lib/workspace/types";
 import type { AgentResult } from "./types";
 import type { AgentStreamEvent } from "./events";
 import type { AgentPhase } from "./phase";
@@ -20,6 +20,7 @@ import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { restoreRedacted } from "./unredact";
+import { describeSendError } from "./send-error";
 import { compactFiles, RESEND_FILES } from "./wire";
 import { savedBaseline } from "@/lib/workspace/sync-controller";
 import { compareRuns } from "@/lib/runner/compare";
@@ -45,22 +46,26 @@ function runtimeFrom(errors: string[]): string | undefined {
   return `The live preview (the applied files) reports these script errors:\n${lines.join("\n")}`.slice(0, 4000);
 }
 
-function describeError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : "Request failed";
-  if (/unauthorized/i.test(raw)) {
-    return "Sign in to run Composer. Plans and API keys live on the account.";
-  }
-  return raw;
-}
-
-/** A failed turn keeps whatever already arrived, then says why it stopped. */
-function keepReply(messageId: string, error: unknown) {
+/** A failed turn keeps whatever already arrived, then says why it stopped, and offers Retry when it can. */
+function keepReply(messageId: string, error: unknown, retry: RetrySend | undefined) {
   const partial = useWorkspace.getState().messages.find((m) => m.id === messageId)?.content ?? "";
-  const why = describeError(error);
+  const why = describeSendError(error, Boolean(retry));
   useWorkspace.getState().patchMessage(messageId, {
     content: partial.trim() ? `${partial}\n\n${why}` : why,
     status: undefined,
+    failed: true,
+    ...(retry ? { retry } : {}),
   });
+}
+
+/** Sends a failed turn's request again, exactly as it was sent. The failed reply loses its Retry. */
+export function retrySend(messageId: string) {
+  const state = useWorkspace.getState();
+  const retry = state.messages.find((m) => m.id === messageId)?.retry;
+  if (!retry || state.agentRunning) return;
+  state.patchMessage(messageId, { retry: undefined });
+  const { instruction, mode, source, ...opts } = retry;
+  return submitAgent(instruction, mode, source, opts);
 }
 
 let currentAbort: AbortController | null = null;
@@ -302,6 +307,23 @@ export async function submitAgent(
   const state = useWorkspace.getState();
   if (state.agentRunning) return;
 
+  // Only a send the person made is offered again; a chained follow-up carries state
+  // (pending edits, a crew, a test run) that a second send would not have.
+  const chained = Boolean(
+    opts?.workers || opts?.role || opts?.pendingEdits || opts?.messageExtra || opts?.browserRuns || opts?.copyId || opts?.automatic,
+  );
+  const retry: RetrySend | undefined = chained
+    ? undefined
+    : {
+        instruction: trimmed,
+        mode,
+        source,
+        ...(opts?.phase ? { phase: opts.phase } : {}),
+        ...(opts?.approvedPlan ? { approvedPlan: opts.approvedPlan } : {}),
+        ...(opts?.apiInstruction ? { apiInstruction: opts.apiInstruction } : {}),
+        ...(opts?.agentId ? { agentId: opts.agentId, agentLabel: opts.agentLabel ?? null } : {}),
+      };
+
   const followUp = Boolean(
     opts?.automatic || opts?.phase === "skip" || opts?.pendingEdits || opts?.role === "review" || opts?.copyId,
   );
@@ -406,7 +428,12 @@ export async function submitAgent(
         debug: result.debug,
       });
     } catch (error) {
-      useWorkspace.getState().patchMessage(asstId, { content: describeError(error), status: undefined });
+      useWorkspace.getState().patchMessage(asstId, {
+        content: describeSendError(error, Boolean(retry)),
+        status: undefined,
+        failed: true,
+        ...(retry ? { retry } : {}),
+      });
     } finally {
       useWorkspace.getState().setAgentRunning(false);
     }
@@ -526,7 +553,7 @@ export async function submitAgent(
       }
       return;
     }
-    keepReply(asstId, error);
+    keepReply(asstId, error, retry);
   } finally {
     if (currentAbort === abort) currentAbort = null;
     useWorkspace.getState().setAgentRunning(false);

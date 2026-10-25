@@ -48,6 +48,7 @@ export const PLANS: Plan[] = [
       "One send = one call on your key",
       "Up to five bring-your-own keys",
       "Tab ghost-text — fast model, on your key",
+      "Tests run free in your browser",
       "One background job",
       `ACP: ${acpAgentNames()} in the same diffs`,
       "Session cap on by default",
@@ -57,7 +58,7 @@ export const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    blurb: "Everything in Hobby, and the agent runs your tests.",
+    blurb: "Everything in Hobby, and a server sandbox for tests that need real Node.",
     monthly: 20,
     yearlyMonthly: 16,
     hostedTurns: 500,
@@ -72,7 +73,7 @@ export const PLANS: Plan[] = [
     features: [
       "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
-      "The agent runs your tests in a sandbox (40 a day)",
+      "Tests that need real Node run in a sandbox (40 a day)",
     ],
   },
   {
@@ -91,7 +92,7 @@ export const PLANS: Plan[] = [
     cta: "Activate Team",
     features: [
       "Everything in Pro",
-      "The agent runs your tests in a sandbox (150 a day)",
+      "Tests that need real Node run in a sandbox (150 a day)",
       "Three concurrent background jobs",
       "Usage dashboard and session caps",
     ],

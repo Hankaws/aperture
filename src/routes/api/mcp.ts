@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { version } from "../../../package.json";
+import { readCapped } from "@/lib/security/read-capped";
 
 /** A little over the check's own character limit, for the JSON around it. */
 const MAX_BODY_CHARS = 3_000_000;
+// Read no further than any body of that many characters could be (4 bytes each in UTF-8).
+const MAX_BODY_BYTES = MAX_BODY_CHARS * 4;
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
@@ -63,8 +66,8 @@ export const Route = createFileRoute("/api/mcp")({
         const refused = await screen(request);
         if (refused) return refused;
 
-        const raw = await request.text();
-        if (raw.length > MAX_BODY_CHARS) return json({ error: "Too large" }, 413);
+        const raw = await readCapped(request, MAX_BODY_BYTES);
+        if (raw === null || raw.length > MAX_BODY_CHARS) return json({ error: "Too large" }, 413);
         let body: unknown;
         try {
           body = JSON.parse(raw);

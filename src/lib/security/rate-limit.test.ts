@@ -59,8 +59,9 @@ test("every server function that costs server time checks its limit first", asyn
     const text = read(file);
     const start = text.search(new RegExp(`(export const ${fn} = createServerFn|${fn}: async)`));
     assert.ok(start >= 0, `${fn} in ${file}`);
-    // The handler's opening lines, before any work is done.
-    const head = text.slice(start, start + 1_200);
+    // The handler's opening lines, before any work is done. The MCP route screens the
+    // caller and reads its (capped) body first, so its limit sits a little further in.
+    const head = text.slice(start, start + 1_500);
     assert.match(
       head,
       new RegExp(`overLimit\\("${limit}"`),

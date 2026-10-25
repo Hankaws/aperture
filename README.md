@@ -225,10 +225,34 @@ environment settings, never in a committed file.
 | `APERTURE_LOCAL_ENDPOINTS` | `1` lets a custom model endpoint on `http://127.0.0.1` (Ollama, LM Studio) be called from a production server you run yourself. On by default in local dev, off when deployed: there, loopback is the server itself, not your machine |
 | `APERTURE_SANDBOX=vercel-oidc` | Lets the agent run projects in Vercel Sandbox, when deployed on Vercel |
 | `VERCEL_SANDBOX_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Vercel Sandbox from any other host |
+| `PADDLE_ENVIRONMENT` | `sandbox` (Paddle's test mode) or `production`. Paid plans stay off unless it is one of the two |
+| `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET` | Paddle's API key and the webhook destination's secret. Server only |
+| `PADDLE_CLIENT_TOKEN` | Paddle's client-side token, which loads the checkout. Paddle makes it to be public |
+| `PADDLE_PRICE_PRO_MONTHLY`, `PADDLE_PRICE_PRO_YEARLY`, `PADDLE_PRICE_TEAM_MONTHLY`, `PADDLE_PRICE_TEAM_YEARLY` | The Paddle price IDs (`pri_…`) for each plan and period |
 
 Don't set `VITE_AUTH_ENABLED=false` together with `DATABASE_URL`. The app
 refuses that combination on purpose, so a shared database is never opened
 without sign-in.
+
+### Selling Pro and Team
+
+Pro and Team sell server sandbox runs (300 and 1,000 a month), so they can be
+bought only when both Paddle **and** the sandbox are configured. Until then the
+pricing page shows them as coming soon. Paddle is the seller of record and
+handles payment and sales tax.
+
+1. In Paddle, create a Pro and a Team product, each with a monthly and a yearly
+   price, and put the four price IDs in the variables above.
+2. **Checkout settings → default payment link:** `https://<your site>/billing/pay`.
+   Paddle reviews the site before approving it for live payments.
+3. **Notifications → new destination:** `https://<your site>/api/billing/webhook`,
+   with the `subscription.*` events. Its secret is `PADDLE_WEBHOOK_SECRET`.
+4. Test end to end with `PADDLE_ENVIRONMENT=sandbox` and Paddle's test cards,
+   then switch to `production` keys.
+
+A plan changes only when a signed webhook confirms the payment. A failed renewal
+keeps the plan for 7 days, a cancellation keeps it to the end of the period paid
+for, and both then move the account to Hobby without deleting anything.
 
 ## Development
 

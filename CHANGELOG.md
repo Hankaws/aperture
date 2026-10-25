@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Pro and Team can be bought through Paddle once the deployment configures it and the server sandbox, with 300 and 1,000 sandbox runs a month. A failed payment keeps the plan for 7 days, cancelling keeps it to the end of the period, and Settings → Plan shows the renewal date and opens Paddle's billing page. (#149)
 - The GitHub card explains how to use a fine-grained token limited to chosen repositories, and the MCP server stops reading a request once it is over its size limit. (#148)
 - A file-tree row opens wherever you click it, indent and edges included, and two timing tests no longer fail on a busy machine. (#147)
 - A send that loses the connection says so plainly and offers Retry, and a request you are typing survives a reload or signing in. (#146)

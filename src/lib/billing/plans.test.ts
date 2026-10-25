@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PLANS, planAvailable, planById, planChangeRefusal, pricingVisible } from "./plans.ts";
 
-test("only the free plan can be chosen while there is no checkout", () => {
-  const available = PLANS.filter(planAvailable).map((p) => p.id);
-  assert.deepEqual(available, ["hobby"]);
+test("only the free plan can be had while checkout is closed; every plan once it opens", () => {
+  assert.deepEqual(PLANS.filter((p) => planAvailable(p)).map((p) => p.id), ["hobby"]);
+  assert.deepEqual(PLANS.filter((p) => planAvailable(p, true)).map((p) => p.id), ["hobby", "pro", "team"]);
 });
 
 test("pricing is hidden when sign-in is off", () => {
@@ -19,10 +19,20 @@ test("the server refuses paid plans with sign-in off", () => {
   }
 });
 
-test("the server refuses paid plans with sign-in on, since there is no checkout", () => {
+test("the server never switches to a paid plan without a payment", () => {
   for (const id of ["pro", "team"]) {
     const refusal = planChangeRefusal(planById(id), false);
-    assert.match(refusal ?? "", /no checkout/, id);
+    assert.match(refusal ?? "", /bought through checkout/, id);
+  }
+});
+
+test("a month of the longest sandbox runs costs less than a paid plan earns", () => {
+  // 6 minutes on 2 vCPUs and 4 GB at Vercel's iad1 rates (plans/020): about 3.4 cents.
+  const worstRunUsd = 2 * 0.1 * 0.128 + 4 * 0.1 * 0.0212;
+  for (const id of ["pro", "team"]) {
+    const plan = planById(id);
+    const earned = plan.monthly - (plan.monthly * 0.05 + 0.5);
+    assert.ok(plan.sandboxRuns * worstRunUsd < earned, `${id}: ${plan.sandboxRuns} runs vs $${earned}`);
   }
 });
 

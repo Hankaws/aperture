@@ -16,7 +16,7 @@ export type Plan = {
   tab: boolean;
   tabDaily: number;
   backgroundJobs: number;
-  /** Sandbox verification runs per day; 0 means the feature is off for this plan. */
+  /** Sandbox verification runs per UTC month; 0 means the feature is off for this plan. */
   sandboxRuns: number;
   acp: boolean;
   featured?: boolean;
@@ -66,14 +66,15 @@ export const PLANS: Plan[] = [
     tab: true,
     tabDaily: 250,
     backgroundJobs: 1,
-    sandboxRuns: 40,
+    // Sized so a month of the longest runs still costs less than the price (plans/020).
+    sandboxRuns: 300,
     acp: true,
     featured: true,
-    cta: "Activate Pro",
+    cta: "Get Pro",
     features: [
       "Unlimited Composer on your GPT, Claude, Gemini, DeepSeek, Grok keys",
       "You pick the model. No Auto",
-      "Tests that need real Node run in a sandbox (40 a day)",
+      "Tests that need real Node run in a sandbox (300 a month)",
     ],
   },
   {
@@ -87,14 +88,13 @@ export const PLANS: Plan[] = [
     tab: true,
     tabDaily: 600,
     backgroundJobs: 3,
-    sandboxRuns: 150,
+    sandboxRuns: 1000,
     acp: true,
-    cta: "Activate Team",
+    cta: "Get Team",
     features: [
       "Everything in Pro",
-      "Tests that need real Node run in a sandbox (150 a day)",
+      "Tests that need real Node run in a sandbox (1,000 a month)",
       "Three concurrent background jobs",
-      "Usage dashboard",
     ],
   },
 ];
@@ -130,23 +130,23 @@ export function providerShort(id: ProviderId): string {
 }
 
 /**
- * Whether a plan can be chosen today. There is no checkout yet, so only the
- * free plan can; the paid plans show as coming soon.
+ * Whether a plan can be had today: the free plan always, a paid one only when
+ * this deployment's checkout is open (Paddle and the sandbox both configured).
  */
-export function planAvailable(plan: Pick<Plan, "monthly">): boolean {
-  return plan.monthly === 0;
+export function planAvailable(plan: Pick<Plan, "monthly">, checkoutOpen = false): boolean {
+  return plan.monthly === 0 || checkoutOpen;
 }
 
 /**
- * Why a plan change must be refused, or null when it may go ahead. The server
- * asks this, so a request made without the UI cannot pick a paid plan either.
- * With sign-in off every visitor shares one plan, and a paid plan there would
- * raise the demo's spending cap for everyone.
+ * Why switching straight to a plan must be refused, or null when it may go
+ * ahead. A paid plan is never switched to: it comes from a payment that
+ * Paddle confirms, so a request made without the UI cannot pick one. With
+ * sign-in off every visitor shares one plan, which must never be a paid one.
  */
 export function planChangeRefusal(plan: Pick<Plan, "name" | "monthly">, signInOff: boolean): string | null {
-  if (planAvailable(plan)) return null;
+  if (plan.monthly === 0) return null;
   if (signInOff) return `${plan.name} can't be chosen while sign-in is off.`;
-  return `${plan.name} is not available yet: there is no checkout.`;
+  return `${plan.name} is bought through checkout, not switched to here.`;
 }
 
 /**

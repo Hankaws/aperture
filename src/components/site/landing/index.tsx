@@ -36,7 +36,7 @@ const FAQ = [
   },
   {
     q: "Is it paid?",
-    a: "Not yet. Nothing is charged today.",
+    a: "Hobby is free. Pro and Team add a server sandbox for tests that need real Node; the pricing page shows whether they are on sale.",
   },
 ];
 

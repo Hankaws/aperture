@@ -30,7 +30,7 @@ export function SiteSearch() {
   const items = useMemo(() => {
     const all: Item[] = [
       ...PAGES,
-      ...(showPricing ? [{ label: "Pricing", hint: "Nothing is charged today.", to: "/pricing" }] : []),
+      ...(showPricing ? [{ label: "Pricing", hint: "Hobby is free. Pro and Team add a server sandbox.", to: "/pricing" }] : []),
       { label: "Open the editor", hint: user ? "Go to your project." : "Try the demo. No account needed.", to: "/app" },
     ];
     const needle = q.trim().toLowerCase();

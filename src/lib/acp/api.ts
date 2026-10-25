@@ -58,10 +58,8 @@ export const saveAgent = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<AgentConnection[]> => {
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    const { planById } = await import("@/lib/billing/plans");
-    const { spendOwnerId } = await import("@/lib/auth/visitor");
-    const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(context.userId)}`;
-    if (!planById(settings[0]?.plan ?? "hobby").acp) {
+    const { planFor } = await import("@/lib/billing/plan.server");
+    if (!(await planFor(context.userId)).acp) {
       throw new Error(
         `External agents (${acpAgentNames("or")}) are not on this plan.`,
       );

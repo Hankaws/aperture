@@ -1,19 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { PLANS, planAvailable, type PlanId } from "@/lib/billing/plans";
-import { setPlan } from "@/lib/billing/api";
+import { billingOpen, setPlan, startCheckout } from "@/lib/billing/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
-export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
+export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: PlanId; checkoutOpen?: boolean }) {
   const [yearly, setYearly] = useState(true);
   const [busy, setBusy] = useState<PlanId | null>(null);
+  // Signed out there is no account to say whether paid plans are on sale: ask.
+  const [asked, setAsked] = useState<boolean | null>(null);
   const { user, isPending } = useCurrentUserState();
   const navigate = useNavigate();
+  const open = checkoutOpen ?? asked ?? false;
+
+  useEffect(() => {
+    if (checkoutOpen !== undefined) return;
+    let cancel = false;
+    billingOpen()
+      .then((next) => {
+        if (!cancel) setAsked(next);
+      })
+      .catch(() => {
+        if (!cancel) setAsked(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [checkoutOpen]);
 
   async function activate(id: PlanId) {
     if (isPending) return;
@@ -23,17 +41,23 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
     }
     setBusy(id);
     try {
-      await setPlan({ data: id });
-      toast.success(`${id === "hobby" ? "Hobby" : id === "pro" ? "Pro" : "Team"} is active on this account`);
-      void navigate({ to: "/settings", search: { tab: "plan" } });
+      if (id === "hobby") {
+        await setPlan({ data: id });
+        toast.success("Hobby is active on this account");
+        void navigate({ to: "/settings", search: { tab: "plan" } });
+        setBusy(null);
+        return;
+      }
+      // Paddle's checkout; the plan changes when Paddle confirms the payment.
+      const { url } = await startCheckout({ data: { plan: id, period: yearly ? "yearly" : "monthly" } });
+      window.location.assign(url);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update plan");
-    } finally {
       setBusy(null);
     }
   }
 
-  const sellable = PLANS.some((plan) => planAvailable(plan) && plan.monthly > 0);
+  const sellable = PLANS.some((plan) => planAvailable(plan, open) && plan.monthly > 0);
 
   return (
     <div>
@@ -61,7 +85,7 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
         {PLANS.map((plan) => {
           const price = yearly ? plan.yearlyMonthly : plan.monthly;
           const active = currentPlan === plan.id;
-          const comingSoon = !planAvailable(plan);
+          const comingSoon = !planAvailable(plan, open);
           return (
             <article
               key={plan.id}
@@ -107,14 +131,24 @@ export function PricingTable({ currentPlan }: { currentPlan?: PlanId }) {
                 disabled={active || comingSoon || busy === plan.id}
                 onClick={() => void activate(plan.id)}
               >
-                {active ? "Current plan" : comingSoon ? "Coming soon" : busy === plan.id ? "Activating…" : plan.cta}
+                {active
+                  ? "Current plan"
+                  : comingSoon
+                    ? "Coming soon"
+                    : busy === plan.id
+                      ? plan.monthly > 0
+                        ? "Opening checkout…"
+                        : "Activating…"
+                      : plan.cta}
               </Button>
             </article>
           );
         })}
       </div>
       <p className="mt-6 text-center text-xs text-subtle">
-        Paid plans are not available yet: there is no checkout, and no card is charged.{" "}
+        {open
+          ? "Payments are handled by Paddle, which also handles sales tax. Cancel any time in Settings → Plan."
+          : "Paid plans are not available yet: there is no checkout, and no card is charged."}{" "}
         <Link
           to="/settings"
           search={{ tab: "models" }}

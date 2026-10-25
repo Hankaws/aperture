@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { builtinById, isBuiltinAgentId } from "@/lib/acp/kinds";
-import { planById } from "@/lib/billing/plans";
 import type { JobRecord } from "./types";
 import { JOB_KEEP_COUNT, pruneFinishedJobs } from "./retention";
 import { insertQueuedJob } from "./slots";
@@ -95,11 +94,8 @@ async function loadJobs(userId: string): Promise<JobRecord[]> {
 }
 
 async function planOf(userId: string) {
-  const { getSql } = await import("@/lib/db");
-  const sql = await getSql();
-  const { spendOwnerId } = await import("@/lib/auth/visitor");
-  const rows = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(userId)}`;
-  return planById(rows[0]?.plan ?? "hobby");
+  const { planFor } = await import("@/lib/billing/plan.server");
+  return planFor(userId);
 }
 
 export const listJobs = createServerFn({ method: "POST" })

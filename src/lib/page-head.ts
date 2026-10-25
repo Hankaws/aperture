@@ -17,6 +17,7 @@ export type PageKey =
   | "benchmark"
   | "changelog"
   | "pricing"
+  | "pay"
   | "privacy"
   | "security"
   | "terms"
@@ -50,7 +51,11 @@ export const PAGES: Record<PageKey, { title: string; description: string }> = {
     description: "How often Aperture's checks stop a bad edit, with the full list of what they caught and what they missed.",
   },
   changelog: { title: "Changelog", description: "What changed in Aperture, version by version." },
-  pricing: { title: "Pricing", description: "Aperture's plans. Nothing is charged today." },
+  pricing: {
+    title: "Pricing",
+    description: "Aperture's plans. Hobby is free; Pro and Team add a server sandbox for tests that need real Node.",
+  },
+  pay: { title: "Checkout", description: "Pay for an Aperture plan through Paddle." },
   privacy: {
     title: "Privacy",
     description: "What leaves your browser when you use Aperture, and what does not.",

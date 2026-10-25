@@ -54,6 +54,8 @@ test("every server function that costs server time checks its limit first", asyn
     ["lib/mcp/api.ts", "confirmMcpCall", "mcp"],
     ["lib/mcp-server/tokens.api.ts", "createAgentToken", "tokens"],
     ["routes/api/mcp.ts", "POST", "agentChecks"],
+    ["lib/billing/api.ts", "startCheckout", "billing"],
+    ["lib/billing/api.ts", "manageBilling", "billing"],
   ];
   for (const [file, fn, limit] of expected) {
     const text = read(file);

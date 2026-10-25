@@ -10,6 +10,7 @@ import {
   MIN_SESSION_TURNS,
   estimateCents,
   quoteRuns,
+  sessionSnapshot,
   type SessionSnapshot,
 } from "./cost";
 import {
@@ -86,6 +87,10 @@ function asBool(value: unknown, fallback = true): boolean {
   return fallback;
 }
 
+function asStartedAt(value: unknown): Date | string | null {
+  return value instanceof Date || typeof value === "string" ? value : null;
+}
+
 function asInt(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
@@ -111,6 +116,7 @@ type SettingsRow = {
   session_id: string | null;
   session_turns: unknown;
   session_cents: unknown;
+  session_started_at: unknown;
   tab_used: unknown;
   tab_day: string | null;
 };
@@ -128,7 +134,7 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
     select plan, preferred_provider, model_source, grok_key, openai_key, anthropic_key, gemini_key, deepseek_key,
            custom_base, custom_model, custom_key,
            hosted_used, usage_month, session_cap_on, session_cap_turns, session_cap_cents,
-           session_id, session_turns, session_cents, tab_used, tab_day
+           session_id, session_turns, session_cents, session_started_at, tab_used, tab_day
     from user_settings where user_id = ${userId}
   `;
   if (!existing[0]) {
@@ -156,6 +162,7 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
       session_id: null,
       session_turns: 0,
       session_cents: 0,
+      session_started_at: null,
       tab_used: 0,
       tab_day: day,
     };
@@ -218,6 +225,7 @@ async function loadAccount(userId: string): Promise<SettingsRow> {
     session_id: pool.session_id,
     session_turns: pool.session_turns,
     session_cents: pool.session_cents,
+    session_started_at: pool.session_started_at,
     tab_used: pool.tab_used,
     tab_day: pool.tab_day,
   };
@@ -282,13 +290,14 @@ function snapshot(
     tabRemaining: Math.max(0, plan.tabDaily - tabUsed),
     backgroundJobs: plan.backgroundJobs,
     acp: plan.acp,
-    session: {
+    session: sessionSnapshot({
       on: asBool(row.session_cap_on, true),
       capTurns,
       capCents,
-      turns: Math.max(0, asInt(row.session_turns, 0)),
-      cents: Math.max(0, asInt(row.session_cents, 0)),
-    },
+      turns: asInt(row.session_turns, 0),
+      cents: asInt(row.session_cents, 0),
+      startedAt: asStartedAt(row.session_started_at),
+    }),
     custom: {
       base: row.custom_base,
       model: row.custom_model,
@@ -440,10 +449,10 @@ export const resetSession = createServerFn({ method: "POST" })
     const sql = await getSql();
     const payer = spendOwnerId(context.userId);
     await loadSettings(payer);
-    const id = crypto.randomUUID();
+    // Cleared, not restarted: the next send starts the session, so its 24 hours begin then.
     await sql`
       update user_settings
-      set session_id = ${id}, session_turns = 0, session_cents = 0, session_started_at = now(), updated_at = now()
+      set session_id = null, session_turns = 0, session_cents = 0, session_started_at = null, updated_at = now()
       where user_id = ${payer}
     `;
     return snapshotOf(await loadAccount(context.userId));
@@ -581,10 +590,10 @@ function sessionBlock(account: AccountSnapshot, hosted: boolean, cents: number):
   const session = account.session;
   if (!session.on) return null;
   if (hosted && session.turns >= session.capTurns) {
-    return `Session cap reached (${session.capTurns} hosted turns). Raise it in Settings — we stop instead of running away.`;
+    return `Session cap reached (${session.capTurns} hosted turns). Raise it or reset it in Settings → Limits.`;
   }
   if (!hosted && session.cents + cents > session.capCents) {
-    return `Session cap reached (${formatCap(session.capCents)} on your keys). Raise it in Settings.`;
+    return `Session cap reached (${formatCap(session.capCents)} on your keys). Raise it or reset it in Settings → Limits.`;
   }
   void cents;
   return null;
@@ -635,15 +644,16 @@ export async function recordAgentRun(userId: string, hosted: boolean, cents: num
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   const payer = spendOwnerId(userId);
-  const row = await loadSettings(payer);
-  if (!row.session_id) {
-    const id = crypto.randomUUID();
-    await sql`
-      update user_settings
-      set session_id = ${id}, session_started_at = now(), updated_at = now()
-      where user_id = ${payer} and session_id is null
-    `;
-  }
+  await loadSettings(payer);
+  // A missing or expired session (24 hours, as SESSION_MS) starts over before this send counts.
+  // One statement, so two sends at once start it only once and neither is lost.
+  await sql`
+    update user_settings
+    set session_id = ${crypto.randomUUID()}, session_started_at = now(), session_turns = 0, session_cents = 0,
+        updated_at = now()
+    where user_id = ${payer}
+      and (session_id is null or session_started_at is null or session_started_at < now() - interval '24 hours')
+  `;
   if (hosted) {
     await consumeHostedTurn(userId);
     await sql`

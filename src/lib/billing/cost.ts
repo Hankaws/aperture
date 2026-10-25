@@ -23,7 +23,42 @@ export type SessionSnapshot = {
   capCents: number;
   turns: number;
   cents: number;
+  /** When this session stops counting (ISO), or null when the next send starts one. */
+  resetsAt?: string | null;
 };
+
+/** How long a session lasts from its first counted send. The SQL in `recordAgentRun` uses the same 24 hours. */
+export const SESSION_MS = 24 * 60 * 60 * 1000;
+
+// A start this far ahead of the clock is treated as bad data, not a live session.
+const CLOCK_SKEW_MS = 60 * 1000;
+
+function startTime(startedAt: Date | string | null | undefined): number | null {
+  if (startedAt == null) return null;
+  const t = startedAt instanceof Date ? startedAt.getTime() : Date.parse(startedAt);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** True when a session that started at `startedAt` still counts at `now`. */
+export function sessionLive(startedAt: Date | string | null | undefined, now = Date.now()): boolean {
+  const t = startTime(startedAt);
+  return t !== null && t <= now + CLOCK_SKEW_MS && now - t < SESSION_MS;
+}
+
+/** The session as checks see it: an expired one counts as empty, so the cap never outlives its day. */
+export function sessionSnapshot(
+  row: { on: boolean; capTurns: number; capCents: number; turns: number; cents: number; startedAt: Date | string | null | undefined },
+  now = Date.now(),
+): SessionSnapshot {
+  const base = { on: row.on, capTurns: row.capTurns, capCents: row.capCents };
+  if (!sessionLive(row.startedAt, now)) return { ...base, turns: 0, cents: 0, resetsAt: null };
+  return {
+    ...base,
+    turns: Math.max(0, row.turns),
+    cents: Math.max(0, row.cents),
+    resetsAt: new Date((startTime(row.startedAt) as number) + SESSION_MS).toISOString(),
+  };
+}
 
 export type QuoteAccount = {
   remaining: number;
@@ -138,7 +173,7 @@ export function quoteRun(account: QuoteAccount | null, source?: ModelSource): Ru
         : `Add a ${providerShort(src)} key in Settings.`;
   } else if (session.on && session.cents + cents > session.capCents) {
     blocked = true;
-    blockReason = `Session cap reached (${formatUsd(session.capCents)} on your keys). Raise it in Settings.`;
+    blockReason = `Session cap reached (${formatUsd(session.capCents)} on your keys). Raise it or reset it in Settings → Limits.`;
     capped = true;
   }
 
@@ -202,7 +237,7 @@ export function quoteRuns(
     account.session.cents + cents > account.session.capCents
   ) {
     blocked = true;
-    blockReason = `Need ~${formatUsd(cents)}; session cap is ${formatUsd(account.session.capCents)}.`;
+    blockReason = `Need ~${formatUsd(cents)}; session cap is ${formatUsd(account.session.capCents)}. Raise it or reset it in Settings → Limits.`;
     capped = true;
   }
 

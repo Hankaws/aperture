@@ -34,7 +34,7 @@ function PricingPage() {
             <li>One send is one call on the key you attached.</li>
             <li>You pick your Grok, GPT, Claude, Gemini, or DeepSeek key. No silent Auto.</li>
             <li>Or a custom OpenAI-compatible endpoint, such as Ollama, LM Studio, or OpenRouter.</li>
-            <li>Session cap on by default (about $1 on your keys). Raise it in Settings.</li>
+            <li>Session cap on by default: about $1 on your keys per 24 hours. Raise it in Settings.</li>
             <li>Tab ghost-text uses a fast model on your key, not grok-4.5 per keystroke.</li>
             <li>
               Tests run free in your browser on every plan: <code className="font-mono text-xs whitespace-nowrap">node --test</code>,

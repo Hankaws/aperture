@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { quoteRun, quoteRuns, replayQuote, type QuoteAccount } from "./cost.ts";
+import { SESSION_MS, quoteRun, quoteRuns, replayQuote, sessionLive, sessionSnapshot, type QuoteAccount } from "./cost.ts";
 
 const hosted: QuoteAccount = {
   remaining: 40,
@@ -88,4 +88,38 @@ test("a cap block says so, so the editor links to Limits; a missing key links to
   assert.equal(noKey.blocked, true);
   assert.equal(noKey.capped, undefined);
   assert.equal(quoteRun(hosted, "hosted").capped, undefined);
+});
+
+test("a session counts for 24 hours from its start", () => {
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  const ago = (ms: number) => new Date(now - ms);
+  assert.equal(sessionLive(ago(0), now), true);
+  assert.equal(sessionLive(ago(SESSION_MS - 60_000), now), true);
+  assert.equal(sessionLive(ago(SESSION_MS + 60_000), now), false);
+  assert.equal(sessionLive(ago(SESSION_MS + 60_000).toISOString(), now), false);
+  assert.equal(sessionLive(null, now), false);
+  assert.equal(sessionLive("not a date", now), false);
+  assert.equal(sessionLive(new Date(now + 2 * 60_000), now), false);
+});
+
+test("an expired session reads as empty, so its cap no longer blocks a send", () => {
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  const row = { on: true, capTurns: 8, capCents: 100, turns: 7, cents: 95 };
+  const live = sessionSnapshot({ ...row, startedAt: new Date(now - 60 * 60_000) }, now);
+  assert.equal(live.cents, 95);
+  assert.equal(live.resetsAt, new Date(now - 60 * 60_000 + SESSION_MS).toISOString());
+  assert.equal(quoteRun({ ...hosted, session: live }, "hosted").blocked, true);
+
+  const expired = sessionSnapshot({ ...row, startedAt: new Date(now - SESSION_MS - 1) }, now);
+  assert.deepEqual([expired.turns, expired.cents, expired.resetsAt], [0, 0, null]);
+  assert.equal(quoteRun({ ...hosted, session: expired }, "hosted").blocked, false);
+
+  const never = sessionSnapshot({ ...row, startedAt: null }, now);
+  assert.equal(never.cents, 0);
+});
+
+test("the cap message says how to get going again", () => {
+  const spent = { ...hosted, session: { ...hosted.session, cents: 95 } };
+  assert.match(quoteRun(spent, "hosted").blockReason ?? "", /reset it in Settings → Limits/);
+  assert.match(quoteRuns(spent, "hosted", 3).blockReason ?? "", /reset it in Settings → Limits/);
 });

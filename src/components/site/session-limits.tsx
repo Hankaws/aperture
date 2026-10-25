@@ -50,8 +50,8 @@ export function SessionLimits({
       <div>
         <h2 className="text-xl font-medium tracking-tight">Session cap</h2>
         <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-          On by default. Sends stop around {formatUsd(account.session.capCents)} on the key you attached.
-          The runaway hour cannot happen here.
+          On by default. Sends stop around {formatUsd(account.session.capCents)} on the key you attached, per
+          session. A session lasts 24 hours from its first send, then the next send starts a new one.
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export function SessionLimits({
         </div>
         <p className="mt-3 text-xs text-subtle">
           This session: {account.session.turns} turns, {formatUsd(account.session.cents)} on your keys. One
-          Composer send is one turn — greps inside the loop are free.
+          Composer send is one turn — greps inside the loop are free. {startsAgain(account.session.resetsAt)}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => void save()} disabled={busy}>
@@ -113,4 +113,14 @@ export function SessionLimits({
       </div>
     </div>
   );
+}
+
+/** When the counters above go back to zero, in the reader's own time. */
+function startsAgain(resetsAt: string | null | undefined): string {
+  const at = resetsAt ? new Date(resetsAt) : null;
+  if (!at || Number.isNaN(at.getTime())) return "A new session starts with your next send.";
+  const minutes = Math.max(1, Math.round((at.getTime() - Date.now()) / 60_000));
+  const wait = minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+  const time = at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `A new session starts in about ${wait} (${time}).`;
 }

@@ -58,13 +58,9 @@ export const Route = createFileRoute("/api/agent")({
         }
 
         if (input.agentId) {
-          const { planById } = await import("@/lib/billing/plans");
+          const { planFor } = await import("@/lib/billing/plan.server");
           const { acpAgentNames } = await import("@/lib/acp/kinds");
-          const { getSql } = await import("@/lib/db");
-          const sql = await getSql();
-          const { spendOwnerId } = await import("@/lib/auth/visitor");
-          const settings = await sql<{ plan: string }>`select plan from user_settings where user_id = ${spendOwnerId(userId)}`;
-          if (!planById(settings[0]?.plan ?? "hobby").acp) {
+          if (!(await planFor(userId)).acp) {
             return Response.json(
               {
                 error: `External agents (${acpAgentNames("or")}) are not on this plan.`,

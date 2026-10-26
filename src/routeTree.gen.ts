@@ -27,7 +27,9 @@ import { Route as ApiAgentRouteImport } from './routes/api/agent'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as ApiSandboxCheckRouteImport } from './routes/api/sandbox-check'
 import { Route as ApiTabRouteImport } from './routes/api/tab'
+import { Route as BillingPayRouteImport } from './routes/billing/pay'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiBillingWebhookRouteImport } from './routes/api/billing/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -119,9 +121,19 @@ const ApiTabRoute = ApiTabRouteImport.update({
   path: '/api/tab',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BillingPayRoute = BillingPayRouteImport.update({
+  id: '/billing/pay',
+  path: '/billing/pay',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBillingWebhookRoute = ApiBillingWebhookRouteImport.update({
+  id: '/api/billing/webhook',
+  path: '/api/billing/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -144,7 +156,9 @@ export interface FileRoutesByFullPath {
   '/api/mcp': typeof ApiMcpRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
+  '/billing/pay': typeof BillingPayRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/billing/webhook': typeof ApiBillingWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -165,7 +179,9 @@ export interface FileRoutesByTo {
   '/api/mcp': typeof ApiMcpRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
+  '/billing/pay': typeof BillingPayRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/billing/webhook': typeof ApiBillingWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -187,7 +203,9 @@ export interface FileRoutesById {
   '/api/mcp': typeof ApiMcpRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
+  '/billing/pay': typeof BillingPayRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/billing/webhook': typeof ApiBillingWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -210,7 +228,9 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/sandbox-check'
     | '/api/tab'
+    | '/billing/pay'
     | '/api/auth/$'
+    | '/api/billing/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -231,7 +251,9 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/sandbox-check'
     | '/api/tab'
+    | '/billing/pay'
     | '/api/auth/$'
+    | '/api/billing/webhook'
   id:
     | '__root__'
     | '/'
@@ -252,7 +274,9 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/sandbox-check'
     | '/api/tab'
+    | '/billing/pay'
     | '/api/auth/$'
+    | '/api/billing/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -274,7 +298,9 @@ export interface RootRouteChildren {
   ApiMcpRoute: typeof ApiMcpRoute
   ApiSandboxCheckRoute: typeof ApiSandboxCheckRoute
   ApiTabRoute: typeof ApiTabRoute
+  BillingPayRoute: typeof BillingPayRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiBillingWebhookRoute: typeof ApiBillingWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -405,11 +431,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTabRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/billing/pay': {
+      id: '/billing/pay'
+      path: '/billing/pay'
+      fullPath: '/billing/pay'
+      preLoaderRoute: typeof BillingPayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/billing/webhook': {
+      id: '/api/billing/webhook'
+      path: '/api/billing/webhook'
+      fullPath: '/api/billing/webhook'
+      preLoaderRoute: typeof ApiBillingWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -434,7 +474,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMcpRoute: ApiMcpRoute,
   ApiSandboxCheckRoute: ApiSandboxCheckRoute,
   ApiTabRoute: ApiTabRoute,
+  BillingPayRoute: BillingPayRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiBillingWebhookRoute: ApiBillingWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

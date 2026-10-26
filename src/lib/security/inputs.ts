@@ -40,6 +40,7 @@ export const PROVIDERS = ["grok", "openai", "anthropic", "gemini", "deepseek"] a
 
 export const idInput = text(200).min(1);
 export const planInput = z.enum(["hobby", "pro", "team"]);
+export const checkoutInput = z.object({ plan: z.enum(["pro", "team"]), period: z.enum(["monthly", "yearly"]) });
 export const providerInput = z.enum(PROVIDERS);
 export const modelSourceInput = z.enum(["hosted", "custom", "local", ...PROVIDERS]);
 

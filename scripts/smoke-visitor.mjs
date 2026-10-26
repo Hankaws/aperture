@@ -166,7 +166,7 @@ try {
   const pages = [
     ["/", /Checked before you apply it\./],
     ["/benchmark", new RegExp(`with ${benchCases} edits an agent might stage`)],
-    ["/pricing", /Hobby is free today/],
+    ["/pricing", /Hobby is free\. Pro and Team add a server sandbox/],
     ["/agents", /Your agent writes the change\. Aperture checks it first\./],
     ["/agent-check", /Catches AI agents.{1,2}mistakes in pull requests, before they merge\./],
     ["/bot", /The coding bot that checks before it pushes\./],
@@ -254,13 +254,17 @@ try {
     clean(errors, "signed-in editor");
 
     // The paid plan button is disabled; the server must refuse it even when the button is forced.
+    // React drops clicks on a disabled button whatever the DOM says, so call its handler directly:
+    // the request then really reaches the server, and only the server's answer passes.
     await page.goto(`${base}/pricing`, { waitUntil: "networkidle" });
     const pro = page.getByRole("button", { name: "Coming soon" }).first();
     check(await pro.isDisabled(), "Pro cannot be picked on the pricing page");
-    await pro.evaluate((el) => el.removeAttribute("disabled"));
-    await pro.click();
+    await pro.evaluate((el) => {
+      const props = Object.keys(el).find((key) => key.startsWith("__reactProps$"));
+      el[props].onClick();
+    });
     check(
-      await waitForText(page, /not available yet: there is no checkout/, 10_000),
+      await waitForText(page, /Paid plans are not available on this deployment yet/, 10_000),
       "the server refuses Pro when the button is forced",
     );
     await page.goto(`${base}/settings`, { waitUntil: "networkidle" });

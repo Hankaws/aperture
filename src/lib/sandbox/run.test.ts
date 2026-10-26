@@ -5,31 +5,33 @@ import { planRun, sandboxEnv, clampTimeout } from "./policy.ts";
 import { formatOutcome, outcomePassed, type RunOutcome, type RunRequest, type SandboxRunner } from "./runner.ts";
 
 test("a plan without runs is told where tests can run, not given a smaller number", () => {
-  const gate = checkAllowance("hobby", 0, "2026-09-22", "2026-09-22");
+  const gate = checkAllowance("hobby", 0, "2026-09", "2026-09");
   assert.equal(gate.ok, false);
   assert.match(gate.ok ? "" : gate.reason, /not on this plan/);
   assert.match(gate.ok ? "" : gate.reason, /Agent Check/);
 });
 
 test("the allowance counts down and then refuses", () => {
-  const first = checkAllowance("pro", 0, "2026-09-22", "2026-09-22");
-  assert.equal(first.ok && first.remaining, 39);
-  const last = checkAllowance("pro", 39, "2026-09-22", "2026-09-22");
+  const first = checkAllowance("pro", 0, "2026-09", "2026-09");
+  assert.equal(first.ok && first.remaining, 299);
+  const last = checkAllowance("pro", 299, "2026-09", "2026-09");
   assert.equal(last.ok && last.remaining, 0);
-  const spent = checkAllowance("pro", 40, "2026-09-22", "2026-09-22");
+  const spent = checkAllowance("pro", 300, "2026-09", "2026-09");
   assert.equal(spent.ok, false);
-  assert.match(spent.ok ? "" : spent.reason, /Out of verified runs/);
+  assert.match(spent.ok ? "" : spent.reason, /Out of sandbox runs for this month \(300\)/);
 });
 
-test("yesterday's count does not spend today's allowance", () => {
-  const gate = checkAllowance("pro", 40, "2026-09-21", "2026-09-22");
+test("last month's count does not spend this month's allowance", () => {
+  const gate = checkAllowance("pro", 300, "2026-08", "2026-09");
   assert.equal(gate.ok, true);
-  assert.equal(gate.ok && gate.remaining, 39);
+  assert.equal(gate.ok && gate.remaining, 299);
+  // A count kept by day before runs were counted by month starts fresh.
+  assert.equal(checkAllowance("pro", 300, "2026-09-22", "2026-09").ok, true);
 });
 
 test("team gets its larger allowance", () => {
-  const gate = checkAllowance("team", 100, "2026-09-22", "2026-09-22");
-  assert.equal(gate.ok && gate.remaining, 49);
+  const gate = checkAllowance("team", 100, "2026-09", "2026-09");
+  assert.equal(gate.ok && gate.remaining, 899);
 });
 
 /** Stands in for the execution backend, so the chain is testable without one. */

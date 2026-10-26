@@ -222,9 +222,9 @@ function Login() {
           </form>
 
           <p className="mt-4 text-center text-xs text-subtle">
-            New accounts start on Hobby, which is free. Paid plans are{" "}
+            New accounts start on Hobby, which is free.{" "}
             <Link to="/pricing" className="text-muted underline underline-offset-2 hover:text-fg">
-              coming soon
+              See the plans
             </Link>
             .
           </p>

@@ -21,6 +21,26 @@ export const deleteAccount = createServerFn({ method: "POST" })
     }
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
+    // A live subscription is cancelled at Paddle first: deleting the account must not
+    // leave Paddle charging for it. If that fails, nothing is deleted.
+    const billing = await sql<{ billing_subscription_id: string | null; billing_status: string | null }>`
+      select billing_subscription_id, billing_status from user_settings where user_id = ${userId}
+    `;
+    const subscription = billing[0]?.billing_subscription_id;
+    if (subscription && billing[0]?.billing_status !== "canceled") {
+      const { cancelNow, paddleConfig } = await import("@/lib/billing/paddle.server");
+      const config = paddleConfig();
+      try {
+        if (!config) throw new Error("Billing is not configured.");
+        await cancelNow(config, subscription);
+      } catch {
+        return {
+          ok: false,
+          error:
+            "Could not cancel the subscription. Cancel it in Settings → Plan → Manage billing, then delete the account.",
+        };
+      }
+    }
     const rows = await sql<{ email: string }>`select "email" as email from "user" where "id" = ${userId}`;
     const email = rows[0]?.email ?? "";
     await sql`delete from user_jobs where user_id = ${userId}`;

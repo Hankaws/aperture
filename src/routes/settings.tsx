@@ -16,6 +16,7 @@ import { planById } from "@/lib/billing/plans";
 import { showPricing } from "@/lib/billing/pricing-visible";
 import { cn } from "@/lib/utils";
 import { DeleteAccount } from "@/components/site/delete-account";
+import { BillingCard } from "@/components/site/billing-card";
 
 type SettingsTab = "plan" | "models" | "limits" | "agents";
 
@@ -27,16 +28,17 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
 ];
 
 export const Route = createFileRoute("/settings")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { tab: SettingsTab; checkout?: "done" } => ({
     tab: s.tab === "models" || s.tab === "limits" || s.tab === "agents" ? (s.tab as SettingsTab) : ("plan" as const),
+    ...(s.checkout === "done" ? { checkout: "done" as const } : {}),
   }),
   head: () => pageHead("settings"),
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { tab } = Route.useSearch();
-  const { account, setAccount, user, isPending } = useAccount();
+  const { tab, checkout } = Route.useSearch();
+  const { account, setAccount, user, isPending, refresh } = useAccount();
 
   if (isPending) {
     return (
@@ -111,11 +113,12 @@ function SettingsPage() {
                 </Link>
               </div>
             </div>
+            <BillingCard account={account} justPaid={checkout === "done"} refresh={refresh} />
             <GithubAccountCard />
             {showPricing && (
               <div>
                 <h2 className="mb-4 text-lg font-medium tracking-tight">Plans</h2>
-                <PricingTable currentPlan={account.plan} />
+                <PricingTable currentPlan={account.plan} checkoutOpen={account.checkoutOpen} />
               </div>
             )}
           </section>

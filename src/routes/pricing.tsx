@@ -22,10 +22,10 @@ function PricingPage() {
         <p className="text-center text-xs font-medium tracking-[0.16em] text-subtle uppercase">Pricing</p>
         <h1 className="mt-4 text-center text-4xl font-medium tracking-tight sm:text-5xl">Plans</h1>
         <p className="mx-auto mt-3 max-w-lg text-center text-muted">
-          Hobby is free today. Pro and Team are coming soon: there is no checkout yet, and nothing is charged.
+          Hobby is free. Pro and Team add a server sandbox for tests that need real Node.
         </p>
         <div className="mt-10">
-          <PricingTable currentPlan={account?.plan} />
+          <PricingTable currentPlan={account?.plan} checkoutOpen={account?.checkoutOpen} />
         </div>
         <div className="mx-auto mt-14 max-w-2xl rounded-2xl border border-border bg-surface p-5">
           <h2 className="text-lg font-medium tracking-tight">What the plan actually limits</h2>

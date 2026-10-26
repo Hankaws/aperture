@@ -91,9 +91,13 @@ const SECTIONS: Array<{ title: string; body: ReactNode }> = [
     title: "8. Price",
     body: (
       <>
-        The hosted site does not charge you today. Prices marked “coming soon” are not on sale. A provider you call
-        with your own key charges you on their side. If a paid plan is offered later, the price is the one shown at
-        the time you choose it, and these terms will say so.
+        Hobby is free. A provider you call with your own key charges you on their side. Plans marked “coming soon”
+        are not on sale. Pro and Team, where they are on sale, are sold through Paddle, which is the seller of record
+        and handles payment and sales tax; Paddle’s buyer terms apply to the purchase. The price is the one shown
+        when you buy. A plan renews each month or year until you cancel it in Settings → Plan, and stays on until
+        the end of the period you paid for. If a renewal payment fails, the plan stays on for 7 days while Paddle
+        retries, then the account moves to Hobby. Moving to Hobby deletes nothing. You can ask for a refund within
+        14 days of your first payment.
       </>
     ),
   },

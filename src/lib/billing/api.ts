@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { overLimit } from "@/lib/security/rate-limit";
 import { isVisitorUserId, spendOwnerId } from "@/lib/auth/visitor";
 import {
   DEFAULT_SESSION_CENTS,
@@ -23,9 +24,10 @@ import {
   type PlanId,
   type ProviderId,
 } from "./plans";
+import { billingView, effectivePlan, runPeriod, type BillingRow, type BillingView } from "./subscription";
 import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
 import type { SecretsProtection } from "@/lib/security/secret-box";
-import { customEndpointInput, modelSourceInput, planInput, providerInput, providerKeyInput, sessionCapInput } from "@/lib/security/inputs";
+import { checkoutInput, customEndpointInput, modelSourceInput, planInput, providerInput, providerKeyInput, sessionCapInput } from "@/lib/security/inputs";
 
 export type KeyStatus = { set: boolean; last4: string | null };
 
@@ -49,6 +51,12 @@ export type AccountSnapshot = {
   custom: { base: string | null; model: string | null; keySet: boolean; last4: string | null };
   /** What protects the keys saved here: shown in Settings so the owner can see APERTURE_SECRETS_KEY took effect. */
   secrets: SecretsProtection;
+  /** The paid subscription, if there is one: renews, cancels, or past due. */
+  billing: BillingView | null;
+  /** Whether paid plans can be bought on this deployment. */
+  checkoutOpen: boolean;
+  /** Server sandbox runs this UTC month, against the plan's allowance. */
+  sandbox: { used: number; cap: number };
 };
 
 const PROVIDER_COLS: Record<ProviderId, "grok_key" | "openai_key" | "anthropic_key" | "gemini_key" | "deepseek_key"> = {
@@ -119,7 +127,20 @@ type SettingsRow = {
   session_started_at: unknown;
   tab_used: unknown;
   tab_day: string | null;
+  billing_customer_id: string | null;
+  billing_subscription_id: string | null;
+  billing_status: string | null;
+  billing_period_end: Date | string | null;
+  billing_cancel_at: Date | string | null;
+  billing_past_due_since: Date | string | null;
+  sandbox_runs_used: unknown;
+  sandbox_run_period: string | null;
 };
+
+/** The plan the row may use now: what it paid for, unless the subscription lapsed. */
+function planOfRow(row: BillingRow) {
+  return planById(effectivePlan(row));
+}
 
 async function peek() {
   return import("@/lib/security/secrets.server");
@@ -134,7 +155,9 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
     select plan, preferred_provider, model_source, grok_key, openai_key, anthropic_key, gemini_key, deepseek_key,
            custom_base, custom_model, custom_key,
            hosted_used, usage_month, session_cap_on, session_cap_turns, session_cap_cents,
-           session_id, session_turns, session_cents, session_started_at, tab_used, tab_day
+           session_id, session_turns, session_cents, session_started_at, tab_used, tab_day,
+           billing_customer_id, billing_subscription_id, billing_status, billing_period_end, billing_cancel_at,
+           billing_past_due_since, sandbox_runs_used, sandbox_run_period
     from user_settings where user_id = ${userId}
   `;
   if (!existing[0]) {
@@ -165,6 +188,14 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
       session_started_at: null,
       tab_used: 0,
       tab_day: day,
+      billing_customer_id: null,
+      billing_subscription_id: null,
+      billing_status: null,
+      billing_period_end: null,
+      billing_cancel_at: null,
+      billing_past_due_since: null,
+      sandbox_runs_used: 0,
+      sandbox_run_period: "",
     };
   }
   const row = existing[0];
@@ -228,6 +259,14 @@ async function loadAccount(userId: string): Promise<SettingsRow> {
     session_started_at: pool.session_started_at,
     tab_used: pool.tab_used,
     tab_day: pool.tab_day,
+    billing_customer_id: pool.billing_customer_id,
+    billing_subscription_id: pool.billing_subscription_id,
+    billing_status: pool.billing_status,
+    billing_period_end: pool.billing_period_end,
+    billing_cancel_at: pool.billing_cancel_at,
+    billing_past_due_since: pool.billing_past_due_since,
+    sandbox_runs_used: pool.sandbox_runs_used,
+    sandbox_run_period: pool.sandbox_run_period,
   };
 }
 
@@ -253,8 +292,9 @@ function snapshot(
   row: SettingsRow,
   peekLast4: (stored: string | null) => string | null,
   secrets: SecretsProtection,
+  checkoutOpen: boolean,
 ): AccountSnapshot {
-  const plan = planById(row.plan);
+  const plan = planOfRow(row);
   const keys: Record<ProviderId, KeyStatus> = {
     grok: { set: Boolean(row.grok_key), last4: peekLast4(row.grok_key) },
     openai: { set: Boolean(row.openai_key), last4: peekLast4(row.openai_key) },
@@ -305,12 +345,19 @@ function snapshot(
       last4: peekLast4(row.custom_key),
     },
     secrets,
+    billing: billingView(row),
+    checkoutOpen,
+    sandbox: {
+      used: row.sandbox_run_period === runPeriod() ? Math.max(0, asInt(row.sandbox_runs_used, 0)) : 0,
+      cap: plan.sandboxRuns,
+    },
   };
 }
 
 async function snapshotOf(row: SettingsRow): Promise<AccountSnapshot> {
   const { peekLast4, protectionOf } = await peek();
-  return snapshot(row, peekLast4, protectionOf([...KEY_COLS.map((col) => row[col]), row.custom_key]));
+  const { checkoutOpen } = await import("./paddle.server");
+  return snapshot(row, peekLast4, protectionOf([...KEY_COLS.map((col) => row[col]), row.custom_key]), checkoutOpen());
 }
 
 async function applyModelSource(userId: string, source: ModelSource): Promise<AccountSnapshot> {
@@ -353,13 +400,78 @@ export const setPlan = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const payer = spendOwnerId(context.userId);
-    await loadSettings(payer);
+    const current = await loadSettings(payer);
+    // Dropping to Hobby here would leave Paddle charging for a plan the account no longer has.
+    if (effectivePlan(current) !== "hobby" && current.billing_subscription_id) {
+      throw new Error("Cancel the subscription in Settings → Plan → Manage billing. It ends with the period you paid for.");
+    }
     await sql`
       update user_settings
       set plan = ${plan}, updated_at = now()
       where user_id = ${payer}
     `;
     return snapshotOf(await loadAccount(context.userId));
+  });
+
+/** Whether paid plans can be bought here. Public: the pricing page asks before sign-in. */
+export const billingOpen = createServerFn({ method: "GET" }).handler(async (): Promise<boolean> => {
+  if (process.env.VITE_AUTH_ENABLED?.trim() === "false") return false;
+  const { checkoutOpen } = await import("./paddle.server");
+  return checkoutOpen();
+});
+
+/**
+ * What the checkout page needs to load Paddle.js: the client-side token, which
+ * Paddle makes to be public, and which environment it belongs to. Never the API key.
+ */
+export const paddleClient = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ token: string; environment: "sandbox" | "production" } | null> => {
+    const { paddleConfig } = await import("./paddle.server");
+    const config = paddleConfig();
+    return config ? { token: config.clientToken, environment: config.environment } : null;
+  },
+);
+
+/**
+ * A Paddle checkout for a paid plan. The plan changes only when Paddle's
+ * webhook confirms the payment, never on the way back from checkout.
+ */
+export const startCheckout = createServerFn({ method: "POST" })
+  .validator(checkoutInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<{ url: string }> => {
+    const busy = overLimit("billing", context.userId);
+    if (busy) throw new Error(busy);
+    const signInOff = process.env.VITE_AUTH_ENABLED?.trim() === "false" || isVisitorUserId(context.userId);
+    if (signInOff) throw new Error("Paid plans need an account. Sign in first.");
+    const { checkoutOpen, createCheckout, paddleConfig } = await import("./paddle.server");
+    const config = paddleConfig();
+    if (!config || !checkoutOpen()) throw new Error("Paid plans are not available on this deployment yet.");
+    const row = await loadSettings(context.userId);
+    if (effectivePlan(row) !== "hobby" && row.billing_subscription_id) {
+      throw new Error("This account already has a subscription. Change it in Settings → Plan → Manage billing.");
+    }
+    const url = await createCheckout(config, {
+      userId: context.userId,
+      plan: data.plan,
+      period: data.period,
+      customerId: row.billing_customer_id,
+    });
+    return { url };
+  });
+
+/** Paddle's billing page for this account's subscription: payment method, invoices, cancel. */
+export const manageBilling = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ url: string; cancel: string | null }> => {
+    const busy = overLimit("billing", context.userId);
+    if (busy) throw new Error(busy);
+    const { paddleConfig, portalLinks } = await import("./paddle.server");
+    const config = paddleConfig();
+    const row = await loadSettings(context.userId);
+    if (!config || !row.billing_customer_id) throw new Error("This account has no subscription to manage.");
+    const links = await portalLinks(config, row.billing_customer_id, row.billing_subscription_id);
+    return { url: links.overview, cancel: links.cancel };
   });
 
 export const saveProviderKey = createServerFn({ method: "POST" })
@@ -369,7 +481,7 @@ export const saveProviderKey = createServerFn({ method: "POST" })
     if (!isProvider(data.provider)) throw new Error("Unknown provider");
     const { encryptSecret, validateProviderKey } = await peek();
     const row = await loadAccount(context.userId);
-    const plan = planById(row.plan);
+    const plan = planOfRow(row);
     const col = PROVIDER_COLS[data.provider];
     const trimmed = data.key.trim();
     const currentlySet = Boolean(row[col]);
@@ -606,7 +718,7 @@ function formatCap(cents: number) {
 export async function consumeHostedTurn(userId: string) {
   const payer = spendOwnerId(userId);
   const row = await loadSettings(payer);
-  const plan = planById(row.plan);
+  const plan = planOfRow(row);
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   await sql`
@@ -622,7 +734,7 @@ export async function recordTabUse(userId: string, hosted: boolean) {
   const sql = await getSql();
   const payer = spendOwnerId(userId);
   const row = await loadSettings(payer);
-  const plan = planById(row.plan);
+  const plan = planOfRow(row);
   if (plan.tabDaily <= 0) return;
   await sql`
     update user_settings

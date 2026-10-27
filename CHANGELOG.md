@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- Signed in, the editor no longer rebuilds its whole layout as it opens, and on a phone it no longer flashes "Sign in": the phone account button waits for the session, as the desktop bar does. ([#151](https://github.com/Hankaws/aperture/pull/151))
+
 ## 0.3.0 - 2026-10-27
 
 ### Added

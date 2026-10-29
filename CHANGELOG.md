@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- A long agent turn wraps up before the server's time limit and keeps what it staged, instead of being cut off mid-reply; a test run is shortened, or left for the next turn, when there is not enough time left. A reply that still ends early says it was cut off and offers Retry, and an external agent that cannot start now shows why. ([#152](https://github.com/Hankaws/aperture/pull/152))
 - Signed in, the editor no longer rebuilds its whole layout as it opens, and on a phone it no longer flashes "Sign in": the phone account button waits for the session, as the desktop bar does. ([#151](https://github.com/Hankaws/aperture/pull/151))
 
 ## 0.3.0 - 2026-10-27

@@ -39,6 +39,7 @@ import {
   shouldAutoVerify,
   verifiedLine,
 } from "@/lib/sandbox/auto-verify";
+import { MIN_STEP_MS, noTimeToRunText, outOfTimeText, runAllowance, timeLeft } from "./turn-budget";
 
 const MAX_PLAN_STEPS = 8;
 const MAX_BUILD_STEPS = 12;
@@ -252,8 +253,14 @@ export type LoopHost = {
     signal?: AbortSignal,
     tools?: AgentToolDef[],
   ) => Promise<Completion>;
-  /** Runs a package.json script in a sandbox, for a request with a known owner. */
-  runScript?: (userId: string, files: Record<string, string>, script: string, signal?: AbortSignal) => Promise<ScriptOutcome>;
+  /** Runs a package.json script in a sandbox, for a request with a known owner, in at most `maxMs` when given. */
+  runScript?: (
+    userId: string,
+    files: Record<string, string>,
+    script: string,
+    signal?: AbortSignal,
+    maxMs?: number,
+  ) => Promise<ScriptOutcome>;
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
   /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
   parser?: () => Promise<ParseCheck>;
@@ -271,7 +278,7 @@ export type LoopHost = {
 
 export async function runLoop(
   input: AgentInput,
-  cfg: CompletionCfg & { userId?: string },
+  cfg: CompletionCfg & { userId?: string; deadline?: number },
   emit: (event: AgentStreamEvent) => void,
   signal: AbortSignal | undefined,
   host: LoopHost,
@@ -319,6 +326,12 @@ export async function runLoop(
   let lastRun: { script: string; editsKey: string; result: { text: string; passed: boolean; ran: boolean } } | undefined;
   /** run_script calls made before any edit. Two of those end the turn instead of spending it. */
   let scriptsWithoutEdits = 0;
+  // A server turn wraps up before the function's time limit (turn-budget.ts); one in the browser has none.
+  // Reaching the deadline cuts off the step in flight, and the turn ends with what it staged.
+  const deadline = cfg.deadline ?? null;
+  const timeUp = new AbortController();
+  const timer = deadline === null ? null : setTimeout(() => timeUp.abort(), Math.max(0, deadline - Date.now()));
+  const stepSignal = deadline === null ? signal : signal ? AbortSignal.any([signal, timeUp.signal]) : timeUp.signal;
   const editsKeyOf = (edits: ProposedEdit[]) => JSON.stringify(mergeEdits(edits).map((e) => [e.path, e.newText]));
   const reviewTally = { kept: 0, dropped: 0 };
   // The compiler sees the whole project, not just the files in the prompt (some
@@ -362,7 +375,12 @@ export async function runLoop(
     // account, and an unattributed run cannot be counted or capped.
     runScript: cfg.userId && host.runScript
       ? async (script: string) => {
-          const result = await host.runScript!(cfg.userId!, ctx.files, script, signal);
+          const allowed = runAllowance(deadline);
+          if (allowed === 0) {
+            emit({ type: "status", text: `Could not run ${script}` });
+            return { text: noTimeToRunText(script), passed: false, ran: false };
+          }
+          const result = await host.runScript!(cfg.userId!, ctx.files, script, stepSignal, allowed ?? undefined);
           emit({
             type: "status",
             text: !result.ran ? `Could not run ${script}` : result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed`,
@@ -416,6 +434,7 @@ export async function runLoop(
   const rules = findRules(fileMap)?.text ?? null;
 
   if (input.mode === "inline") {
+    if (timer) clearTimeout(timer);
     return runInline(cfg, input, files, signal, host);
   }
 
@@ -525,9 +544,28 @@ export async function runLoop(
     return { ok: true, ...body, text: verifiedText, ...extra };
   };
 
+  /** Steps started so far, for the debug panel when the turn ends early. */
+  let stepsTaken = 0;
+  /** Ends a turn cut short by the step limit or the time limit, keeping what it staged. */
+  const stopEarly = async (why: "steps" | "time", steps: number): Promise<AgentResult> => {
+    const staged = mergeEdits(ctx.edits);
+    const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
+    const text = awaitingBuild
+      ? planReadyText(undefined)
+      : why === "time"
+        ? outOfTimeText(staged.length)
+        : staged.length > 0
+          ? "Stopped after the tool-call limit. Review the staged edits."
+          : "Stopped after the tool-call limit. Nothing was staged.";
+    return await succeed({ text, traces, edits: awaitingBuild ? [] : staged, plan: ctx.plan, awaitingBuild }, steps);
+  };
+
   try {
     for (let step = 0; step < maxSteps; step++) {
       if (signal?.aborted) return { ok: false, error: "Stopped." };
+      const left = timeLeft(deadline);
+      if (left !== null && left < MIN_STEP_MS) return await stopEarly("time", step);
+      stepsTaken = step + 1;
       const hasPlan = ctx.plan.length > 0;
       const kind = input.role === "review" ? "review" : toolKindFor(input.mode, phase);
       emit({
@@ -550,7 +588,7 @@ export async function runLoop(
         messages,
         true,
         (delta) => emit({ type: "text", delta }),
-        signal,
+        stepSignal,
         toolsForStep(kind),
       );
       const calls = completion.tool_calls ?? [];
@@ -741,29 +779,15 @@ export async function runLoop(
       }
     }
 
-    const staged = mergeEdits(ctx.edits);
-    const text =
-      phase === "plan" && ctx.plan.length > 0
-        ? planReadyText(undefined)
-        : staged.length > 0
-          ? "Stopped after the tool-call limit. Review the staged edits."
-          : "Stopped after the tool-call limit. Nothing was staged.";
-    const awaitingBuild = phase === "plan" && ctx.plan.length > 0;
-    return await succeed(
-      {
-        text,
-        traces,
-        edits: awaitingBuild ? [] : staged,
-        plan: ctx.plan,
-        awaitingBuild,
-      },
-      maxSteps,
-    );
+    return await stopEarly("steps", maxSteps);
   } catch (error) {
     if (signal?.aborted) return { ok: false, error: "Stopped." };
+    if (timeUp.signal.aborted) return await stopEarly("time", stepsTaken);
     const message = error instanceof Error ? error.message : "Agent failed";
     emit({ type: "error", error: message });
     return { ok: false, error: message };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

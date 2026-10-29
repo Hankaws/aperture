@@ -8,6 +8,8 @@ export async function runAcpSession(
     userId: string;
     emit: (event: AgentStreamEvent) => void;
     signal?: AbortSignal;
+    /** When the turn must wrap up (turn-budget.ts). */
+    deadline?: number;
   },
 ): Promise<AgentResult & { hosted?: boolean; cents?: number }> {
   const agentId = input.agentId ?? "";
@@ -22,7 +24,15 @@ export async function runAcpSession(
     const { runComposerStreaming } = await import("@/lib/agent/fanout.server");
     const { result, bills } = await runComposerStreaming(
       input,
-      { provider: resolved.provider, apiKey: resolved.apiKey, base: resolved.base, model: resolved.model, hosted: resolved.hosted, cents: resolved.cents },
+      {
+        provider: resolved.provider,
+        apiKey: resolved.apiKey,
+        base: resolved.base,
+        model: resolved.model,
+        hosted: resolved.hosted,
+        cents: resolved.cents,
+        deadline: opts.deadline,
+      },
       opts.emit,
       opts.signal,
       (n) => canAffordRuns(opts.userId, resolved.source, n),

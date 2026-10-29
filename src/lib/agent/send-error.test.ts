@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { describeSendError, isNetworkError } from "./send-error.ts";
+import { cutOffLine, describeSendError, isNetworkError } from "./send-error.ts";
 
 test("a dropped connection, in each browser's words, reads as one plain line", () => {
   for (const message of [
@@ -27,4 +27,12 @@ test("other failures keep their own message", () => {
   assert.equal(describeSendError(new Error("Session cap reached")), "Session cap reached");
   assert.match(describeSendError(new Error("Unauthorized")), /Sign in to run Composer/);
   assert.equal(describeSendError("nope"), "Request failed");
+});
+
+test("a reply cut off mid-stream says so, and offers Retry only with the button", () => {
+  assert.equal(
+    cutOffLine(true),
+    "The reply was cut off before it finished. Press Retry to send it again.",
+  );
+  assert.equal(cutOffLine(), "The reply was cut off before it finished.");
 });

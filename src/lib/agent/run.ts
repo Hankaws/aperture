@@ -20,7 +20,7 @@ import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { restoreRedacted } from "./unredact";
-import { describeSendError } from "./send-error";
+import { cutOffLine, describeSendError } from "./send-error";
 import { compactFiles, RESEND_FILES } from "./wire";
 import { savedBaseline } from "@/lib/workspace/sync-controller";
 import { compareRuns } from "@/lib/runner/compare";
@@ -47,9 +47,8 @@ function runtimeFrom(errors: string[]): string | undefined {
 }
 
 /** A failed turn keeps whatever already arrived, then says why it stopped, and offers Retry when it can. */
-function keepReply(messageId: string, error: unknown, retry: RetrySend | undefined) {
+function keepReply(messageId: string, why: string, retry: RetrySend | undefined) {
   const partial = useWorkspace.getState().messages.find((m) => m.id === messageId)?.content ?? "";
-  const why = describeSendError(error, Boolean(retry));
   useWorkspace.getState().patchMessage(messageId, {
     content: partial.trim() ? `${partial}\n\n${why}` : why,
     status: undefined,
@@ -454,6 +453,8 @@ export async function submitAgent(
     }
 
     let text = "";
+    /** Set by the turn's last word, "done" or "error". A stream that closes without one was cut off. */
+    let ended = false;
     let traces: ToolTrace[] = [];
     let edits: ProposedEdit[] = [];
     let plan: PlanEntry[] = [];
@@ -488,6 +489,7 @@ export async function submitAgent(
         return;
       }
       if (event.type === "done") {
+        ended = true;
         text = event.text;
         traces = event.traces;
         edits = tagCopy(unredact(event.edits));
@@ -533,16 +535,21 @@ export async function submitAgent(
         return;
       }
       if (event.type === "error") {
+        ended = true;
         const current = ws.messages.find((m) => m.id === asstId)?.content ?? text;
         const why = event.error || "Agent failed";
-        const content = current.trim() && current.trim() !== why ? `${current}\n\n${why}` : why;
+        // A crew, then the request itself, may report the same failure: say it once.
+        const content = !current.trim() ? why : current.trim().endsWith(why) ? current : `${current}\n\n${why}`;
         ws.patchMessage(asstId, { content, traces, edits, plan, status: undefined });
       }
     };
     await opened.run(onEvent);
 
     const latest = useWorkspace.getState().messages.find((m) => m.id === asstId);
-    if (latest && !latest.content && traces.length === 0 && (latest.plan?.length ?? 0) === 0) {
+    if (!ended && !abort.signal.aborted) {
+      // The server stopped mid-turn (a time limit, a crash): say so, not a silent half answer.
+      keepReply(asstId, cutOffLine(Boolean(retry)), retry);
+    } else if (latest && !latest.content && traces.length === 0 && (latest.plan?.length ?? 0) === 0) {
       useWorkspace.getState().patchMessage(asstId, { content: "Stopped.", status: undefined });
     }
   } catch (error) {
@@ -553,7 +560,7 @@ export async function submitAgent(
       }
       return;
     }
-    keepReply(asstId, error, retry);
+    keepReply(asstId, describeSendError(error, Boolean(retry)), retry);
   } finally {
     if (currentAbort === abort) currentAbort = null;
     useWorkspace.getState().setAgentRunning(false);

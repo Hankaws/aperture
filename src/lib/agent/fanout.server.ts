@@ -7,9 +7,13 @@ import type { ModelSource } from "@/lib/billing/plans";
 import type { WorkerSpec } from "./crew";
 import type { ProposedEdit } from "@/lib/workspace/types";
 import { mergeEdits as overlayEdits } from "@/lib/workspace/preview-check";
+import { MIN_STEP_MS, timeLeft, turnDeadline } from "./turn-budget";
 
-/** `userId` lets a worker run the project's scripts, counted against that account. */
-export type WorkerCfg = CompletionCfg & { hosted: boolean; cents: number; userId?: string };
+/**
+ * `userId` lets a worker run the project's scripts, counted against that account.
+ * `deadline`: when the whole turn must wrap up (turn-budget.ts), shared by every worker.
+ */
+export type WorkerCfg = CompletionCfg & { hosted: boolean; cents: number; userId?: string; deadline?: number };
 
 function applyNotes(edits: ProposedEdit[], noted: ProposedEdit[]): ProposedEdit[] {
   return edits.map((edit) => {
@@ -28,12 +32,15 @@ function workerInput(input: AgentInput, worker: WorkerSpec): AgentInput {
 
 export async function runComposerStreaming(
   input: AgentInput,
-  cfg: WorkerCfg,
+  given: WorkerCfg,
   emit: (event: AgentStreamEvent) => void,
   signal: AbortSignal | undefined,
   afford: (n: number) => boolean | Promise<boolean>,
   resolveWorker?: (source: ModelSource | undefined) => Promise<WorkerCfg>,
 ): Promise<{ result: AgentResult; turns: number; bills: Array<{ hosted: boolean; cents: number }> }> {
+  // One deadline for the turn: workers, then reviewers, all inside it.
+  const deadline = given.deadline ?? turnDeadline();
+  const cfg: WorkerCfg = { ...given, deadline };
   const assignments: WorkerSpec[] = (input.workers ?? []).filter((w) => w.files.length > 0).slice(0, 3);
   if (assignments.length === 0) {
     const result = await runAgentLoopStreaming(input, cfg, emit, signal);
@@ -59,7 +66,7 @@ export async function runComposerStreaming(
     if (!resolveWorker) return cfg;
     const resolved = await resolveWorker(worker.source);
     bills[index] = { hosted: resolved.hosted, cents: resolved.cents };
-    return { ...resolved, userId: cfg.userId };
+    return { ...resolved, userId: cfg.userId, deadline };
   }
 
   function forward(tag: string, i: number) {
@@ -123,6 +130,12 @@ export async function runComposerStreaming(
     const files = Object.entries(staged).map(([path, content]) => ({ path, content }));
     for (let i = 0; i < reviewers.length; i += 1) {
       if (signal?.aborted) break;
+      // A review needs at least one model step; with less time left the change goes out unreviewed.
+      const left = timeLeft(deadline);
+      if (left !== null && left < MIN_STEP_MS) {
+        text = [text, "Review skipped: this turn reached its time limit."].filter(Boolean).join("\n\n");
+        break;
+      }
       const worker = reviewers[i]!;
       const tag = worker.label || "Review";
       const index = builders.length + i;

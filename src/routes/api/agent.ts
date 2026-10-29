@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { AgentStreamEvent } from "@/lib/agent/events";
+import { turnDeadline } from "@/lib/agent/turn-budget";
 
 export const Route = createFileRoute("/api/agent")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // The whole request, setup included, ends before the function's time limit.
+        const deadline = turnDeadline();
         const { assertSameSiteRequest } = await import("@/lib/auth/isolation.server");
         try {
           assertSameSiteRequest();
@@ -83,7 +86,9 @@ export const Route = createFileRoute("/api/agent")({
             try {
               if (input.agentId) {
                 const { runAcpSession } = await import("@/lib/acp/session.server");
-                await runAcpSession(input, { userId, emit, signal: request.signal });
+                const result = await runAcpSession(input, { userId, emit, signal: request.signal, deadline });
+                // A refusal before the session started (no key, no agent) has emitted nothing yet.
+                if (!result.ok && !request.signal.aborted) emit({ type: "error", error: result.error });
               } else {
                 const { resolveModel, recordAgentRun, canAffordRuns } = await import("@/lib/billing/api");
                 const resolved = await resolveModel(userId, input.source);
@@ -103,6 +108,7 @@ export const Route = createFileRoute("/api/agent")({
                     cents: resolved.cents,
                     // Without it the agent cannot run the project's checks: runs are per account.
                     userId,
+                    deadline,
                   },
                   emit,
                   request.signal,

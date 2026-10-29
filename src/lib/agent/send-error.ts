@@ -9,6 +9,13 @@ export function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError && /fetch|network|load failed/i.test(error.message);
 }
 
+/** The line a reply ends with when its stream closed before the turn's last word. */
+export function cutOffLine(canRetry = false): string {
+  return canRetry
+    ? "The reply was cut off before it finished. Press Retry to send it again."
+    : "The reply was cut off before it finished.";
+}
+
 /** The line a failed turn ends with. `canRetry`: the reply offers a Retry button. */
 export function describeSendError(error: unknown, canRetry = false): string {
   if (isNetworkError(error)) {

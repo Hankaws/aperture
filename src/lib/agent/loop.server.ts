@@ -9,14 +9,18 @@ import { runLoop, type LoopHost } from "./loop";
 import { tsParseCheck } from "@/lib/workspace/ts-parse";
 import { TSC_LIMITS } from "@/lib/workspace/tsc-core";
 import type { AgentInput, AgentResult } from "./types";
+import { turnDeadline } from "./turn-budget";
 
 const SERVER_HOST: LoopHost = {
   complete,
   completeStreaming,
-  runScript: async (userId, files, script, signal) => {
+  runScript: async (userId, files, script, signal, maxMs) => {
     const { resolveRunner, runScript } = await import("@/lib/sandbox/run.server");
+    const { DEFAULT_RUN_MS } = await import("@/lib/sandbox/policy");
     const runner = await resolveRunner();
-    const result = await runScript({ userId, runner, files, signal }, script);
+    // The run's usual timeout, shortened when the turn has less time left than that.
+    const timeoutMs = maxMs === undefined ? undefined : Math.min(DEFAULT_RUN_MS, maxMs);
+    const result = await runScript({ userId, runner, files, signal }, script, timeoutMs);
     return { text: result.text, passed: result.passed, ran: result.ran };
   },
   mcp: async (userId, files) => {
@@ -40,15 +44,18 @@ const SERVER_HOST: LoopHost = {
   },
 };
 
-export async function runAgentLoop(input: AgentInput, cfg: CompletionCfg & { userId?: string }): Promise<AgentResult> {
-  return runLoop(input, cfg, () => undefined, undefined, SERVER_HOST);
+/** `deadline`: when the turn must wrap up (turn-budget.ts); a turn starting now when not given. */
+type ServerLoopCfg = CompletionCfg & { userId?: string; deadline?: number };
+
+export async function runAgentLoop(input: AgentInput, cfg: ServerLoopCfg): Promise<AgentResult> {
+  return runLoop(input, { ...cfg, deadline: cfg.deadline ?? turnDeadline() }, () => undefined, undefined, SERVER_HOST);
 }
 
 export async function runAgentLoopStreaming(
   input: AgentInput,
-  cfg: CompletionCfg & { userId?: string },
+  cfg: ServerLoopCfg,
   emit: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
-  return runLoop(input, cfg, emit, signal, SERVER_HOST);
+  return runLoop(input, { ...cfg, deadline: cfg.deadline ?? turnDeadline() }, emit, signal, SERVER_HOST);
 }

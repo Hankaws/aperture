@@ -39,7 +39,10 @@ const TABS: Array<{ id: BotTab; label: string; icon: LucideIcon }> = [
 const BOT_REPO = "https://github.com/Hankaws/aperture-bot";
 
 const STEPS = [
-  ["Ask", "Here, or with a comment that starts with /aperture on an issue or a pull request."],
+  [
+    "Ask",
+    "Here, or with a comment that starts with /aperture on an issue or a pull request. A question is answered on the thread; every reply ends with suggestions you can tick.",
+  ],
   [
     "It works",
     "On your GitHub runner, with your model key: it plans, makes the change, and runs Aperture Agent Check on it, with your tests in a container that has no network and no secrets.",

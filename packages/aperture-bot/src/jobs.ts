@@ -75,7 +75,7 @@ export async function planJob(
     body = [
       "Aperture Bot looks this repository over on its workflow's schedule and posts what it finds here: how things stand, and what it would do next.",
       "",
-      "It changes nothing. To have a suggestion done, send it from the Bot page, or comment `/aperture` and the task.",
+      "It changes nothing. To have a suggestion done, tick its box, send it from the Bot page, or comment `/aperture` and the task.",
     ].join("\n");
   }
   if (job.kind === "fix-ci") {

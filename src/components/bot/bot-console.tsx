@@ -451,6 +451,7 @@ function whoAsked(task: BotTask): string {
   if (task.via === "schedule") return "Standing job";
   if (task.via === "label") return `Labelled by @${task.author}`;
   if (task.via === "pull") return `Pushed by @${task.author}`;
+  if (task.via === "tick") return `Ticked by @${task.author}`;
   return `@${task.author}`;
 }
 

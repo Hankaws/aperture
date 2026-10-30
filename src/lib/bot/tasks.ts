@@ -35,7 +35,7 @@ export type TaskState = BotState | "waiting" | "silent" | "replied" | "ended";
 export type BotTask = {
   /** The asking comment's id; for a label or the schedule, the bot's comment's. */
   id: number;
-  via: "comment" | "label" | "schedule" | "pull";
+  via: "comment" | "label" | "schedule" | "pull" | "tick";
   number: number;
   thread: Thread | null;
   task: string;
@@ -293,6 +293,16 @@ export function cleanScheduled(task: string): string {
 }
 
 /**
+ * A person ticking a box in one of the bot's replies: an edit, by someone who
+ * is not a bot, of a comment with the bot's summary and a ticked box. The bot
+ * reads the edit itself and does only a suggestion it made (`suggestions.ts`).
+ */
+const TICKED = [
+  "      || (github.event_name == 'issue_comment' && github.event.action == 'edited' && github.event.sender.type != 'Bot'",
+  "          && contains(github.event.comment.body, '<!-- aperture-bot ') && contains(github.event.comment.body, '- [x] '))",
+];
+
+/**
  * The bot's workflow: the README's, with the provider, version and jobs
  * filled in. `settings` are the bot step's existing `with:` lines, kept as
  * they are (but for the jobs' own) when the page changes the jobs.
@@ -316,6 +326,7 @@ export function workflowFile(
   const any = jobs.label || Boolean(scheduled) || jobs.pulls;
   const asks = [
     "a comment",
+    "a ticked suggestion",
     ...(jobs.label ? ["its label"] : []),
     ...(scheduled ? ["its schedule"] : []),
     ...(jobs.pulls ? ["a pull request"] : []),
@@ -325,7 +336,7 @@ export function workflowFile(
     "name: Aperture Bot",
     "on:",
     "  issue_comment:",
-    "    types: [created]",
+    "    types: [created, edited]",
     ...(jobs.label ? ["  issues:", "    types: [labeled]"] : []),
     ...(jobs.pulls ? ["  pull_request:", `    types: ${PULL_TYPES}`] : []),
     ...(scheduled
@@ -339,29 +350,21 @@ export function workflowFile(
     "",
     "jobs:",
     "  bot:",
-    ...(any
+    `    # Starts a runner only when the bot is asked: ${asked}.`,
+    "    if: >-",
+    "      (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture'))",
+    ...TICKED,
+    ...(jobs.label
+      ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
+      : []),
+    ...(jobs.pulls
       ? [
-          `    # Starts a runner only when the bot is asked: ${asked}.`,
-          "    if: >-",
-          "      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture'))",
-          ...(jobs.label
-            ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
-            : []),
-          ...(jobs.pulls
-            ? [
-                "      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)",
-              ]
-            : []),
-          ...(scheduled
-            ? [
-                "      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
-              ]
-            : []),
+          "      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)",
         ]
-      : [
-          "    # Starts a runner only for comments that ask the bot.",
-          "    if: startsWith(github.event.comment.body, '/aperture')",
-        ]),
+      : []),
+    ...(scheduled
+      ? ["      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"]
+      : []),
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 45",
     "    concurrency:",

@@ -7,9 +7,17 @@
  * for Aperture Agent Check alone: a report, and no change. Everything else is
  * ignored, with the reason, so the run's log says why.
  *
+ * A comment that asks a question (`/aperture why does the login test fail?`)
+ * is answered on the thread, changing nothing (`ask.ts`). A suggestion ticked
+ * in one of the bot's own replies is a task, for whoever ticked it
+ * (`suggestions.ts`): the edit that ticks it is the one edit that counts.
+ *
  * `/aperture` rather than `@aperture`: an @-mention would notify whoever owns
  * that GitHub username every time the bot is asked for something.
  */
+import { isQuestion } from "./question.ts";
+import { tickedTask } from "./suggestions.ts";
+import { readSummary } from "../../../src/lib/bot/summary.ts";
 
 export type Command = {
   /** Issue or pull request number. */
@@ -21,9 +29,17 @@ export type Command = {
   task: string;
   /** The asking comment; null when a label or the schedule asked. */
   commentId: number | null;
-  /** Who asked: the commenter, whoever added the label, or whoever pushed. */
+  /** Who asked: the commenter, whoever added the label, pushed or ticked. */
   author: string;
-  via: "comment" | "label" | "schedule" | "pull";
+  via: "comment" | "label" | "schedule" | "pull" | "tick";
+  /** A question: answer it on the thread, changing nothing (`ask.ts`). */
+  ask?: boolean;
+  /**
+   * The bot's reply whose suggestion was ticked, to mark it started. When a
+   * person posted that reply (a personal token posts as its owner), they too
+   * must be able to write: the task's words are theirs.
+   */
+  ticked?: { commentId: number; body: string; postedBy: string | null };
   /** Run Aperture Agent Check on the pull request and report it, changing nothing. */
   check?: boolean;
   /** Look the repository over and report how it stands, changing nothing (`jobs.ts`). */
@@ -48,6 +64,8 @@ type IssueCommentEvent = {
   label?: { name?: string };
   sender?: { login?: string; type?: string };
   comment?: { id?: number; body?: string; user?: { login?: string; type?: string } };
+  /** On an edit: what the comment said before. */
+  changes?: { body?: { from?: string } };
   issue?: { number?: number; title?: string; body?: string | null; pull_request?: unknown };
   repository?: { name?: string; owner?: { login?: string }; default_branch?: string };
 };
@@ -87,6 +105,7 @@ export function parseEvent(
       ignored: `${name} events are not commands; the bot answers comments, its label, its schedule and pull requests.`,
     };
   const event = (payload ?? {}) as IssueCommentEvent;
+  if (event.action === "edited") return ticked(event);
   if (event.action !== "created") return { ignored: "only new comments are commands, not edits." };
   const user = event.comment?.user;
   if (user?.type === "Bot") return { ignored: "comments from bots are not commands." };
@@ -99,6 +118,7 @@ export function parseEvent(
   const title = issue.title ?? "";
   // On an issue too, so the bot can answer that a check needs a pull request.
   const check = isCheck(task);
+  const asked = !check && isQuestion(task);
   return {
     command: {
       number: issue.number,
@@ -112,6 +132,47 @@ export function parseEvent(
       author: user.login,
       via: "comment",
       ...(check ? { check: true } : {}),
+      ...(asked ? { ask: true } : {}),
+      owner: repo.owner.login,
+      repo: repo.name,
+      defaultBranch: repo.default_branch ?? "main",
+    },
+  };
+}
+
+/**
+ * An edit to one of the bot's replies that ticks one of its suggestions: that
+ * suggestion is the task, for whoever ticked it. Any other edit is ignored,
+ * and so is a ticked line that is not one of the suggestions the reply's
+ * summary carries, or that is already marked started.
+ */
+function ticked(event: IssueCommentEvent): Parsed {
+  const sender = event.sender;
+  if (sender?.type === "Bot") return { ignored: "edits by bots are not commands." };
+  const comment = event.comment;
+  const summary = readSummary(comment?.body ?? "");
+  if (!summary?.next?.length) return { ignored: "only new comments are commands, not edits." };
+  const task = tickedTask(event.changes?.body?.from ?? "", comment?.body ?? "", summary.next);
+  if (!task) return { ignored: "the edit ticks none of the bot's suggestions." };
+  const issue = event.issue;
+  const repo = event.repository;
+  if (!issue?.number || !comment?.id || !sender?.login || !repo?.name || !repo.owner?.login)
+    return { ignored: "the event is missing the issue, comment, sender or repository." };
+  return {
+    command: {
+      number: issue.number,
+      isPull: Boolean(issue.pull_request),
+      title: issue.title ?? "",
+      body: issue.body ?? "",
+      task,
+      commentId: null,
+      author: sender.login,
+      via: "tick",
+      ticked: {
+        commentId: comment.id,
+        body: comment.body ?? "",
+        postedBy: comment.user?.type === "Bot" ? null : (comment.user?.login ?? ""),
+      },
       owner: repo.owner.login,
       repo: repo.name,
       defaultBranch: repo.default_branch ?? "main",

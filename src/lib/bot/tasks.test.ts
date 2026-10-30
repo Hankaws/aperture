@@ -345,13 +345,13 @@ test("checking every pull request is a job: its trigger, only this repository's 
 test("the workflow's comment names the ways the bot is asked", () => {
   const says = (jobs: typeof NO_JOBS) =>
     /# Starts a runner only (.*)\n/.exec(workflowFile("grok", "v1", jobs))![1];
-  assert.equal(says(NO_JOBS), "for comments that ask the bot.");
+  assert.equal(says(NO_JOBS), "when the bot is asked: a comment or a ticked suggestion.");
   assert.equal(
     says({ ...NO_JOBS, pulls: true }),
-    "when the bot is asked: a comment or a pull request.",
+    "when the bot is asked: a comment, a ticked suggestion, or a pull request.",
   );
   assert.equal(
     says({ label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: true }),
-    "when the bot is asked: a comment, its label, its schedule, or a pull request.",
+    "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
   );
 });

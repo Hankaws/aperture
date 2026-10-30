@@ -6,7 +6,9 @@
  * clear, opens a pull request (asked on an issue) or pushes to the pull
  * request (asked on one). Otherwise it replies with what it tried and why it
  * stopped. `/aperture check` on a pull request, or a push to one, runs Agent
- * Check alone and replies with its report: no model, and no change.
+ * Check alone and replies with its report: no model, and no change. A
+ * question (`/aperture why …?`) is answered on the thread, changing nothing,
+ * and a suggestion ticked in one of the bot's replies is a task like any other.
  *
  * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
  */
@@ -14,6 +16,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.server.ts";
+import { failingContext } from "./answer.ts";
+import { answerQuestion } from "./ask.ts";
 import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
@@ -32,6 +36,7 @@ import {
   push,
 } from "./publish.ts";
 import {
+  answerReply,
   checkReply,
   commitMessage,
   doneReply,
@@ -46,7 +51,9 @@ import {
   type Asked,
 } from "./replies.ts";
 import { jobFrom, planJob } from "./jobs.ts";
+import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
+import { markStarted } from "./suggestions.ts";
 import { runTask, type BotProgress } from "./run.ts";
 import { asTestRunner, DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
 
@@ -187,6 +194,15 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       setOutput(env, { outcome: "ignored" });
       return 0;
     }
+    // A ticked suggestion's words are whoever posted the reply: a person, with a personal token.
+    const postedBy = command.ticked?.postedBy;
+    if (postedBy !== undefined && postedBy !== null && !canWrite(await gh.permission(postedBy))) {
+      log(
+        `Aperture Bot: the ticked suggestion is in a comment by @${postedBy}, who cannot write; it is not a task.`,
+      );
+      setOutput(env, { outcome: "ignored" });
+      return 0;
+    }
     if (command.commentId !== null)
       await gh.react(command.commentId, "eyes").catch(() => undefined);
   } else {
@@ -207,6 +223,11 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       ? {}
       : { via: command.via, by: command.author, task: command.task }),
   };
+  if (command.ticked) {
+    // Marked before the work starts, so ticking it again cannot start a second run.
+    const marked = markStarted(command.ticked.body, command.task, command.author, runUrl);
+    if (marked) await gh.editComment(command.ticked.commentId, marked).catch(() => undefined);
+  }
 
   // One comment for the whole run: posted when work starts, edited as it goes,
   // and edited into the reply at the end. Until it exists, replies are new comments.
@@ -337,8 +358,53 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     return 0;
   };
 
+  /**
+   * A question: answered on the thread from the code, the thread, a pull
+   * request's diff and whatever fails. It changes nothing and runs nothing.
+   * A fork's code is read only as its diff: it is never checked out.
+   */
+  const answer = async (): Promise<number> => {
+    const model = modelConfig(env);
+    let diff: string | null = null;
+    let sha = "";
+    if (command.isPull) {
+      const pull = await gh.pull(command.number);
+      sha = pull.headSha;
+      diff = await gh.diff(command.number).catch(() => null);
+      if (pull.headRepo.toLowerCase() === `${command.owner}/${command.repo}`.toLowerCase())
+        checkoutPullHead(cwd, pull.headRef);
+    } else {
+      sha = await gh.head(command.defaultBranch).catch(() => "");
+    }
+    const [comments, failures] = await Promise.all([
+      gh.comments(command.number),
+      sha ? gh.failures(sha).catch(() => []) : Promise.resolve([]),
+    ]);
+    const where = command.isPull ? "this pull request's head" : command.defaultBranch;
+    const context = [threadContext(command, comments, diff), failingContext(where, sha, failures)]
+      .filter(Boolean)
+      .join("\n\n");
+    log(`Aperture Bot: answering #${command.number} for @${command.author}`);
+    const result = await answerQuestion(
+      {
+        cwd,
+        question: questionText(command.task),
+        context,
+        model,
+        maxTokens: number(env, "max-tokens", 1_000_000),
+      },
+      { model: deps.model },
+    );
+    if (!result.ok) throw new Error(result.error);
+    log([result.answer, ...result.next.map((task) => `- ${task}`)].join("\n"));
+    await reply(answerReply(result, { ...asked, usage: result.usage }));
+    setOutput(env, { outcome: "answered" });
+    return 0;
+  };
+
   try {
     if (command.look) return await lookOver();
+    if (command.ask) return await answer();
     if (command.check) return await checkPull();
     const model = modelConfig(env);
     let pull: Pull | null = null;

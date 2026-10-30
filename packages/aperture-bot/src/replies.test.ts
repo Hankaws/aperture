@@ -158,7 +158,7 @@ test("a finished run lists what it would do next, and the Bot page reads them ba
   );
   assert.match(
     body,
-    /\*\*Next, I would suggest\*\*\n- Add a test for an empty cart\n- Round half cents up\n\nAsk for one with `\/aperture`/,
+    /\*\*Next, I would suggest\*\*\n- \[ \] Add a test for an empty cart\n- \[ \] Round half cents up\n\nTick one and I will do it/,
   );
   assert.deepEqual(readSummary(body)?.next, next);
   const quiet = doneReply(

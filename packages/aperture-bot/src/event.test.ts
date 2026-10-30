@@ -200,3 +200,110 @@ test("a check is the first line alone: a signature under it is fine, more words 
   assert.equal(isCheck("check the login flow\nplease"), false);
   assert.equal(isCheck("please\ncheck"), false);
 });
+
+test("a question is marked to be answered; a request and a check are not", () => {
+  const asked = (body: string) => {
+    const parsed = parseEvent(
+      "issue_comment",
+      payload({ comment: { id: 9, body, user: { login: "ada", type: "User" } } }),
+    );
+    assert.ok("command" in parsed);
+    return parsed.command;
+  };
+  const question = asked("/aperture why does the cart show 100?");
+  assert.equal(question.ask, true);
+  assert.equal(question.task, "why does the cart show 100?");
+  assert.equal(asked("/aperture can you show dollars?").ask, undefined);
+  assert.equal(asked("/aperture add a currency").ask, undefined);
+  assert.equal(asked("/aperture").ask, undefined);
+  assert.equal(asked("/aperture check").ask, undefined);
+});
+
+/** The bot's reply with its suggestions, the second ticked or not. */
+const botReply = (
+  mark: string,
+  summaryNext = ["Add a test for an empty cart", "Round half cents up"],
+) =>
+  [
+    "Opened #8.",
+    "",
+    "**Next, I would suggest**",
+    "- [ ] Add a test for an empty cart",
+    `- [${mark}] Round half cents up`,
+    "",
+    `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", asked: 9, run: "https://github.com/acme/shop/actions/runs/1", next: summaryNext })} -->`,
+  ].join("\n");
+
+const tick = (more: Record<string, unknown> = {}) =>
+  payload({
+    action: "edited",
+    sender: { login: "ada", type: "User" },
+    comment: {
+      id: 900,
+      body: botReply("x"),
+      user: { login: "github-actions[bot]", type: "Bot" },
+    },
+    changes: { body: { from: botReply(" ") } },
+    ...more,
+  });
+
+test("ticking a suggestion in the bot's reply is that task, for whoever ticked it", () => {
+  const parsed = parseEvent("issue_comment", tick());
+  assert.ok("command" in parsed, JSON.stringify(parsed));
+  assert.deepEqual(parsed.command, {
+    number: 3,
+    isPull: false,
+    title: "Prices",
+    body: "They show cents.",
+    task: "Round half cents up",
+    commentId: null,
+    author: "ada",
+    via: "tick",
+    ticked: { commentId: 900, body: botReply("x"), postedBy: null },
+    owner: "acme",
+    repo: "shop",
+    defaultBranch: "trunk",
+  });
+  // A reply a person posted (a personal token): their words, so they must be able to write too.
+  const personal = parseEvent(
+    "issue_comment",
+    tick({ comment: { id: 900, body: botReply("x"), user: { login: "owner", type: "User" } } }),
+  );
+  assert.ok("command" in personal);
+  assert.equal(personal.command.ticked?.postedBy, "owner");
+});
+
+test("an edit that is not a tick of one of the bot's own suggestions is ignored", () => {
+  const ignored = (p: unknown) => {
+    const parsed = parseEvent("issue_comment", p);
+    assert.ok("ignored" in parsed, JSON.stringify(parsed));
+    return parsed.ignored;
+  };
+  // An edit by a bot: the bot's own, marking a line started.
+  assert.match(ignored(tick({ sender: { login: "aperture[bot]", type: "Bot" } })), /by bots/);
+  // Unticking, or an edit that leaves the boxes as they were.
+  assert.match(ignored(tick({ changes: { body: { from: botReply("x") } } })), /ticks none/);
+  // A box whose words are not among the suggestions the summary carries.
+  assert.match(
+    ignored(
+      tick({
+        comment: {
+          id: 900,
+          body: botReply("x", ["Add a test for an empty cart"]),
+          user: { login: "b", type: "Bot" },
+        },
+        changes: { body: { from: botReply(" ", ["Add a test for an empty cart"]) } },
+      }),
+    ),
+    /ticks none/,
+  );
+  // A comment with no summary, or a summary with nothing suggested.
+  assert.match(
+    ignored(
+      tick({
+        comment: { id: 900, body: "- [x] Round half cents up", user: { login: "b", type: "Bot" } },
+      }),
+    ),
+    /not edits/,
+  );
+});

@@ -246,6 +246,43 @@ export class GitHub {
     return out.number;
   }
 
+  /** The review comments on a pull request's lines: what the bot already said there. */
+  async reviewComments(
+    pull: number,
+  ): Promise<Array<{ path: string; body: string; authorType: string }>> {
+    const out = await this.all<{ path?: string; body?: string; user?: { type?: string } }>(
+      `${this.base}/pulls/${pull}/comments`,
+      3,
+    );
+    return out.map((c) => ({
+      path: c.path ?? "",
+      body: c.body ?? "",
+      authorType: c.user?.type ?? "User",
+    }));
+  }
+
+  /** A review that only comments: it never approves or asks for changes. */
+  async createReview(
+    pull: number,
+    input: {
+      commitId: string;
+      body: string;
+      comments: Array<{ path: string; line: number; side: "RIGHT" | "LEFT"; body: string }>;
+    },
+  ): Promise<{ url: string }> {
+    const out = await this.call<{ html_url?: string }>(
+      "POST",
+      `${this.base}/pulls/${pull}/reviews`,
+      {
+        commit_id: input.commitId,
+        event: "COMMENT",
+        body: input.body,
+        comments: input.comments,
+      },
+    );
+    return { url: out.html_url ?? "" };
+  }
+
   async editIssue(number: number, body: string): Promise<void> {
     await this.call("PATCH", `${this.base}/issues/${number}`, { body });
   }

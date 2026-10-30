@@ -391,3 +391,25 @@ test("a workflow red on the default branch is explained; anything else is ignore
   assert.match(ignored(run({ name: "Aperture Bot" })), /own runs/);
   assert.match(ignored({ ...run(), action: "requested" }), /finished/);
 });
+
+test("/aperture review asks for a review; a sentence that starts with review is a task", () => {
+  const parsed = (body: string) => {
+    const p = parseEvent(
+      "issue_comment",
+      payload({
+        issue: { number: 3, title: "Prices", body: "", pull_request: {} },
+        comment: { id: 9, body, user: { login: "ada", type: "User" } },
+      }),
+    );
+    assert.ok("command" in p);
+    return p.command;
+  };
+  const review = parsed("/aperture review");
+  assert.equal(review.review, true);
+  assert.equal(review.task, "Review this pull request");
+  assert.equal(review.ask, undefined);
+  assert.equal(parsed("/aperture Review.\nthanks").review, true);
+  const task = parsed("/aperture review the login flow and fix it");
+  assert.equal(task.review, undefined);
+  assert.equal(task.task, "review the login flow and fix it");
+});

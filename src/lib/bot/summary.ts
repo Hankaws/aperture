@@ -21,10 +21,10 @@ export type BotSummary = {
   asked: number;
   /**
    * What the bot did: a change (unset), Aperture Agent Check on a pull
-   * request, a look over the repository on its schedule, or an answer to a
-   * question; the last three change nothing.
+   * request, a look over the repository on its schedule, an answer to a
+   * question, or a review of a pull request; the last four change nothing.
    */
-  kind?: "check" | "look" | "answer";
+  kind?: "check" | "look" | "answer" | "review";
   /**
    * How the bot was asked, when it was not a comment: a push to a pull request
    * is a check; a tick is a suggestion ticked in one of the bot's replies; an
@@ -136,7 +136,8 @@ export function readSummary(body: string): BotSummary | null {
     asked: r.asked,
     run: isGithubUrl(r.run) ? r.run : "",
   };
-  if (r.kind === "check" || r.kind === "look" || r.kind === "answer") out.kind = r.kind;
+  if (r.kind === "check" || r.kind === "look" || r.kind === "answer" || r.kind === "review")
+    out.kind = r.kind;
   if (
     r.via === "label" ||
     r.via === "schedule" ||

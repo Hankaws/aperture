@@ -52,6 +52,8 @@ export type Command = {
   ticked?: { commentId: number; body: string; postedBy: string | null };
   /** Run Aperture Agent Check on the pull request and report it, changing nothing. */
   check?: boolean;
+  /** Review the pull request: comments on the lines of likely bugs, changing nothing (`review.ts`). */
+  review?: boolean;
   /** Look the repository over and report how it stands, changing nothing (`jobs.ts`). */
   look?: boolean;
   owner: string;
@@ -113,6 +115,11 @@ export function isCheck(task: string): boolean {
   return /^check[.!]?$/i.test(task.trim().split("\n")[0]!.trim());
 }
 
+/** `/aperture review`: the word alone on the first line, as with `check`. */
+export function isReview(task: string): boolean {
+  return /^review[.!]?$/i.test(task.trim().split("\n")[0]!.trim());
+}
+
 export function parseEvent(
   name: string,
   payload: unknown,
@@ -144,7 +151,8 @@ export function parseEvent(
   const title = issue.title ?? "";
   // On an issue too, so the bot can answer that a check needs a pull request.
   const check = isCheck(task);
-  const asked = !check && isQuestion(task);
+  const review = !check && isReview(task);
+  const asked = !check && !review && isQuestion(task);
   return {
     command: {
       number: issue.number,
@@ -153,11 +161,14 @@ export function parseEvent(
       body: issue.body ?? "",
       task: check
         ? "Check this pull request"
-        : task || `Do what this ${issue.pull_request ? "pull request" : "issue"} asks: ${title}`,
+        : review
+          ? "Review this pull request"
+          : task || `Do what this ${issue.pull_request ? "pull request" : "issue"} asks: ${title}`,
       commentId: event.comment.id,
       author: user.login,
       via: "comment",
       ...(check ? { check: true } : {}),
+      ...(review ? { review: true } : {}),
       ...(asked ? { ask: true } : {}),
       owner: repo.owner.login,
       repo: repo.name,

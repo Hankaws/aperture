@@ -49,6 +49,10 @@ inputs:
     description: How many times Aperture Agent Check may run; each red result but the last goes back to the agent.
     required: false
     default: "2"
+  pull-requests:
+    description: 'What a push to a pull request starts, when the workflow listens for pull_request: "check" runs Aperture Agent Check (no model key); "review" posts a review with comments on the lines of likely bugs; "check, review" does both.'
+    required: false
+    default: check
   daily-limit:
     description: How many replies nobody asked for (to new issues, and to workflows red on the default branch) the bot posts in a day at most. Anyone can open an issue, and each reply spends the model key.
     required: false

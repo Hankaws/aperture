@@ -146,6 +146,7 @@ export const botJobsInput = z.object({
   scheduled: text(2_000).optional(),
   weekly: z.boolean().optional(),
   pulls: z.boolean().optional(),
+  review: z.boolean().optional(),
   issues: z.boolean().optional(),
   red: z.boolean().optional(),
 });

@@ -4,6 +4,7 @@ import {
   CircleAlert,
   GitPullRequest,
   Loader2,
+  MessageSquareCode,
   MessageSquareText,
   ShieldCheck,
   Tag,
@@ -43,6 +44,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const startMode = modeOf(now.scheduled);
   const [label, setLabel] = useState(now.label);
   const [pulls, setPulls] = useState(now.pulls);
+  const [review, setReview] = useState(now.review);
   const [issues, setIssues] = useState(now.issues);
   const [red, setRed] = useState(now.red.length > 0);
   const [mode, setMode] = useState<Mode>(startMode);
@@ -57,6 +59,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const changed =
     label !== now.label ||
     pulls !== now.pulls ||
+    review !== now.review ||
     issues !== now.issues ||
     red !== now.red.length > 0 ||
     scheduled !== (now.scheduled ?? "") ||
@@ -75,6 +78,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           scheduled,
           weekly: timed(mode) && weekly,
           pulls,
+          review,
           issues,
           red,
         },
@@ -148,6 +152,26 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           <span className="mt-0.5 block text-muted">
             Aperture Agent Check on each push: one report on the pull request, kept up to date. It
             changes nothing and uses no model key.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={review}
+          onChange={(event) => setReview(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <MessageSquareCode className="size-3.5 text-subtle" />
+            Review every pull request
+          </span>
+          <span className="mt-0.5 block text-muted">
+            On each push, the bot comments on the lines of likely bugs, only what it is at least 80%
+            sure of, and replies with their fixes to tick. It changes nothing; it uses your key.
           </span>
         </span>
       </label>

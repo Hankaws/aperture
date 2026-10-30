@@ -185,6 +185,8 @@ export type Jobs = {
   scheduled: string | null;
   cron: string | null;
   pulls: boolean;
+  /** Review each push to a pull request: comments on the lines of likely bugs. */
+  review: boolean;
   /** Read each new issue and reply with what the bot would do. */
   issues: boolean;
   /** The workflows (by name) it watches: a red run on the default branch is explained. */
@@ -196,9 +198,18 @@ export const NO_JOBS: Jobs = {
   scheduled: null,
   cron: null,
   pulls: false,
+  review: false,
   issues: false,
   red: [],
 };
+
+/** What the pull request trigger does, from the bot's `pull-requests` setting: check (the default), review, or both. */
+function pullJobs(listens: boolean, setting: string | null): { pulls: boolean; review: boolean } {
+  if (!listens) return { pulls: false, review: false };
+  const words = (setting ?? "check").toLowerCase().split(/[\s,]+/);
+  const review = words.includes("review");
+  return { pulls: words.includes("check") || !review, review };
+}
 
 /** The workflow names a workflow file watches, as written in `workflow_run`'s `workflows:`. */
 function watched(text: string): string[] {
@@ -282,7 +293,7 @@ export function workflowUse(text: string): {
       label: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\blabeled\b/m.test(text),
       scheduled: setting("scheduled") || null,
       cron: /cron:\s*["']([^"']+)["']/.exec(text)?.[1] ?? null,
-      pulls: /^\s{2}pull_request:\s*$/m.test(text),
+      ...pullJobs(/^\s{2}pull_request:\s*$/m.test(text), setting("pull-requests")),
       issues: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\bopened\b/m.test(text),
       red: watched(text),
     },
@@ -343,14 +354,16 @@ export function workflowFile(
   const scheduled = jobs.scheduled ? cleanScheduled(jobs.scheduled) : "";
   const kept = settings
     ? settings.filter(
-        (l) => !/^(scheduled|label):/.test(l) && !/^github-token:.*steps\.app\./.test(l),
+        (l) =>
+          !/^(scheduled|label|pull-requests):/.test(l) && !/^github-token:.*steps\.app\./.test(l),
       )
     : [
         `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
         ...(provider === "grok" ? [] : [`provider: ${provider}`]),
       ];
   const red = jobs.red.map((name) => name.replace(/[\n"]/g, "").trim()).filter(Boolean);
-  const any = jobs.label || Boolean(scheduled) || jobs.pulls || jobs.issues || red.length > 0;
+  const onPulls = jobs.pulls || jobs.review;
+  const any = jobs.label || Boolean(scheduled) || onPulls || jobs.issues || red.length > 0;
   const issueTypes = [...(jobs.issues ? ["opened"] : []), ...(jobs.label ? ["labeled"] : [])];
   const asks = [
     "a comment",
@@ -358,7 +371,7 @@ export function workflowFile(
     ...(jobs.issues ? ["a new issue"] : []),
     ...(jobs.label ? ["its label"] : []),
     ...(scheduled ? ["its schedule"] : []),
-    ...(jobs.pulls ? ["a pull request"] : []),
+    ...(onPulls ? ["a pull request"] : []),
     ...(red.length ? ["a red run on the default branch"] : []),
   ];
   const asked = `${asks.slice(0, -1).join(", ")}${asks.length > 2 ? "," : ""} or ${asks.at(-1)}`;
@@ -368,7 +381,7 @@ export function workflowFile(
     "  issue_comment:",
     "    types: [created, edited]",
     ...(issueTypes.length ? ["  issues:", `    types: [${issueTypes.join(", ")}]`] : []),
-    ...(jobs.pulls ? ["  pull_request:", `    types: ${PULL_TYPES}`] : []),
+    ...(onPulls ? ["  pull_request:", `    types: ${PULL_TYPES}`] : []),
     ...(red.length
       ? ["  workflow_run:", `    workflows: ${JSON.stringify(red)}`, "    types: [completed]"]
       : []),
@@ -395,7 +408,7 @@ export function workflowFile(
     ...(jobs.label
       ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
       : []),
-    ...(jobs.pulls
+    ...(onPulls
       ? [
           "      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)",
         ]
@@ -440,6 +453,9 @@ export function workflowFile(
     ...kept.map((l) => `          ${l}`),
     ...(app ? ["          github-token: ${{ steps.app.outputs.token }}"] : []),
     ...(scheduled ? [`          scheduled: ${JSON.stringify(scheduled)}`] : []),
+    ...(jobs.review
+      ? [`          pull-requests: ${jobs.pulls ? '"check, review"' : "review"}`]
+      : []),
     "",
   ].join("\n");
 }

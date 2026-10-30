@@ -48,6 +48,9 @@ function fakeGitHub(
     thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
     /** Comments anywhere in the repository in the last day. */
     recent?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
+    /** The pull request's review comments, and whether posting a review fails as GitHub does on a bad line. */
+    reviewComments?: Array<{ path: string; body: string; user: { type: string } }>;
+    reviewFails?: boolean;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -111,6 +114,12 @@ function fakeGitHub(
     if (method === "GET" && path === "/repos/acme/shop/issues/comments")
       return json(options.recent ?? []);
     if (method === "PATCH" && /\/issues\/\d+$/.test(path)) return json({ number: 7 });
+    if (method === "GET" && /\/pulls\/\d+\/comments$/.test(path))
+      return json(options.reviewComments ?? []);
+    if (method === "POST" && /\/pulls\/\d+\/reviews$/.test(path))
+      return options.reviewFails
+        ? json({ message: "Unprocessable Entity", errors: ["Line could not be resolved"] }, 422)
+        : json({ html_url: "https://github.com/acme/shop/pull/7#pullrequestreview-1" }, 200);
     if (method === "GET" && /\/issues\/\d+\/comments$/.test(path))
       return json(
         options.thread ?? [
@@ -217,6 +226,8 @@ async function act(
     model?: ReturnType<typeof scripted>["model"];
     thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
     recent?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
+    reviewComments?: Array<{ path: string; body: string; user: { type: string } }>;
+    reviewFails?: boolean;
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
     payload?: unknown;
@@ -234,7 +245,12 @@ async function act(
     poster: options.poster,
     thread: options.thread,
     recent: options.recent,
+    reviewComments: options.reviewComments,
+    reviewFails: options.reviewFails,
   });
+  // GitHub keeps every pull request's head as refs/pull/<n>/head, a fork's too.
+  if (options.pull && options.branches?.[options.pull.headRef])
+    git(origin, "update-ref", "refs/pull/7/head", `refs/heads/${options.pull.headRef}`);
   const eventPath =
     options.payload === undefined
       ? event(root, { body: options.body, pull: Boolean(options.pull), action: options.action })
@@ -1041,4 +1057,189 @@ test("a red commit already explained, or green again, is not explained again", a
   const green = await act({ eventName: "workflow_run", payload: redRun, red: false });
   assert.match(green.lines.join("\n"), /nothing fails on main at abc1234 any more/);
   assert.equal(green.gh.calls.filter((c) => c.method !== "GET").length, 0);
+});
+
+/** A model that, in review, notes one bug on the line it is told, at the confidence it is told. */
+function reviewing(excerpt: string, confidence = 0.9) {
+  const offered: string[][] = [];
+  const read: string[] = [];
+  const model: ReturnType<typeof scripted>["model"] = async (
+    _cfg,
+    messages,
+    _useTools,
+    _signal,
+    tools,
+  ) => {
+    offered.push((tools ?? []).map((t) => t.function.name));
+    read.push(messages.map((m) => String(m.content)).join("\n"));
+    const usage = { input: 400, output: 50 };
+    if (messages.some((m) => m.role === "tool")) return { content: "One bug.", usage };
+    return {
+      content: "",
+      usage,
+      tool_calls: [
+        {
+          id: "note",
+          type: "function" as const,
+          function: {
+            name: "note_diff",
+            arguments: JSON.stringify({
+              path: "src/price.ts",
+              excerpt,
+              type: "add",
+              text: "Divides by 10, so 100 cents shows as $10.",
+              bug: true,
+              confidence,
+            }),
+          },
+        },
+      ],
+    };
+  };
+  return { model, offered, read };
+}
+
+const buggy = {
+  "src/price.ts":
+    "export function formatPrice(cents: number): string {\n  return `$${cents / 10}`;\n}\n",
+};
+
+test("/aperture review comments on the lines of likely bugs, and replies with their fixes to tick", async () => {
+  const review = reviewing("cents / 10");
+  const run = await act({
+    body: "/aperture review",
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    model: review.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  // The review role: it reads the diff and can only note.
+  assert.deepEqual(review.offered[0], ["note_diff"]);
+  assert.match(review.read[0]!, /src\/price\.ts/);
+  assert.match(review.read[0]!, /\+ {2}return `\$\$\{cents \/ 10\}`;/);
+  const [posted] = run.posted(/\/pulls\/7\/reviews$/);
+  const body = posted!.body as {
+    commit_id: string;
+    event: string;
+    comments: Array<{ path: string; line: number; side: string; body: string }>;
+  };
+  assert.equal(body.event, "COMMENT");
+  assert.match(body.commit_id, /^[0-9a-f]{40}$/);
+  assert.deepEqual(
+    body.comments.map((c) => [c.path, c.line, c.side]),
+    [["src/price.ts", 2, "RIGHT"]],
+  );
+  assert.match(body.comments[0]!.body, /^\*\*Likely bug\*\* · 90% sure\n\nDivides by 10/);
+  // Nothing pushed; the reply lists it, with its fix to tick.
+  assert.equal(
+    git(run.origin, "rev-parse", "dollars"),
+    git(run.origin, "rev-parse", "refs/pull/7/head"),
+  );
+  const reply = run.replied();
+  assert.match(
+    reply,
+    /^\*\*Reviewed\*\* at [0-9a-f]{7}: 1 likely bug, \[commented on their lines\]\(https:\/\/github\.com\/acme\/shop\/pull\/7#pullrequestreview-1\)\.\n\n- `src\/price\.ts:2`: Divides by 10/,
+  );
+  assert.match(
+    reply,
+    /- \[ \] Fix src\/price\.ts:2: Divides by 10, so 100 cents shows as \$10\.\n/,
+  );
+  const s = readSummary(reply)!;
+  assert.deepEqual([s.kind, s.state, s.asked, s.note], ["review", "clear", 55, "1 likely bug"]);
+  assert.match(run.output, /^outcome=reviewed\n$/);
+});
+
+test("a note under 80% sure is not posted, and one already on its line is not posted again", async () => {
+  const unsure = await act({
+    body: "/aperture review",
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    model: reviewing("cents / 10", 0.6).model,
+  });
+  assert.equal(unsure.posted(/\/reviews$/).length, 0);
+  assert.match(
+    unsure.replied(),
+    /^\*\*Reviewed\*\* at [0-9a-f]{7}: nothing that looks like a bug\./,
+  );
+  const again = await act({
+    body: "/aperture review",
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    model: reviewing("cents / 10").model,
+    reviewComments: [
+      {
+        path: "src/price.ts",
+        body: "**Likely bug** · 90% sure\n\nDivides by 10, so 100 cents shows as $10.",
+        user: { type: "Bot" },
+      },
+    ],
+  });
+  assert.equal(again.posted(/\/reviews$/).length, 0);
+  // Still listed, with its fix.
+  assert.match(again.replied(), /: 1 likely bug\.\n\n- `src\/price\.ts:2`/);
+});
+
+test("when GitHub refuses the lines, every note is still in the reply", async () => {
+  const run = await act({
+    body: "/aperture review",
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    model: reviewing("cents / 10").model,
+    reviewFails: true,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /could not comment on the lines/);
+  assert.match(run.replied(), /: 1 likely bug\.\n\n- `src\/price\.ts`: Divides by 10/);
+  assert.match(run.replied(), /- \[ \] Fix src\/price\.ts: Divides by 10/);
+});
+
+test("a push is checked and reviewed when the workflow asks for both, each with its own reply", async () => {
+  const run = await act({
+    eventName: "pull_request",
+    payload: pushEvent,
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    env: { "INPUT_PULL-REQUESTS": "check, review" },
+    model: reviewing("cents / 10").model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  // Two comments: the check's (posted working, then edited into its report), and the review's.
+  const written = run.gh.calls
+    .filter(
+      (c) =>
+        (c.method === "POST" && /\/issues\/7\/comments$/.test(c.path)) ||
+        (c.method === "PATCH" && /\/issues\/comments\/\d+$/.test(c.path)),
+    )
+    .map((c) => [c.method, readSummary((c.body as { body: string }).body)?.kind ?? "working"]);
+  assert.deepEqual(written.at(0), ["POST", "working"]);
+  assert.ok(written.some(([method, kind]) => method === "PATCH" && kind === "check"));
+  assert.deepEqual(written.at(-1), ["POST", "review"]);
+  assert.equal(run.posted(/\/reviews$/).length, 1);
+  const last = readSummary(run.replied())!;
+  assert.deepEqual(
+    [last.kind, last.via, last.task],
+    ["review", "pull", "Review this pull request"],
+  );
+  // Review only: no check, and the review's reply.
+  const only = await act({
+    eventName: "pull_request",
+    payload: pushEvent,
+    pull: { headRef: "dollars" },
+    branches: { dollars: buggy },
+    env: { "INPUT_PULL-REQUESTS": "review" },
+    model: reviewing("cents / 10").model,
+  });
+  assert.equal(only.code, 0, only.lines.join("\n"));
+  assert.ok(!only.lines.join("\n").includes("checking #7"));
+  assert.equal(readSummary(only.replied())!.kind, "review");
+});
+
+test("/aperture review on an issue says a review needs a pull request", async () => {
+  const run = await act({ body: "/aperture review" });
+  assert.equal(run.code, 0);
+  assert.match(
+    run.replied(),
+    /^`\/aperture review` reviews a pull request's changes, and this is an issue/,
+  );
+  assert.equal(readSummary(run.replied())?.state, "declined");
 });

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { cancelNow, checkoutOpen, createCheckout, portalLinks } from "./paddle.server.ts";
+import {
+  cancelNow,
+  changeSubscription,
+  checkoutOpen,
+  checkoutState,
+  createCheckout,
+  portalLinks,
+  previewChange,
+} from "./paddle.server.ts";
 import type { BillingConfig } from "./subscription.ts";
 
 const config: BillingConfig = {
@@ -40,13 +48,14 @@ test("a checkout names the price, ties the payment to the account, and returns P
   const sent = answer(201, {
     data: { id: "txn_1", checkout: { url: "https://example.test/billing/pay?_ptxn=txn_1" } },
   });
-  const url = await createCheckout(config, {
+  const checkout = await createCheckout(config, {
     userId: "user_1",
     plan: "team",
     period: "yearly",
     customerId: null,
   });
-  assert.equal(url, "https://example.test/billing/pay?_ptxn=txn_1");
+  // The id is kept, so a second checkout can reopen this one instead of charging twice.
+  assert.deepEqual(checkout, { url: "https://example.test/billing/pay?_ptxn=txn_1", id: "txn_1" });
   assert.equal(sent[0]!.url, "https://sandbox-api.paddle.com/transactions");
   assert.equal(sent[0]!.method, "POST");
   assert.equal(sent[0]!.headers.Authorization, "Bearer pdl_sdbx_apikey_test");
@@ -160,5 +169,67 @@ test("checkout opens only when Paddle and the sandbox are both configured", () =
       if (saved[name] === undefined) delete process.env[name];
       else process.env[name] = saved[name];
     }
+  }
+});
+
+test("a recent checkout's state and link are read back from Paddle", async () => {
+  const sent = answer(200, {
+    data: {
+      id: "txn_1",
+      status: "ready",
+      checkout: { url: "https://example.test/billing/pay?_ptxn=txn_1" },
+    },
+  });
+  assert.deepEqual(await checkoutState(config, "txn_1"), {
+    status: "ready",
+    url: "https://example.test/billing/pay?_ptxn=txn_1",
+  });
+  assert.equal(sent[0]!.url, "https://sandbox-api.paddle.com/transactions/txn_1");
+  assert.equal(sent[0]!.method, "GET");
+  answer(200, { data: { id: "txn_1", status: "completed", checkout: null } });
+  assert.deepEqual(await checkoutState(config, "txn_1"), { status: "completed", url: null });
+});
+
+test("a plan switch is priced first, then made, prorated now and only if the charge succeeds", async () => {
+  const preview = answer(200, {
+    data: {
+      status: "active",
+      update_summary: {
+        credit: { amount: "1200", currency_code: "USD" },
+        charge: { amount: "3050", currency_code: "USD" },
+        result: { action: "charge", amount: "1850", currency_code: "USD" },
+      },
+    },
+  });
+  assert.deepEqual(await previewChange(config, "sub_1", "team", "monthly"), {
+    action: "charge",
+    amount: "1850",
+    currency: "USD",
+  });
+  const body = {
+    items: [{ price_id: "pri_tm", quantity: 1 }],
+    proration_billing_mode: "prorated_immediately",
+    on_payment_failure: "prevent_change",
+  };
+  assert.equal(preview[0]!.url, "https://sandbox-api.paddle.com/subscriptions/sub_1/preview");
+  assert.equal(preview[0]!.method, "PATCH");
+  assert.deepEqual(preview[0]!.body, body);
+
+  const made = answer(200, { data: { id: "sub_1", status: "active" } });
+  await changeSubscription(config, "sub_1", "team", "monthly");
+  assert.equal(made[0]!.url, "https://sandbox-api.paddle.com/subscriptions/sub_1");
+  assert.equal(made[0]!.method, "PATCH");
+  assert.deepEqual(made[0]!.body, body);
+});
+
+test("a preview without a usable price is refused, not shown as free", async () => {
+  for (const result of [
+    null,
+    { action: "charge", amount: "-5", currency_code: "USD" },
+    { action: "charge", amount: "1850", currency_code: "usd" },
+    { action: "refund", amount: "1850", currency_code: "USD" },
+  ]) {
+    answer(200, { data: { update_summary: result ? { result } : null } });
+    await assert.rejects(previewChange(config, "sub_1", "pro", "yearly"), /did not return a price/);
   }
 });

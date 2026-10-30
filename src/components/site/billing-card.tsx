@@ -21,15 +21,21 @@ const when = (iso: string | null) =>
 export function BillingCard({
   account,
   justPaid,
+  switching = null,
   refresh,
 }: {
   account: AccountSnapshot;
   justPaid: boolean;
+  /** A plan switch just sent to Paddle: shown as pending until its webhook lands. */
+  switching?: { plan: "pro" | "team"; period: "monthly" | "yearly" } | null;
   refresh: () => Promise<unknown>;
 }) {
   const [busy, setBusy] = useState(false);
   const [waited, setWaited] = useState(0);
-  const waiting = justPaid && account.plan === "hobby" && waited < 20;
+  const switchPending =
+    switching !== null &&
+    (account.plan !== switching.plan || account.billing?.period !== switching.period);
+  const waiting = ((justPaid && account.plan === "hobby") || switchPending) && waited < 20;
 
   useEffect(() => {
     if (!waiting) return;
@@ -53,22 +59,27 @@ export function BillingCard({
   const name = planById(account.plan).name;
   const billing = account.billing;
   if (!billing && !justPaid) return null;
+  const target = switching ? `${planById(switching.plan).name} ${switching.period}` : "";
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-5" aria-live="polite">
       <p className="text-sm font-medium">Billing</p>
       <p className="mt-1 text-sm text-muted">
-        {waiting
-          ? "Payment received. Your plan changes as soon as Paddle confirms it, usually within a minute."
-          : justPaid && account.plan === "hobby" && !billing
-            ? "Paddle has not confirmed the payment yet. Reload this page in a few minutes, and do not pay again."
-            : billing?.status === "active"
-              ? `${name} renews on ${when(billing.until)}.`
-              : billing?.status === "canceling"
-                ? `${name} is cancelled and stays on until ${when(billing.until)}. Then this account moves to Hobby; nothing is deleted.`
-                : billing?.status === "past_due"
-                  ? `The last payment failed. ${name} stays on until ${when(billing.until)} while Paddle retries. Update your payment method to keep it.`
-                  : "The subscription has ended. This account is on Hobby; nothing was deleted."}
+        {waiting && switchPending
+          ? `Switching to ${target}. It shows here as soon as Paddle confirms it, usually within a minute.`
+          : waiting
+            ? "Payment received. Your plan changes as soon as Paddle confirms it, usually within a minute."
+            : switchPending
+              ? `Paddle has not confirmed the switch to ${target} yet. Reload this page in a few minutes, and do not switch again.`
+              : justPaid && account.plan === "hobby" && !billing
+                ? "Paddle has not confirmed the payment yet. Reload this page in a few minutes, and do not pay again."
+                : billing?.status === "active"
+                  ? `${name}${billing.period ? ` ${billing.period}` : ""} renews on ${when(billing.until)}.`
+                  : billing?.status === "canceling"
+                    ? `${name} is cancelled and stays on until ${when(billing.until)}. Then this account moves to Hobby; nothing is deleted.`
+                    : billing?.status === "past_due"
+                      ? `The last payment failed. ${name} stays on until ${when(billing.until)} while Paddle retries. Update your payment method to keep it.`
+                      : "The subscription has ended. This account is on Hobby; nothing was deleted."}
       </p>
       {billing && (
         <Button

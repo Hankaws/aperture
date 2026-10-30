@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { readCapped } from "@/lib/security/read-capped";
+import type { StoredBilling } from "@/lib/billing/subscription";
+
+/** The account's billing as the webhook reads it, with the newest event's exact time as text. */
+type StoredRow = StoredBilling & { event_at_text: string | null };
 
 /** Paddle's subscription events are a few kilobytes; anything far larger is not one. */
 const MAX_BODY_BYTES = 1_000_000;
@@ -8,7 +12,8 @@ const MAX_BODY_BYTES = 1_000_000;
  * Paddle's webhook: the only way a paid plan reaches an account. The body is
  * trusted only after its signature checks out against PADDLE_WEBHOOK_SECRET.
  * A verified event is answered 200 even when it changes nothing, so Paddle
- * does not retry an event this app chose to ignore.
+ * does not retry an event this app chose to ignore. A second live
+ * subscription for the same account is cancelled at once (see `webhookAction`).
  */
 export const Route = createFileRoute("/api/billing/webhook")({
   server: {
@@ -43,41 +48,74 @@ export const Route = createFileRoute("/api/billing/webhook")({
         }
 
         const { getSql } = await import("@/lib/db");
+        const { webhookAction } = await import("@/lib/billing/subscription");
         const sql = await getSql();
-        // Applied only if newer than what is stored (Paddle may deliver out of order), and
-        // only to the account's own subscription, or in place of one that has ended.
-        const rows = await sql<{ user_id: string }>`
-          update user_settings set
-            plan = ${change.plan},
-            billing_customer_id = ${change.customerId},
-            billing_subscription_id = ${change.subscriptionId},
-            billing_status = ${change.status},
-            billing_period_end = ${change.periodEnd},
-            billing_cancel_at = ${change.cancelAt},
-            billing_past_due_since = case
-              when ${change.status} = 'past_due' then coalesce(billing_past_due_since, ${change.occurredAt}::timestamptz)
-              else null
-            end,
-            billing_event_at = ${change.occurredAt},
-            updated_at = now()
-          where user_id = ${change.userId}
-            and (billing_event_at is null or billing_event_at <= ${change.occurredAt}::timestamptz)
-            and (
-              billing_subscription_id is null
-              or billing_subscription_id = ${change.subscriptionId}
-              or billing_status in ('canceled', 'paused')
-            )
-          returning user_id
-        `;
-        if (rows.length === 0) {
-          console.warn(
-            "[billing] event not applied",
-            change.subscriptionId,
-            change.status,
-            change.occurredAt,
-          );
+        // Read, decide, then write only if the row is still as read: two events for two
+        // subscriptions (two checkouts paid at once) must not both take the account.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const stored = await sql<StoredRow>`
+            select plan, billing_subscription_id, billing_status, billing_period_end, billing_cancel_at,
+                   billing_past_due_since, billing_event_at, billing_event_at::text as event_at_text
+            from user_settings where user_id = ${change.userId}
+          `;
+          const row = stored[0];
+          const action = webhookAction(row, change);
+          if (action === "duplicate") {
+            // A second live subscription for an account that already has one: end it now, so
+            // it is never charged again, and tell the owner, who refunds its first payment.
+            const { cancelNow } = await import("@/lib/billing/paddle.server");
+            try {
+              await cancelNow(config, change.subscriptionId);
+            } catch {
+              // Paddle retries the event, and this runs again.
+              return new Response("Could not cancel a second subscription", { status: 503 });
+            }
+            console.error(
+              "[billing] cancelled a second subscription; refund its payment in Paddle",
+              change.subscriptionId,
+              change.customerId,
+              change.userId,
+            );
+            return Response.json({ ok: true, applied: false, cancelled: true });
+          }
+          if (action !== "apply" || !row) {
+            console.warn(
+              "[billing] event not applied",
+              action,
+              change.subscriptionId,
+              change.status,
+              change.occurredAt,
+            );
+            return Response.json({ ok: true, applied: false });
+          }
+          const rows = await sql<{ user_id: string }>`
+            update user_settings set
+              plan = ${change.plan},
+              billing_interval = ${change.period},
+              billing_customer_id = ${change.customerId},
+              billing_subscription_id = ${change.subscriptionId},
+              billing_status = ${change.status},
+              billing_period_end = ${change.periodEnd},
+              billing_cancel_at = ${change.cancelAt},
+              billing_past_due_since = case
+                when ${change.status} = 'past_due' then
+                  case when billing_subscription_id is not distinct from ${change.subscriptionId}::text
+                    then coalesce(billing_past_due_since, ${change.occurredAt}::timestamptz)
+                    else ${change.occurredAt}::timestamptz
+                  end
+                else null
+              end,
+              billing_event_at = ${change.occurredAt},
+              updated_at = now()
+            where user_id = ${change.userId}
+              and billing_subscription_id is not distinct from ${row.billing_subscription_id ?? null}::text
+              and billing_event_at is not distinct from ${row.event_at_text ?? null}::timestamptz
+            returning user_id
+          `;
+          if (rows.length > 0) return Response.json({ ok: true, applied: true });
         }
-        return Response.json({ ok: true, applied: rows.length > 0 });
+        // The row kept changing under this event: Paddle delivers it again later.
+        return new Response("Busy, retry", { status: 503 });
       },
     },
   },

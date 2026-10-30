@@ -5,13 +5,36 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { PLANS, planAvailable, type PlanId } from "@/lib/billing/plans";
-import { billingOpen, setPlan, startCheckout } from "@/lib/billing/api";
+import { billingOpen, changePlan, previewPlanChange, setPlan, startCheckout } from "@/lib/billing/api";
+import type { BillingView } from "@/lib/billing/subscription";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
-export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: PlanId; checkoutOpen?: boolean }) {
+type Period = "monthly" | "yearly";
+type Quote = { plan: "pro" | "team"; period: Period; action: "charge" | "credit"; amount: string; currency: string };
+
+/** Paddle's amount, in the currency's minor units ("1850" USD), as the person reads it ("$18.50"). */
+function money(amount: string, currency: string): string {
+  const format = new Intl.NumberFormat(undefined, { style: "currency", currency });
+  const digits = format.resolvedOptions().maximumFractionDigits ?? 2;
+  return format.format(Number(amount) / 10 ** digits);
+}
+
+export function PricingTable({
+  currentPlan,
+  checkoutOpen,
+  billing,
+}: {
+  currentPlan?: PlanId;
+  checkoutOpen?: boolean;
+  /** The account's subscription: with one, a paid plan is switched to, not bought again. */
+  billing?: BillingView | null;
+}) {
   const [yearly, setYearly] = useState(true);
   const [busy, setBusy] = useState<PlanId | null>(null);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const subscribed = Boolean(billing && billing.status !== "ended");
+  const period: Period = yearly ? "yearly" : "monthly";
   // Signed out there is no account to say whether paid plans are on sale: ask.
   const [asked, setAsked] = useState<boolean | null>(null);
   const { user, isPending } = useCurrentUserState();
@@ -39,7 +62,24 @@ export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: Plan
       void navigate({ to: "/login", search: { next: "/pricing" } });
       return;
     }
+    if (subscribed && id === "hobby") {
+      toast.message(
+        "To move to Hobby, cancel the subscription in Settings → Plan → Manage billing. It ends with the period you paid for.",
+      );
+      return;
+    }
     setBusy(id);
+    if (subscribed && id !== "hobby") {
+      // A subscriber switches: show what Paddle will charge or credit before anything changes.
+      try {
+        const next = await previewPlanChange({ data: { plan: id, period } });
+        setQuote({ plan: id, period, ...next });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not price this change");
+      }
+      setBusy(null);
+      return;
+    }
     try {
       if (id === "hobby") {
         await setPlan({ data: id });
@@ -57,6 +97,18 @@ export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: Plan
     }
   }
 
+  async function confirmSwitch(target: Quote) {
+    setBusy(target.plan);
+    try {
+      await changePlan({ data: { plan: target.plan, period: target.period } });
+      setQuote(null);
+      void navigate({ to: "/settings", search: { tab: "plan", switched: `${target.plan}-${target.period}` } });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change plan");
+    }
+    setBusy(null);
+  }
+
   const sellable = PLANS.some((plan) => planAvailable(plan, open) && plan.monthly > 0);
 
   return (
@@ -67,14 +119,20 @@ export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: Plan
           <button
             type="button"
             className={cn("h-10 rounded-md px-4 text-sm", !yearly ? "bg-elevated text-fg" : "text-muted")}
-            onClick={() => setYearly(false)}
+            onClick={() => {
+              setYearly(false);
+              setQuote(null);
+            }}
           >
             Monthly
           </button>
           <button
             type="button"
             className={cn("h-10 rounded-md px-4 text-sm", yearly ? "bg-elevated text-fg" : "text-muted")}
-            onClick={() => setYearly(true)}
+            onClick={() => {
+              setYearly(true);
+              setQuote(null);
+            }}
           >
             Yearly · 20% off
           </button>
@@ -84,7 +142,17 @@ export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: Plan
       <div className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => {
           const price = yearly ? plan.yearlyMonthly : plan.monthly;
-          const active = currentPlan === plan.id;
+          // A subscriber is on one plan and one period; anything else on a paid card is a switch.
+          const active =
+            currentPlan === plan.id &&
+            (!subscribed || plan.monthly === 0 || !billing?.period || billing.period === period);
+          const switchLabel =
+            subscribed && plan.monthly > 0 && !active
+              ? currentPlan === plan.id
+                ? `Switch to ${period}`
+                : `Switch to ${plan.name}`
+              : null;
+          const asking = quote && quote.plan === plan.id && quote.period === period ? quote : null;
           const comingSoon = !planAvailable(plan, open);
           return (
             <article
@@ -125,22 +193,43 @@ export function PricingTable({ currentPlan, checkoutOpen }: { currentPlan?: Plan
                   </li>
                 ))}
               </ul>
-              <Button
-                className="mt-6 h-11 w-full"
-                variant={plan.featured ? "default" : "outline"}
-                disabled={active || comingSoon || busy === plan.id}
-                onClick={() => void activate(plan.id)}
-              >
-                {active
-                  ? "Current plan"
-                  : comingSoon
-                    ? "Coming soon"
-                    : busy === plan.id
-                      ? plan.monthly > 0
-                        ? "Opening checkout…"
-                        : "Activating…"
-                      : plan.cta}
-              </Button>
+              {asking ? (
+                <div className="mt-6 rounded-xl border border-border bg-elevated p-3 text-sm" aria-live="polite">
+                  <p className="text-fg">
+                    {asking.action === "charge"
+                      ? `You pay ${money(asking.amount, asking.currency)} now for the rest of this period.`
+                      : `${money(asking.amount, asking.currency)} of what you paid goes toward your next payments.`}{" "}
+                    Then {plan.name} is ${yearly ? price * 12 : price} a {yearly ? "year" : "month"}.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" disabled={busy === plan.id} onClick={() => void confirmSwitch(asking)}>
+                      {busy === plan.id ? "Switching…" : `Switch to ${plan.name} ${period}`}
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={busy === plan.id} onClick={() => setQuote(null)}>
+                      Keep current plan
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="mt-6 h-11 w-full"
+                  variant={plan.featured ? "default" : "outline"}
+                  disabled={active || comingSoon || busy === plan.id}
+                  onClick={() => void activate(plan.id)}
+                >
+                  {active
+                    ? "Current plan"
+                    : comingSoon
+                      ? "Coming soon"
+                      : busy === plan.id
+                        ? switchLabel
+                          ? "Pricing the change…"
+                          : plan.monthly > 0
+                            ? "Opening checkout…"
+                            : "Activating…"
+                        : (switchLabel ?? plan.cta)}
+                </Button>
+              )}
             </article>
           );
         })}

@@ -24,7 +24,17 @@ import {
   type PlanId,
   type ProviderId,
 } from "./plans";
-import { billingView, effectivePlan, runPeriod, type BillingRow, type BillingView } from "./subscription";
+import {
+  billingView,
+  checkoutVerdict,
+  effectivePlan,
+  recentCheckout,
+  switchRefusal,
+  runPeriod,
+  type BillingRow,
+  type BillingView,
+} from "./subscription";
+import type { ChangeQuote } from "./paddle.server";
 import { cleanCustomModel, normalizeCustomBase } from "@/lib/agent/custom-endpoint";
 import type { SecretsProtection } from "@/lib/security/secret-box";
 import { checkoutInput, customEndpointInput, modelSourceInput, planInput, providerInput, providerKeyInput, sessionCapInput } from "@/lib/security/inputs";
@@ -135,6 +145,10 @@ type SettingsRow = {
   billing_past_due_since: Date | string | null;
   sandbox_runs_used: unknown;
   sandbox_run_period: string | null;
+  billing_interval: string | null;
+  billing_checkout_txn: string | null;
+  billing_checkout_price: string | null;
+  billing_checkout_at: Date | string | null;
 };
 
 /** The plan the row may use now: what it paid for, unless the subscription lapsed. */
@@ -157,7 +171,8 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
            hosted_used, usage_month, session_cap_on, session_cap_turns, session_cap_cents,
            session_id, session_turns, session_cents, session_started_at, tab_used, tab_day,
            billing_customer_id, billing_subscription_id, billing_status, billing_period_end, billing_cancel_at,
-           billing_past_due_since, sandbox_runs_used, sandbox_run_period
+           billing_past_due_since, sandbox_runs_used, sandbox_run_period, billing_interval,
+           billing_checkout_txn, billing_checkout_price, billing_checkout_at
     from user_settings where user_id = ${userId}
   `;
   if (!existing[0]) {
@@ -196,6 +211,10 @@ async function loadSettings(userId: string): Promise<SettingsRow> {
       billing_past_due_since: null,
       sandbox_runs_used: 0,
       sandbox_run_period: "",
+      billing_interval: null,
+      billing_checkout_txn: null,
+      billing_checkout_price: null,
+      billing_checkout_at: null,
     };
   }
   const row = existing[0];
@@ -267,6 +286,7 @@ async function loadAccount(userId: string): Promise<SettingsRow> {
     billing_past_due_since: pool.billing_past_due_since,
     sandbox_runs_used: pool.sandbox_runs_used,
     sandbox_run_period: pool.sandbox_run_period,
+    billing_interval: pool.billing_interval,
   };
 }
 
@@ -444,20 +464,81 @@ export const startCheckout = createServerFn({ method: "POST" })
     if (busy) throw new Error(busy);
     const signInOff = process.env.VITE_AUTH_ENABLED?.trim() === "false" || isVisitorUserId(context.userId);
     if (signInOff) throw new Error("Paid plans need an account. Sign in first.");
-    const { checkoutOpen, createCheckout, paddleConfig } = await import("./paddle.server");
+    const { checkoutOpen, checkoutState, createCheckout, paddleConfig } = await import("./paddle.server");
     const config = paddleConfig();
     if (!config || !checkoutOpen()) throw new Error("Paid plans are not available on this deployment yet.");
     const row = await loadSettings(context.userId);
     if (effectivePlan(row) !== "hobby" && row.billing_subscription_id) {
-      throw new Error("This account already has a subscription. Change it in Settings → Plan → Manage billing.");
+      throw new Error("This account already has a subscription. Switch plans on the pricing table in Settings → Plan.");
     }
-    const url = await createCheckout(config, {
+    const price = config.prices[data.plan][data.period];
+    // One checkout at a time: a second tab, or Back and buy again, must not make a second payment possible.
+    const recent = recentCheckout(row);
+    if (recent) {
+      const state = await checkoutState(config, recent.txn).catch(() => null);
+      const verdict = checkoutVerdict(state?.status ?? null, recent.price === price);
+      if (verdict === "paid") {
+        throw new Error("Your payment went through. Your plan changes as soon as Paddle confirms it: check Settings → Plan in a minute, and do not pay again.");
+      }
+      if (verdict === "reuse" && state?.url) return { url: state.url };
+    }
+    const checkout = await createCheckout(config, {
       userId: context.userId,
       plan: data.plan,
       period: data.period,
       customerId: row.billing_customer_id,
     });
-    return { url };
+    if (checkout.id) {
+      const { getSql } = await import("@/lib/db");
+      const sql = await getSql();
+      await sql`
+        update user_settings
+        set billing_checkout_txn = ${checkout.id}, billing_checkout_price = ${price}, billing_checkout_at = now(),
+            updated_at = now()
+        where user_id = ${context.userId}
+      `;
+    }
+    return { url: checkout.url };
+  });
+
+/** The subscription a plan change applies to, or why there is none to change. */
+async function changeTarget(userId: string, target: { plan: "pro" | "team"; period: "monthly" | "yearly" }) {
+  const busy = overLimit("billing", userId);
+  if (busy) throw new Error(busy);
+  const { paddleConfig } = await import("./paddle.server");
+  const config = paddleConfig();
+  if (!config) throw new Error("Paid plans are not available on this deployment.");
+  const row = await loadSettings(userId);
+  const refusal = switchRefusal(row, target);
+  if (refusal) throw new Error(refusal);
+  return { config, subscriptionId: row.billing_subscription_id! };
+}
+
+/**
+ * What switching plan or period costs now: Paddle's own preview, charged or
+ * credited for the rest of the period. Nothing changes.
+ */
+export const previewPlanChange = createServerFn({ method: "POST" })
+  .validator(checkoutInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<ChangeQuote> => {
+    const { config, subscriptionId } = await changeTarget(context.userId, data);
+    const { previewChange } = await import("./paddle.server");
+    return previewChange(config, subscriptionId, data.plan, data.period);
+  });
+
+/**
+ * Switches the subscription to another plan or period, prorated now. The plan
+ * changes on this account when Paddle's webhook confirms it, as with a checkout.
+ */
+export const changePlan = createServerFn({ method: "POST" })
+  .validator(checkoutInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<{ ok: true }> => {
+    const { config, subscriptionId } = await changeTarget(context.userId, data);
+    const { changeSubscription } = await import("./paddle.server");
+    await changeSubscription(config, subscriptionId, data.plan, data.period);
+    return { ok: true };
   });
 
 /** Paddle's billing page for this account's subscription: payment method, invoices, cancel. */

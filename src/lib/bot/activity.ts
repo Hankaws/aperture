@@ -43,6 +43,7 @@ function who(task: BotTask): string {
   if (task.via === "schedule") return "A standing job";
   if (task.via === "label") return `@${task.author}'s label`;
   if (task.via === "pull") return `@${task.author}'s push`;
+  if (task.via === "tick") return `@${task.author}'s tick`;
   return `@${task.author}`;
 }
 
@@ -154,6 +155,7 @@ export function headline(a: Activity): string {
   switch (a.kind) {
     case "asked":
       if (a.who.endsWith("'s push")) return `${a.who.slice(0, -7)} pushed`;
+      if (a.who.endsWith("'s tick")) return `${a.who.slice(0, -7)} ticked a suggestion`;
       return a.who === "A standing job" ? "A standing job asked" : `${a.who} asked`;
     case "working":
       return "Working";

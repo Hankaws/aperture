@@ -11,6 +11,7 @@ import {
   type BotSummary,
 } from "../../../src/lib/bot/summary.ts";
 import type { Command } from "./event.ts";
+import { suggestionBoxes } from "./suggestions.ts";
 import type { BotResult } from "./run.ts";
 
 const MARK: Record<string, string> = { pass: "✓", fail: "✗", warn: "!", skip: "–" };
@@ -27,7 +28,7 @@ export const SITE = "https://aperturesais.grok.me";
 export type Asked = {
   asked: number;
   run: string;
-  via?: "label" | "schedule" | "pull";
+  via?: "label" | "schedule" | "pull" | "tick";
   by?: string;
   task?: string;
 };
@@ -38,6 +39,8 @@ function askedBy(command: Command): string {
   if (command.via === "label") return `@${command.author} labelled #${command.number} for the bot`;
   if (command.via === "schedule") return `A standing job, on #${command.number}`;
   if (command.via === "pull") return `@${command.author} pushed to #${command.number}`;
+  if (command.via === "tick")
+    return `@${command.author} ticked a suggestion of Aperture Bot's in #${command.number}`;
   return `@${command.author} asked in #${command.number}`;
 }
 
@@ -116,14 +119,14 @@ export function resultSummary(
   };
 }
 
-/** What the bot would do next, as a list the maintainer can ask for. */
+/** What the bot would do next, as boxes: ticking one asks for it (`suggestions.ts`). */
 function nextList(next: string[]): string[] {
   if (next.length === 0) return [];
   return [
     "**Next, I would suggest**",
-    ...next.map((task) => `- ${task}`),
+    ...suggestionBoxes(next),
     "",
-    "Ask for one with `/aperture` and the task, or send it from the Bot page. Nothing is done until you do.",
+    "Tick one and I will do it, or ask for something else with `/aperture`. Nothing is done until you do.",
   ];
 }
 
@@ -232,6 +235,30 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
     nextList(result.next),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx))],
+  );
+}
+
+/** A question, answered on the thread: the answer, what the bot would do about it, and nothing changed. */
+export function answerReply(
+  answer: { answer: string; next: string[] },
+  ctx: Asked & { usage: string },
+): string {
+  return join(
+    [answer.answer],
+    nextList(answer.next),
+    [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
+    [
+      summaryMarker({
+        v: 1,
+        state: "clear",
+        kind: "answer",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        ...(answer.next.length ? { next: answer.next } : {}),
+        usage: ctx.usage,
+      }),
+    ],
   );
 }
 

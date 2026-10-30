@@ -175,8 +175,8 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           <div className="mt-2 space-y-2">
             <p className="text-sm text-pretty text-muted">
               Read CI on {setup.defaultBranch} and the open issues and pull requests, then post how
-              things stand and up to three things worth doing. It changes nothing: the suggestions
-              come to this bot&apos;s chat, to send or dismiss.
+              things stand and up to three things worth doing. It changes nothing: tick a suggestion
+              on GitHub, or send or dismiss it in this bot&apos;s chat.
             </p>
             {often}
           </div>

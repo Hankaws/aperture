@@ -17,7 +17,7 @@ It runs on your runner with your model key. There is no Aperture account, server
 name: Aperture Bot
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
 
 permissions:
   contents: write
@@ -26,8 +26,11 @@ permissions:
 
 jobs:
   bot:
-    # Starts a runner only for comments that ask the bot.
-    if: startsWith(github.event.comment.body, '/aperture')
+    # Starts a runner only when the bot is asked: a comment or a ticked suggestion.
+    if: >-
+      (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture'))
+      || (github.event_name == 'issue_comment' && github.event.action == 'edited' && github.event.sender.type != 'Bot'
+          && contains(github.event.comment.body, '<!-- aperture-bot ') && contains(github.event.comment.body, '- [x] '))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -50,6 +53,29 @@ Then, on an issue:
 
 `/aperture` alone asks it to do what the issue says.
 
+## Ask it a question
+
+A comment that asks something is answered on the thread, and nothing is changed:
+
+```
+/aperture why does the checkout test fail on this branch?
+/aperture explain what this pull request changes
+```
+
+It reads the code (on a pull request from this repository, at the pull request's head), the thread, a pull request's diff and the checks failing on it, and answers with the files and lines it found. A comment is a question when it ends with `?`, starts with a question word (why, what, how, explain, summarize, …) or starts with `ask`. "Can you add a dark mode?" is a request, so it is a task.
+
+## Tick a suggestion
+
+Every reply ends with what the bot would do next, as boxes:
+
+```
+**Next, I would suggest**
+- [ ] Add a test for an empty cart
+- [ ] Round half cents up
+```
+
+Tick one and the bot does it, as if you had commented `/aperture` and the task: a pull request when Agent Check is clear, or a reply that says why not. The line is then marked started, with a link to the run, so ticking it again does nothing. Only a suggestion the bot made counts (its reply carries the list, hidden), and only when the person who ticks it can write. Ticking needs the workflow above, which listens for edited comments; an older one that listens only for new comments needs `types: [created, edited]` and its `if:` line.
+
 ## What it does
 
 | Asked on                            | When Agent Check is clear                                                                                                   | Otherwise                                                 |
@@ -66,20 +92,20 @@ Comment `/aperture check` on a pull request and the bot runs Aperture Agent Chec
 
 While it works, one comment on the thread says what it is doing and links the run; at the end that comment becomes its reply. [The Bot page](https://aperturesais.grok.me/bot) shows every task on a repo in one place, and can ask the bot and add this workflow for you.
 
-Only people with write access to the repository can ask; anyone else's comment is ignored. Edited comments and other bots' comments are never commands.
+Only people with write access to the repository can ask; anyone else's comment is ignored. Other bots' comments are never commands, and an edited comment is only ever a ticked suggestion.
 
 ## Standing jobs
 
 Three more ways to ask, all optional, all on your runner:
 
 - **The `aperture` label.** Add it to an issue and the bot does what the issue says, as if you had commented `/aperture`. Only a label added by someone with write access counts.
-- **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. `look-over` changes nothing: it reads CI on the default branch and the open issues and pull requests, and posts a few sentences on how things stand with up to three things it would do next, for you to send or not. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
+- **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. `look-over` changes nothing: it reads CI on the default branch and the open issues and pull requests, and posts a few sentences on how things stand with up to three things it would do next, as boxes to tick. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
 - **Every pull request.** Add `pull_request` to the workflow's triggers and each push to a pull request from this repository is checked, as with `/aperture check`. The report is one comment, updated on each push. Drafts are checked once they are ready for review.
 
 ```yaml
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
   issues:
     types: [labeled]
   schedule:
@@ -90,7 +116,9 @@ on:
 jobs:
   bot:
     if: >-
-      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/aperture')) ||
+      (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture')) ||
+      (github.event_name == 'issue_comment' && github.event.action == 'edited' && github.event.sender.type != 'Bot' &&
+        contains(github.event.comment.body, '<!-- aperture-bot ') && contains(github.event.comment.body, '- [x] ')) ||
       (github.event_name == 'issues' && github.event.label.name == 'aperture') ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)

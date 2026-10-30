@@ -1,5 +1,5 @@
 name: Aperture Bot
-description: A coding bot for issues and pull requests that checks before it pushes. Comment /aperture and a task; it opens a pull request only when Aperture Agent Check is clear. Comment /aperture check on a pull request, or run it on pull_request, for the check alone.
+description: A coding bot for issues and pull requests that checks before it pushes. Comment /aperture and a task; it opens a pull request only when Aperture Agent Check is clear. Ask it a question and it answers on the thread; tick one of its suggestions and it does it. Comment /aperture check on a pull request, or run it on pull_request, for the check alone.
 author: Hankaws
 branding:
   icon: aperture

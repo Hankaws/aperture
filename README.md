@@ -254,6 +254,14 @@ A plan changes only when a signed webhook confirms the payment. A failed renewal
 keeps the plan for 7 days, a cancellation keeps it to the end of the period paid
 for, and both then move the account to Hobby without deleting anything.
 
+Subscribers switch plan or period (Pro to Team, monthly to yearly) on the pricing
+table: Paddle prices the change first, then charges or credits the rest of the
+period at once. Paddle's own billing page has no plan change. If one account ever
+ends up with a second live subscription (two checkouts both paid), the webhook
+cancels the second one immediately and logs
+`[billing] cancelled a second subscription`: refund that payment in Paddle →
+Transactions.
+
 ## Development
 
 ```sh

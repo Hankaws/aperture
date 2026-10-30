@@ -25,7 +25,7 @@ function PricingPage() {
           Hobby is free. Pro and Team add a server sandbox for tests that need real Node.
         </p>
         <div className="mt-10">
-          <PricingTable currentPlan={account?.plan} checkoutOpen={account?.checkoutOpen} />
+          <PricingTable currentPlan={account?.plan} checkoutOpen={account?.checkoutOpen} billing={account?.billing} />
         </div>
         <div className="mx-auto mt-14 max-w-2xl rounded-2xl border border-border bg-surface p-5">
           <h2 className="text-lg font-medium tracking-tight">What the plan actually limits</h2>

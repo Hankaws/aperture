@@ -30,7 +30,7 @@ export function checkoutOpen(): boolean {
 
 async function call<T>(
   config: BillingConfig,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -78,13 +78,14 @@ async function call<T>(
  * A checkout for one plan and period. `custom_data.user_id` ties the payment
  * to this account: Paddle copies it to the subscription and every renewal, and
  * the webhook reads it back. The URL is the account's default payment link
- * (`/billing/pay` on this site) with the transaction attached.
+ * (`/billing/pay` on this site) with the transaction attached; the id is kept
+ * so a second checkout can reopen this one instead of charging twice.
  */
 export async function createCheckout(
   config: BillingConfig,
   input: { userId: string; plan: PaidPlan; period: BillingPeriod; customerId: string | null },
-): Promise<string> {
-  const data = await call<{ checkout?: { url?: string | null } | null }>(
+): Promise<{ url: string; id: string | null }> {
+  const data = await call<{ id?: string; checkout?: { url?: string | null } | null }>(
     config,
     "POST",
     "/transactions",
@@ -101,7 +102,86 @@ export async function createCheckout(
     console.error("[billing] Paddle returned no checkout URL: set a default payment link");
     throw new Error("The payment provider did not return a checkout. Try again in a minute.");
   }
-  return url;
+  return { url, id: typeof data.id === "string" ? data.id : null };
+}
+
+/** A checkout's state at Paddle (`ready`, `completed`, …) and its link, to reopen or refuse it. */
+export async function checkoutState(
+  config: BillingConfig,
+  transactionId: string,
+): Promise<{ status: string | null; url: string | null }> {
+  const data = await call<{ status?: unknown; checkout?: { url?: unknown } | null }>(
+    config,
+    "GET",
+    `/transactions/${encodeURIComponent(transactionId)}`,
+  );
+  return {
+    status: typeof data.status === "string" ? data.status : null,
+    url: typeof data.checkout?.url === "string" ? data.checkout.url : null,
+  };
+}
+
+/**
+ * The body of a plan change: the new price in place of the old, charged or
+ * credited for the rest of the period now. If the charge fails, Paddle keeps
+ * the subscription as it was.
+ */
+function changeBody(config: BillingConfig, plan: PaidPlan, period: BillingPeriod) {
+  return {
+    items: [{ price_id: config.prices[plan][period], quantity: 1 }],
+    proration_billing_mode: "prorated_immediately",
+    on_payment_failure: "prevent_change",
+  };
+}
+
+/** What a plan change would cost now: a charge, or a credit toward later payments, in minor units. */
+export type ChangeQuote = { action: "charge" | "credit"; amount: string; currency: string };
+
+/** Paddle's preview of a plan change. Nothing is charged or changed. */
+export async function previewChange(
+  config: BillingConfig,
+  subscriptionId: string,
+  plan: PaidPlan,
+  period: BillingPeriod,
+): Promise<ChangeQuote> {
+  const data = await call<{
+    update_summary?: {
+      result?: { action?: unknown; amount?: unknown; currency_code?: unknown };
+    } | null;
+  }>(
+    config,
+    "PATCH",
+    `/subscriptions/${encodeURIComponent(subscriptionId)}/preview`,
+    changeBody(config, plan, period),
+  );
+  const result = data.update_summary?.result;
+  const amount =
+    typeof result?.amount === "string" && /^\d+$/.test(result.amount) ? result.amount : null;
+  const currency =
+    typeof result?.currency_code === "string" && /^[A-Z]{3}$/.test(result.currency_code)
+      ? result.currency_code
+      : null;
+  if (!amount || !currency || (result?.action !== "charge" && result?.action !== "credit")) {
+    throw new Error(
+      "The payment provider did not return a price for this change. Try again in a minute.",
+    );
+  }
+  return { action: result.action, amount, currency };
+}
+
+/** Moves the subscription to another plan or period. The plan itself changes when the webhook confirms it. */
+export async function changeSubscription(
+  config: BillingConfig,
+  subscriptionId: string,
+  plan: PaidPlan,
+  period: BillingPeriod,
+): Promise<void> {
+  await call(
+    config,
+    "PATCH",
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    changeBody(config, plan, period),
+  );
 }
 
 /** Signed links into Paddle's customer portal: its overview, and this subscription's cancel page. */
@@ -124,7 +204,7 @@ export async function portalLinks(
   return { overview, cancel: sub?.cancel_subscription ?? null };
 }
 
-/** Ends a subscription now, with no further charge: for deleting the account. */
+/** Ends a subscription now, with no further charge: for deleting the account, or a second subscription. */
 export async function cancelNow(config: BillingConfig, subscriptionId: string): Promise<void> {
   await call(config, "POST", `/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
     effective_from: "immediately",

@@ -27,17 +27,28 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: "agents", label: "Agents" },
 ];
 
+/** A plan switch just sent to Paddle, waiting for its webhook: "team-yearly". */
+type SwitchedTo = "pro-monthly" | "pro-yearly" | "team-monthly" | "team-yearly";
+const isSwitchedTo = (value: unknown): value is SwitchedTo =>
+  value === "pro-monthly" || value === "pro-yearly" || value === "team-monthly" || value === "team-yearly";
+function switchTarget(value: SwitchedTo | undefined) {
+  if (!value) return null;
+  const [plan, period] = value.split("-") as ["pro" | "team", "monthly" | "yearly"];
+  return { plan, period };
+}
+
 export const Route = createFileRoute("/settings")({
-  validateSearch: (s: Record<string, unknown>): { tab: SettingsTab; checkout?: "done" } => ({
+  validateSearch: (s: Record<string, unknown>): { tab: SettingsTab; checkout?: "done"; switched?: SwitchedTo } => ({
     tab: s.tab === "models" || s.tab === "limits" || s.tab === "agents" ? (s.tab as SettingsTab) : ("plan" as const),
     ...(s.checkout === "done" ? { checkout: "done" as const } : {}),
+    ...(isSwitchedTo(s.switched) ? { switched: s.switched } : {}),
   }),
   head: () => pageHead("settings"),
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { tab, checkout } = Route.useSearch();
+  const { tab, checkout, switched } = Route.useSearch();
   const { account, setAccount, user, isPending, refresh } = useAccount();
 
   if (isPending) {
@@ -113,12 +124,17 @@ function SettingsPage() {
                 </Link>
               </div>
             </div>
-            <BillingCard account={account} justPaid={checkout === "done"} refresh={refresh} />
+            <BillingCard
+              account={account}
+              justPaid={checkout === "done"}
+              switching={switchTarget(switched)}
+              refresh={refresh}
+            />
             <GithubAccountCard />
             {showPricing && (
               <div>
                 <h2 className="mb-4 text-lg font-medium tracking-tight">Plans</h2>
-                <PricingTable currentPlan={account.plan} checkoutOpen={account.checkoutOpen} />
+                <PricingTable currentPlan={account.plan} checkoutOpen={account.checkoutOpen} billing={account.billing} />
               </div>
             )}
           </section>

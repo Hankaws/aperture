@@ -50,7 +50,10 @@ test("everything else is ignored, with the reason", () => {
     assert.ok("ignored" in parsed, JSON.stringify(p));
     return parsed.ignored;
   };
-  assert.match(ignored("push", payload()), /answers comments, its label, its schedule and pull/);
+  assert.match(
+    ignored("push", payload()),
+    /answers comments, new issues, its label, its schedule, pull requests and red runs/,
+  );
   assert.match(ignored("issue_comment", payload({ action: "edited" })), /not edits/);
   assert.match(
     ignored(
@@ -306,4 +309,85 @@ test("an edit that is not a tick of one of the bot's own suggestions is ignored"
     ),
     /not edits/,
   );
+});
+
+test("a new issue is read unasked, from anyone but a bot", () => {
+  const opened = (more: Record<string, unknown> = {}) =>
+    parseEvent("issues", {
+      action: "opened",
+      sender: { login: "visitor", type: "User" },
+      issue: { number: 4, title: "Prices show cents", body: "100 for a dollar." },
+      repository: { name: "shop", owner: { login: "acme" }, default_branch: "trunk" },
+      ...more,
+    });
+  const parsed = opened();
+  assert.ok("command" in parsed);
+  assert.deepEqual(parsed.command, {
+    number: 4,
+    isPull: false,
+    title: "Prices show cents",
+    body: "100 for a dollar.",
+    task: "Read issue #4 and say what you would do: Prices show cents",
+    commentId: null,
+    author: "visitor",
+    via: "issue",
+    triage: true,
+    owner: "acme",
+    repo: "shop",
+    defaultBranch: "trunk",
+  });
+  const byBot = opened({ sender: { login: "dependabot[bot]", type: "Bot" } });
+  assert.ok("ignored" in byBot && /by bots/.test(byBot.ignored));
+  // The label still asks for the work itself.
+  const labelled = parseEvent("issues", {
+    action: "labeled",
+    label: { name: "aperture" },
+    sender: { login: "ada", type: "User" },
+    issue: { number: 4, title: "Prices", body: "" },
+    repository: { name: "shop", owner: { login: "acme" } },
+  });
+  assert.ok("command" in labelled && labelled.command.via === "label");
+});
+
+test("a workflow red on the default branch is explained; anything else is ignored", () => {
+  const run = (more: Record<string, unknown> = {}) => ({
+    action: "completed",
+    workflow_run: {
+      name: "CI",
+      conclusion: "failure",
+      head_branch: "trunk",
+      head_sha: "abc1234def",
+      html_url: "https://github.com/acme/shop/actions/runs/77",
+      event: "push",
+      ...more,
+    },
+    repository: { name: "shop", owner: { login: "acme" }, default_branch: "trunk" },
+  });
+  assert.deepEqual(parseEvent("workflow_run", run()), {
+    red: {
+      workflow: "CI",
+      sha: "abc1234def",
+      branch: "trunk",
+      url: "https://github.com/acme/shop/actions/runs/77",
+      owner: "acme",
+      repo: "shop",
+    },
+  });
+  assert.ok("red" in parseEvent("workflow_run", run({ conclusion: "timed_out" })));
+  const ignored = (p: unknown) => {
+    const parsed = parseEvent("workflow_run", p);
+    assert.ok("ignored" in parsed, JSON.stringify(parsed));
+    return parsed.ignored;
+  };
+  assert.match(ignored(run({ conclusion: "success" })), /not red/);
+  assert.match(ignored(run({ conclusion: "cancelled" })), /not red/);
+  assert.match(ignored(run({ head_branch: "feature" })), /on feature, not trunk/);
+  assert.match(ignored(run({ event: "pull_request" })), /not trunk/);
+  // A fork's branch of the same name.
+  assert.match(ignored(run({ head_repository: { full_name: "someone/shop" } })), /not trunk/);
+  assert.ok(
+    "red" in parseEvent("workflow_run", run({ head_repository: { full_name: "acme/shop" } })),
+  );
+  assert.match(ignored(run({ name: "Aperture Bot" })), /own runs/);
+  assert.match(ignored({ ...run(), action: "requested" }), /finished/);
 });

@@ -44,6 +44,8 @@ function who(task: BotTask): string {
   if (task.via === "label") return `@${task.author}'s label`;
   if (task.via === "pull") return `@${task.author}'s push`;
   if (task.via === "tick") return `@${task.author}'s tick`;
+  if (task.via === "issue") return `@${task.author}'s new issue`;
+  if (task.via === "red") return "Red CI";
   return `@${task.author}`;
 }
 
@@ -156,6 +158,9 @@ export function headline(a: Activity): string {
     case "asked":
       if (a.who.endsWith("'s push")) return `${a.who.slice(0, -7)} pushed`;
       if (a.who.endsWith("'s tick")) return `${a.who.slice(0, -7)} ticked a suggestion`;
+      if (a.who.endsWith("'s new issue")) return `${a.who.slice(0, -12)} opened an issue`;
+      if (a.who === "Red CI")
+        return `${a.task.split(" at ")[0]!.replace(/^Fix what is red on /, "")} went red`;
       return a.who === "A standing job" ? "A standing job asked" : `${a.who} asked`;
     case "working":
       return "Working";

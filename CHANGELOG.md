@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture Bot can work unasked. With "Reply to new issues" on, it reads each new issue and the code and replies with what it would do (or asks for what is missing), its first box being the issue itself to tick. With "Explain red CI" on, a workflow that fails on the default branch is explained on the bot's own issue, once per red commit, with the fix to tick. Both change nothing on their own and stop at 20 replies a day (`daily-limit`). ([#155](https://github.com/Hankaws/aperture/pull/155))
 - Aperture Bot answers questions and takes suggestions with one tick. Comment `/aperture why does the login test fail?` and it answers on the thread from the code, the diff and the failing checks, changing nothing. Every reply ends with what it would do next as boxes: tick one and it does it, as if you had asked with `/aperture`. Ticking needs the workflow to listen for edited comments, as the Bot page's and the README's now do. ([#154](https://github.com/Hankaws/aperture/pull/154))
 - Subscribers can switch between Pro and Team, or between monthly and yearly, from the pricing table: Paddle prices the change first ("You pay $18.50 now for the rest of this period"), and Settings → Plan shows the switch once Paddle confirms it. ([#153](https://github.com/Hankaws/aperture/pull/153))
 

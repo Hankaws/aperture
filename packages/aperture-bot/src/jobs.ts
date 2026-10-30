@@ -10,8 +10,12 @@
  * A job that changes code does nothing when there is nothing to do: the
  * branch is green, or a pull request it opened for that issue is still
  * waiting for review. A look-over always runs: saying all is quiet is news.
+ *
+ * A red run on the default branch (`planRed`) is explained on its own issue
+ * too, once per red commit; the fix waits for a tick.
  */
-import type { Command } from "./event.ts";
+import { readSummary } from "../../../src/lib/bot/summary.ts";
+import type { Command, RedRun } from "./event.ts";
 import type { CheckFailure, GitHub } from "./github.ts";
 
 export type Job = { kind: "fix-ci" } | { kind: "look-over" } | { kind: "task"; task: string };
@@ -112,6 +116,64 @@ export async function planJob(
       owner: repo.owner,
       repo: repo.repo,
       defaultBranch: branch,
+    },
+  };
+}
+
+/** The bot's issue for a red default branch: one, kept for every red run until someone closes it. */
+export function redTitle(branch: string): string {
+  return `Aperture Bot: ${branch} is red`;
+}
+
+/** The task a red run's reply offers to tick: its commit is in it, so each red commit is told apart. */
+export function redTask(red: Pick<RedRun, "branch" | "sha">): string {
+  return `Fix what is red on ${red.branch} at ${red.sha.slice(0, 7)}`;
+}
+
+/**
+ * The command a red run comes to: its issue, with what fails as the issue's
+ * body (what a ticked fix reads), or why there is nothing to do: the checks
+ * are green again, or this commit was already explained.
+ */
+export async function planRed(gh: GitHub, red: RedRun): Promise<Planned> {
+  const failures = await gh.failures(red.sha);
+  if (failures.length === 0)
+    return { skip: `nothing fails on ${red.branch} at ${red.sha.slice(0, 7)} any more.` };
+  const title = redTitle(red.branch);
+  const task = redTask(red);
+  const body = [
+    `${red.workflow} finished red on ${red.branch}${red.url ? ` ([the run](${red.url}))` : ""}. Aperture Bot explains why below, and fixes it when someone who can write ticks its suggestion.`,
+    "",
+    fixCiTask(red.branch, red.sha, failures),
+  ].join("\n");
+  const existing = (await gh.openIssues()).find((i) => !i.isPull && i.title === title);
+  let number: number;
+  if (existing) {
+    const said = (await gh.comments(existing.number)).some((c) => {
+      const s = c.authorType === "Bot" ? readSummary(c.body) : null;
+      return s?.via === "red" && s.task === task;
+    });
+    if (said)
+      return { skip: `${red.sha.slice(0, 7)} is already explained on #${existing.number}.` };
+    await gh.editIssue(existing.number, body);
+    number = existing.number;
+  } else {
+    number = await gh.createIssue(title, body);
+  }
+  return {
+    command: {
+      number,
+      isPull: false,
+      title,
+      body,
+      task,
+      commentId: null,
+      author: red.workflow,
+      via: "red",
+      red,
+      owner: red.owner,
+      repo: red.repo,
+      defaultBranch: red.branch,
     },
   };
 }

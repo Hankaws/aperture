@@ -606,7 +606,29 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       "- **Every pull request**: on each push to a pull request from this repository, Aperture Agent Check runs and its report is kept in one comment, updated on each push. It changes nothing, and needs no model key.",
     );
+  if (jobs.issues)
+    lines.push(
+      "- **Every new issue**: the bot reads it and the code, and replies with what it would do, with a box to tick to have it done. It changes nothing; at most `daily-limit` (20) such replies a day.",
+    );
+  if (jobs.red.length)
+    lines.push(
+      `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue, with a box to tick to have it fixed. It changes nothing until someone ticks it.`,
+    );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
+}
+
+/** The names of the repository's workflows other than the bot's, for `workflow_run` to watch. */
+async function otherWorkflows(call: Call, base: string): Promise<string[]> {
+  const res = await call(`${base}/actions/workflows?per_page=100`);
+  if (res.status !== 200) throw new Error("Could not list this repository's workflows.");
+  const list = (
+    res.body as { workflows?: Array<{ name?: unknown; path?: unknown; state?: unknown }> }
+  ).workflows;
+  const names = (list ?? [])
+    .filter((w) => w.path !== WORKFLOW_PATH && w.state === "active")
+    .map((w) => (typeof w.name === "string" ? w.name.replace(/[\n"]/g, "").trim() : ""))
+    .filter((name) => name && name.toLowerCase() !== "aperture bot");
+  return [...new Set(names)].slice(0, 20);
 }
 
 /** The bot's workflow at WORKFLOW_PATH, with its blob for replacing it. */
@@ -638,13 +660,19 @@ export const setBotJobs = createServerFn({ method: "POST" })
     if (!base) return { ok: false, error: "That repo name is not valid." };
     const call: Call = (url, init) => githubJson(url, token, init);
     const scheduled = data.scheduled ? cleanScheduled(data.scheduled).trim() : "";
-    const jobs: Jobs = {
-      label: data.label,
-      scheduled: scheduled || null,
-      cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
-      pulls: data.pulls ?? false,
-    };
     try {
+      // The workflows to watch are read here, never taken from the page: the bot's own is left out.
+      const red = data.red ? await otherWorkflows(call, base) : [];
+      if (data.red && red.length === 0)
+        return { ok: false, error: "This repository has no other workflow to watch." };
+      const jobs: Jobs = {
+        label: data.label,
+        scheduled: scheduled || null,
+        cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
+        pulls: data.pulls ?? false,
+        issues: data.issues ?? false,
+        red,
+      };
       const read = await readWorkflow(call, base);
       if (!read.ok) return read;
       const { text, sha } = read;

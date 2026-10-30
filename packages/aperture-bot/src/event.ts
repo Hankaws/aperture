@@ -12,6 +12,12 @@
  * in one of the bot's own replies is a task, for whoever ticked it
  * (`suggestions.ts`): the edit that ticks it is the one edit that counts.
  *
+ * Two events the bot answers without being asked, when the workflow listens
+ * for them: a new issue, which it reads and replies to with what it would do
+ * (`triage`), and a workflow that finishes red on the default branch, which it
+ * explains on its own issue (`red`). Both change nothing; what they suggest
+ * waits for someone who can write to tick it.
+ *
  * `/aperture` rather than `@aperture`: an @-mention would notify whoever owns
  * that GitHub username every time the bot is asked for something.
  */
@@ -29,9 +35,13 @@ export type Command = {
   task: string;
   /** The asking comment; null when a label or the schedule asked. */
   commentId: number | null;
-  /** Who asked: the commenter, whoever added the label, pushed or ticked. */
+  /** Who asked: the commenter, whoever added the label, pushed or ticked, or opened the issue. */
   author: string;
-  via: "comment" | "label" | "schedule" | "pull" | "tick";
+  via: "comment" | "label" | "schedule" | "pull" | "tick" | "issue" | "red";
+  /** A new issue: read it and reply with what the bot would do, changing nothing. */
+  triage?: boolean;
+  /** A workflow red on the default branch: explain it on the bot's issue, changing nothing. */
+  red?: RedRun;
   /** A question: answer it on the thread, changing nothing (`ask.ts`). */
   ask?: boolean;
   /**
@@ -49,8 +59,20 @@ export type Command = {
   defaultBranch: string;
 };
 
+/** A workflow run that finished red on the default branch. */
+export type RedRun = {
+  workflow: string;
+  sha: string;
+  branch: string;
+  /** The run on github.com. */
+  url: string;
+  owner: string;
+  repo: string;
+};
+
 /** The schedule, or a manual run: the job is the workflow's `scheduled` input. */
-export type Parsed = { command: Command } | { scheduled: true } | { ignored: string };
+export type Parsed =
+  { command: Command } | { scheduled: true } | { red: RedRun } | { ignored: string };
 
 type PullRequestEvent = {
   action?: string;
@@ -98,11 +120,15 @@ export function parseEvent(
   label = DEFAULT_LABEL,
 ): Parsed {
   if (name === "schedule" || name === "workflow_dispatch") return { scheduled: true };
-  if (name === "issues") return labelled(payload, label);
+  if (name === "issues") {
+    const action = (payload as { action?: string } | null)?.action;
+    return action === "opened" ? opened(payload) : labelled(payload, label);
+  }
   if (name === "pull_request") return pushed(payload);
+  if (name === "workflow_run") return redRun(payload);
   if (name !== "issue_comment")
     return {
-      ignored: `${name} events are not commands; the bot answers comments, its label, its schedule and pull requests.`,
+      ignored: `${name} events are not commands; the bot answers comments, new issues, its label, its schedule, pull requests and red runs.`,
     };
   const event = (payload ?? {}) as IssueCommentEvent;
   if (event.action === "edited") return ticked(event);
@@ -208,6 +234,87 @@ function pushed(payload: unknown): Parsed {
       owner: repo.owner.login,
       repo: repo.name,
       defaultBranch: repo.default_branch ?? "main",
+    },
+  };
+}
+
+/** A new issue, from anyone but a bot: read it and say what the bot would do. */
+function opened(payload: unknown): Parsed {
+  const event = (payload ?? {}) as IssueCommentEvent;
+  if (event.sender?.type === "Bot") return { ignored: "issues opened by bots are not read." };
+  const issue = event.issue;
+  const repo = event.repository;
+  if (!issue?.number || !event.sender?.login || !repo?.name || !repo.owner?.login)
+    return { ignored: "the event is missing the issue, sender or repository." };
+  if (issue.pull_request) return { ignored: "pull requests are not issues to read." };
+  const title = issue.title ?? "";
+  return {
+    command: {
+      number: issue.number,
+      isPull: false,
+      title,
+      body: issue.body ?? "",
+      task: `Read issue #${issue.number} and say what you would do: ${title}`,
+      commentId: null,
+      author: event.sender.login,
+      via: "issue",
+      triage: true,
+      owner: repo.owner.login,
+      repo: repo.name,
+      defaultBranch: repo.default_branch ?? "main",
+    },
+  };
+}
+
+type WorkflowRunEvent = {
+  action?: string;
+  workflow_run?: {
+    name?: string;
+    conclusion?: string | null;
+    head_branch?: string | null;
+    head_sha?: string;
+    html_url?: string;
+    event?: string;
+    head_repository?: { full_name?: string } | null;
+  };
+  repository?: { name?: string; owner?: { login?: string }; default_branch?: string };
+};
+
+/** How a run ends when it is red. */
+const RED = new Set(["failure", "timed_out"]);
+
+/** A workflow that finished red on the default branch: the bot explains why, on its own issue. */
+function redRun(payload: unknown): Parsed {
+  const event = (payload ?? {}) as WorkflowRunEvent;
+  const run = event.workflow_run;
+  const repo = event.repository;
+  if (event.action !== "completed" || !run)
+    return { ignored: "only a finished workflow run is read." };
+  if (!RED.has(run.conclusion ?? ""))
+    return { ignored: `the run ended ${run.conclusion ?? "without a result"}, not red.` };
+  const branch = repo?.default_branch ?? "main";
+  // A fork's pull request can have a branch of the same name: only this repository's branch counts.
+  const own = `${repo?.owner?.login ?? ""}/${repo?.name ?? ""}`.toLowerCase();
+  const from = run.head_repository?.full_name?.toLowerCase();
+  if (
+    run.head_branch !== branch ||
+    run.event === "pull_request" ||
+    run.event === "pull_request_target" ||
+    (from !== undefined && from !== own)
+  )
+    return { ignored: `the run was on ${run.head_branch ?? "another branch"}, not ${branch}.` };
+  if ((run.name ?? "").toLowerCase() === "aperture bot")
+    return { ignored: "the bot's own runs are not explained by the bot." };
+  if (!run.head_sha || !repo?.name || !repo.owner?.login)
+    return { ignored: "the event is missing the run's commit or the repository." };
+  return {
+    red: {
+      workflow: run.name ?? "A workflow",
+      sha: run.head_sha,
+      branch,
+      url: run.html_url ?? "",
+      owner: repo.owner.login,
+      repo: repo.name,
     },
   };
 }

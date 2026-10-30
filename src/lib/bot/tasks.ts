@@ -35,7 +35,7 @@ export type TaskState = BotState | "waiting" | "silent" | "replied" | "ended";
 export type BotTask = {
   /** The asking comment's id; for a label or the schedule, the bot's comment's. */
   id: number;
-  via: "comment" | "label" | "schedule" | "pull" | "tick";
+  via: "comment" | "label" | "schedule" | "pull" | "tick" | "issue" | "red";
   number: number;
   thread: Thread | null;
   task: string;
@@ -177,16 +177,40 @@ export function isSettled(state: TaskState): boolean {
 
 /**
  * Standing jobs, as the workflow sets them: the label, what to do on its
- * schedule, and Agent Check on every pull request.
+ * schedule, Agent Check on every pull request, a reply to each new issue, and
+ * the workflows whose red runs on the default branch it explains.
  */
 export type Jobs = {
   label: boolean;
   scheduled: string | null;
   cron: string | null;
   pulls: boolean;
+  /** Read each new issue and reply with what the bot would do. */
+  issues: boolean;
+  /** The workflows (by name) it watches: a red run on the default branch is explained. */
+  red: string[];
 };
 
-export const NO_JOBS: Jobs = { label: false, scheduled: null, cron: null, pulls: false };
+export const NO_JOBS: Jobs = {
+  label: false,
+  scheduled: null,
+  cron: null,
+  pulls: false,
+  issues: false,
+  red: [],
+};
+
+/** The workflow names a workflow file watches, as written in `workflow_run`'s `workflows:`. */
+function watched(text: string): string[] {
+  const list = /^\s{2}workflow_run:\s*\n\s+workflows:\s*(\[[^\n]*\])/m.exec(text)?.[1];
+  if (!list) return [];
+  try {
+    const names = JSON.parse(list) as unknown;
+    return Array.isArray(names) ? names.filter((n): n is string => typeof n === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /** The pull request events the bot checks: new code to look at. */
 const PULL_TYPES = "[opened, synchronize, reopened, ready_for_review]";
@@ -259,6 +283,8 @@ export function workflowUse(text: string): {
       scheduled: setting("scheduled") || null,
       cron: /cron:\s*["']([^"']+)["']/.exec(text)?.[1] ?? null,
       pulls: /^\s{2}pull_request:\s*$/m.test(text),
+      issues: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\bopened\b/m.test(text),
+      red: watched(text),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -323,13 +349,17 @@ export function workflowFile(
         `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
         ...(provider === "grok" ? [] : [`provider: ${provider}`]),
       ];
-  const any = jobs.label || Boolean(scheduled) || jobs.pulls;
+  const red = jobs.red.map((name) => name.replace(/[\n"]/g, "").trim()).filter(Boolean);
+  const any = jobs.label || Boolean(scheduled) || jobs.pulls || jobs.issues || red.length > 0;
+  const issueTypes = [...(jobs.issues ? ["opened"] : []), ...(jobs.label ? ["labeled"] : [])];
   const asks = [
     "a comment",
     "a ticked suggestion",
+    ...(jobs.issues ? ["a new issue"] : []),
     ...(jobs.label ? ["its label"] : []),
     ...(scheduled ? ["its schedule"] : []),
     ...(jobs.pulls ? ["a pull request"] : []),
+    ...(red.length ? ["a red run on the default branch"] : []),
   ];
   const asked = `${asks.slice(0, -1).join(", ")}${asks.length > 2 ? "," : ""} or ${asks.at(-1)}`;
   return [
@@ -337,8 +367,11 @@ export function workflowFile(
     "on:",
     "  issue_comment:",
     "    types: [created, edited]",
-    ...(jobs.label ? ["  issues:", "    types: [labeled]"] : []),
+    ...(issueTypes.length ? ["  issues:", `    types: [${issueTypes.join(", ")}]`] : []),
     ...(jobs.pulls ? ["  pull_request:", `    types: ${PULL_TYPES}`] : []),
+    ...(red.length
+      ? ["  workflow_run:", `    workflows: ${JSON.stringify(red)}`, "    types: [completed]"]
+      : []),
     ...(scheduled
       ? ["  schedule:", `    - cron: "${jobs.cron ?? NIGHTLY}"`, "  workflow_dispatch:"]
       : []),
@@ -354,6 +387,11 @@ export function workflowFile(
     "    if: >-",
     "      (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture'))",
     ...TICKED,
+    ...(jobs.issues
+      ? [
+          "      || (github.event_name == 'issues' && github.event.action == 'opened' && github.event.sender.type != 'Bot')",
+        ]
+      : []),
     ...(jobs.label
       ? ["      || (github.event_name == 'issues' && github.event.label.name == 'aperture')"]
       : []),
@@ -365,11 +403,20 @@ export function workflowFile(
     ...(scheduled
       ? ["      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"]
       : []),
+    ...(red.length
+      ? [
+          "      || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == github.event.repository.default_branch",
+          "          && github.event.workflow_run.head_repository.full_name == github.repository",
+          '          && contains(fromJSON(\'["failure", "timed_out"]\'), github.event.workflow_run.conclusion))',
+        ]
+      : []),
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 45",
     "    concurrency:",
     any
-      ? "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || 'scheduled' }}"
+      ? red.length
+        ? "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || (github.event.workflow_run && 'red') || 'scheduled' }}"
+        : "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || 'scheduled' }}"
       : "      group: aperture-bot-${{ github.event.issue.number }}",
     "    steps:",
     ...(app

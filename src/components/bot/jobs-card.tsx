@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { CalendarClock, GitPullRequest, Loader2, ShieldCheck, Tag } from "lucide-react";
+import {
+  CalendarClock,
+  CircleAlert,
+  GitPullRequest,
+  Loader2,
+  MessageSquareText,
+  ShieldCheck,
+  Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { setBotJobs, type BotSetup } from "@/lib/github/bot";
@@ -35,6 +43,8 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const startMode = modeOf(now.scheduled);
   const [label, setLabel] = useState(now.label);
   const [pulls, setPulls] = useState(now.pulls);
+  const [issues, setIssues] = useState(now.issues);
+  const [red, setRed] = useState(now.red.length > 0);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -47,6 +57,8 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const changed =
     label !== now.label ||
     pulls !== now.pulls ||
+    issues !== now.issues ||
+    red !== now.red.length > 0 ||
     scheduled !== (now.scheduled ?? "") ||
     (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -63,6 +75,8 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           scheduled,
           weekly: timed(mode) && weekly,
           pulls,
+          issues,
+          red,
         },
       });
       if (out.ok) setOpened(out.url);
@@ -134,6 +148,47 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           <span className="mt-0.5 block text-muted">
             Aperture Agent Check on each push: one report on the pull request, kept up to date. It
             changes nothing and uses no model key.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={issues}
+          onChange={(event) => setIssues(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <MessageSquareText className="size-3.5 text-subtle" />
+            Reply to new issues
+          </span>
+          <span className="mt-0.5 block text-muted">
+            The bot reads each new issue and the code, and replies with what it would do, with a box
+            to tick to have it done. At most 20 such replies a day, on your key.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={red}
+          onChange={(event) => setRed(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <CircleAlert className="size-3.5 text-subtle" />
+            Explain red CI on {setup.defaultBranch}
+          </span>
+          <span className="mt-0.5 block text-muted">
+            When another workflow fails on {setup.defaultBranch}, the bot says why on its own issue,
+            with a box to tick to have it fixed.
+            {now.red.length > 0 && <> Watching {now.red.join(", ")}.</>}
           </span>
         </span>
       </label>

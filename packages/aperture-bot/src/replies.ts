@@ -28,7 +28,7 @@ export const SITE = "https://aperturesais.grok.me";
 export type Asked = {
   asked: number;
   run: string;
-  via?: "label" | "schedule" | "pull" | "tick";
+  via?: "label" | "schedule" | "pull" | "tick" | "issue" | "red";
   by?: string;
   task?: string;
 };
@@ -41,6 +41,8 @@ function askedBy(command: Command): string {
   if (command.via === "pull") return `@${command.author} pushed to #${command.number}`;
   if (command.via === "tick")
     return `@${command.author} ticked a suggestion of Aperture Bot's in #${command.number}`;
+  if (command.via === "issue") return `@${command.author} opened #${command.number}`;
+  if (command.via === "red") return `${command.author} was red, on #${command.number}`;
   return `@${command.author} asked in #${command.number}`;
 }
 

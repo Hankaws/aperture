@@ -264,6 +264,63 @@ export function answerReply(
   );
 }
 
+/**
+ * After a review: what it found, where, and the fixes to tick. The comments
+ * themselves are on the pull request's lines; one placed nowhere is listed here.
+ */
+export function reviewReply(
+  review: {
+    head: string;
+    placed: Array<{ path: string; line: number; text: string }>;
+    unplaced: Array<{ path: string; text: string }>;
+    next: string[];
+    /** Files changed but not read: binary, very large, or past the limit. */
+    skipped: number;
+    /** The review on GitHub, when one was posted. */
+    url: string | null;
+  },
+  ctx: Asked & { usage: string },
+): string {
+  const found = review.placed.length + review.unplaced.length;
+  const counted = found === 1 ? "1 likely bug" : `${found} likely bugs`;
+  const at = ` at ${review.head.slice(0, 7)}`;
+  return join(
+    [
+      found === 0
+        ? `**Reviewed**${at}: nothing that looks like a bug.`
+        : `**Reviewed**${at}: ${counted}${review.url ? `, [commented on their lines](${review.url})` : ""}.`,
+    ],
+    found > 0
+      ? [
+          ...review.placed.map((n) => `- \`${n.path}:${n.line}\`: ${n.text}`),
+          ...review.unplaced.map((n) => `- \`${n.path}\`: ${n.text}`),
+        ]
+      : [],
+    review.skipped > 0
+      ? [
+          `${review.skipped === 1 ? "1 file was" : `${review.skipped} files were`} not read: binary, very large, or past the first 30.`,
+        ]
+      : [],
+    nextList(review.next),
+    [
+      `Only what it is at least 80% sure is a bug is posted. Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`,
+    ],
+    [
+      summaryMarker({
+        v: 1,
+        state: "clear",
+        kind: "review",
+        asked: ctx.asked,
+        run: ctx.run,
+        ...askedFields(ctx),
+        note: found === 0 ? "Nothing that looks like a bug" : counted,
+        ...(review.next.length ? { next: review.next } : {}),
+        usage: ctx.usage,
+      }),
+    ],
+  );
+}
+
 export function forkReply(ctx: Asked): string {
   return join(
     [
@@ -276,14 +333,16 @@ export function forkReply(ctx: Asked): string {
 }
 
 /** `/aperture check` on an issue: there is no change to check. */
-export function notPullReply(ctx: Asked): string {
+export function notPullReply(ctx: Asked, what: "check" | "review" = "check"): string {
   return join(
     [
-      "`/aperture check` runs Aperture Agent Check on a pull request, and this is an issue, so there is nothing to check.",
+      what === "check"
+        ? "`/aperture check` runs Aperture Agent Check on a pull request, and this is an issue, so there is nothing to check."
+        : "`/aperture review` reviews a pull request's changes, and this is an issue, so there is nothing to review.",
       "",
       "Comment it on the pull request instead, or say what to do after `/aperture` and the bot will make the change.",
     ],
-    [summaryMarker({ v: 1, state: "declined", kind: "check", asked: ctx.asked, run: ctx.run })],
+    [summaryMarker({ v: 1, state: "declined", kind: what, asked: ctx.asked, run: ctx.run })],
   );
 }
 

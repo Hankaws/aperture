@@ -9,6 +9,9 @@
  * Check alone and replies with its report: no model, and no change. A
  * question (`/aperture why …?`) is answered on the thread, changing nothing,
  * and a suggestion ticked in one of the bot's replies is a task like any other.
+ * `/aperture review` on a pull request, or each push to one when the
+ * `pull-requests` input says `review`, posts a review with comments on the
+ * lines of likely bugs, and a reply with their fixes to tick.
  * Unasked, when the workflow listens: a new issue gets a reply with what the
  * bot would do, and a workflow red on the default branch is explained on the
  * bot's issue for it. Those two are capped per day (`daily-limit`), since
@@ -30,6 +33,8 @@ import { Budget, providerModel, runnerHost, type Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
 import { readSummary } from "../../../src/lib/bot/summary.ts";
+import { alreadySaid, bugCount, commentBody, fixTask, placeNotes } from "./review.ts";
+import { reviewChanges } from "./reviewer.ts";
 import {
   authorFor,
   checkoutPullHead,
@@ -37,6 +42,7 @@ import {
   diffOf,
   fetchBase,
   freeBranch,
+  pullFiles,
   push,
 } from "./publish.ts";
 import {
@@ -50,6 +56,7 @@ import {
   notDoneReply,
   notPullReply,
   pullBody,
+  reviewReply,
   titleFor,
   workingReply,
   type Asked,
@@ -91,6 +98,16 @@ function setOutput(env: NodeJS.ProcessEnv, values: Record<string, string>): void
       .map(([k, v]) => `${k}=${v}\n`)
       .join(""),
   );
+}
+
+/** What a push to a pull request starts, from the `pull-requests` input: Agent Check, a review, or both. */
+export function pullModes(value: string | undefined): { check: boolean; review: boolean } {
+  const words = (value ?? "check")
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  const review = words.includes("review");
+  return { check: words.includes("check") || !review, review };
 }
 
 /** What the bot asks itself about a new issue, before anyone asks it. */
@@ -472,7 +489,106 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     return 0;
   };
 
+  /**
+   * A review: the pull request's changes, read from git (a fork's too, never
+   * checked out), reviewed in one model step that can only note likely bugs.
+   * New notes go on their lines as one review; a note a later push would
+   * repeat is not posted again. The reply lists them all, with their fixes to
+   * tick. A push's reply replaces the last push's.
+   */
+  const reviewPull = async (): Promise<number> => {
+    const ctx: Asked =
+      command.via === "pull" ? { ...asked, task: "Review this pull request" } : asked;
+    if (!command.isPull) {
+      await gh.comment(command.number, notPullReply(ctx, "review"));
+      setOutput(env, { outcome: "declined" });
+      return 0;
+    }
+    const model = modelConfig(env);
+    const pull = await gh.pull(command.number);
+    const read = pullFiles(cwd, command.number, pull.baseRef);
+    if (command.via === "pull") {
+      const earlier = (await gh.comments(command.number))
+        .filter((c) => {
+          const s = c.authorType === "Bot" ? readSummary(c.body) : null;
+          return s?.kind === "review" && s.via === "pull";
+        })
+        .at(-1);
+      status = earlier?.id ?? null;
+    }
+    log(`Aperture Bot: reviewing #${command.number} for @${command.author}`);
+    const result =
+      read.files.length > 0
+        ? await reviewChanges(
+            {
+              files: read.files,
+              title: command.title,
+              body: command.body,
+              model,
+              maxTokens: number(env, "max-tokens", 1_000_000),
+            },
+            { model: deps.model },
+          )
+        : { ok: true as const, notes: [], usage: "no model call" };
+    if (!result.ok) throw new Error(result.error);
+    let { placed, unplaced } = placeNotes(read.files, result.notes);
+    const said = (await gh.reviewComments(command.number)).filter((c) => c.authorType === "Bot");
+    const fresh = placed.filter((note) => !alreadySaid(note, said));
+    let url: string | null = null;
+    if (fresh.length > 0) {
+      try {
+        url =
+          (
+            await gh.createReview(command.number, {
+              commitId: read.head,
+              body: `Aperture Bot: ${bugCount(fresh.length)}, at least 80% sure each. Its reply on this pull request has the fixes to tick.`,
+              comments: fresh.map((note) => ({
+                path: note.path,
+                line: note.line,
+                side: note.side,
+                body: commentBody(note),
+              })),
+            })
+          ).url || null;
+      } catch (error) {
+        // GitHub refused a line (the head moved on, say): the reply still lists every note.
+        log(`Aperture Bot: could not comment on the lines: ${describeError(error)}`);
+        unplaced = [
+          ...unplaced,
+          ...fresh.map((n) => ({ path: n.path, text: n.text, confidence: n.confidence })),
+        ];
+        placed = placed.filter((n) => !fresh.includes(n));
+      }
+    }
+    const next = [...new Set([...placed.map(fixTask), ...unplaced.map(fixTask)])].slice(
+      0,
+      MAX_NEXT,
+    );
+    log(`Aperture Bot: ${bugCount(placed.length + unplaced.length)} on #${command.number}`);
+    await reply(
+      reviewReply(
+        { head: read.head, placed, unplaced, next, skipped: read.skipped, url },
+        { ...ctx, usage: result.usage },
+      ),
+    );
+    setOutput(env, { outcome: "reviewed" });
+    return 0;
+  };
+
   try {
+    if (command.via === "pull") {
+      const modes = pullModes(input(env, "pull-requests"));
+      let code = 0;
+      if (modes.check) code = await checkPull();
+      if (modes.review) {
+        // The review has its own reply: the check's comment is not it.
+        await edits;
+        status = null;
+        code = Math.max(code, await reviewPull());
+      }
+      return code;
+    }
+    if (command.review) return await reviewPull();
     if (command.look) return await lookOver();
     if (command.ask) return await answer({ question: questionText(command.task) });
     if (command.triage)

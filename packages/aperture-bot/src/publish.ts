@@ -1,11 +1,13 @@
 /**
  * Git on the runner: checking out a pull request's branch before a run, and
  * after a clear one, a commit of exactly the files the bot wrote, pushed with
- * the token actions/checkout left in the repository's git config.
+ * the token actions/checkout left in the repository's git config; and a pull
+ * request's changes, read for a review.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../agent-check/src/git.ts";
+import type { PullFile } from "./review.ts";
 
 export type Author = { name: string; email: string };
 
@@ -100,4 +102,53 @@ export function diffOf(cwd: string, paths: string[], max = 30_000): string {
   if (present.length) git(["add", "--intent-to-add", "--", ...present], cwd);
   const diff = git(["diff", "--no-color", "--", ...paths], cwd);
   return diff.length <= max ? diff : `${diff.slice(0, max)}\n… (cut at ${max} characters)`;
+}
+
+/** At most this many files, each at most this long, go to a review: the rest are counted, not read. */
+export const REVIEW_LIMITS = { files: 30, chars: 200_000 };
+
+/**
+ * A pull request's changed files, at the point it branched from its base and
+ * at its head, read from git. The head is fetched as `refs/pull/<n>/head`,
+ * which a fork's pull request has too: its commits are only read, never
+ * checked out or run. Binary and very large files are left out.
+ */
+export function pullFiles(
+  cwd: string,
+  number: number,
+  baseRef: string,
+): { head: string; files: PullFile[]; skipped: number } {
+  const base = fetchBase(cwd, baseRef);
+  const ref = `refs/remotes/origin/pull/${number}`;
+  git(["fetch", "--no-tags", "origin", `+refs/pull/${number}/head:${ref}`], cwd);
+  const head = git(["rev-parse", ref], cwd).trim();
+  const from = git(["merge-base", base, head], cwd).trim();
+  const show = (sha: string, path: string) => git(["show", `${sha}:${path}`], cwd);
+  const files: PullFile[] = [];
+  let skipped = 0;
+  const changed = git(["diff", "--name-status", "--no-renames", from, head], cwd)
+    .split("\n")
+    .filter(Boolean);
+  for (const line of changed) {
+    const [status, path] = line.split("\t") as [string, string | undefined];
+    if (!path) continue;
+    if (files.length >= REVIEW_LIMITS.files) {
+      skipped += 1;
+      continue;
+    }
+    const oldText = status.startsWith("A") ? "" : show(from, path);
+    const newText = status.startsWith("D") ? "" : show(head, path);
+    if (
+      oldText.includes("\0") ||
+      newText.includes("\0") ||
+      oldText.length > REVIEW_LIMITS.chars ||
+      newText.length > REVIEW_LIMITS.chars
+    ) {
+      skipped += 1;
+      continue;
+    }
+    const patch = git(["diff", "-U3", "--no-renames", from, head, "--", path], cwd);
+    files.push({ path, oldText, newText, patch });
+  }
+  return { head, files, skipped };
 }

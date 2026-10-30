@@ -17,6 +17,7 @@ export type ActivityKind =
   | "checked"
   | "flagged"
   | "looked"
+  | "reviewed"
   | Exclude<TaskState, "waiting" | "working" | "clear">;
 
 export type Activity = {
@@ -66,6 +67,7 @@ function outcome(task: BotTask): ActivityKind | null {
       return null;
     case "clear":
       if (isLook(task)) return "looked";
+      if (task.summary?.kind === "review") return "reviewed";
       if (isCheck(task)) return "checked";
       if (task.summary?.link?.what === "pull") return "opened";
       if (task.summary?.link?.what === "commit") return "pushed";
@@ -115,9 +117,11 @@ export function activityFrom(repo: string, tasks: BotTask[]): Activity[] {
         ? phaseLine(s ?? {})
         : kind === "looked"
           ? suggestions(s?.next?.length ?? 0)
-          : kind === "error" || kind === "stopped"
-            ? (s?.error ?? checksLine(task))
-            : checksLine(task);
+          : kind === "reviewed"
+            ? (s?.note ?? null)
+            : kind === "error" || kind === "stopped"
+              ? (s?.error ?? checksLine(task))
+              : checksLine(task);
     out.push({
       ...base,
       id: `${repo}#${task.id}:${kind}`,
@@ -176,6 +180,8 @@ export function headline(a: Activity): string {
       return "Checked the pull request: red, not ready to merge";
     case "looked":
       return "Looked things over";
+    case "reviewed":
+      return "Reviewed the pull request";
     case "stopped":
       return "Stopped";
     case "no-change":
@@ -281,6 +287,8 @@ export function statusOf(items: Activity[], repo: string, now: number): BotStatu
       return was("done", `Found red on ${n}`, "danger");
     case "looked":
       return was("done", "Looked things over", "ok");
+    case "reviewed":
+      return was("done", `Reviewed ${n}`, "ok");
     case "error":
       return was("stuck", `Hit an error on ${n}`, "danger");
     case "stopped":

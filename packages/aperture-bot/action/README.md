@@ -53,6 +53,12 @@ Then, on an issue:
 
 `/aperture` alone asks it to do what the issue says.
 
+## Review a pull request
+
+Comment `/aperture review` on a pull request and the bot reviews its changes: a GitHub review with a comment on the line of each likely bug, and a reply that lists them with their fixes to tick. Only what it is at least 80% sure is a bug is posted; when nothing is, it says so in one line. It reads the changes from git (a fork's too, never checked out or run), changes nothing, and uses the model key for one short call. A later review does not repeat a comment already on its line.
+
+To review every push, see `pull-requests` under Standing jobs.
+
 ## Ask it a question
 
 A comment that asks something is answered on the thread, and nothing is changed:
@@ -101,6 +107,7 @@ More ways to put the bot to work, all optional, all on your runner:
 - **The `aperture` label.** Add it to an issue and the bot does what the issue says, as if you had commented `/aperture`. Only a label added by someone with write access counts.
 - **A schedule.** Set `scheduled` and give the workflow a `schedule`. `fix-ci` fixes whatever is red on the default branch: when the branch is green, or the bot's last fix is still waiting for review, it does nothing. `look-over` changes nothing: it reads CI on the default branch and the open issues and pull requests, and posts a few sentences on how things stand with up to three things it would do next, as boxes to tick. Any other text is a task done each time, such as `Update links in docs/ that no longer resolve`. Each job reports on its own issue, which its pull requests fix.
 - **Every pull request.** Add `pull_request` to the workflow's triggers and each push to a pull request from this repository is checked, as with `/aperture check`. The report is one comment, updated on each push. Drafts are checked once they are ready for review.
+- **Review every pull request.** With `pull_request` in the triggers, set `pull-requests: review` (or `check, review` for both) and each push to a pull request from this repository is reviewed, as with `/aperture review`. The reply is one comment, updated on each push.
 - **Every new issue.** Add `opened` to the `issues` types and the bot reads each new issue and the code, and replies with what it understands, where in the code it lives and how it would fix it, or asks for what is missing. Its first suggestion is the issue itself: tick it and the bot does it. It changes nothing on its own, so anyone's issue is read; at most `daily-limit` such replies a day, since each spends your model key.
 - **Red CI on the default branch.** Add `workflow_run` with your other workflows' names, and when one fails on the default branch the bot explains why on its own issue (`Aperture Bot: main is red`), once per red commit, with the fix to tick. The issue's body lists what fails, so a ticked fix reads it. These replies count toward `daily-limit` too.
 
@@ -191,6 +198,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `timeout-minutes`   | `10`                                 | How long one test run may take.                                                                                                                |
 | `max-tokens`        | `1000000`                            | The token budget for one run.                                                                                                                  |
 | `rounds`            | `2`                                  | How many times Agent Check may run before the bot gives up.                                                                                    |
+| `pull-requests`     | `check`                              | What a push to a pull request starts: `check`, `review`, or `check, review`.                                                                   |
 | `daily-limit`       | `20`                                 | Replies nobody asked for (new issues, red runs) a day at most.                                                                                 |
 | `install`           | `auto`                               | `npm ci --ignore-scripts` when there is a package-lock.json and no `node_modules`; `none` to install yourself in an earlier step (pnpm, Yarn). |
 | `sandbox-image`     | `mirror.gcr.io/library/node:22-slim` | The Docker image tests run in.                                                                                                                 |

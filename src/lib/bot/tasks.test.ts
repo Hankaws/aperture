@@ -195,6 +195,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     scheduled: "fix-ci",
     cron: NIGHTLY,
     pulls: false,
+    review: false,
     issues: false,
     red: [],
   };
@@ -218,6 +219,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     scheduled: "look-over",
     cron: WEEKLY,
     pulls: true,
+    review: false,
     issues: false,
     red: [],
   };
@@ -227,6 +229,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     scheduled: 'Update "docs" links\nthat 404',
     cron: WEEKLY,
     pulls: false,
+    review: false,
     issues: false,
     red: [],
   };
@@ -256,6 +259,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     scheduled: "fix-ci",
     cron: NIGHTLY,
     pulls: false,
+    review: false,
     issues: false,
     red: [],
   })!;
@@ -269,6 +273,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     scheduled: "fix-ci",
     cron: NIGHTLY,
     pulls: false,
+    review: false,
     issues: false,
     red: [],
   });
@@ -341,6 +346,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
     scheduled: null,
     cron: null,
     pulls: false,
+    review: false,
     issues: false,
     red: [],
   })!;
@@ -348,7 +354,15 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
   const off = withJobs(
     jobs,
-    { label: true, scheduled: null, cron: null, pulls: false, issues: false, red: [] },
+    {
+      label: true,
+      scheduled: null,
+      cron: null,
+      pulls: false,
+      review: false,
+      issues: false,
+      red: [],
+    },
     false,
   )!;
   assert.equal(workflowUse(off).app, false);
@@ -362,7 +376,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
 });
 
 test("checking every pull request is a job: its trigger, only this repository's branches, read back", () => {
-  const jobs = { ...NO_JOBS, pulls: true, issues: false, red: [] };
+  const jobs = { ...NO_JOBS, pulls: true, review: false, issues: false, red: [] };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
     text,
@@ -383,11 +397,19 @@ test("the workflow's comment names the ways the bot is asked", () => {
     /# Starts a runner only (.*)\n/.exec(workflowFile("grok", "v1", jobs))![1];
   assert.equal(says(NO_JOBS), "when the bot is asked: a comment or a ticked suggestion.");
   assert.equal(
-    says({ ...NO_JOBS, pulls: true, issues: false, red: [] }),
+    says({ ...NO_JOBS, pulls: true, review: false, issues: false, red: [] }),
     "when the bot is asked: a comment, a ticked suggestion, or a pull request.",
   );
   assert.equal(
-    says({ label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: true, issues: false, red: [] }),
+    says({
+      label: true,
+      scheduled: "fix-ci",
+      cron: NIGHTLY,
+      pulls: true,
+      review: false,
+      issues: false,
+      red: [],
+    }),
     "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
   );
 });
@@ -424,4 +446,22 @@ test("replying to new issues and explaining red runs go into the workflow and re
     workflowUse(workflowFile("grok", "v1", { ...NO_JOBS, red: ['C"I\nx'] })).jobs.red,
     ["CIx"],
   );
+});
+
+test("reviewing every pull request sets the bot's pull-requests setting, with or without the check", () => {
+  const both = workflowFile("grok", "v1", { ...NO_JOBS, pulls: true, review: true });
+  assert.match(both, /^ {2}pull_request:\n/m);
+  assert.match(both, / {10}pull-requests: "check, review"\n/);
+  assert.deepEqual(workflowUse(both).jobs, { ...NO_JOBS, pulls: true, review: true });
+  const review = workflowFile("grok", "v1", { ...NO_JOBS, review: true });
+  assert.match(review, /^ {2}pull_request:\n/m);
+  assert.match(review, / {10}pull-requests: review\n/);
+  assert.deepEqual(workflowUse(review).jobs, { ...NO_JOBS, review: true });
+  // Check alone is the default: no setting written, as before.
+  const check = workflowFile("grok", "v1", { ...NO_JOBS, pulls: true });
+  assert.doesNotMatch(check, / {10}pull-requests:/);
+  assert.deepEqual(workflowUse(check).jobs, { ...NO_JOBS, pulls: true });
+  // Turned off, the setting goes with the trigger.
+  const off = withJobs(both, NO_JOBS)!;
+  assert.doesNotMatch(off, /pull_request:| {10}pull-requests:/);
 });

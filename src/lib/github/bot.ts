@@ -606,6 +606,10 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       "- **Every pull request**: on each push to a pull request from this repository, Aperture Agent Check runs and its report is kept in one comment, updated on each push. It changes nothing, and needs no model key.",
     );
+  if (jobs.review)
+    lines.push(
+      "- **Review every pull request**: on each push to a pull request from this repository, the bot comments on the lines of likely bugs (only what it is at least 80% sure of) and replies with their fixes to tick. It changes nothing, and uses the model key.",
+    );
   if (jobs.issues)
     lines.push(
       "- **Every new issue**: the bot reads it and the code, and replies with what it would do, with a box to tick to have it done. It changes nothing; at most `daily-limit` (20) such replies a day.",
@@ -670,6 +674,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         scheduled: scheduled || null,
         cron: scheduled ? (data.weekly ? WEEKLY : NIGHTLY) : null,
         pulls: data.pulls ?? false,
+        review: data.review ?? false,
         issues: data.issues ?? false,
         red,
       };

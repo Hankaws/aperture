@@ -246,6 +246,25 @@ export class GitHub {
     return out.number;
   }
 
+  async editIssue(number: number, body: string): Promise<void> {
+    await this.call("PATCH", `${this.base}/issues/${number}`, { body });
+  }
+
+  /** Comments anywhere in the repository since `since` (ISO): what the bot said lately. */
+  async commentsSince(since: string): Promise<ThreadComment[]> {
+    const out = await this.all<{
+      id: number;
+      body?: string;
+      user?: { login?: string; type?: string };
+    }>(`${this.base}/issues/comments?since=${encodeURIComponent(since)}&sort=created`, 3);
+    return out.map((c) => ({
+      id: c.id,
+      author: c.user?.login ?? "someone",
+      authorType: c.user?.type ?? "User",
+      body: c.body ?? "",
+    }));
+  }
+
   /** Open pull requests: their branch and page, and what the look-over reads. */
   async openPulls(): Promise<
     Array<{

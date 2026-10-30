@@ -9,6 +9,10 @@
  * Check alone and replies with its report: no model, and no change. A
  * question (`/aperture why …?`) is answered on the thread, changing nothing,
  * and a suggestion ticked in one of the bot's replies is a task like any other.
+ * Unasked, when the workflow listens: a new issue gets a reply with what the
+ * bot would do, and a workflow red on the default branch is explained on the
+ * bot's issue for it. Those two are capped per day (`daily-limit`), since
+ * anyone can open an issue and each reply spends the model key.
  *
  * Settings arrive as INPUT_* variables, as GitHub passes an action's inputs.
  */
@@ -50,7 +54,8 @@ import {
   workingReply,
   type Asked,
 } from "./replies.ts";
-import { jobFrom, planJob } from "./jobs.ts";
+import { jobFrom, planJob, planRed } from "./jobs.ts";
+import { MAX_NEXT } from "./next.ts";
 import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
@@ -87,6 +92,19 @@ function setOutput(env: NodeJS.ProcessEnv, values: Record<string, string>): void
       .join(""),
   );
 }
+
+/** What the bot asks itself about a new issue, before anyone asks it. */
+export const TRIAGE_QUESTION = [
+  "Someone just opened this issue. Reply to them as the project's bot, from the code.",
+  "Say what you understand the issue to be, where in the code it lives (path:line), and how you would fix or build it, in a few short steps.",
+  "If the issue is unclear or misses something you need (steps to reproduce, what they expected, versions), ask for exactly that. If it is not about the code (a usage question, a duplicate), say so plainly.",
+].join(" ");
+
+/** A suggestion's text, kept to what a box carries. */
+const clipTask = (task: string) =>
+  task.replace(/\s+/g, " ").trim().length <= 200
+    ? task.replace(/\s+/g, " ").trim()
+    : `${task.replace(/\s+/g, " ").trim().slice(0, 199)}…`;
 
 export function modelConfig(env: NodeJS.ProcessEnv): CompletionCfg {
   const provider = (input(env, "provider") ?? "grok") as EngineId;
@@ -172,7 +190,9 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   const [owner, name] =
     "command" in parsed
       ? [parsed.command.owner, parsed.command.repo]
-      : (env.GITHUB_REPOSITORY ?? "").split("/");
+      : "red" in parsed
+        ? [parsed.red.owner, parsed.red.repo]
+        : (env.GITHUB_REPOSITORY ?? "").split("/");
   if (!owner || !name) throw new Error("GITHUB_REPOSITORY is not owner/repo.");
   const token = input(env, "github-token") ?? env.GITHUB_TOKEN;
   if (!token) throw new Error("github-token is empty.");
@@ -183,8 +203,35 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     deps.fetch,
   );
 
+  /**
+   * Replies nobody asked for (new issues, red runs) stop at `daily-limit` a
+   * day: anyone can open issues, and each reply spends the model key.
+   */
+  const overDailyLimit = async (): Promise<string | null> => {
+    const limit = Math.floor(number(env, "daily-limit", 20));
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const sent = (await gh.commentsSince(since)).filter((c) => {
+      const s = c.authorType === "Bot" ? readSummary(c.body) : null;
+      return s?.via === "issue" || s?.via === "red";
+    }).length;
+    return sent >= limit
+      ? `it already replied unasked ${sent} times in the last day (daily-limit: ${limit}).`
+      : null;
+  };
+
   let command: Command;
-  if ("command" in parsed) {
+  if ("command" in parsed && parsed.command.triage) {
+    // Read-only, so anyone's new issue may be read; the cap keeps it cheap.
+    command = parsed.command;
+    const over = await overDailyLimit();
+    if (over) return ignore(over);
+  } else if ("red" in parsed) {
+    const over = await overDailyLimit();
+    if (over) return ignore(over);
+    const planned = await planRed(gh, parsed.red);
+    if ("skip" in planned) return ignore(planned.skip);
+    command = planned.command;
+  } else if ("command" in parsed) {
     command = parsed.command;
     const permission = await gh.permission(command.author);
     if (!canWrite(permission)) {
@@ -361,13 +408,22 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   /**
    * A question: answered on the thread from the code, the thread, a pull
    * request's diff and whatever fails. It changes nothing and runs nothing.
-   * A fork's code is read only as its diff: it is never checked out.
+   * A fork's code is read only as its diff: it is never checked out. A new
+   * issue and a red run are answered the same way, with their own question,
+   * and their reply's first suggestion is the work itself, to tick.
    */
-  const answer = async (): Promise<number> => {
+  const answer = async (how: {
+    question: string;
+    /** The suggestion that leads the list: the issue, or the fix. */
+    first?: string;
+    heading?: string;
+  }): Promise<number> => {
     const model = modelConfig(env);
     let diff: string | null = null;
-    let sha = "";
-    if (command.isPull) {
+    let sha = command.red?.sha ?? "";
+    if (command.red) {
+      // The issue's body already says what fails.
+    } else if (command.isPull) {
       const pull = await gh.pull(command.number);
       sha = pull.headSha;
       diff = await gh.diff(command.number).catch(() => null);
@@ -381,14 +437,17 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       sha ? gh.failures(sha).catch(() => []) : Promise.resolve([]),
     ]);
     const where = command.isPull ? "this pull request's head" : command.defaultBranch;
-    const context = [threadContext(command, comments, diff), failingContext(where, sha, failures)]
+    const context = [
+      threadContext(command, comments, diff),
+      command.red ? "" : failingContext(where, sha, failures),
+    ]
       .filter(Boolean)
       .join("\n\n");
     log(`Aperture Bot: answering #${command.number} for @${command.author}`);
     const result = await answerQuestion(
       {
         cwd,
-        question: questionText(command.task),
+        question: how.question,
         context,
         model,
         maxTokens: number(env, "max-tokens", 1_000_000),
@@ -396,15 +455,39 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       { model: deps.model },
     );
     if (!result.ok) throw new Error(result.error);
-    log([result.answer, ...result.next.map((task) => `- ${task}`)].join("\n"));
-    await reply(answerReply(result, { ...asked, usage: result.usage }));
+    const first = how.first;
+    const next = first
+      ? [first, ...result.next.filter((t) => t.toLowerCase() !== first.toLowerCase())].slice(
+          0,
+          MAX_NEXT,
+        )
+      : result.next;
+    const answered = {
+      answer: how.heading ? `${how.heading}\n\n${result.answer}` : result.answer,
+      next,
+    };
+    log([answered.answer, ...next.map((task) => `- ${task}`)].join("\n"));
+    await reply(answerReply(answered, { ...asked, usage: result.usage }));
     setOutput(env, { outcome: "answered" });
     return 0;
   };
 
   try {
     if (command.look) return await lookOver();
-    if (command.ask) return await answer();
+    if (command.ask) return await answer({ question: questionText(command.task) });
+    if (command.triage)
+      return await answer({
+        question: TRIAGE_QUESTION,
+        first: clipTask(`Do what this issue asks: ${command.title}`),
+      });
+    if (command.red) {
+      const sha = command.red.sha.slice(0, 7);
+      return await answer({
+        question: `Why does ${command.red.workflow} fail on ${command.red.branch} at ${sha}? Explain the cause from the failing checks and the code, and say what the fix is.`,
+        first: command.task,
+        heading: `**${command.red.workflow} is red on ${command.red.branch}** at ${sha}.${command.red.url ? ` [The run](${command.red.url})` : ""}`,
+      });
+    }
     if (command.check) return await checkPull();
     const model = modelConfig(env);
     let pull: Pull | null = null;

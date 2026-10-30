@@ -27,9 +27,11 @@ export type BotSummary = {
   kind?: "check" | "look" | "answer";
   /**
    * How the bot was asked, when it was not a comment: a push to a pull request
-   * is a check; a tick is a suggestion ticked in one of the bot's replies.
+   * is a check; a tick is a suggestion ticked in one of the bot's replies; an
+   * issue is a new issue it read unasked, and red a workflow red on the
+   * default branch that it explained.
    */
-  via?: "label" | "schedule" | "pull" | "tick";
+  via?: "label" | "schedule" | "pull" | "tick" | "issue" | "red";
   /** Who asked, when it was not a comment: whoever added the label, pushed or ticked, or "schedule". */
   by?: string;
   /** What was asked, when it was not a comment. */
@@ -135,7 +137,14 @@ export function readSummary(body: string): BotSummary | null {
     run: isGithubUrl(r.run) ? r.run : "",
   };
   if (r.kind === "check" || r.kind === "look" || r.kind === "answer") out.kind = r.kind;
-  if (r.via === "label" || r.via === "schedule" || r.via === "pull" || r.via === "tick")
+  if (
+    r.via === "label" ||
+    r.via === "schedule" ||
+    r.via === "pull" ||
+    r.via === "tick" ||
+    r.via === "issue" ||
+    r.via === "red"
+  )
     out.via = r.via;
   if (typeof r.by === "string") out.by = r.by.slice(0, 100);
   if (typeof r.task === "string") out.task = r.task;

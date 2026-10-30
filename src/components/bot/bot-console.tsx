@@ -452,6 +452,8 @@ function whoAsked(task: BotTask): string {
   if (task.via === "label") return `Labelled by @${task.author}`;
   if (task.via === "pull") return `Pushed by @${task.author}`;
   if (task.via === "tick") return `Ticked by @${task.author}`;
+  if (task.via === "issue") return `Opened by @${task.author}`;
+  if (task.via === "red") return `${task.author} went red`;
   return `@${task.author}`;
 }
 

@@ -49,6 +49,10 @@ inputs:
     description: How many times Aperture Agent Check may run; each red result but the last goes back to the agent.
     required: false
     default: "2"
+  daily-limit:
+    description: How many replies nobody asked for (to new issues, and to workflows red on the default branch) the bot posts in a day at most. Anyone can open an issue, and each reply spends the model key.
+    required: false
+    default: "20"
   install:
     description: '"auto" runs npm ci --ignore-scripts when there is a package-lock.json and no node_modules; "none" leaves installing to you.'
     required: false

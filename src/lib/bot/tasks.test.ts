@@ -190,7 +190,14 @@ test("Set up's workflow file is one the Bot page recognises, with the provider's
 });
 
 test("standing jobs go into the workflow and read back the same", () => {
-  const jobs = { label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: false };
+  const jobs = {
+    label: true,
+    scheduled: "fix-ci",
+    cron: NIGHTLY,
+    pulls: false,
+    issues: false,
+    red: [],
+  };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
     text,
@@ -206,13 +213,22 @@ test("standing jobs go into the workflow and read back the same", () => {
   );
   assert.match(text, / {10}scheduled: "fix-ci"\n/);
   assert.deepEqual(workflowUse(text).jobs, jobs);
-  const look = { label: false, scheduled: "look-over", cron: WEEKLY, pulls: true };
+  const look = {
+    label: false,
+    scheduled: "look-over",
+    cron: WEEKLY,
+    pulls: true,
+    issues: false,
+    red: [],
+  };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", look)).jobs, look);
   const weekly = {
     label: false,
     scheduled: 'Update "docs" links\nthat 404',
     cron: WEEKLY,
     pulls: false,
+    issues: false,
+    red: [],
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", weekly)).jobs, weekly);
 });
@@ -235,7 +251,14 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     "          scheduled: old task",
     "",
   ].join("\n");
-  const next = withJobs(custom, { label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: false })!;
+  const next = withJobs(custom, {
+    label: true,
+    scheduled: "fix-ci",
+    cron: NIGHTLY,
+    pulls: false,
+    issues: false,
+    red: [],
+  })!;
   assert.match(
     next,
     / {10}model-key: \$\{\{ secrets\.MY_KEY \}\}\n {10}provider: anthropic\n {10}test-script: test:unit # the fast ones\n {10}scheduled: "fix-ci"\n/,
@@ -246,6 +269,8 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     scheduled: "fix-ci",
     cron: NIGHTLY,
     pulls: false,
+    issues: false,
+    red: [],
   });
   const off = withJobs(next, NO_JOBS)!;
   assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
@@ -311,10 +336,21 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
   assert.match(app, / {10}github-token: \$\{\{ steps\.app\.outputs\.token \}\}\n/);
   assert.equal(workflowUse(app).app, true);
   // Changing the jobs keeps the app; turning the app off takes its token with it.
-  const jobs = withJobs(app, { label: true, scheduled: null, cron: null, pulls: false })!;
+  const jobs = withJobs(app, {
+    label: true,
+    scheduled: null,
+    cron: null,
+    pulls: false,
+    issues: false,
+    red: [],
+  })!;
   assert.equal(workflowUse(jobs).app, true);
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
-  const off = withJobs(jobs, { label: true, scheduled: null, cron: null, pulls: false }, false)!;
+  const off = withJobs(
+    jobs,
+    { label: true, scheduled: null, cron: null, pulls: false, issues: false, red: [] },
+    false,
+  )!;
   assert.equal(workflowUse(off).app, false);
   assert.doesNotMatch(off, /github-token|create-github-app-token/);
   // A token of the person's own is theirs: it stays.
@@ -326,7 +362,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
 });
 
 test("checking every pull request is a job: its trigger, only this repository's branches, read back", () => {
-  const jobs = { ...NO_JOBS, pulls: true };
+  const jobs = { ...NO_JOBS, pulls: true, issues: false, red: [] };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
     text,
@@ -347,11 +383,45 @@ test("the workflow's comment names the ways the bot is asked", () => {
     /# Starts a runner only (.*)\n/.exec(workflowFile("grok", "v1", jobs))![1];
   assert.equal(says(NO_JOBS), "when the bot is asked: a comment or a ticked suggestion.");
   assert.equal(
-    says({ ...NO_JOBS, pulls: true }),
+    says({ ...NO_JOBS, pulls: true, issues: false, red: [] }),
     "when the bot is asked: a comment, a ticked suggestion, or a pull request.",
   );
   assert.equal(
-    says({ label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: true }),
+    says({ label: true, scheduled: "fix-ci", cron: NIGHTLY, pulls: true, issues: false, red: [] }),
     "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
+  );
+});
+
+test("replying to new issues and explaining red runs go into the workflow and read back", () => {
+  const jobs = { ...NO_JOBS, label: true, issues: true, red: ["CI", "Deploy docs"] };
+  const text = workflowFile("grok", "v1", jobs);
+  assert.match(text, /^ {2}issues:\n {4}types: \[opened, labeled\]\n/m);
+  assert.match(
+    text,
+    /^ {2}workflow_run:\n {4}workflows: \["CI","Deploy docs"\]\n {4}types: \[completed\]\n/m,
+  );
+  assert.match(
+    text,
+    /\|\| \(github\.event_name == 'issues' && github\.event\.action == 'opened' && github\.event\.sender\.type != 'Bot'\)/,
+  );
+  assert.match(
+    text,
+    /\|\| \(github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_branch == github\.event\.repository\.default_branch\n {10}&& github\.event\.workflow_run\.head_repository\.full_name == github\.repository\n {10}&& contains\(fromJSON\('\["failure", "timed_out"\]'\), github\.event\.workflow_run\.conclusion\)\)/,
+  );
+  // Red runs share one group: two at once must not both open the bot's issue.
+  assert.match(text, /\(github\.event\.workflow_run && 'red'\)/);
+  assert.match(
+    text,
+    /# Starts a runner only when the bot is asked: a comment, a ticked suggestion, a new issue, its label, or a red run on the default branch\./,
+  );
+  assert.deepEqual(workflowUse(text).jobs, jobs);
+  // Off again: neither trigger is left behind.
+  const off = withJobs(text, NO_JOBS)!;
+  assert.doesNotMatch(off, /workflow_run|opened/);
+  assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
+  // A name cannot break out of its string.
+  assert.deepEqual(
+    workflowUse(workflowFile("grok", "v1", { ...NO_JOBS, red: ['C"I\nx'] })).jobs.red,
+    ["CIx"],
   );
 });

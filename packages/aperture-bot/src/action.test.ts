@@ -46,6 +46,8 @@ function fakeGitHub(
     poster?: { login: string; id: number };
     /** The thread's comments, instead of an ask and an earlier bot reply. */
     thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
+    /** Comments anywhere in the repository in the last day. */
+    recent?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -106,6 +108,9 @@ function fakeGitHub(
         })),
       );
     if (path.endsWith("/reactions")) return json({}, 201);
+    if (method === "GET" && path === "/repos/acme/shop/issues/comments")
+      return json(options.recent ?? []);
+    if (method === "PATCH" && /\/issues\/\d+$/.test(path)) return json({ number: 7 });
     if (method === "GET" && /\/issues\/\d+\/comments$/.test(path))
       return json(
         options.thread ?? [
@@ -211,6 +216,7 @@ async function act(
     /** The model, instead of one scripted to build `builds`. */
     model?: ReturnType<typeof scripted>["model"];
     thread?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
+    recent?: Array<{ id: number; body: string; user: { login: string; type: string } }>;
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
     payload?: unknown;
@@ -227,6 +233,7 @@ async function act(
     openPulls: options.openPulls,
     poster: options.poster,
     thread: options.thread,
+    recent: options.recent,
   });
   const eventPath =
     options.payload === undefined
@@ -908,4 +915,130 @@ test("a tick counts only from someone who can write, in a reply whose words are 
   assert.match(forged.lines.join("\n"), /in a comment by @stranger, who cannot write/);
   assert.equal(forged.gh.calls.filter((c) => c.method !== "GET").length, 0);
   assert.deepEqual(branchesOf(forged.origin), ["main"]);
+});
+
+const newIssue = {
+  action: "opened",
+  sender: { login: "visitor", type: "User" },
+  issue: { number: 7, title: "Prices show cents", body: "The cart says 100 for a dollar." },
+  repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+};
+
+test("a new issue gets a reply with what the bot would do, from anyone, changing nothing", async () => {
+  const ask = answering(
+    "formatPrice returns the cents as they are (src/price.ts:2).\n\nNext:\n- Format cents as dollars in formatPrice\n- Add a test for 100 cents",
+  );
+  const run = await act({
+    eventName: "issues",
+    payload: newIssue,
+    permission: "none",
+    thread: [],
+    model: ask.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  // Read-only, so a stranger's issue is read; nothing asks who they are.
+  assert.equal(run.gh.calls.filter((c) => c.path.endsWith("/permission")).length, 0);
+  assert.match(ask.read[0]!, /Someone just opened this issue/);
+  assert.match(ask.read[0]!, /Issue #7: Prices show cents\n\nThe cart says 100 for a dollar\./);
+  for (const tools of ask.offered.filter((t) => t.length > 0))
+    assert.ok(!tools.includes("propose_edit") && !tools.includes("run_script"), tools.join());
+  assert.deepEqual(branchesOf(run.origin), ["main"]);
+  const body = run.replied();
+  assert.match(body, /^formatPrice returns the cents as they are/);
+  // The issue itself leads the boxes: one tick, and the bot does it.
+  assert.match(
+    body,
+    /\*\*Next, I would suggest\*\*\n- \[ \] Do what this issue asks: Prices show cents\n- \[ \] Format cents as dollars in formatPrice\n- \[ \] Add a test for 100 cents\n/,
+  );
+  const s = readSummary(body)!;
+  assert.deepEqual([s.kind, s.via, s.by, s.asked], ["answer", "issue", "visitor", 0]);
+  assert.equal(s.next![0], "Do what this issue asks: Prices show cents");
+});
+
+test("unasked replies stop at the daily limit", async () => {
+  const said = (i: number) => ({
+    id: 100 + i,
+    body: `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "answer", asked: 0, run: "https://github.com/acme/shop/actions/runs/1", via: "issue", by: "x" })} -->`,
+    user: { login: "github-actions[bot]", type: "Bot" },
+  });
+  const run = await act({
+    eventName: "issues",
+    payload: newIssue,
+    env: { "INPUT_DAILY-LIMIT": "3" },
+    recent: [said(1), said(2), said(3)],
+  });
+  assert.equal(run.code, 0);
+  assert.match(run.lines.join("\n"), /replied unasked 3 times in the last day \(daily-limit: 3\)/);
+  assert.equal(run.gh.calls.filter((c) => c.method !== "GET").length, 0);
+});
+
+const redRun = {
+  action: "completed",
+  workflow_run: {
+    name: "CI",
+    conclusion: "failure",
+    head_branch: "main",
+    head_sha: "abc1234def",
+    html_url: "https://github.com/acme/shop/actions/runs/77",
+    event: "push",
+  },
+  repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+};
+
+test("a workflow red on the default branch is explained on the bot's issue, with the fix to tick", async () => {
+  const ask = answering(
+    "formatPrice returns cents, and the cart test expects dollars (src/price.ts:2).",
+  );
+  const run = await act({
+    eventName: "workflow_run",
+    payload: redRun,
+    red: true,
+    thread: [],
+    model: ask.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [issue] = run.posted(/\/repos\/acme\/shop\/issues$/);
+  const created = issue!.body as { title: string; body: string };
+  assert.equal(created.title, "Aperture Bot: main is red");
+  assert.match(
+    created.body,
+    /CI finished red on main \(\[the run\]\(https:\/\/github\.com\/acme\/shop\/actions\/runs\/77\)\)/,
+  );
+  assert.match(
+    created.body,
+    /These checks fail on main at abc1234\. Find why in the code, and fix it/,
+  );
+  assert.match(ask.read[0]!, /Why does CI fail on main at abc1234\?/);
+  assert.match(ask.read[0]!, /- test\n {2}1 test failed/, "the issue's body names what fails");
+  assert.deepEqual(branchesOf(run.origin), ["main"]);
+  const body = run.replied();
+  assert.match(
+    body,
+    /^\*\*CI is red on main\*\* at abc1234\. \[The run\]\(https:\/\/github\.com\/acme\/shop\/actions\/runs\/77\)\n\nformatPrice returns cents/,
+  );
+  assert.match(body, /- \[ \] Fix what is red on main at abc1234\n/);
+  const s = readSummary(body)!;
+  assert.deepEqual([s.via, s.task], ["red", "Fix what is red on main at abc1234"]);
+});
+
+test("a red commit already explained, or green again, is not explained again", async () => {
+  const explained = await act({
+    eventName: "workflow_run",
+    payload: redRun,
+    red: true,
+    openIssues: [{ number: 7, title: "Aperture Bot: main is red" }],
+    thread: [
+      {
+        id: 3,
+        body: `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "answer", asked: 0, run: "https://github.com/acme/shop/actions/runs/1", via: "red", by: "CI", task: "Fix what is red on main at abc1234" })} -->`,
+        user: { login: "github-actions[bot]", type: "Bot" },
+      },
+    ],
+  });
+  assert.equal(explained.code, 0);
+  assert.match(explained.lines.join("\n"), /abc1234 is already explained on #7/);
+  assert.equal(explained.gh.calls.filter((c) => c.method !== "GET").length, 0);
+  const green = await act({ eventName: "workflow_run", payload: redRun, red: false });
+  assert.match(green.lines.join("\n"), /nothing fails on main at abc1234 any more/);
+  assert.equal(green.gh.calls.filter((c) => c.method !== "GET").length, 0);
 });

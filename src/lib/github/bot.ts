@@ -596,7 +596,7 @@ function jobsText(jobs: Jobs): string[] {
     );
   else if (jobs.scheduled === "look-over")
     lines.push(
-      `- **On the schedule** (\`${jobs.cron ?? NIGHTLY}\`, UTC): look the repository over and post how it stands, with up to three things worth doing, on its own issue. It changes nothing; a suggestion is done only when someone sends it.`,
+      `- **A daily brief** (\`${jobs.cron ?? NIGHTLY}\`, UTC) on its own issue: what needs you (CI, pull requests waiting, quiet issues) and up to five ideas from reading the code. It changes nothing; an idea is done only when someone ticks or sends it.`,
     );
   else if (jobs.scheduled)
     lines.push(
@@ -616,7 +616,9 @@ function jobsText(jobs: Jobs): string[] {
     );
   if (jobs.red.length)
     lines.push(
-      `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue, with a box to tick to have it fixed. It changes nothing until someone ticks it.`,
+      jobs.autoRed
+        ? `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue and fixes it at once (\`always-allow: red\`), opening a pull request only when Aperture Agent Check is clear.`
+        : `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue, with a box to tick to have it fixed. It changes nothing until someone ticks it.`,
     );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
@@ -677,6 +679,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         review: data.review ?? false,
         issues: data.issues ?? false,
         red,
+        autoRed: Boolean(data.autoRed) && red.length > 0,
       };
       const read = await readWorkflow(call, base);
       if (!read.ok) return read;

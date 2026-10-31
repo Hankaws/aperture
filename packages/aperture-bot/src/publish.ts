@@ -152,3 +152,35 @@ export function pullFiles(
   }
   return { head, files, skipped };
 }
+
+/**
+ * The TODO, FIXME and HACK lines in the checkout's tracked files, as
+ * `path:line: text`, for the daily brief to weigh. None, or no git: empty.
+ */
+export function todoLines(cwd: string, max = 20): string[] {
+  let out = "";
+  try {
+    out = git(
+      [
+        "grep",
+        "-n",
+        "-I",
+        "-E",
+        "\\b(TODO|FIXME|HACK)\\b",
+        "--",
+        ".",
+        ":!*.lock",
+        ":!package-lock.json",
+      ],
+      cwd,
+    );
+  } catch {
+    // git grep exits 1 when nothing matches.
+    return [];
+  }
+  return out
+    .split("\n")
+    .filter(Boolean)
+    .slice(0, max)
+    .map((line) => (line.length > 200 ? `${line.slice(0, 199)}…` : line.trim()));
+}

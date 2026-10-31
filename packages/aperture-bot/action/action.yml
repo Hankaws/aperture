@@ -53,6 +53,9 @@ inputs:
     description: 'What a push to a pull request starts, when the workflow listens for pull_request: "check" runs Aperture Agent Check (no model key); "review" posts a review with comments on the lines of likely bugs; "check, review" does both.'
     required: false
     default: check
+  always-allow:
+    description: 'Work the bot starts without a tick. "red": a workflow red on the default branch is explained and fixed at once (a pull request, only when Aperture Agent Check is clear). Empty: every fix waits for someone who can write to tick it.'
+    required: false
   daily-limit:
     description: How many replies nobody asked for (to new issues, and to workflows red on the default branch) the bot posts in a day at most. Anyone can open an issue, and each reply spends the model key.
     required: false

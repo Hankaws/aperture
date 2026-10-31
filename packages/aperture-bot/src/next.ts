@@ -6,6 +6,8 @@
 import type { ChatMessage } from "../../../src/lib/agent/complete.server.ts";
 
 export const MAX_NEXT = 3;
+/** The daily brief offers a few more: it reads the whole repository, not one task. */
+export const MAX_IDEAS = 5;
 const MAX_CHARS = 240;
 
 export type NextInput = {
@@ -41,7 +43,7 @@ export function nextMessages(input: NextInput): ChatMessage[] {
 }
 
 /** The suggestions in a reply: list lines only, cleaned, unique, at most a few. */
-export function parseNext(text: string): string[] {
+export function parseNext(text: string, max = MAX_NEXT): string[] {
   const out: string[] = [];
   for (const line of text.split("\n")) {
     const match = /^\s*(?:[-*•]|\d+[.)])\s+(.+)$/.exec(line);
@@ -53,7 +55,7 @@ export function parseNext(text: string): string[] {
     if (!task || /^none\.?$/i.test(task)) continue;
     const clipped = task.length > MAX_CHARS ? `${task.slice(0, MAX_CHARS - 1)}…` : task;
     if (!out.some((t) => t.toLowerCase() === clipped.toLowerCase())) out.push(clipped);
-    if (out.length === MAX_NEXT) break;
+    if (out.length === max) break;
   }
   return out;
 }

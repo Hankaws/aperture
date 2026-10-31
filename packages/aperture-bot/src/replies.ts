@@ -122,10 +122,10 @@ export function resultSummary(
 }
 
 /** What the bot would do next, as boxes: ticking one asks for it (`suggestions.ts`). */
-function nextList(next: string[]): string[] {
+function nextList(next: string[], heading = "Next, I would suggest"): string[] {
   if (next.length === 0) return [];
   return [
-    "**Next, I would suggest**",
+    `**${heading}**`,
     ...suggestionBoxes(next),
     "",
     "Tick one and I will do it, or ask for something else with `/aperture`. Nothing is done until you do.",
@@ -401,14 +401,17 @@ export function checkReply(check: CheckResult, ctx: ReplyContext): string {
  */
 export function lookReply(
   look: { note: string; next: string[] },
-  where: { branch: string; sha: string },
+  where: { branch: string; sha: string; needs: string[]; date: string },
   ctx: Asked & { usage: string },
 ): string {
   const at = where.sha ? ` at ${where.sha.slice(0, 7)}` : "";
   return join(
-    [`**Looked things over** on ${where.branch}${at}.`],
+    [`**Daily brief** for ${where.date}, on ${where.branch}${at}.`],
+    ["**What needs you**", ...where.needs],
     look.note ? [look.note] : [],
-    look.next.length > 0 ? nextList(look.next) : ["Nothing I would do right now."],
+    look.next.length > 0
+      ? nextList(look.next, "Ideas from the code")
+      : ["No ideas worth doing from the code today."],
     [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
     [
       summaryMarker({
@@ -418,7 +421,9 @@ export function lookReply(
         asked: ctx.asked,
         run: ctx.run,
         ...askedFields(ctx),
-        ...(look.note ? { note: look.note } : {}),
+        ...(look.note
+          ? { note: look.note.length > 600 ? `${look.note.slice(0, 599)}…` : look.note }
+          : {}),
         ...(look.next.length ? { next: look.next } : {}),
         usage: ctx.usage,
       }),

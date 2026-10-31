@@ -20,7 +20,7 @@ type Mode = "off" | "fix-ci" | "look-over" | "task";
 const MODES: Array<{ id: Mode; label: string }> = [
   { id: "off", label: "Off" },
   { id: "fix-ci", label: "Fix CI" },
-  { id: "look-over", label: "Look over" },
+  { id: "look-over", label: "Daily brief" },
   { id: "task", label: "A task" },
 ];
 
@@ -47,6 +47,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const [review, setReview] = useState(now.review);
   const [issues, setIssues] = useState(now.issues);
   const [red, setRed] = useState(now.red.length > 0);
+  const [autoRed, setAutoRed] = useState(now.autoRed);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -62,6 +63,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
     review !== now.review ||
     issues !== now.issues ||
     red !== now.red.length > 0 ||
+    (red && autoRed) !== now.autoRed ||
     scheduled !== (now.scheduled ?? "") ||
     (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -81,6 +83,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           review,
           issues,
           red,
+          autoRed: red && autoRed,
         },
       });
       if (out.ok) setOpened(out.url);
@@ -214,6 +217,22 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
             with a box to tick to have it fixed.
             {now.red.length > 0 && <> Watching {now.red.join(", ")}.</>}
           </span>
+          {red && (
+            <span className="mt-2 flex items-start gap-2 text-muted">
+              <input
+                type="checkbox"
+                checked={autoRed}
+                onChange={(event) => setAutoRed(event.target.checked)}
+                disabled={!editable}
+                aria-label="Fix red CI without asking"
+                className="mt-0.5 size-4 accent-[var(--color-accent)]"
+              />
+              <span>
+                Fix it without asking: the bot opens a pull request with the fix straight away,
+                still only when Aperture Agent Check is clear.
+              </span>
+            </span>
+          )}
         </span>
       </label>
 
@@ -232,8 +251,8 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
               disabled={!editable}
               onClick={() => {
                 setMode(m.id);
-                // A new look-over starts weekly: a note a week is news, one a night is noise.
-                if (m.id === "look-over" && startMode !== "look-over") setWeekly(true);
+                // A new brief starts daily, as its name says; Monday only is one click away.
+                if (m.id === "look-over" && startMode !== "look-over") setWeekly(false);
               }}
               className={cn(
                 "h-8 flex-1 rounded-md text-xs",
@@ -253,9 +272,10 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
         {mode === "look-over" && (
           <div className="mt-2 space-y-2">
             <p className="text-sm text-pretty text-muted">
-              Read CI on {setup.defaultBranch} and the open issues and pull requests, then post how
-              things stand and up to three things worth doing. It changes nothing: tick a suggestion
-              on GitHub, or send or dismiss it in this bot&apos;s chat.
+              Each morning on its own issue: what needs you (CI on {setup.defaultBranch}, pull
+              requests waiting, issues gone quiet) and up to five ideas from reading the code. It
+              changes nothing: tick an idea on GitHub to have it done, or send it from this
+              bot&apos;s chat.
             </p>
             {often}
           </div>

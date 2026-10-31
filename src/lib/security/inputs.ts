@@ -149,6 +149,7 @@ export const botJobsInput = z.object({
   review: z.boolean().optional(),
   issues: z.boolean().optional(),
   red: z.boolean().optional(),
+  autoRed: z.boolean().optional(),
 });
 export const botAppInput = z.object({ owner: repoName, repo: repoName, on: z.boolean() });
 export const botSetupInput = z.object({

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readSummary, summaryMarker } from "./summary.ts";
-test("suggestions read back at most three, clipped, and only as strings", () => {
+test("suggestions read back at most five (a daily brief's), clipped, and only as strings", () => {
   const body = summaryMarker({
     v: 1,
     state: "clear",
     asked: 1,
     run: "https://github.com/a/b/actions/runs/1",
-    next: ["one", "two", "three", "four"],
+    next: ["one", "two", "three", "four", "five", "six"],
   });
-  assert.deepEqual(readSummary(body)?.next, ["one", "two", "three"]);
+  assert.deepEqual(readSummary(body)?.next, ["one", "two", "three", "four", "five"]);
   const odd = `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", asked: 1, run: "", next: ["ok", 5, null, "x".repeat(400)] })} -->`;
   const next = readSummary(odd)?.next;
   assert.equal(next?.length, 2);

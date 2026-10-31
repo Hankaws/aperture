@@ -4,13 +4,15 @@
  * tests.
  */
 import type { CheckFailure } from "./github.ts";
-import { parseNext } from "./next.ts";
+import { MAX_NEXT, parseNext } from "./next.ts";
 
 const MAX_ANSWER = 6_000;
-const NEXT_LINE = /^\s*(?:#+\s*)?(?:\*\*)?next(?:\*\*)?\s*:?\s*(?:\*\*)?\s*$/i;
+/** "Next:" on a line of its own (bold or a heading too), or "Next: none" when there is nothing. */
+const NEXT_LINE =
+  /^\s*(?:#+\s*)?(?:\*\*)?next(?:\*\*)?\s*:?\s*(?:\*\*)?\s*(?:(?:none|nothing)\.?\s*)?$/i;
 
 /** The answer and the tasks it ends with, split at its last "Next:" line. */
-export function splitAnswer(text: string): { answer: string; next: string[] } {
+export function splitAnswer(text: string, max = MAX_NEXT): { answer: string; next: string[] } {
   const lines = text.trim().split("\n");
   let at = -1;
   for (let i = lines.length - 1; i >= 0; i -= 1) {
@@ -21,7 +23,7 @@ export function splitAnswer(text: string): { answer: string; next: string[] } {
   }
   const body = (at < 0 ? lines : lines.slice(0, at)).join("\n").trim();
   const answer = body.length <= MAX_ANSWER ? body : `${body.slice(0, MAX_ANSWER - 1)}…`;
-  return { answer, next: at < 0 ? [] : parseNext(lines.slice(at + 1).join("\n")) };
+  return { answer, next: at < 0 ? [] : parseNext(lines.slice(at + 1).join("\n"), max) };
 }
 
 const MAX_FAILURES = 8;

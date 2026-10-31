@@ -438,8 +438,13 @@ test("replying to new issues and explaining red runs go into the workflow and re
     text,
     /\|\| \(github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_branch == github\.event\.repository\.default_branch\n {10}&& github\.event\.workflow_run\.head_repository\.full_name == github\.repository\n {10}&& contains\(fromJSON\('\["failure", "timed_out"\]'\), github\.event\.workflow_run\.conclusion\)\)/,
   );
-  // Red runs share one group: two at once must not both open the bot's issue.
-  assert.match(text, /\(github\.event\.workflow_run && 'red'\)/);
+  // Unasked replies (new issues, red runs) share one queue: two at once must not both open the
+  // bot's issue, and a burst of new issues cannot slip past daily-limit.
+  assert.match(
+    text,
+    /group: aperture-bot-\$\{\{ \(\(github\.event_name == 'issues' && github\.event\.action == 'opened'\) \|\| github\.event_name == 'workflow_run'\) && 'unasked' \|\| github\.event\.issue\.number/,
+  );
+  assert.doesNotMatch(workflowFile("grok", "v1", { ...NO_JOBS, label: true }), /'unasked'/);
   assert.match(
     text,
     /# Starts a runner only when the bot is asked: a comment, a ticked suggestion, a new issue, its label, or a red run on the default branch\./,

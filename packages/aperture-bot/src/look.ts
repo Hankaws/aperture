@@ -6,6 +6,7 @@
  * each a box to tick. Pure, so the wording is tested without a network.
  */
 import { MAX_IDEAS } from "./next.ts";
+import { quiet } from "./quiet.ts";
 
 export type LookThread = {
   number: number;
@@ -41,7 +42,8 @@ function days(at: string | undefined, now: number): number | null {
 }
 
 const dayWord = (n: number) => (n === 1 ? "1 day" : `${n} days`);
-const title = (t: LookThread) => t.title.replace(/\s+/g, " ").trim().slice(0, 120);
+/** An issue's title as the brief shows it: anyone wrote it, so its @mentions stay quiet. */
+const title = (t: LookThread) => quiet(t.title.replace(/\s+/g, " ").trim().slice(0, 120));
 
 /** Oldest first: what has waited longest comes first. */
 function byAge(list: LookThread[], now: number): LookThread[] {
@@ -71,16 +73,16 @@ export function needsYou(view: LookView): string[] {
     );
   }
   if (ready.length > SHOWN) lines.push(`- and ${ready.length - SHOWN} more pull requests waiting.`);
-  const quiet = byAge(
+  const stale = byAge(
     view.issues.filter((i) => (days(i.updatedAt, view.now) ?? 0) >= QUIET_DAYS),
     view.now,
   );
-  for (const i of quiet.slice(0, SHOWN))
+  for (const i of stale.slice(0, SHOWN))
     lines.push(
       `- #${i.number} ${title(i)} has been quiet for ${dayWord(days(i.updatedAt, view.now)!)}.`,
     );
-  if (quiet.length > SHOWN) lines.push(`- and ${quiet.length - SHOWN} more quiet issues.`);
-  if (ready.length === 0 && quiet.length === 0 && view.failing.length === 0)
+  if (stale.length > SHOWN) lines.push(`- and ${stale.length - SHOWN} more quiet issues.`);
+  if (ready.length === 0 && stale.length === 0 && view.failing.length === 0)
     lines.push("- Nothing is waiting on you.");
   return lines;
 }

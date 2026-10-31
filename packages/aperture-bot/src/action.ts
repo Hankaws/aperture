@@ -121,6 +121,12 @@ export function pullModes(value: string | undefined): { check: boolean; review: 
   return { check: words.includes("check") || !review, review };
 }
 
+/**
+ * The most a reply nobody asked for (a new issue, a red run) may spend, in
+ * tokens, whatever `max-tokens` allows: a stranger's issue must not cost much.
+ */
+export const UNASKED_TOKENS = 150_000;
+
 /** What the bot asks itself about a new issue, before anyone asks it. */
 export const TRIAGE_QUESTION = [
   "Someone just opened this issue. Reply to them as the project's bot, from the code.",
@@ -475,6 +481,8 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     /** The suggestion that leads the list: the issue, or the fix. */
     first?: string;
     heading?: string;
+    /** Unasked: spend at most UNASKED_TOKENS. */
+    unasked?: boolean;
   }): Promise<number> => {
     const model = modelConfig(env);
     let diff: string | null = null;
@@ -508,7 +516,9 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         question: how.question,
         context,
         model,
-        maxTokens: number(env, "max-tokens", 1_000_000),
+        maxTokens: how.unasked
+          ? Math.min(UNASKED_TOKENS, number(env, "max-tokens", 1_000_000))
+          : number(env, "max-tokens", 1_000_000),
       },
       { model: deps.model },
     );
@@ -636,12 +646,14 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       return await answer({
         question: TRIAGE_QUESTION,
         first: clipTask(`Do what this issue asks: ${command.title}`),
+        unasked: true,
       });
     if (command.red) {
       const sha = command.red.sha.slice(0, 7);
       const code = await answer({
         question: `Why does ${command.red.workflow} fail on ${command.red.branch} at ${sha}? Explain the cause from the failing checks and the code, and say what the fix is.`,
         first: command.task,
+        unasked: true,
         heading: `**${command.red.workflow} is red on ${command.red.branch}** at ${sha}.${command.red.url ? ` [The run](${command.red.url})` : ""}`,
       });
       if (!alwaysAllowed(input(env, "always-allow")).has("red")) return code;

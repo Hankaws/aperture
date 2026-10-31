@@ -431,11 +431,17 @@ export function workflowFile(
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 45",
     "    concurrency:",
-    any
-      ? red.length
-        ? "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || (github.event.workflow_run && 'red') || 'scheduled' }}"
-        : "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || 'scheduled' }}"
-      : "      group: aperture-bot-${{ github.event.issue.number }}",
+    ...(jobs.issues || red.length
+      ? [
+          "      # Replies nobody asked for (new issues, red runs) queue one at a time, so",
+          "      # daily-limit counts each one before the next: a burst cannot slip past it.",
+          "      group: aperture-bot-${{ ((github.event_name == 'issues' && github.event.action == 'opened') || github.event_name == 'workflow_run') && 'unasked' || github.event.issue.number || github.event.pull_request.number || 'scheduled' }}",
+        ]
+      : [
+          any
+            ? "      group: aperture-bot-${{ github.event.issue.number || github.event.pull_request.number || 'scheduled' }}"
+            : "      group: aperture-bot-${{ github.event.issue.number }}",
+        ]),
     "    steps:",
     ...(app
       ? [

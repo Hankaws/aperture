@@ -12,6 +12,7 @@ import {
   Settings2,
   UserRound,
   X,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import { getAccount } from "@/lib/billing/api";
 import type { BotProfile } from "@/lib/bot/team";
 import { cn } from "@/lib/utils";
 import { ActivityPanel } from "./activity-feed";
+import { AutomationPanel } from "./automation-panel";
 import { AskCard, SetupCard, TaskList } from "./bot-console";
 import { BotChat } from "./bot-chat";
 import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
@@ -57,7 +59,11 @@ function keepSelected(id: string) {
 }
 
 type View =
-  { kind: "bot"; id: string } | { kind: "activity" } | { kind: "ideas" } | { kind: "new" };
+  | { kind: "bot"; id: string }
+  | { kind: "activity" }
+  | { kind: "ideas" }
+  | { kind: "automation" }
+  | { kind: "new" };
 type Panel = "profile" | "tasks" | "setup";
 
 const PANEL_CARD = "rounded-2xl border border-border bg-surface";
@@ -293,6 +299,20 @@ export function BotTeam() {
               </span>
             )}
           </button>
+          {bots.length > 0 && (
+            <button
+              type="button"
+              onClick={() => open({ kind: "automation" })}
+              aria-current={view.kind === "automation" || undefined}
+              className={cn(
+                "flex h-10 w-full items-center gap-3 rounded-full px-3 text-sm text-muted hover:bg-elevated hover:text-fg",
+                view.kind === "automation" && "bg-elevated text-fg",
+              )}
+            >
+              <Zap className="size-4" />
+              Automation
+            </button>
+          )}
           <Link
             to="/settings"
             search={{ tab: "models" }}
@@ -313,10 +333,24 @@ export function BotTeam() {
               ? "Activity"
               : view.kind === "ideas"
                 ? "Ideas"
-                : "New bot"
+                : view.kind === "automation"
+                  ? "Automation"
+                  : "New bot"
         }
       >
-        {view.kind === "ideas" ? (
+        {view.kind === "automation" ? (
+          <>
+            <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
+              {back}
+              <span className="text-sm font-medium">Automation</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <PanelBoundary name="Automation" className={PANEL_CARD}>
+                <AutomationPanel bots={bots} />
+              </PanelBoundary>
+            </div>
+          </>
+        ) : view.kind === "ideas" ? (
           <>
             <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
               {back}

@@ -9,10 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- An Ideas inbox on the Bot page: everything your bots' replies still suggest across the team's repositories (daily briefs, answers, reviews, red CI), newest first, with a count in the sidebar. Do it asks the bot on GitHub, on the thread the idea is about or in a new issue (never on the brief's own issue); Dismiss hides an idea in this browser, even when tomorrow's brief offers it again, and Restore brings it back. An idea someone has ticked, sent or had done since leaves by itself. ([#162](https://github.com/Hankaws/aperture/pull/162))
 - Aperture Bot can act on its daily brief without asking. With "Do the top idea without asking" on the Bot page (`always-allow: brief`), each brief's first idea from the code becomes a pull request at once, only when Aperture Agent Check is clear and one at a time: nothing new starts while the last one waits for review. An idea that names an issue still waits for a tick, since anyone can write an issue, and the brief now lists the idea most worth doing first. A box started by an `always-allow` setting names the setting instead of @mentioning a user called always-allow. ([#161](https://github.com/Hankaws/aperture/pull/161))
 
 ### Fixed
 
+- On the Bot page, a bot whose daily brief was posted in one go no longer shows as queued in the roster: the team's feed keeps an outcome before its ask at the same moment. ([#162](https://github.com/Hankaws/aperture/pull/162))
 - A ticked box starts Aperture Bot's work only in a list the bot itself made on that thread: its suggestion lists are signed with a key derived from its model key, so another bot's look-alike comment, or a list copied from another thread, starts nothing, and the bot replies with the task for you to ask for if you meant it. Suggestions posted before this are no longer tickable. ([#160](https://github.com/Hankaws/aperture/pull/160))
 
 ## 0.4.0 - 2026-10-31

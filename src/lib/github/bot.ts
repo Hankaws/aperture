@@ -17,6 +17,7 @@ import {
   botSetupInput,
 } from "@/lib/security/inputs";
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
+import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import {
   ciText,
@@ -241,7 +242,7 @@ async function loadTasks(
   base: string,
   get: Get,
   { quick = false }: { quick?: boolean } = {},
-): Promise<{ ok: true; tasks: BotTask[] } | Failure> {
+): Promise<{ ok: true; tasks: BotTask[]; threads: Map<number, Thread> } | Failure> {
   const recentUrl = `${base}/issues?state=all&sort=updated&direction=desc&per_page=50`;
   const early = quick ? null : get(recentUrl);
   const comments = await get(`${base}/issues/comments?sort=updated&direction=desc&per_page=100`);
@@ -250,7 +251,7 @@ async function loadTasks(
   if (comments.status !== 200 || !Array.isArray(comments.body))
     return { ok: false, error: `GitHub returned ${comments.status}.` };
   if (quick && tasksFrom(comments.body as RawComment[], new Map()).length === 0)
-    return { ok: true, tasks: [] };
+    return { ok: true, tasks: [], threads: new Map() };
   const recent = await (early ?? get(recentUrl));
   const threads = new Map<number, Thread>();
   const addThread = (row: unknown) => {
@@ -299,7 +300,7 @@ async function loadTasks(
     const ended = run ? endedRun(t, run) : t;
     return { ...ended, thread: threads.get(t.number) ?? null };
   });
-  return { ok: true, tasks };
+  return { ok: true, tasks, threads };
 }
 
 export const botTasks = createServerFn({ method: "POST" })
@@ -314,7 +315,8 @@ export const botTasks = createServerFn({ method: "POST" })
     const base = repoBase(data.owner, data.repo);
     if (!base) return { ok: false, error: "That repo name is not valid." };
     try {
-      return await loadTasks(base, (url) => githubJson(url, token));
+      const out = await loadTasks(base, (url) => githubJson(url, token));
+      return out.ok ? { ok: true, tasks: out.tasks } : out;
     } catch (error) {
       return {
         ok: false,
@@ -328,7 +330,9 @@ const ACTIVITY_REPOS = 15;
 /** this many at a time. */
 const ACTIVITY_PARALLEL = 5;
 
-export type BotActivity = { ok: true; activity: Activity[]; repos: number } | Failure;
+/** `ideas`: what the bot's replies still suggest, for the Ideas inbox (`ideas.ts`). */
+export type BotActivity =
+  { ok: true; activity: Activity[]; ideas: Idea[]; repos: number } | Failure;
 
 /** What the bot did across the team's repositories, or the person's most recently pushed, newest first. */
 export const botActivity = createServerFn({ method: "POST" })
@@ -366,23 +370,31 @@ export const botActivity = createServerFn({ method: "POST" })
       }
       names = names.slice(0, ACTIVITY_REPOS);
       const lists: Activity[][] = [];
+      const ideaLists: Idea[][] = [];
       for (let i = 0; i < names.length; i += ACTIVITY_PARALLEL) {
         const batch = await Promise.all(
           names.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
             const [owner = "", repo = ""] = fullName.split("/");
             const base = repoBase(owner, repo);
-            if (!base) return [];
+            if (!base) return { activity: [], ideas: [] };
             // One repository GitHub will not show is left out, not the whole feed.
             const out = await loadTasks(base, get, { quick: true }).catch(() => null);
-            return out?.ok ? activityFrom(fullName, out.tasks) : [];
+            return out?.ok
+              ? {
+                  activity: activityFrom(fullName, out.tasks),
+                  ideas: ideasFrom(fullName, out.tasks, Date.now(), out.threads),
+                }
+              : { activity: [], ideas: [] };
           }),
         );
-        lists.push(...batch);
+        lists.push(...batch.map((b) => b.activity));
+        ideaLists.push(...batch.map((b) => b.ideas));
       }
       // A team's feed keeps each repository's newest: one busy one must not hide the rest.
       return {
         ok: true,
         activity: data.repos?.length ? feedOf(lists, 150, 10) : feedOf(lists),
+        ideas: inboxOf(ideaLists),
         repos: names.length,
       };
     } catch (error) {

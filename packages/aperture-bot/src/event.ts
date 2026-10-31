@@ -62,6 +62,11 @@ export type Command = {
    */
   idea?: boolean;
   /**
+   * A follow-up (`follow-threads`): the bot's reply it follows, which the
+   * thread's context then includes, as it leaves the bot's other replies out.
+   */
+  follows?: number;
+  /**
    * The thread is the bot's own standing issue (the daily brief's): its pull
    * request does not close it. Set for a suggestion ticked in a brief.
    */
@@ -83,8 +88,30 @@ export type RedRun = {
 };
 
 /** The schedule, or a manual run: the job is the workflow's `scheduled` input. */
+/**
+ * A new comment without the trigger, read only when the bot follows its
+ * threads (`follow-threads`): whether it follows one of the bot's replies,
+ * and what it asks, the action decides from the thread (`follow.ts`).
+ */
+export type FollowUp = {
+  number: number;
+  isPull: boolean;
+  title: string;
+  body: string;
+  text: string;
+  commentId: number;
+  author: string;
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+};
+
 export type Parsed =
-  { command: Command } | { scheduled: true } | { red: RedRun } | { ignored: string };
+  | { command: Command }
+  | { scheduled: true }
+  | { red: RedRun }
+  | { follow: FollowUp }
+  | { ignored: string };
 
 type PullRequestEvent = {
   action?: string;
@@ -135,6 +162,8 @@ export function parseEvent(
   payload: unknown,
   trigger = DEFAULT_TRIGGER,
   label = DEFAULT_LABEL,
+  /** `follow-threads`: a comment without the trigger may follow one of the bot's replies. */
+  follow = false,
 ): Parsed {
   if (name === "schedule" || name === "workflow_dispatch") return { scheduled: true };
   if (name === "issues") {
@@ -153,9 +182,27 @@ export function parseEvent(
   const user = event.comment?.user;
   if (user?.type === "Bot") return { ignored: "comments from bots are not commands." };
   const task = taskFrom(event.comment?.body ?? "", trigger);
-  if (task === null) return { ignored: `the comment does not start with ${trigger}.` };
   const issue = event.issue;
   const repo = event.repository;
+  if (task === null) {
+    if (!follow) return { ignored: `the comment does not start with ${trigger}.` };
+    if (!issue?.number || !event.comment?.id || !user?.login || !repo?.name || !repo.owner?.login)
+      return { ignored: "the event is missing the issue, comment or repository." };
+    return {
+      follow: {
+        number: issue.number,
+        isPull: Boolean(issue.pull_request),
+        title: issue.title ?? "",
+        body: issue.body ?? "",
+        text: event.comment.body ?? "",
+        commentId: event.comment.id,
+        author: user.login,
+        owner: repo.owner.login,
+        repo: repo.name,
+        defaultBranch: repo.default_branch ?? "main",
+      },
+    };
+  }
   if (!issue?.number || !event.comment?.id || !user?.login || !repo?.name || !repo.owner?.login)
     return { ignored: "the event is missing the issue, comment or repository." };
   const title = issue.title ?? "";

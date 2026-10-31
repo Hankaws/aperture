@@ -26,7 +26,8 @@ import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.se
 import { failingContext } from "./answer.ts";
 import { answerQuestion } from "./ask.ts";
 import { threadContext } from "./context.ts";
-import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
+import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command, type Parsed } from "./event.ts";
+import { askerOf, followKind, mentionsSomeone } from "./follow.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
 import { briefQuestion, ideaToDo, needsYou, type LookView } from "./look.ts";
 import type { Model } from "./model.ts";
@@ -213,11 +214,12 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   } catch {
     // No event file: nothing is a command.
   }
-  const parsed = parseEvent(
+  let parsed: Parsed = parseEvent(
     env.GITHUB_EVENT_NAME ?? "",
     payload,
     input(env, "trigger") ?? DEFAULT_TRIGGER,
     input(env, "label") ?? DEFAULT_LABEL,
+    /^(true|yes|on)$/i.test(input(env, "follow-threads") ?? ""),
   );
   const ignore = (why: string) => {
     log(`Aperture Bot: nothing to do: ${why}`);
@@ -233,7 +235,9 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       ? [parsed.command.owner, parsed.command.repo]
       : "red" in parsed
         ? [parsed.red.owner, parsed.red.repo]
-        : (env.GITHUB_REPOSITORY ?? "").split("/");
+        : "follow" in parsed
+          ? [parsed.follow.owner, parsed.follow.repo]
+          : (env.GITHUB_REPOSITORY ?? "").split("/");
   if (!owner || !name) throw new Error("GITHUB_REPOSITORY is not owner/repo.");
   const token = input(env, "github-token") ?? env.GITHUB_TOKEN;
   if (!token) throw new Error("github-token is empty.");
@@ -259,6 +263,54 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       ? `it already replied unasked ${sent} times in the last day (daily-limit: ${limit}).`
       : null;
   };
+
+  /**
+   * A comment that follows one of the bot's replies (`follow-threads`), from
+   * someone who can write and, when the reply answered someone, from them:
+   * "yes" or "do the second one" does that suggestion, as a tick would (the
+   * reply's signature is checked below); thanks are let be; anything else is
+   * answered, changing nothing. Every other comment is left alone.
+   */
+  if ("follow" in parsed) {
+    const f = parsed.follow;
+    if (!canWrite(await gh.permission(f.author)))
+      return ignore(`@${f.author} cannot write; the bot follows only people who can.`);
+    if (mentionsSomeone(f.text))
+      return ignore("the comment @mentions someone, so it is addressed to them.");
+    const thread = await gh.comments(f.number);
+    const at = thread.findIndex((c) => c.id === f.commentId);
+    const prev = at > 0 ? thread[at - 1] : undefined;
+    const summary = prev ? readSummary(prev.body) : null;
+    if (!prev || !summary || summary.state === "working")
+      return ignore("the comment does not follow one of the bot's replies.");
+    const asker = askerOf(summary, thread);
+    if (asker && asker.toLowerCase() !== f.author.toLowerCase())
+      return ignore(`the bot's reply answered @${asker}, so it follows only them.`);
+    const kind = followKind(f.text);
+    if (kind.kind === "thanks") return ignore("the comment needs no answer.");
+    const pick = kind.kind === "do" ? summary.next?.[kind.index] : undefined;
+    if (kind.kind === "do" && !pick)
+      return ignore(`the bot's reply has no suggestion ${kind.index + 1} to do.`);
+    const base = {
+      number: f.number,
+      isPull: f.isPull,
+      title: f.title,
+      body: f.body,
+      commentId: f.commentId,
+      author: f.author,
+      via: "comment" as const,
+      follows: prev.id,
+      owner: f.owner,
+      repo: f.repo,
+      defaultBranch: f.defaultBranch,
+    };
+    parsed = {
+      command: pick
+        ? { ...base, task: pick, ticked: { commentId: prev.id, body: prev.body, postedBy: null } }
+        : { ...base, task: f.text.trim(), ask: true },
+    };
+    log(`Aperture Bot: following #${f.number}: ${pick ? `doing ${pick}` : "answering"}`);
+  }
 
   let command: Command;
   if ("command" in parsed && parsed.command.triage) {

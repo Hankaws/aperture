@@ -347,6 +347,7 @@ export function BotTeam() {
               <PanelBoundary name="The activity feed" className={PANEL_CARD}>
                 <ActivityPanel
                   feed={team.loaded ? team.items : null}
+                  week={team.week}
                   now={team.now}
                   busy={team.busy}
                   error={team.error}

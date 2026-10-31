@@ -22,7 +22,8 @@ export type RawComment = {
   user?: { login?: string; type?: string } | null;
 };
 
-export type Thread = { title: string; isPull: boolean; open: boolean };
+/** `merged`: a pull request that was merged, when GitHub said so. */
+export type Thread = { title: string; isPull: boolean; open: boolean; merged?: boolean };
 
 /**
  * Where a task is. `waiting`: asked, and no answer yet. `silent`: asked a

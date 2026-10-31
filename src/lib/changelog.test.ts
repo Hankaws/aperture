@@ -115,7 +115,9 @@ test("CHANGELOG.md keeps its shape: Unreleased first, then dates newest first", 
     assert.ok(parseHeading(title).date, `"${title}" is not "YYYY-MM-DD" or "X.Y.Z - YYYY-MM-DD"`);
   const dates = headings.map((title) => parseHeading(title).date!);
   assert.deepEqual(dates, [...dates].sort().reverse(), "dates run newest first");
-  assert.equal(new Set(dates).size, dates.length, "one heading per day");
+  // A day's changes share one heading, but two versions can be released on the same day.
+  const days = headings.filter((title) => !parseHeading(title).version);
+  assert.equal(new Set(days).size, days.length, "one undated-version heading per day");
   const versions = headings.flatMap((title) => parseHeading(title).version ?? []);
   const sorted = [...versions].sort((a, b) => {
     const [x, y] = [a, b].map((v) => v.split(".").map(Number));

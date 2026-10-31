@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.5.0 - 2026-10-31
+
 ### Added
 
 - The Bot page's Activity starts with the last seven days at a glance: pull requests the bots opened (merged, waiting for review, closed), likely bugs their reviews caught, questions, new issues and red runs answered, and pull requests checked, with the daily briefs and ticked suggestions under them. Every number is counted from what the bots posted. ([#164](https://github.com/Hankaws/aperture/pull/164))

@@ -21,6 +21,7 @@ import {
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
+import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import {
@@ -341,7 +342,16 @@ const ACTIVITY_PARALLEL = 5;
  * (`ideas.ts`); `week`: what the bots did in the last seven days (`week.ts`).
  */
 export type BotActivity =
-  { ok: true; activity: Activity[]; ideas: Idea[]; week: Week; repos: number } | Failure;
+  | {
+      ok: true;
+      activity: Activity[];
+      ideas: Idea[];
+      week: Week;
+      /** The bots' pull requests still open, for Next up (`next-up.ts`). */
+      pulls: WaitingPull[];
+      repos: number;
+    }
+  | Failure;
 
 /** What the bot did across the team's repositories, or the person's most recently pushed, newest first. */
 export const botActivity = createServerFn({ method: "POST" })
@@ -381,12 +391,13 @@ export const botActivity = createServerFn({ method: "POST" })
       const lists: Activity[][] = [];
       const ideaLists: Idea[][] = [];
       const weeks: Week[] = [];
+      const pullLists: WaitingPull[][] = [];
       for (let i = 0; i < names.length; i += ACTIVITY_PARALLEL) {
         const batch = await Promise.all(
           names.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
             const [owner = "", repo = ""] = fullName.split("/");
             const base = repoBase(owner, repo);
-            if (!base) return { activity: [], ideas: [], week: EMPTY_WEEK };
+            if (!base) return { activity: [], ideas: [], week: EMPTY_WEEK, pulls: [] };
             // One repository GitHub will not show is left out, not the whole feed.
             const out = await loadTasks(base, get, { quick: true }).catch(() => null);
             return out?.ok
@@ -394,13 +405,15 @@ export const botActivity = createServerFn({ method: "POST" })
                   activity: activityFrom(fullName, out.tasks),
                   ideas: ideasFrom(fullName, out.tasks, Date.now(), out.threads),
                   week: weekFrom(out.tasks, out.threads),
+                  pulls: waitingPulls(fullName, out.tasks, out.threads),
                 }
-              : { activity: [], ideas: [], week: EMPTY_WEEK };
+              : { activity: [], ideas: [], week: EMPTY_WEEK, pulls: [] };
           }),
         );
         lists.push(...batch.map((b) => b.activity));
         ideaLists.push(...batch.map((b) => b.ideas));
         weeks.push(...batch.map((b) => b.week));
+        pullLists.push(...batch.map((b) => b.pulls));
       }
       // A team's feed keeps each repository's newest: one busy one must not hide the rest.
       return {
@@ -408,6 +421,7 @@ export const botActivity = createServerFn({ method: "POST" })
         activity: data.repos?.length ? feedOf(lists, 150, 10) : feedOf(lists),
         ideas: inboxOf(ideaLists),
         week: addWeeks(weeks),
+        pulls: pullLists.flat(),
         repos: names.length,
       };
     } catch (error) {

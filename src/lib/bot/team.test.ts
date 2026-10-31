@@ -34,6 +34,7 @@ test("a stored row reads back as a profile, its mascot parsed", () => {
     model: "anthropic",
     allow: "ask",
     lastLine: "You: what's red?",
+    main: false,
     createdAt: "2026-10-01T10:00:00.000Z",
     updatedAt: "2026-10-02T10:00:00.000Z",
   });
@@ -62,6 +63,22 @@ test("names are one line, instructions keep their lines, both are cut", () => {
 test("the roster keeps the order bots were made in", () => {
   const a = profileFrom(row({ id: "aaaaaaaaaaaa", created_at: "2026-10-03T00:00:00Z" }))!;
   const b = profileFrom(row({ id: "bbbbbbbbbbbb", created_at: "2026-10-01T00:00:00Z" }))!;
+  assert.deepEqual(
+    rosterOrder([a, b]).map((x) => x.id),
+    ["bbbbbbbbbbbb", "aaaaaaaaaaaa"],
+  );
+});
+
+test("the main bot reads from the row and leads the roster", () => {
+  const a = profileFrom(row({ id: "aaaaaaaaaaaa", created_at: "2026-10-01T00:00:00Z" }))!;
+  const b = profileFrom(
+    row({ id: "bbbbbbbbbbbb", created_at: "2026-10-03T00:00:00Z", main: true }),
+  )!;
+  assert.equal(a.main, false);
+  assert.equal(b.main, true);
+  // Postgres drivers may give a boolean as "t".
+  assert.equal(profileFrom(row({ main: "t" }))!.main, true);
+  assert.equal(profileFrom(row({ main: "yes" }))!.main, false);
   assert.deepEqual(
     rosterOrder([a, b]).map((x) => x.id),
     ["bbbbbbbbbbbb", "aaaaaaaaaaaa"],

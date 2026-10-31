@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { botChatSaveInput, botIdInput, botProfileInput } from "@/lib/security/inputs";
+import { botChatSaveInput, botIdInput, botMainInput, botProfileInput } from "@/lib/security/inputs";
 
 /** A team needs an account: a sign-in-off visitor has nowhere to keep one. */
 async function refusal(userId: string): Promise<string | null> {
@@ -27,6 +27,18 @@ export const saveBot = createServerFn({ method: "POST" })
     if (busy) return { ok: false as const, error: busy };
     const { saveBotFor } = await import("./team.server");
     return saveBotFor(context.userId, data);
+  });
+
+/** Stars a bot as the main one (an empty id: none), and returns the team. */
+export const setMainBot = createServerFn({ method: "POST" })
+  .validator(botMainInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    if (await refusal(context.userId)) return [];
+    const { overLimit } = await import("@/lib/security/rate-limit");
+    if (overLimit("bot", context.userId)) return null;
+    const { setMainFor } = await import("./team.server");
+    return setMainFor(context.userId, data.id);
   });
 
 export const deleteBot = createServerFn({ method: "POST" })

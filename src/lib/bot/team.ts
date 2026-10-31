@@ -21,6 +21,8 @@ export type BotProfile = {
   allow: BotAllow;
   /** The last line of its conversation, kept on the account, for the roster. */
   lastLine: string;
+  /** The person's main bot: first in the roster, and the face of Next up. At most one. */
+  main: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -135,14 +137,19 @@ export function profileFrom(row: Record<string, unknown>): BotProfile | null {
     model: (BOT_MODELS as readonly unknown[]).includes(row.model) ? (row.model as BotModel) : "",
     allow: row.allow === "checks" ? "checks" : "ask",
     lastLine: cleanName(typeof row.last_line === "string" ? row.last_line : "", 160),
+    main: row.main === true || row.main === "t" || row.main === "true",
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   };
 }
 
 /** The roster order: oldest first, so a bot keeps its place. */
+/** The main bot first, then the rest as they were made. */
 export function rosterOrder(bots: BotProfile[]): BotProfile[] {
   return [...bots].sort(
-    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    (a, b) =>
+      Number(b.main) - Number(a.main) ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.id.localeCompare(b.id),
   );
 }

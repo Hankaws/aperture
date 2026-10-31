@@ -84,7 +84,8 @@ function suggestions(count: number): string {
   return count === 1 ? "1 suggestion" : `${count} suggestions`;
 }
 
-function pullNumber(url: string | undefined): number | null {
+/** The number in a pull request's URL, or null. */
+export function pullNumber(url: string | undefined): number | null {
   const match = /\/pull\/(\d+)(?:$|[/#?])/.exec(url ?? "");
   return match ? Number(match[1]) : null;
 }

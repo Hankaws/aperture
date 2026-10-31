@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Star,
   UserRound,
   X,
   Zap,
@@ -36,6 +37,7 @@ import { IdeasPanel } from "./ideas-panel";
 import { useDismissedIdeas } from "./use-dismissed-ideas";
 import { JobsCard } from "./jobs-card";
 import { MascotAvatar } from "./mascot";
+import { NextUpPanel } from "./next-up";
 import { ModelPicker } from "./model-picker";
 import { useRepoBot } from "./use-repo-bot";
 import { useTeamActivity } from "./use-team-activity";
@@ -63,6 +65,7 @@ type View =
   | { kind: "activity" }
   | { kind: "ideas" }
   | { kind: "automation" }
+  | { kind: "next" }
   | { kind: "new" };
 type Panel = "profile" | "tasks" | "setup";
 
@@ -126,7 +129,14 @@ export function BotTeam() {
         );
         const kept = readSelected();
         const first = team.find((b) => b.id === kept) ?? team[0];
-        setView(first ? { kind: "bot", id: first.id } : { kind: "new" });
+        // With a main bot, the page opens on its plan unless a bot was open last.
+        setView(
+          team.some((b) => b.main) && (kept === "next" || !team.some((b) => b.id === kept))
+            ? { kind: "next" }
+            : first
+              ? { kind: "bot", id: first.id }
+              : { kind: "new" },
+        );
       })
       .catch((err) => !cancel && setError(err instanceof Error ? err.message : "Could not load."));
     return () => {
@@ -138,6 +148,8 @@ export function BotTeam() {
     setView(next);
     setMobileMain(true);
     if (next.kind === "bot") keepSelected(next.id);
+    // Next up is remembered too, so the page opens on it again.
+    if (next.kind === "next") keepSelected("next");
     if (next.kind !== "bot") setPanel(null);
   }, []);
 
@@ -244,7 +256,15 @@ export function BotTeam() {
                   <MascotAvatar mascot={bot.mascot} mood={status?.mood ?? "idle"} size={44} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium">{bot.name}</span>
+                      <span className="flex min-w-0 items-center gap-1 text-sm font-medium">
+                        <span className="truncate">{bot.name}</span>
+                        {bot.main && (
+                          <Star
+                            className="size-3.5 shrink-0 fill-current text-warn"
+                            aria-label="Main bot"
+                          />
+                        )}
+                      </span>
                       <span className="max-w-[45%] shrink-0 truncate font-mono text-[11px] text-subtle">
                         {bot.repo.split("/")[1]}
                       </span>
@@ -267,6 +287,20 @@ export function BotTeam() {
           )}
         </ul>
         <div className="space-y-0.5 border-t border-border p-2">
+          {bots.length > 0 && (
+            <button
+              type="button"
+              onClick={() => open({ kind: "next" })}
+              aria-current={view.kind === "next" || undefined}
+              className={cn(
+                "flex h-10 w-full items-center gap-3 rounded-full px-3 text-sm text-muted hover:bg-elevated hover:text-fg",
+                view.kind === "next" && "bg-elevated text-fg",
+              )}
+            >
+              <Star className="size-4" />
+              Next up
+            </button>
+          )}
           <button
             type="button"
             onClick={() => open({ kind: "activity" })}
@@ -335,10 +369,40 @@ export function BotTeam() {
                 ? "Ideas"
                 : view.kind === "automation"
                   ? "Automation"
-                  : "New bot"
+                  : view.kind === "next"
+                    ? "Next up"
+                    : "New bot"
         }
       >
-        {view.kind === "automation" ? (
+        {view.kind === "next" ? (
+          <>
+            <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
+              {back}
+              <span className="text-sm font-medium">Next up</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <PanelBoundary name="Next up" className={PANEL_CARD}>
+                <NextUpPanel
+                  bots={bots}
+                  ideas={team.ideas}
+                  pulls={team.pulls}
+                  loaded={team.loaded}
+                  now={team.now}
+                  busy={team.busy}
+                  error={team.error}
+                  dismissed={dismissed}
+                  onDismissed={setDismissed}
+                  onRefresh={() => void team.reload()}
+                  onSent={() => void team.reload()}
+                  onPickMain={(id) => {
+                    open({ kind: "bot", id });
+                    setPanel("profile");
+                  }}
+                />
+              </PanelBoundary>
+            </div>
+          </>
+        ) : view.kind === "automation" ? (
           <>
             <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
               {back}

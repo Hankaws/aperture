@@ -3,6 +3,7 @@ import { botActivity } from "@/lib/github/bot";
 import type { Activity } from "@/lib/bot/activity";
 import type { Idea } from "@/lib/bot/ideas";
 import type { Week } from "@/lib/bot/week";
+import type { WaitingPull } from "@/lib/bot/next-up";
 
 /**
  * What happened on the team's repositories, for the roster's faces and lines
@@ -17,6 +18,7 @@ export function useTeamActivity(repoKey: string) {
   const [items, setItems] = useState<Activity[] | null>(null);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [week, setWeek] = useState<Week | null>(null);
+  const [pulls, setPulls] = useState<WaitingPull[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -30,6 +32,7 @@ export function useTeamActivity(repoKey: string) {
         setItems(out.activity);
         setIdeas(out.ideas);
         setWeek(out.week);
+        setPulls(out.pulls);
         setError(null);
       } else setError(out.error);
     } catch (err) {
@@ -66,6 +69,7 @@ export function useTeamActivity(repoKey: string) {
     items: items ?? [],
     ideas,
     week,
+    pulls,
     loaded: items !== null,
     error,
     busy,

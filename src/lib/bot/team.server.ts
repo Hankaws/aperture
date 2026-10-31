@@ -22,7 +22,7 @@ async function sql() {
 export async function listBotsFor(userId: string): Promise<BotProfile[]> {
   const db = await sql();
   const rows = await db<Record<string, unknown>>`
-    select b.id, b.name, b.repo, b.mascot, b.personality, b.model, b.allow, b.created_at, b.updated_at,
+    select b.id, b.name, b.repo, b.mascot, b.personality, b.model, b.allow, b.main, b.created_at, b.updated_at,
       coalesce(c.last_line, '') as last_line
     from user_bots b left join user_bot_chats c on c.bot_id = b.id and c.user_id = b.user_id
     where b.user_id = ${userId}
@@ -76,6 +76,16 @@ export async function saveBotFor(
   const bots = await listBotsFor(userId);
   const bot = bots.find((b) => b.id === id);
   return bot ? { ok: true, bot, bots } : { ok: false, error: "Could not save the bot." };
+}
+
+/**
+ * Stars one bot as the main bot, and every other one not: at most one is
+ * main. An empty id stars none. Returns the team, the main bot first.
+ */
+export async function setMainFor(userId: string, id: string): Promise<BotProfile[]> {
+  const db = await sql();
+  await db`update user_bots set main = (id = ${id}) where user_id = ${userId}`;
+  return listBotsFor(userId);
 }
 
 export async function deleteBotFor(userId: string, id: string): Promise<BotProfile[]> {

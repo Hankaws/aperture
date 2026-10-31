@@ -82,6 +82,9 @@ test("the pull request says who asked, what it fixes, the plan and the checks", 
     ].join("\n"),
   );
   assert.doesNotMatch(pullBody({ ...command, isPull: true }, result(), "r", null), /Fixes #/);
+  // The brief's own issue stays open: an idea from it, ticked or done without a tick.
+  assert.doesNotMatch(pullBody({ ...command, keepOpen: true }, result(), "r", null), /Fixes #/);
+  assert.doesNotMatch(pullBody({ ...command, idea: true }, result(), "r", null), /Fixes #/);
 });
 
 test("a stopped run says it pushed nothing, and why", () => {

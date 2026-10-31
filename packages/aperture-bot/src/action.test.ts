@@ -986,6 +986,7 @@ const suggested = (
   mark: string,
   poster = { login: "github-actions[bot]", type: "Bot" },
   signed: { key: Buffer | null; number: number } = { key: KEY, number: 7 },
+  kind: "answer" | "look" = "answer",
 ) => {
   const text = [
     "formatPrice returns cents.",
@@ -993,7 +994,7 @@ const suggested = (
     "**Next, I would suggest**",
     `- [${mark}] Show prices in dollars`,
     "",
-    `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "answer", asked: 55, run: "https://github.com/acme/shop/actions/runs/41", next: ["Show prices in dollars"] })} -->`,
+    `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind, asked: 55, run: "https://github.com/acme/shop/actions/runs/41", next: ["Show prices in dollars"] })} -->`,
   ].join("\n");
   const body = sealBody(text, signed.key, { repo: "acme/shop", number: signed.number });
   return { id: 900, body, user: poster };
@@ -1002,11 +1003,12 @@ const suggested = (
 const ticking = (
   poster?: { login: string; type: string },
   signed?: { key: Buffer | null; number: number },
+  kind?: "answer" | "look",
 ) => ({
   action: "edited",
   sender: { login: "maintainer", type: "User" },
-  comment: suggested("x", poster, signed),
-  changes: { body: { from: suggested(" ", poster, signed).body } },
+  comment: suggested("x", poster, signed, kind),
+  changes: { body: { from: suggested(" ", poster, signed, kind).body } },
   issue: { number: 7, title: "Prices show cents", body: "formatPrice prints 100 for a dollar." },
   repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
 });
@@ -1035,6 +1037,22 @@ test("ticking a suggestion does it, for whoever ticked it, and marks it started"
   );
   // No comment asked, so there is none to react to.
   assert.equal(run.posted(/\/reactions$/).length, 0);
+});
+
+test("ticking an idea in the daily brief opens a pull request that leaves the brief's issue open", async () => {
+  const run = await act({
+    eventName: "issue_comment",
+    payload: ticking(undefined, undefined, "look"),
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [opened] = run.posted(/\/pulls$/);
+  const pr = opened!.body as { body: string };
+  assert.match(pr.body, /^@maintainer ticked a suggestion of Aperture Bot's in #7:/);
+  assert.doesNotMatch(pr.body, /Fixes #7/);
+  // Any other reply's tick fixes its thread, as before.
+  const answer = await act({ eventName: "issue_comment", payload: ticking() });
+  const [fixes] = answer.posted(/\/pulls$/);
+  assert.match((fixes!.body as { body: string }).body, /\nFixes #7\n/);
 });
 
 test("a tick counts only from someone who can write, in a reply whose words are a writer's", async () => {

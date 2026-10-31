@@ -61,6 +61,11 @@ export type Command = {
    * (`always-allow: brief`): its pull request leaves the brief's issue open.
    */
   idea?: boolean;
+  /**
+   * The thread is the bot's own standing issue (the daily brief's): its pull
+   * request does not close it. Set for a suggestion ticked in a brief.
+   */
+  keepOpen?: boolean;
   owner: string;
   repo: string;
   defaultBranch: string;
@@ -215,6 +220,8 @@ function ticked(event: IssueCommentEvent): Parsed {
         body: comment.body ?? "",
         postedBy: comment.user?.type === "Bot" ? null : (comment.user?.login ?? ""),
       },
+      // A brief's idea: the brief's issue stays open, as for one done without a tick.
+      ...(summary.kind === "look" ? { keepOpen: true } : {}),
       owner: repo.owner.login,
       repo: repo.name,
       defaultBranch: repo.default_branch ?? "main",

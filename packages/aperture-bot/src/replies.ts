@@ -167,7 +167,7 @@ export function pullBody(
   return join(
     [`${askedBy(command)}:`, "", `> ${quiet(firstLine(command.task))}`],
     // The brief's issue stays open: an idea's pull request does not close it.
-    command.isPull || command.idea ? [] : [`Fixes #${command.number}`],
+    command.isPull || command.idea || command.keepOpen ? [] : [`Fixes #${command.number}`],
     plan(result),
     [
       `**Aperture Agent Check**: ${result.check?.verdict === "clear" ? "nothing red" : "red"}.`,

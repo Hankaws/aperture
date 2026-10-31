@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A weekly digest in Aperture Bot's daily brief: on Mondays the brief also says what the bot did in the last seven days (pull requests opened, merged or waiting, likely bugs caught, what it answered and checked), in the Bot page's own words, so it reaches you in GitHub's notifications without opening Aperture. It is counted from the bot's own replies, with no model call. ([#167](https://github.com/Hankaws/aperture/pull/167))
 - Automation on the Bot page: one switch turns on every bot's daily brief doing its top idea without asking, or turns it off again. It shows where each repository's brief stands, then opens one pull request per repository that needs it, on its bot workflow and keeping its other jobs; a repository whose schedule runs another job is left as it is, and a pull request from an earlier switch that is still open is shown rather than opened again. Needs Aperture Bot v1.7. ([#166](https://github.com/Hankaws/aperture/pull/166))
 
 ## 0.5.0 - 2026-10-31

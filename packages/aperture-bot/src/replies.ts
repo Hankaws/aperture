@@ -435,13 +435,21 @@ export function checkReply(check: CheckResult, ctx: ReplyContext): string {
  */
 export function lookReply(
   look: { note: string; next: string[] },
-  where: { branch: string; sha: string; needs: string[]; date: string },
+  where: {
+    branch: string;
+    sha: string;
+    needs: string[];
+    date: string;
+    /** On Mondays: what the bot did in the last seven days (`weekLines`). */
+    week?: string[];
+  },
   ctx: Asked & { usage: string },
 ): string {
   const at = where.sha ? ` at ${where.sha.slice(0, 7)}` : "";
   return join(
     [`**Daily brief** for ${where.date}, on ${where.branch}${at}.`],
     ["**What needs you**", ...where.needs],
+    where.week?.length ? ["**Last 7 days**", ...where.week] : [],
     look.note ? [quiet(look.note)] : [],
     look.next.length > 0
       ? nextList(look.next, "Ideas from the code", true)

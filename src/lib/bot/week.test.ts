@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BotSummary } from "./summary.ts";
 import type { BotTask, Thread } from "./tasks.ts";
-import { addWeeks, EMPTY_WEEK, quietWeek, weekFrom, weekNote, weekTiles } from "./week.ts";
+import {
+  addWeeks,
+  EMPTY_WEEK,
+  quietWeek,
+  weekFrom,
+  weekLines,
+  weekNote,
+  weekTiles,
+} from "./week.ts";
 
 const NOW = Date.parse("2026-10-31T12:00:00Z");
 const ago = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
@@ -126,4 +134,24 @@ test("tiles with nothing in them say so in words", () => {
     NOW,
   );
   assert.equal(weekTiles(pushed)[0]!.detail, "1 fix pushed to open ones");
+});
+
+test("weekLines writes the week for the brief, a quiet one in one line", () => {
+  const week = weekFrom(
+    [
+      task({ summary: { link: pull(20) } }),
+      task({ summary: { kind: "review", note: "1 likely bug" } }),
+      task({ via: "schedule", summary: { kind: "look" } }),
+    ],
+    new Map([[20, { title: "a", isPull: true, open: true }]]),
+    NOW,
+  );
+  assert.deepEqual(weekLines(week), [
+    "- **Pull requests opened**: 1 (1 waiting for review)",
+    "- **Likely bugs caught**: 1 (In 1 review)",
+    "- **Answered**: none",
+    "- **Pull requests checked**: none",
+    "Also 1 daily brief.",
+  ]);
+  assert.deepEqual(weekLines(EMPTY_WEEK), ["Nothing from the bot in the last 7 days."]);
 });

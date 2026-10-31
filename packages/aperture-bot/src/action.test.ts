@@ -1286,3 +1286,57 @@ test("with always-allow red, a red run is explained and fixed at once, its box m
   assert.match(pr.body, /^CI was red, on #7/);
   assert.match(git(run.origin, "show", `${pr.head}:src/price.ts`), /toFixed\(2\)/);
 });
+
+test("a reply nobody asked for cannot ping anyone, says to read before ticking, and spends little", async () => {
+  const ask = answering(
+    "Thanks @alice and @acme/core! <!-- hidden\n\nNext:\n- Ping @bob when fixing src/price.ts",
+  );
+  const run = await act({
+    eventName: "issues",
+    payload: { ...newIssue, issue: { ...newIssue.issue, title: "Prices @carol" } },
+    thread: [],
+    env: { "INPUT_MAX-TOKENS": "5000000" },
+    model: ask.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const body = run.replied();
+  assert.match(body, /^Thanks @\u200balice and @\u200bacme\/core! <\u200b!-- hidden\n/);
+  assert.doesNotMatch(body.replace(/<!-- aperture-bot [^\n]*-->$/, ""), /@(alice|bob|carol|acme)/);
+  assert.match(
+    body,
+    /- \[ \] Do what this issue asks: Prices @\u200bcarol\n- \[ \] Ping @\u200bbob when fixing src\/price\.ts\n/,
+  );
+  assert.match(
+    body,
+    /Read a suggestion before you tick it: it can come from what anyone wrote here\./,
+  );
+  // The hidden list matches the boxes exactly, so a tick still counts.
+  assert.deepEqual(readSummary(body)!.next, [
+    "Do what this issue asks: Prices @\u200bcarol",
+    "Ping @\u200bbob when fixing src/price.ts",
+  ]);
+});
+
+test("a reply nobody asked for stops at 150,000 tokens, whatever max-tokens allows", async () => {
+  // Each call reports 160,000 tokens: one call spends the unasked budget, so the second is refused.
+  const costly: ReturnType<typeof scripted>["model"] = async (...args) => ({
+    ...(await answering("It is fine.").model(...args)),
+    usage: { input: 150_000, output: 10_000 },
+  });
+  const unasked = await act({
+    eventName: "issues",
+    payload: newIssue,
+    thread: [],
+    env: { "INPUT_MAX-TOKENS": "5000000" },
+    model: costly,
+  });
+  assert.match(unasked.replied(), /Stopped at the token budget: 160,000 of 150,000 tokens used\./);
+  // A question someone who can write asked keeps the workflow's own budget.
+  const asked = await act({
+    body: "/aperture why does the cart show 100?",
+    env: { "INPUT_MAX-TOKENS": "5000000" },
+    model: costly,
+  });
+  assert.equal(asked.code, 0, asked.lines.join("\n"));
+  assert.match(asked.replied(), /^It is fine\./);
+});

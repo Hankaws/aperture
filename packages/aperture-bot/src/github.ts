@@ -293,7 +293,7 @@ export class GitHub {
       id: number;
       body?: string;
       user?: { login?: string; type?: string };
-    }>(`${this.base}/issues/comments?since=${encodeURIComponent(since)}&sort=created`, 3);
+    }>(`${this.base}/issues/comments?since=${encodeURIComponent(since)}&sort=created`);
     return out.map((c) => ({
       id: c.id,
       author: c.user?.login ?? "someone",

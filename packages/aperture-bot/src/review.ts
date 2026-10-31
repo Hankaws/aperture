@@ -6,6 +6,7 @@
  * the reply instead. Pure, for tests.
  */
 import type { DiffNote } from "../../../src/lib/workspace/types.ts";
+import { quiet } from "./quiet.ts";
 
 /** One changed file of a pull request: its text at the merge base and at the head. */
 export type PullFile = {
@@ -62,7 +63,7 @@ export function placeNote(file: PullFile, note: DiffNote): Placed | null {
         path: file.path,
         line: i + 1,
         side,
-        text: note.text,
+        text: quiet(note.text),
         confidence: note.confidence ?? 0.8,
       };
     }
@@ -81,7 +82,7 @@ export function placeNotes(
     const file = files.find((f) => f.path === path);
     const at = file ? placeNote(file, note) : null;
     if (at) placed.push(at);
-    else unplaced.push({ path, text: note.text, confidence: note.confidence ?? 0.8 });
+    else unplaced.push({ path, text: quiet(note.text), confidence: note.confidence ?? 0.8 });
   }
   return { placed, unplaced };
 }

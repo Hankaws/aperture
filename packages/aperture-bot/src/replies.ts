@@ -11,11 +11,12 @@ import {
   type BotSummary,
 } from "../../../src/lib/bot/summary.ts";
 import type { Command } from "./event.ts";
+import { quiet } from "./quiet.ts";
 import { suggestionBoxes } from "./suggestions.ts";
 import type { BotResult } from "./run.ts";
 
 const MARK: Record<string, string> = { pass: "✓", fail: "✗", warn: "!", skip: "–" };
-const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
+const cell = (text: string) => quiet(text).replace(/\|/g, "\\|").replace(/\n/g, " ");
 const firstLine = (text: string) => text.split("\n")[0]!.trim();
 
 export const SITE = "https://aperturesais.grok.me";
@@ -73,7 +74,9 @@ function checksTable(result: BotResult): string[] {
 }
 
 function plan(result: BotResult): string[] {
-  return result.plan.length > 0 ? ["**Plan**", ...result.plan.map((s) => `- ${s.content}`)] : [];
+  return result.plan.length > 0
+    ? ["**Plan**", ...result.plan.map((s) => `- ${quiet(s.content)}`)]
+    : [];
 }
 
 function agentSaid(result: BotResult): string[] {
@@ -81,7 +84,7 @@ function agentSaid(result: BotResult): string[] {
   return [
     "<details><summary>What the agent said</summary>",
     "",
-    result.summary.trim(),
+    quiet(result.summary.trim()),
     "",
     "</details>",
   ];
@@ -104,7 +107,7 @@ export function resultSummary(
     asked: ctx.asked,
     run: ctx.run,
     ...askedFields(ctx),
-    plan: result.plan.map((s) => s.content),
+    plan: result.plan.map((s) => quiet(s.content)),
     checks: result.check
       ? shownRows(result.check.rows).map((r) => ({
           status: r.status,
@@ -117,18 +120,25 @@ export function resultSummary(
     tests: ctx.tests,
     usage: result.usage,
     error: result.error,
-    ...(result.next.length ? { next: result.next } : {}),
+    ...(result.next.length ? { next: result.next.map(quiet) } : {}),
   };
 }
 
-/** What the bot would do next, as boxes: ticking one asks for it (`suggestions.ts`). */
-function nextList(next: string[], heading = "Next, I would suggest"): string[] {
+/**
+ * What the bot would do next, as boxes: ticking one asks for it
+ * (`suggestions.ts`). The texts are made quiet here and in the summary alike,
+ * so a box still matches its summary. `wary`: the suggestions may come from
+ * what anyone wrote (a stranger's issue, issue titles), so say to read first.
+ */
+function nextList(next: string[], heading = "Next, I would suggest", wary = false): string[] {
   if (next.length === 0) return [];
   return [
     `**${heading}**`,
-    ...suggestionBoxes(next),
+    ...suggestionBoxes(next.map(quiet)),
     "",
-    "Tick one and I will do it, or ask for something else with `/aperture`. Nothing is done until you do.",
+    wary
+      ? "Tick one and I will do it. Read a suggestion before you tick it: it can come from what anyone wrote here. Nothing is done until you do."
+      : "Tick one and I will do it, or ask for something else with `/aperture`. Nothing is done until you do.",
   ];
 }
 
@@ -153,7 +163,7 @@ export function pullBody(
   where: string | null,
 ): string {
   return join(
-    [`${askedBy(command)}:`, "", `> ${firstLine(command.task)}`],
+    [`${askedBy(command)}:`, "", `> ${quiet(firstLine(command.task))}`],
     command.isPull ? [] : [`Fixes #${command.number}`],
     plan(result),
     [
@@ -173,7 +183,7 @@ export function workingReply(
 ): string {
   return join(
     [`**Aperture Bot is on it.** ${phaseLine(progress)}`],
-    progress.plan?.length ? ["**Plan**", ...progress.plan.map((s) => `- ${s}`)] : [],
+    progress.plan?.length ? ["**Plan**", ...progress.plan.map((s) => `- ${quiet(s)}`)] : [],
     [`[Follow the run](${ctx.run}) · [Aperture Bot](${SITE})`],
     [
       summaryMarker({
@@ -219,7 +229,7 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
   const outcome = result.outcome === "clear" ? "no-change" : result.outcome;
   return join(
     [OUTCOME[outcome]],
-    result.error ? [`> ${result.error}`] : [],
+    result.error ? [`> ${quiet(result.error)}`] : [],
     checksTable(result),
     result.refused.map((r) => `Refused to write \`${r.path}\`: ${r.reason}.`),
     diff
@@ -245,9 +255,11 @@ export function answerReply(
   answer: { answer: string; next: string[] },
   ctx: Asked & { usage: string },
 ): string {
+  // A reply nobody asked for read what anyone wrote: its suggestions say to read them first.
+  const wary = ctx.via === "issue" || ctx.via === "red";
   return join(
-    [answer.answer],
-    nextList(answer.next),
+    [quiet(answer.answer)],
+    nextList(answer.next, undefined, wary),
     [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
     [
       summaryMarker({
@@ -257,7 +269,7 @@ export function answerReply(
         asked: ctx.asked,
         run: ctx.run,
         ...askedFields(ctx),
-        ...(answer.next.length ? { next: answer.next } : {}),
+        ...(answer.next.length ? { next: answer.next.map(quiet) } : {}),
         usage: ctx.usage,
       }),
     ],
@@ -292,8 +304,8 @@ export function reviewReply(
     ],
     found > 0
       ? [
-          ...review.placed.map((n) => `- \`${n.path}:${n.line}\`: ${n.text}`),
-          ...review.unplaced.map((n) => `- \`${n.path}\`: ${n.text}`),
+          ...review.placed.map((n) => `- \`${n.path}:${n.line}\`: ${quiet(n.text)}`),
+          ...review.unplaced.map((n) => `- \`${n.path}\`: ${quiet(n.text)}`),
         ]
       : [],
     review.skipped > 0
@@ -314,7 +326,7 @@ export function reviewReply(
         run: ctx.run,
         ...askedFields(ctx),
         note: found === 0 ? "Nothing that looks like a bug" : counted,
-        ...(review.next.length ? { next: review.next } : {}),
+        ...(review.next.length ? { next: review.next.map(quiet) } : {}),
         usage: ctx.usage,
       }),
     ],
@@ -348,7 +360,7 @@ export function notPullReply(ctx: Asked, what: "check" | "review" = "check"): st
 
 export function errorReply(message: string, ctx: Asked): string {
   return join(
-    ["Aperture Bot stopped with an error and changed nothing:", "", `> ${message}`],
+    ["Aperture Bot stopped with an error and changed nothing:", "", `> ${quiet(message)}`],
     [`[The run](${ctx.run})`],
     [
       summaryMarker({
@@ -408,9 +420,9 @@ export function lookReply(
   return join(
     [`**Daily brief** for ${where.date}, on ${where.branch}${at}.`],
     ["**What needs you**", ...where.needs],
-    look.note ? [look.note] : [],
+    look.note ? [quiet(look.note)] : [],
     look.next.length > 0
-      ? nextList(look.next, "Ideas from the code")
+      ? nextList(look.next, "Ideas from the code", true)
       : ["No ideas worth doing from the code today."],
     [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
     [
@@ -422,9 +434,9 @@ export function lookReply(
         run: ctx.run,
         ...askedFields(ctx),
         ...(look.note
-          ? { note: look.note.length > 600 ? `${look.note.slice(0, 599)}…` : look.note }
+          ? { note: quiet(look.note.length > 600 ? `${look.note.slice(0, 599)}…` : look.note) }
           : {}),
-        ...(look.next.length ? { next: look.next } : {}),
+        ...(look.next.length ? { next: look.next.map(quiet) } : {}),
         usage: ctx.usage,
       }),
     ],

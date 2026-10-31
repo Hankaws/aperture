@@ -17,6 +17,7 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Aperture Bot can no longer be made to @mention people: text it did not write itself (the model's words, issue titles, review notes) has its mentions made inert, and an HTML comment in it can no longer hide the bot's boxes. Replies nobody asked for queue one at a time, so a burst of new issues cannot slip past `daily-limit`, spend at most 150,000 tokens each, and say to read a suggestion before ticking it. ([#158](https://github.com/Hankaws/aperture/pull/158))
 - Paying twice no longer leaves a second subscription charging every month: a second live subscription for the same account is cancelled the moment Paddle reports it, and buying again while a checkout is open reopens that checkout, or says the payment already went through. ([#153](https://github.com/Hankaws/aperture/pull/153))
 - A long agent turn wraps up before the server's time limit and keeps what it staged, instead of being cut off mid-reply; a test run is shortened, or left for the next turn, when there is not enough time left. A reply that still ends early says it was cut off and offers Retry, and an external agent that cannot start now shows why. ([#152](https://github.com/Hankaws/aperture/pull/152))
 - Signed in, the editor no longer rebuilds its whole layout as it opens, and on a phone it no longer flashes "Sign in": the phone account button waits for the session, as the desktop bar does. ([#151](https://github.com/Hankaws/aperture/pull/151))

@@ -73,3 +73,10 @@ test("the brief asks for up to five ideas from the code, with the state and TODO
   );
   assert.match(briefQuestion(view(), []).context, /No TODO lines in the code\.$/);
 });
+
+test("an issue's title cannot ping anyone from the brief", () => {
+  const lines = needsYou(
+    view({ issues: [{ number: 3, title: "@alice please look", updatedAt: ago(30) }] }),
+  );
+  assert.equal(lines[1], "- #3 @\u200balice please look has been quiet for 30 days.");
+});

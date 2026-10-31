@@ -146,6 +146,8 @@ export function feedOf(lists: Activity[][], limit = 60, perList = Infinity): Act
           .map((a, i) => ({ a, i }))
           .sort((x, y) => time(y.a) - time(x.a) || y.i - x.i)
           .slice(0, perList)
+          // Back in the list's own order, so the tie-break below still puts an outcome before its ask.
+          .sort((x, y) => x.i - y.i)
           .map(({ a }) => a),
   );
   // Newest first; at the same moment, the outcome before its ask.

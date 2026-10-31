@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowLeft,
   KeyRound,
+  Lightbulb,
   ListTodo,
   Plus,
   RefreshCw,
@@ -29,6 +30,8 @@ import { AskCard, SetupCard, TaskList } from "./bot-console";
 import { BotChat } from "./bot-chat";
 import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
 import { IdentityCard } from "./identity-card";
+import { IdeasPanel } from "./ideas-panel";
+import { useDismissedIdeas } from "./use-dismissed-ideas";
 import { JobsCard } from "./jobs-card";
 import { MascotAvatar } from "./mascot";
 import { ModelPicker } from "./model-picker";
@@ -53,7 +56,8 @@ function keepSelected(id: string) {
   }
 }
 
-type View = { kind: "bot"; id: string } | { kind: "activity" } | { kind: "new" };
+type View =
+  { kind: "bot"; id: string } | { kind: "activity" } | { kind: "ideas" } | { kind: "new" };
 type Panel = "profile" | "tasks" | "setup";
 
 const PANEL_CARD = "rounded-2xl border border-border bg-surface";
@@ -86,6 +90,11 @@ export function BotTeam() {
     [bots],
   );
   const team = useTeamActivity(repoKey);
+  const [dismissed, setDismissed] = useDismissedIdeas();
+  const waiting = useMemo(() => {
+    const hidden = new Set(dismissed);
+    return team.ideas.filter((i) => !hidden.has(i.id)).length;
+  }, [team.ideas, dismissed]);
 
   useEffect(() => {
     let cancel = false;
@@ -264,6 +273,26 @@ export function BotTeam() {
             <Activity className="size-4" />
             Activity
           </button>
+          <button
+            type="button"
+            onClick={() => open({ kind: "ideas" })}
+            aria-current={view.kind === "ideas" || undefined}
+            className={cn(
+              "flex h-10 w-full items-center gap-3 rounded-full px-3 text-sm text-muted hover:bg-elevated hover:text-fg",
+              view.kind === "ideas" && "bg-elevated text-fg",
+            )}
+          >
+            <Lightbulb className="size-4" />
+            Ideas
+            {waiting > 0 && (
+              <span
+                className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-fg"
+                aria-label={`${waiting} waiting`}
+              >
+                {waiting}
+              </span>
+            )}
+          </button>
           <Link
             to="/settings"
             search={{ tab: "models" }}
@@ -277,9 +306,38 @@ export function BotTeam() {
 
       <main
         className={cn("min-w-0 flex-1 flex-col", showMain ? "flex" : "hidden lg:flex")}
-        aria-label={current ? current.name : view.kind === "activity" ? "Activity" : "New bot"}
+        aria-label={
+          current
+            ? current.name
+            : view.kind === "activity"
+              ? "Activity"
+              : view.kind === "ideas"
+                ? "Ideas"
+                : "New bot"
+        }
       >
-        {view.kind === "activity" ? (
+        {view.kind === "ideas" ? (
+          <>
+            <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
+              {back}
+              <span className="text-sm font-medium">Ideas</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <PanelBoundary name="The ideas inbox" className={PANEL_CARD}>
+                <IdeasPanel
+                  ideas={team.loaded ? team.ideas : null}
+                  now={team.now}
+                  busy={team.busy}
+                  error={team.error}
+                  dismissed={dismissed}
+                  onDismissed={setDismissed}
+                  onRefresh={() => void team.reload()}
+                  onSent={() => void team.reload()}
+                />
+              </PanelBoundary>
+            </div>
+          </>
+        ) : view.kind === "activity" ? (
           <>
             <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
               {back}

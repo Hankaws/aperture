@@ -161,6 +161,15 @@ test("the feed merges repositories newest first, an outcome before its ask, up t
   const fair = feedOf([busy, shop], 4, 3);
   assert.equal(fair.filter((a) => a.repo === "acme/busy").length, 3);
   assert.ok(fair.some((a) => a.repo === "acme/shop"));
+  // A team's feed keeps an outcome before its ask at the same moment, as the plain feed does.
+  assert.deepEqual(
+    feedOf([shop, docs], 150, 10).map((a) => a.id),
+    ["acme/docs#9:asked", "acme/shop#1:no-change", "acme/shop#1:asked"],
+  );
+  assert.equal(
+    statusOf(feedOf([shop], 150, 10), "acme/shop", NOW)?.line,
+    "Nothing to change on #7",
+  );
 });
 
 test("days read as Today, Yesterday, then the date, and entries group under them", () => {

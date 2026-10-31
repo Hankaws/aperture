@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { botActivity } from "@/lib/github/bot";
 import type { Activity } from "@/lib/bot/activity";
+import type { Idea } from "@/lib/bot/ideas";
 
 /**
  * What happened on the team's repositories, for the roster's faces and lines
@@ -13,6 +14,7 @@ import type { Activity } from "@/lib/bot/activity";
  */
 export function useTeamActivity(repoKey: string) {
   const [items, setItems] = useState<Activity[] | null>(null);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -24,6 +26,7 @@ export function useTeamActivity(repoKey: string) {
       const out = await botActivity({ data: { repos: repoKey.split(",") } });
       if (out.ok) {
         setItems(out.activity);
+        setIdeas(out.ideas);
         setError(null);
       } else setError(out.error);
     } catch (err) {
@@ -56,5 +59,5 @@ export function useTeamActivity(repoKey: string) {
     return () => window.clearInterval(timer);
   }, [moving, load]);
 
-  return { items: items ?? [], loaded: items !== null, error, busy, now, reload: load };
+  return { items: items ?? [], ideas, loaded: items !== null, error, busy, now, reload: load };
 }

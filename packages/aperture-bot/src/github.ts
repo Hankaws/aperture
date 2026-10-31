@@ -6,6 +6,7 @@
 import { retryStale } from "./retry.ts";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+import type { RawComment, Thread } from "../../../src/lib/bot/tasks.ts";
 
 export type Repo = { owner: string; repo: string };
 
@@ -306,6 +307,36 @@ export class GitHub {
       authorType: c.user?.type ?? "User",
       body: c.body ?? "",
     }));
+  }
+
+  /**
+   * Comments updated since then, as GitHub gives them, newest first: the
+   * week's digest reads them as tasks (`week.ts`).
+   */
+  async rawCommentsSince(since: string): Promise<RawComment[]> {
+    return this.all<RawComment>(
+      `${this.base}/issues/comments?since=${encodeURIComponent(since)}&sort=updated&direction=desc`,
+    );
+  }
+
+  /** Issues and pull requests updated since then, and whether each pull request was merged. */
+  async threadsSince(since: string): Promise<Map<number, Thread>> {
+    const rows = await this.all<{
+      number?: number;
+      title?: string;
+      state?: string;
+      pull_request?: { merged_at?: string | null } | null;
+    }>(`${this.base}/issues?state=all&since=${encodeURIComponent(since)}`);
+    const threads = new Map<number, Thread>();
+    for (const r of rows)
+      if (typeof r.number === "number")
+        threads.set(r.number, {
+          title: r.title ?? "",
+          isPull: Boolean(r.pull_request),
+          open: r.state !== "closed",
+          ...(r.pull_request?.merged_at ? { merged: true } : {}),
+        });
+    return threads;
   }
 
   /** Open pull requests: their branch and page, and what the look-over reads. */

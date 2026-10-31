@@ -232,6 +232,8 @@ async function act(
     /** Another event than a new comment: its name, and its payload. */
     eventName?: string;
     payload?: unknown;
+    /** The clock the run reads. */
+    now?: number;
   } = {},
 ) {
   const { action } = await bundled();
@@ -269,6 +271,7 @@ async function act(
     model,
     sandbox: null,
     log: (line) => lines.push(line),
+    ...(options.now === undefined ? {} : { now: () => options.now! }),
   });
   const posted = (suffix: RegExp) =>
     gh.calls.filter((c) => c.method === "POST" && suffix.test(c.path));
@@ -755,6 +758,80 @@ test("always-allow brief waits while its last pull request is open, and leaves i
   assert.equal(off.code, 0, off.lines.join("\n"));
   assert.equal(off.posted(/\/pulls$/).length, 0);
   assert.doesNotMatch(off.lines.join("\n"), /always-allow brief/);
+});
+
+test("on Mondays the brief carries the last seven days, counted from the bot's own replies", async () => {
+  const monday = Date.parse("2026-11-02T03:17:00Z");
+  const ago = (days: number) => new Date(monday - days * 86_400_000).toISOString();
+  const raw = (id: number, issue: number, user: string, body: string, days: number) => ({
+    id,
+    issue_url: `https://api.github.com/repos/acme/shop/issues/${issue}`,
+    html_url: `https://github.com/acme/shop/issues/${issue}#issuecomment-${id}`,
+    user: { login: user, type: user.endsWith("[bot]") ? "Bot" : "User" },
+    body,
+    created_at: ago(days),
+    updated_at: ago(days),
+  });
+  const marker = (s: Record<string, unknown>) =>
+    `<!-- aperture-bot ${JSON.stringify({ v: 1, run: "https://github.com/acme/shop/actions/runs/1", ...s })} -->`;
+  const recent = [
+    raw(51, 5, "ada", "/aperture show prices in dollars", 3),
+    raw(
+      52,
+      5,
+      "github-actions[bot]",
+      `Opened #10.\n\n${marker({ state: "clear", asked: 51, link: { url: "https://github.com/acme/shop/pull/10", what: "pull" } })}`,
+      3,
+    ),
+    raw(61, 8, "ada", "/aperture review", 2),
+    raw(
+      62,
+      8,
+      "github-actions[bot]",
+      marker({ state: "clear", kind: "review", asked: 61, note: "2 likely bugs" }),
+      2,
+    ),
+    // Older than the week: not counted.
+    raw(71, 5, "ada", "/aperture why?", 9),
+    raw(72, 5, "github-actions[bot]", marker({ state: "clear", kind: "answer", asked: 71 }), 9),
+  ];
+  const openIssues = [
+    { number: 7, title: "Aperture Bot: looking things over" },
+    {
+      number: 10,
+      title: "Show prices in dollars",
+      state: "closed",
+      pull_request: { merged_at: ago(1) },
+    },
+  ] as never;
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues,
+    recent,
+    now: monday,
+    model: async () => ({ content: "All quiet.\n\nNext: none" }),
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const body = run.replied();
+  assert.match(body, /^\*\*Daily brief\*\* for November 2, on main/);
+  assert.match(
+    body,
+    /\n\*\*Last 7 days\*\*\n- \*\*Pull requests opened\*\*: 1 \(1 merged\)\n- \*\*Likely bugs caught\*\*: 2 \(In 1 review\)\n- \*\*Answered\*\*: none\n- \*\*Pull requests checked\*\*: none\n/,
+  );
+  // Any other day, the brief goes without it.
+  const tuesday = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues,
+    recent,
+    now: monday + 86_400_000,
+    model: async () => ({ content: "All quiet.\n\nNext: none" }),
+  });
+  assert.equal(tuesday.code, 0, tuesday.lines.join("\n"));
+  assert.doesNotMatch(tuesday.replied(), /Last 7 days/);
 });
 
 test("a scheduled task is done on its own issue, found again on the next run", async () => {

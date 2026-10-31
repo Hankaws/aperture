@@ -68,6 +68,8 @@ import { MAX_IDEAS, MAX_NEXT } from "./next.ts";
 import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
+import { tasksFrom } from "../../../src/lib/bot/tasks.ts";
+import { WEEK_MS, weekFrom, weekLines } from "../../../src/lib/bot/week.ts";
 import { isSealed, sealBody, sealKey } from "./seal.ts";
 import { runTask, type BotProgress } from "./run.ts";
 import { asTestRunner, DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
@@ -77,6 +79,8 @@ export type ActionDeps = {
   model?: Model;
   /** Replaces the Docker sandbox (and its image pull). Null: tests are not run. */
   sandbox?: Sandbox | null;
+  /** The clock, for tests: the brief's date, and whether it carries the week's digest. */
+  now?: () => number;
   log?: (line: string) => void;
 };
 
@@ -434,6 +438,28 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
    * pull requests, are kept for `always-allow: brief`.
    */
   let briefed: { ideas: string[]; waiting: string | null } = { ideas: [], waiting: null };
+  /**
+   * On Mondays (UTC), the brief carries the week's digest: what the bot did in
+   * the last seven days, counted from its own summaries on GitHub as the Bot
+   * page counts them. No model call; if GitHub cannot say, the brief goes
+   * without it.
+   */
+  const mondayDigest = async (now: number): Promise<string[] | undefined> => {
+    if (new Date(now).getUTCDay() !== 1) return undefined;
+    try {
+      // A day more than the week, so a reply's ask from just before it is found too.
+      const since = new Date(now - WEEK_MS - 86_400_000).toISOString();
+      const [raw, threads] = await Promise.all([
+        gh.rawCommentsSince(since),
+        gh.threadsSince(since),
+      ]);
+      const trigger = input(env, "trigger") ?? DEFAULT_TRIGGER;
+      return weekLines(weekFrom(tasksFrom(raw, threads, { now, trigger }), threads, now));
+    } catch (error) {
+      log(`Aperture Bot: the week's digest is left out: ${describeError(error)}`);
+      return undefined;
+    }
+  };
   const lookOver = async (): Promise<number> => {
     const branch = command.defaultBranch;
     const sha = await gh.head(branch);
@@ -454,7 +480,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         updatedAt: p.updatedAt,
         bots: p.headRef.startsWith("aperture/"),
       })),
-      now: Date.now(),
+      now: deps.now?.() ?? Date.now(),
     };
     log(`Aperture Bot: looking ${command.owner}/${command.repo} over`);
     // The agent reads the code in Ask mode, as for a question: it can look, not change.
@@ -483,7 +509,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     await reply(
       lookReply(
         look,
-        { branch, sha, needs: needsYou(view), date },
+        { branch, sha, needs: needsYou(view), date, week: await mondayDigest(view.now) },
         { ...asked, usage: result.usage },
       ),
     );

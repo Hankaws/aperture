@@ -197,3 +197,18 @@ export function weekNote(w: Week): string | null {
   ].filter(Boolean);
   return bits.length ? `Also ${bits.join(", and ")}.` : null;
 }
+
+/**
+ * The week as Markdown lines, for the digest the daily brief carries on
+ * Mondays: the tiles' words, so the brief and the Bot page say the same.
+ */
+export function weekLines(w: Week): string[] {
+  if (quietWeek(w)) return ["Nothing from the bot in the last 7 days."];
+  const lines = weekTiles(w).map((t) =>
+    t.value === 0 && (!t.detail || /^(No|None|Nothing)\b/.test(t.detail))
+      ? `- **${t.label}**: none`
+      : `- **${t.label}**: ${t.value}${t.detail ? ` (${t.detail})` : ""}`,
+  );
+  const note = weekNote(w);
+  return note ? [...lines, note] : lines;
+}

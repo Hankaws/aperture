@@ -664,6 +664,99 @@ test("the brief runs again on its issue, and says so when it has no ideas", asyn
   assert.equal(readSummary(body)?.next, undefined);
 });
 
+/** The brief's ideas, the first naming an issue; then the work on the idea that runs. */
+function briefThenWork(ideas: string) {
+  const ask = answering(`All quiet: main is green.\n\nNext:\n${ideas}`);
+  const fix = scripted([[dollars]]).model;
+  let turn = 0;
+  const model: ReturnType<typeof scripted>["model"] = async (...args) =>
+    turn++ < 2 ? ask.model(...args) : fix(...args);
+  return model;
+}
+
+const briefIssue = [{ number: 7, title: "Aperture Bot: looking things over" }];
+
+test("with always-allow brief, the brief's first idea from the code is done at once", async () => {
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over", "INPUT_ALWAYS-ALLOW": "red, brief" },
+    openIssues: briefIssue,
+    model: briefThenWork(
+      "- Do what #3 asks: show prices in dollars\n- Format cents as dollars in src/price.ts\n- Add a test",
+    ),
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  // An idea naming an issue waits for a tick: anyone can write an issue.
+  assert.match(
+    run.lines.join("\n"),
+    /always-allow brief: doing Format cents as dollars in src\/price\.ts/,
+  );
+  const marked = run.gh.calls.find(
+    (c) =>
+      c.method === "PATCH" &&
+      /\n- \[x\] Format cents as dollars in src\/price\.ts · started without a tick \(`always-allow: brief`\), \[the run\]/.test(
+        (c.body as { body: string }).body,
+      ),
+  );
+  assert.ok(marked, "the brief's box is marked started, naming the setting, not a user");
+  assert.doesNotMatch((marked!.body as { body: string }).body, /@always-allow/);
+  const [opened] = run.posted(/\/pulls$/);
+  const pr = opened!.body as { title: string; body: string; head: string };
+  assert.equal(pr.title, "Format cents as dollars in src/price.ts");
+  assert.match(pr.body, /^An idea from the daily brief in #7, started without a tick/);
+  assert.doesNotMatch(pr.body, /Fixes #7/, "the brief's issue stays open");
+  assert.match(pr.head, /^aperture\/7-/);
+  const s = readSummary(run.replied())!;
+  assert.deepEqual(
+    [s.state, s.via, s.task],
+    ["clear", "schedule", "Format cents as dollars in src/price.ts"],
+  );
+});
+
+test("always-allow brief waits while its last pull request is open, and leaves issue ideas to a tick", async () => {
+  const waiting = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over", "INPUT_ALWAYS-ALLOW": "brief" },
+    openIssues: briefIssue,
+    openPulls: [
+      { ref: "aperture/7-x", url: "https://github.com/acme/shop/pull/9", number: 9, title: "x" },
+    ],
+    model: briefThenWork("- Format cents as dollars in src/price.ts"),
+  });
+  assert.equal(waiting.code, 0, waiting.lines.join("\n"));
+  assert.match(
+    waiting.lines.join("\n"),
+    /the last idea's pull request waits for review: https:\/\/github\.com\/acme\/shop\/pull\/9/,
+  );
+  assert.equal(waiting.posted(/\/pulls$/).length, 0);
+  assert.match(waiting.replied(), /- \[ \] Format cents as dollars in src\/price\.ts\n/);
+
+  const issuesOnly = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over", "INPUT_ALWAYS-ALLOW": "brief" },
+    openIssues: briefIssue,
+    model: briefThenWork("- Do what #3 asks: show prices in dollars"),
+  });
+  assert.equal(issuesOnly.code, 0, issuesOnly.lines.join("\n"));
+  assert.match(issuesOnly.lines.join("\n"), /ideas naming an issue wait for a tick/);
+  assert.equal(issuesOnly.posted(/\/pulls$/).length, 0);
+
+  // Without the setting, the brief changes nothing, as before.
+  const off = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over", "INPUT_ALWAYS-ALLOW": "red" },
+    openIssues: briefIssue,
+    model: briefThenWork("- Format cents as dollars in src/price.ts"),
+  });
+  assert.equal(off.code, 0, off.lines.join("\n"));
+  assert.equal(off.posted(/\/pulls$/).length, 0);
+  assert.doesNotMatch(off.lines.join("\n"), /always-allow brief/);
+});
+
 test("a scheduled task is done on its own issue, found again on the next run", async () => {
   const run = await act({
     eventName: "workflow_dispatch",
@@ -1331,7 +1424,7 @@ test("with always-allow red, a red run is explained and fixed at once, its box m
     (c) =>
       c.method === "PATCH" &&
       c.path === "/repos/acme/shop/issues/comments/900" &&
-      /started by @always-allow/.test((c.body as { body: string }).body),
+      /started without a tick \(`always-allow: red`\)/.test((c.body as { body: string }).body),
   );
   assert.ok(marked, "the explanation's box is marked started");
   const [opened] = run.posted(/\/pulls$/);

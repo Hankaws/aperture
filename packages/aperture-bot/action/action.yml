@@ -54,7 +54,7 @@ inputs:
     required: false
     default: check
   always-allow:
-    description: 'Work the bot starts without a tick. "red": a workflow red on the default branch is explained and fixed at once (a pull request, only when Aperture Agent Check is clear). Empty: every fix waits for someone who can write to tick it.'
+    description: 'Work the bot starts without a tick, comma-separated. "red": a workflow red on the default branch is explained and fixed at once. "brief": the daily brief''s first idea from the code is done at once, one pull request at a time (none while the last waits for review); ideas naming an issue still wait for a tick. Either opens a pull request only when Aperture Agent Check is clear. Empty: every fix waits for someone who can write to tick it.'
     required: false
   daily-limit:
     description: How many replies nobody asked for (to new issues, and to workflows red on the default branch) the bot posts in a day at most. Anyone can open an issue, and each reply spends the model key.

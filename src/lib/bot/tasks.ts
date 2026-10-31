@@ -193,6 +193,8 @@ export type Jobs = {
   red: string[];
   /** And fixed at once, without a tick (`always-allow: red`). */
   autoRed: boolean;
+  /** The daily brief's first idea from the code done at once, one at a time (`always-allow: brief`). */
+  autoBrief: boolean;
 };
 
 export const NO_JOBS: Jobs = {
@@ -204,6 +206,7 @@ export const NO_JOBS: Jobs = {
   issues: false,
   red: [],
   autoRed: false,
+  autoBrief: false,
 };
 
 /** What the pull request trigger does, from the bot's `pull-requests` setting: check (the default), review, or both. */
@@ -300,6 +303,7 @@ export function workflowUse(text: string): {
       issues: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\bopened\b/m.test(text),
       red: watched(text),
       autoRed: /\bred\b/i.test(setting("always-allow") ?? ""),
+      autoBrief: /\bbrief\b/i.test(setting("always-allow") ?? ""),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -368,6 +372,10 @@ export function workflowFile(
       ];
   const red = jobs.red.map((name) => name.replace(/[\n"]/g, "").trim()).filter(Boolean);
   const onPulls = jobs.pulls || jobs.review;
+  const allowed = [
+    ...(jobs.autoRed && red.length ? ["red"] : []),
+    ...(jobs.autoBrief && scheduled === "look-over" ? ["brief"] : []),
+  ].join(", ");
   const any = jobs.label || Boolean(scheduled) || onPulls || jobs.issues || red.length > 0;
   const issueTypes = [...(jobs.issues ? ["opened"] : []), ...(jobs.label ? ["labeled"] : [])];
   const asks = [
@@ -467,7 +475,9 @@ export function workflowFile(
     ...(jobs.review
       ? [`          pull-requests: ${jobs.pulls ? '"check, review"' : "review"}`]
       : []),
-    ...(jobs.autoRed && red.length ? ["          always-allow: red"] : []),
+    ...(allowed
+      ? [`          always-allow: ${allowed.includes(",") ? `"${allowed}"` : allowed}`]
+      : []),
     "",
   ].join("\n");
 }

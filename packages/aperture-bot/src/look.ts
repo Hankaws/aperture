@@ -41,6 +41,15 @@ function days(at: string | undefined, now: number): number | null {
   return Number.isFinite(then) ? Math.max(0, Math.floor((now - then) / 86_400_000)) : null;
 }
 
+/**
+ * The idea `always-allow: brief` does at once: the first that comes from the
+ * code alone. One that names an issue (#12) waits for a tick, since anyone
+ * can open an issue and its words would become the task.
+ */
+export function ideaToDo(next: string[]): string | null {
+  return next.find((task) => !/#\d/.test(task)) ?? null;
+}
+
 const dayWord = (n: number) => (n === 1 ? "1 day" : `${n} days`);
 /** An issue's title as the brief shows it: anyone wrote it, so its @mentions stay quiet. */
 const title = (t: LookThread) => quiet(t.title.replace(/\s+/g, " ").trim().slice(0, 120));
@@ -108,7 +117,7 @@ export function briefQuestion(
 ): { question: string; context: string } {
   const question = [
     "This is your daily brief on this repository. Look through its code with your tools, and the state below.",
-    `First write at most 3 short sentences on how it stands. Then a line "Next:" and at most ${MAX_IDEAS} ideas worth doing now, each one precise task under 200 characters that you, a coding bot, could do by changing the code: a likely bug, an important path with no test, a TODO worth finishing, a fix for what is red, or what an open issue asks (name it, #12).`,
+    `First write at most 3 short sentences on how it stands. Then a line "Next:" and at most ${MAX_IDEAS} ideas worth doing now, the one most worth doing first, each one precise task under 200 characters that you, a coding bot, could do by changing the code: a likely bug, an important path with no test, a TODO worth finishing, a fix for what is red, or what an open issue asks (name it, #12).`,
     'Only ideas the code or the state shows you; name the file. Never suggest what only people can do, such as reviewing, replying or closing. If nothing is worth doing, write "Next: none".',
   ].join(" ");
   const context = [

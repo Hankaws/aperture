@@ -33,9 +33,14 @@ export function tickedTask(before: string, after: string, next: string[]): strin
   return now.length === 1 ? now[0]!.text : null;
 }
 
-/** The line as it reads once its run has started: ticked, who asked, and the run. */
+/**
+ * The line as it reads once its run has started: ticked, who asked, and the
+ * run. Started by an `always-allow` setting, it names the setting, not a
+ * GitHub user (an @ there would ping whoever has that name).
+ */
 export function startedLine(task: string, by: string, run: string): string {
-  return `- [x] ${task} · started by @${by}, [the run](${run})`;
+  const who = by.startsWith("always-allow") ? `without a tick (\`${by}\`)` : `by @${by}`;
+  return `- [x] ${task} · started ${who}, [the run](${run})`;
 }
 
 /**

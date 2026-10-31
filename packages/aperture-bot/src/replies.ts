@@ -38,6 +38,8 @@ export type ReplyContext = Asked & { tests: string | null };
 /** How the asking reads in a commit or a pull request: who asked, and how. */
 function askedBy(command: Command): string {
   if (command.via === "label") return `@${command.author} labelled #${command.number} for the bot`;
+  if (command.idea)
+    return `An idea from the daily brief in #${command.number}, started without a tick (\`always-allow: brief\`)`;
   if (command.via === "schedule") return `A standing job, on #${command.number}`;
   if (command.via === "pull") return `@${command.author} pushed to #${command.number}`;
   if (command.via === "tick")
@@ -52,7 +54,7 @@ const askedFields = (ctx: Asked) => (ctx.via ? { via: ctx.via, by: ctx.by, task:
 
 /** A title for the commit and the pull request: the task's first line, or the issue's title. */
 export function titleFor(command: Command): string {
-  if (command.via === "schedule") {
+  if (command.via === "schedule" && !command.idea) {
     const job = command.title.replace(/^Aperture Bot: /, "");
     return `${job.charAt(0).toUpperCase()}${job.slice(1)}`.slice(0, 72);
   }
@@ -164,7 +166,8 @@ export function pullBody(
 ): string {
   return join(
     [`${askedBy(command)}:`, "", `> ${quiet(firstLine(command.task))}`],
-    command.isPull ? [] : [`Fixes #${command.number}`],
+    // The brief's issue stays open: an idea's pull request does not close it.
+    command.isPull || command.idea ? [] : [`Fixes #${command.number}`],
     plan(result),
     [
       `**Aperture Agent Check**: ${result.check?.verdict === "clear" ? "nothing red" : "red"}.`,

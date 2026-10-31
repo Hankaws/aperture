@@ -28,7 +28,7 @@ import { answerQuestion } from "./ask.ts";
 import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
-import { briefQuestion, needsYou, type LookView } from "./look.ts";
+import { briefQuestion, ideaToDo, needsYou, type LookView } from "./look.ts";
 import type { Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
@@ -105,12 +105,13 @@ function setOutput(env: NodeJS.ProcessEnv, values: Record<string, string>): void
 
 /**
  * The kinds of work the bot may start without a tick, from the `always-allow`
- * input. Only `red` for now: fixing a workflow red on the default branch,
- * which is what the nightly fix-ci job does too.
+ * input: `red` fixes a workflow red on the default branch, which is what the
+ * nightly fix-ci job does too; `brief` does the daily brief's first idea from
+ * the code, one at a time.
  */
-export function alwaysAllowed(value: string | undefined): Set<"red"> {
+export function alwaysAllowed(value: string | undefined): Set<"red" | "brief"> {
   const words = (value ?? "").toLowerCase().split(/[\s,]+/);
-  return new Set(words.includes("red") ? (["red"] as const) : []);
+  return new Set((["red", "brief"] as const).filter((word) => words.includes(word)));
 }
 
 /** What a push to a pull request starts, from the `pull-requests` input: Agent Check, a review, or both. */
@@ -429,8 +430,10 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   /**
    * The look-over: how the repository stands (CI on the default branch, open
    * issues and pull requests), one model call, and a report on its issue.
-   * It checks nothing out and changes nothing.
+   * It checks nothing out and changes nothing. Its ideas, and the bot's open
+   * pull requests, are kept for `always-allow: brief`.
    */
+  let briefed: { ideas: string[]; waiting: string | null } = { ideas: [], waiting: null };
   const lookOver = async (): Promise<number> => {
     const branch = command.defaultBranch;
     const sha = await gh.head(branch);
@@ -469,6 +472,8 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     );
     if (!result.ok) throw new Error(result.error);
     const look = { note: result.answer, next: result.next };
+    const waiting = pulls.find((p) => p.headRef.startsWith(`aperture/${command.number}-`));
+    briefed = { ideas: look.next, waiting: waiting?.url ?? null };
     log([look.note, ...look.next.map((task) => `- ${task}`)].filter(Boolean).join("\n"));
     const date = new Date(view.now).toLocaleDateString("en-US", {
       month: "long",
@@ -657,7 +662,34 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       return code;
     }
     if (command.review) return await reviewPull();
-    if (command.look) return await lookOver();
+    if (command.look) {
+      const code = await lookOver();
+      if (command.via !== "schedule" || !alwaysAllowed(input(env, "always-allow")).has("brief"))
+        return code;
+      // Always allowed: the brief's first idea from the code starts now, one at a time.
+      const idea = ideaToDo(briefed.ideas);
+      if (!idea) {
+        log(
+          "Aperture Bot: always-allow brief: no idea from the code alone; ideas naming an issue wait for a tick.",
+        );
+        return code;
+      }
+      if (briefed.waiting) {
+        log(
+          `Aperture Bot: always-allow brief: the last idea's pull request waits for review: ${briefed.waiting}`,
+        );
+        return code;
+      }
+      const said = replied as { id: number; body: string } | null;
+      if (said) {
+        const marked = markStarted(said.body, idea, "always-allow: brief", runUrl);
+        if (marked) await gh.editComment(said.id, marked).catch(() => undefined);
+      }
+      command = { ...command, task: idea, look: false, idea: true };
+      asked.task = idea;
+      status = null;
+      log(`Aperture Bot: always-allow brief: doing ${idea}`);
+    }
     if (command.ask) return await answer({ question: questionText(command.task) });
     if (command.triage)
       return await answer({
@@ -677,7 +709,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       // Always allowed: the fix starts now, as if its box were ticked, and its box says so.
       const said = replied as { id: number; body: string } | null;
       if (said) {
-        const marked = markStarted(said.body, command.task, "always-allow", runUrl);
+        const marked = markStarted(said.body, command.task, "always-allow: red", runUrl);
         if (marked) await gh.editComment(said.id, marked).catch(() => undefined);
       }
       status = null;

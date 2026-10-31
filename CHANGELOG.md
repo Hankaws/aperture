@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Aperture Bot can act on its daily brief without asking. With "Do the top idea without asking" on the Bot page (`always-allow: brief`), each brief's first idea from the code becomes a pull request at once, only when Aperture Agent Check is clear and one at a time: nothing new starts while the last one waits for review. An idea that names an issue still waits for a tick, since anyone can write an issue, and the brief now lists the idea most worth doing first. A box started by an `always-allow` setting names the setting instead of @mentioning a user called always-allow. ([#161](https://github.com/Hankaws/aperture/pull/161))
+
 ### Fixed
 
 - A ticked box starts Aperture Bot's work only in a list the bot itself made on that thread: its suggestion lists are signed with a key derived from its model key, so another bot's look-alike comment, or a list copied from another thread, starts nothing, and the bot replies with the task for you to ask for if you meant it. Suggestions posted before this are no longer tickable. ([#160](https://github.com/Hankaws/aperture/pull/160))

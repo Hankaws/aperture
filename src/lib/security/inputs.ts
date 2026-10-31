@@ -150,6 +150,7 @@ export const botJobsInput = z.object({
   issues: z.boolean().optional(),
   red: z.boolean().optional(),
   autoRed: z.boolean().optional(),
+  autoBrief: z.boolean().optional(),
 });
 export const botAppInput = z.object({ owner: repoName, repo: repoName, on: z.boolean() });
 export const botSetupInput = z.object({

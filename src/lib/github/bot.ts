@@ -596,7 +596,9 @@ function jobsText(jobs: Jobs): string[] {
     );
   else if (jobs.scheduled === "look-over")
     lines.push(
-      `- **A daily brief** (\`${jobs.cron ?? NIGHTLY}\`, UTC) on its own issue: what needs you (CI, pull requests waiting, quiet issues) and up to five ideas from reading the code. It changes nothing; an idea is done only when someone ticks or sends it.`,
+      jobs.autoBrief
+        ? `- **A daily brief** (\`${jobs.cron ?? NIGHTLY}\`, UTC) on its own issue: what needs you (CI, pull requests waiting, quiet issues) and up to five ideas from reading the code. Its first idea from the code is done at once (\`always-allow: brief\`), one pull request at a time and only when Aperture Agent Check is clear; ideas naming an issue wait for a tick.`
+        : `- **A daily brief** (\`${jobs.cron ?? NIGHTLY}\`, UTC) on its own issue: what needs you (CI, pull requests waiting, quiet issues) and up to five ideas from reading the code. It changes nothing; an idea is done only when someone ticks or sends it.`,
     );
   else if (jobs.scheduled)
     lines.push(
@@ -680,6 +682,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         issues: data.issues ?? false,
         red,
         autoRed: Boolean(data.autoRed) && red.length > 0,
+        autoBrief: Boolean(data.autoBrief) && scheduled === "look-over",
       };
       const read = await readWorkflow(call, base);
       if (!read.ok) return read;

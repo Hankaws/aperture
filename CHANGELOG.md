@@ -14,6 +14,7 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Ticking an idea in Aperture Bot's daily brief no longer closes the brief's issue: the pull request it opens says where the idea came from instead of "Fixes" the brief, so the next brief posts on the same issue. ([#163](https://github.com/Hankaws/aperture/pull/163))
 - On the Bot page, a bot whose daily brief was posted in one go no longer shows as queued in the roster: the team's feed keeps an outcome before its ask at the same moment. ([#162](https://github.com/Hankaws/aperture/pull/162))
 - A ticked box starts Aperture Bot's work only in a list the bot itself made on that thread: its suggestion lists are signed with a key derived from its model key, so another bot's look-alike comment, or a list copied from another thread, starts nothing, and the bot replies with the task for you to ask for if you meant it. Suggestions posted before this are no longer tickable. ([#160](https://github.com/Hankaws/aperture/pull/160))
 

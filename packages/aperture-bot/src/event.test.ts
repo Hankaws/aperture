@@ -276,6 +276,25 @@ test("ticking a suggestion in the bot's reply is that task, for whoever ticked i
   assert.equal(personal.command.ticked?.postedBy, "owner");
 });
 
+test("a suggestion ticked in a daily brief keeps the brief's issue open", () => {
+  const brief = (mark: string) =>
+    botReply(mark).replace('"state":"clear"', '"state":"clear","kind":"look"');
+  const parsed = parseEvent(
+    "issue_comment",
+    tick({
+      comment: { id: 900, body: brief("x"), user: { login: "github-actions[bot]", type: "Bot" } },
+      changes: { body: { from: brief(" ") } },
+    }),
+  );
+  assert.ok("command" in parsed, JSON.stringify(parsed));
+  assert.equal(parsed.command.keepOpen, true);
+  assert.equal(parsed.command.task, "Round half cents up");
+  // Any other reply's tick leaves keepOpen unset: its pull request fixes the thread.
+  const other = parseEvent("issue_comment", tick());
+  assert.ok("command" in other);
+  assert.equal(other.command.keepOpen, undefined);
+});
+
 test("an edit that is not a tick of one of the bot's own suggestions is ignored", () => {
   const ignored = (p: unknown) => {
     const parsed = parseEvent("issue_comment", p);

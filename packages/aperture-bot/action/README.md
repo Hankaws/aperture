@@ -97,6 +97,16 @@ if: >-
 
 "Follow its own threads" on the Bot page writes both for you.
 
+## Post to Slack
+
+Give the bot a Slack [incoming webhook](https://api.slack.com/messaging/webhooks) and the work it does unasked shows in that channel too: the daily brief (with the week's digest on Mondays), a red run it explained (and whether it is fixing it), and a pull request it opened without being asked. Each links back to GitHub. Add the webhook as the repository secret `SLACK_WEBHOOK_URL`, then:
+
+```yaml
+slack-webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+Only a Slack webhook address is posted to, and it is never written to the log. Words from GitHub and the model are posted as words: nothing in them can ping `@channel` or become a link. If Slack does not answer, the run goes on without it. "Post to Slack" on the Bot page writes the line for you.
+
 ## What it does
 
 | Asked on                            | When Agent Check is clear                                                                                                   | Otherwise                                                 |
@@ -216,6 +226,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `pull-requests`     | `check`                              | What a push to a pull request starts: `check`, `review`, or `check, review`.                                                                                   |
 | `always-allow`      |                                      | `red` fixes a workflow red on the default branch, and `brief` does the daily brief's first idea from the code, without waiting for a tick. Both: `red, brief`. |
 | `follow-threads`    |                                      | `true`: a reply to one of the bot's replies needs no `/aperture` (see Talk it through).                                                                        |
+| `slack-webhook`     |                                      | A Slack incoming webhook, from a secret: unasked work is posted there too (see Post to Slack).                                                                 |
 | `daily-limit`       | `20`                                 | Replies nobody asked for (new issues, red runs) a day at most.                                                                                                 |
 | `install`           | `auto`                               | `npm ci --ignore-scripts` when there is a package-lock.json and no `node_modules`; `none` to install yourself in an earlier step (pnpm, Yarn).                 |
 | `sandbox-image`     | `mirror.gcr.io/library/node:22-slim` | The Docker image tests run in.                                                                                                                                 |

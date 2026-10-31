@@ -155,6 +155,7 @@ export const botJobsInput = z.object({
   autoRed: z.boolean().optional(),
   autoBrief: z.boolean().optional(),
   follow: z.boolean().optional(),
+  slack: z.boolean().optional(),
 });
 export const botAppInput = z.object({ owner: repoName, repo: repoName, on: z.boolean() });
 export const botSetupInput = z.object({

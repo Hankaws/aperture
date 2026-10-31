@@ -56,6 +56,9 @@ inputs:
   always-allow:
     description: 'Work the bot starts without a tick, comma-separated. "red": a workflow red on the default branch is explained and fixed at once. "brief": the daily brief''s first idea from the code is done at once, one pull request at a time (none while the last waits for review); ideas naming an issue still wait for a tick. Either opens a pull request only when Aperture Agent Check is clear. Empty: every fix waits for someone who can write to tick it.'
     required: false
+  slack-webhook:
+    description: 'A Slack incoming webhook (https://hooks.slack.com/services/…), from a repository secret: the daily brief, a red run the bot explained, and a pull request it opened unasked are posted to that channel too. Nothing from GitHub or the model can ping or link there. Empty: nothing goes to Slack.'
+    required: false
   follow-threads:
     description: '"true": a reply to one of the bot''s replies needs no trigger. "Yes" or "do the second one" does that suggestion (checked as a tick is); anything else is answered, changing nothing. Only from whoever the reply answered (anyone who can write, on threads the bot started), and never a comment that @mentions someone. The workflow must also run on such comments: see the README.'
     required: false

@@ -41,6 +41,7 @@ import {
   PROVIDER_SECRET,
   WEEKLY,
   withJobs,
+  SLACK_SECRET,
   workflowFile,
   workflowUse,
   WORKFLOW_PATH,
@@ -650,6 +651,10 @@ function jobsText(jobs: Jobs): string[] {
     lines.push(
       '- **Its own threads**: a reply to one of the bot\'s replies, from whoever it answered (anyone who can write, on threads the bot started), needs no `/aperture`. "Yes" or "do the second one" does that suggestion; anything else is answered, changing nothing.',
     );
+  if (jobs.slack)
+    lines.push(
+      `- **Slack**: the daily brief, a red run it explained, and a pull request it opened unasked are posted to Slack too, through the incoming webhook in the \`${SLACK_SECRET}\` secret. Add the secret before merging, or nothing is posted.`,
+    );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
 
@@ -854,6 +859,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         autoRed: Boolean(data.autoRed) && red.length > 0,
         autoBrief: Boolean(data.autoBrief) && scheduled === "look-over",
         follow: data.follow ?? false,
+        slack: data.slack ?? false,
       };
       const read = await readWorkflow(call, base);
       if (!read.ok) return read;

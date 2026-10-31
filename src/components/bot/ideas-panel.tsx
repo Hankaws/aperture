@@ -2,12 +2,9 @@ import { useState } from "react";
 import { ArrowUpRight, Check, Lightbulb, Loader2, RefreshCw, Undo2, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ago } from "@/lib/bot/activity";
-import { sourceLine, type Idea } from "@/lib/bot/ideas";
+import { askFor, sourceLine, type Idea } from "@/lib/bot/ideas";
 import { askBot } from "@/lib/github/bot";
 import { cn } from "@/lib/utils";
-
-/** A new issue's title for an idea, as the chat's cards make it. */
-const issueTitle = (task: string) => (task.length > 80 ? `${task.slice(0, 79)}…` : task);
 
 type Sent = { url: string; number: number };
 
@@ -49,15 +46,10 @@ export function IdeasPanel({
   const restore = (id: string) => onDismissed(dismissed.filter((d) => d !== id));
 
   async function doIt(idea: Idea) {
-    const [owner = "", repo = ""] = idea.repo.split("/");
     setSending(idea.id);
     setFailed(({ [idea.id]: _, ...rest }) => rest);
     try {
-      const out = await askBot({
-        data: idea.send
-          ? { owner, repo, number: idea.send.number, task: idea.task }
-          : { owner, repo, title: issueTitle(idea.task), task: idea.task },
-      });
+      const out = await askBot({ data: askFor(idea) });
       if (out.ok) {
         setSent((s) => ({ ...s, [idea.id]: { url: out.url, number: out.number } }));
         onSent();

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Download, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Loader2, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import {
   type Mascot,
   type MascotMood,
 } from "@/lib/bot/mascot";
-import { deleteBot, saveBot } from "@/lib/bot/team.api";
+import { deleteBot, saveBot, setMainBot } from "@/lib/bot/team.api";
 import { FOCUSES, NAME_MAX, PERSONALITY_MAX, type BotProfile } from "@/lib/bot/team";
 import type { ModelChoice } from "@/lib/bot/team-models";
 import { cn } from "@/lib/utils";
@@ -300,8 +300,45 @@ export function ProfilePanel({
     }
   }
 
+  async function star(on: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await setMainBot({ data: { id: on ? bot.id : "" } });
+      if (out === null) setError("Too many changes at once. Try again in a minute.");
+      else onSaved(out);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
+      <div>
+        <p className={label}>Main bot</p>
+        {bot.main ? (
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <Star className="size-4 fill-current text-warn" />
+            {bot.name} leads your team, and greets you on Next up with the work across all your
+            repositories.
+            <Button variant="ghost" size="sm" onClick={() => void star(false)} disabled={busy}>
+              Unstar
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-1 space-y-1">
+            <Button variant="outline" size="sm" onClick={() => void star(true)} disabled={busy}>
+              <Star className="size-4" />
+              Make {bot.name} your main bot
+            </Button>
+            <p className="text-xs text-subtle">
+              It leads the roster and plans your work across every bot&apos;s repository.
+            </p>
+          </div>
+        )}
+      </div>
       <div>
         <p className={label}>Talks on</p>
         <ModelPicker bot={bot} choices={choices} onSaved={onSaved} className="mt-1 w-fit" />

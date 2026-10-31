@@ -169,3 +169,22 @@ export function sourceLine(idea: Idea): string {
       return `After its work on #${idea.number}`;
   }
 }
+
+/**
+ * What "Do it" asks the bot: `/aperture` and the idea on its thread, or a new
+ * issue titled with it (cut as the chat's cards cut it). Shared by the Ideas
+ * inbox and Next up, so both send an idea the same way.
+ */
+export function askFor(
+  idea: Idea,
+): { owner: string; repo: string; task: string } & ({ number: number } | { title: string }) {
+  const [owner = "", repo = ""] = idea.repo.split("/");
+  return idea.send
+    ? { owner, repo, number: idea.send.number, task: idea.task }
+    : {
+        owner,
+        repo,
+        title: idea.task.length > 80 ? `${idea.task.slice(0, 79)}…` : idea.task,
+        task: idea.task,
+      };
+}

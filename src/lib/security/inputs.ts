@@ -131,6 +131,8 @@ export const botProfileInput = z.object({
   allow: z.enum(BOT_ALLOW).optional(),
 });
 export const botIdInput = z.object({ id: botId });
+/** The bot to star as main, or "" for none. */
+export const botMainInput = z.object({ id: z.union([botId, z.literal("")]) });
 /** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
 export const botChatSaveInput = z.object({
   id: botId,

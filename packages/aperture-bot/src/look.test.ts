@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { briefQuestion, needsYou, QUIET_DAYS, type LookView } from "./look.ts";
+import { briefQuestion, ideaToDo, needsYou, QUIET_DAYS, type LookView } from "./look.ts";
 
 const now = Date.parse("2026-10-13T10:00:00Z");
 const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
@@ -79,4 +79,19 @@ test("an issue's title cannot ping anyone from the brief", () => {
     view({ issues: [{ number: 3, title: "@alice please look", updatedAt: ago(30) }] }),
   );
   assert.equal(lines[1], "- #3 @\u200balice please look has been quiet for 30 days.");
+});
+
+test("ideaToDo picks the first idea from the code; one naming an issue waits for a tick", () => {
+  assert.equal(
+    ideaToDo(["Do what #12 asks: dark mode", "Add a test for src/price.ts", "Round up"]),
+    "Add a test for src/price.ts",
+  );
+  assert.equal(ideaToDo(["Fix #3", "See issue #45"]), null);
+  assert.equal(ideaToDo([]), null);
+  // A # that is not an issue number is fine.
+  assert.equal(ideaToDo(["Use C# naming in src/a.ts"]), "Use C# naming in src/a.ts");
+});
+
+test("the brief asks for the idea most worth doing first", () => {
+  assert.match(briefQuestion(view(), []).question, /the one most worth doing first/);
 });

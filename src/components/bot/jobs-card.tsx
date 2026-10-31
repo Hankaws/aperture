@@ -48,6 +48,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const [issues, setIssues] = useState(now.issues);
   const [red, setRed] = useState(now.red.length > 0);
   const [autoRed, setAutoRed] = useState(now.autoRed);
+  const [autoBrief, setAutoBrief] = useState(now.autoBrief);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -64,6 +65,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
     issues !== now.issues ||
     red !== now.red.length > 0 ||
     (red && autoRed) !== now.autoRed ||
+    (mode === "look-over" && autoBrief) !== now.autoBrief ||
     scheduled !== (now.scheduled ?? "") ||
     (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -84,6 +86,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           issues,
           red,
           autoRed: red && autoRed,
+          autoBrief: mode === "look-over" && autoBrief,
         },
       });
       if (out.ok) setOpened(out.url);
@@ -277,6 +280,21 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
               changes nothing: tick an idea on GitHub to have it done, or send it from this
               bot&apos;s chat.
             </p>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={autoBrief}
+                onChange={(event) => setAutoBrief(event.target.checked)}
+                disabled={!editable}
+                aria-label="Do the top idea without asking"
+                className="mt-0.5 size-4 accent-[var(--color-accent)]"
+              />
+              <span>
+                Do the top idea without asking: the bot opens a pull request for its first idea from
+                the code, one at a time (none while the last waits for review), and only when
+                Aperture Agent Check is clear. Ideas from an issue still wait for a tick.
+              </span>
+            </label>
             {often}
           </div>
         )}

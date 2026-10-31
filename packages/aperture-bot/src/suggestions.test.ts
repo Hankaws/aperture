@@ -66,3 +66,14 @@ test("a started suggestion is marked on its line, so ticking it again does nothi
   assert.equal(tickedTask(reply(" ", " "), marked, next), null);
   assert.equal(markStarted("no boxes here", "Round half cents up", "ada", "u"), null);
 });
+
+test("a line started by an always-allow setting names the setting, never an @user", () => {
+  assert.equal(
+    startedLine("Round half cents up", "always-allow: brief", "https://run"),
+    "- [x] Round half cents up · started without a tick (`always-allow: brief`), [the run](https://run)",
+  );
+  assert.equal(
+    startedLine("Round half cents up", "ada", "https://run"),
+    "- [x] Round half cents up · started by @ada, [the run](https://run)",
+  );
+});

@@ -56,6 +56,11 @@ export type Command = {
   review?: boolean;
   /** Look the repository over and report how it stands, changing nothing (`jobs.ts`). */
   look?: boolean;
+  /**
+   * An idea from the daily brief, done at once without a tick
+   * (`always-allow: brief`): its pull request leaves the brief's issue open.
+   */
+  idea?: boolean;
   owner: string;
   repo: string;
   defaultBranch: string;

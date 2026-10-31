@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.4.0 - 2026-10-31
+
 ### Added
 
 - Aperture Bot's daily brief. The look-over job ("Daily brief" on the Bot page, now daily by default) posts each morning what needs you, read from GitHub (CI on the default branch, pull requests waiting longest, issues quiet for two weeks), and up to five ideas from reading the code (likely bugs, untested paths, TODOs, open issues), each a box to tick. "Fix it without asking" (`always-allow: red`) has the bot fix a red default branch at once instead of waiting for a tick. ([#157](https://github.com/Hankaws/aperture/pull/157))

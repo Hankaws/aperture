@@ -13,12 +13,15 @@ import {
   botChatInput,
   botAppInput,
   botJobsInput,
+  botTeamBriefInput,
+  botTeamInput,
   botRepoInput,
   botSetupInput,
 } from "@/lib/security/inputs";
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
+import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import {
   ciText,
@@ -674,6 +677,148 @@ async function readWorkflow(
     };
   return { ok: true, text: fromBase64(file.content), sha: file.sha };
 }
+
+/** A repository's daily brief, as the Automation view shows it. */
+export type TeamBriefRow = {
+  repo: string;
+  /** `missing`: no bot workflow at its path, so the page cannot change it. */
+  state: BriefState | "missing";
+  note: string | null;
+};
+
+/** Reads each of the team's repositories' bot workflow: where its daily brief stands. */
+export const botTeamBriefs = createServerFn({ method: "POST" })
+  .validator(botTeamInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true; rows: TeamBriefRow[] } | Failure> => {
+    const busy = overLimit("bot", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const call: Call = (url, init) => githubJson(url, token, init);
+    const repos = [...new Set(data.repos)];
+    const rows: TeamBriefRow[] = [];
+    for (let i = 0; i < repos.length; i += ACTIVITY_PARALLEL) {
+      const batch = await Promise.all(
+        repos.slice(i, i + ACTIVITY_PARALLEL).map(async (repo): Promise<TeamBriefRow> => {
+          const [owner = "", name = ""] = repo.split("/");
+          const base = repoBase(owner, name);
+          const missing = {
+            repo,
+            state: "missing" as const,
+            note: `No bot workflow at ${WORKFLOW_PATH}`,
+          };
+          if (!base) return missing;
+          const read = await readWorkflow(call, base).catch(() => null);
+          if (!read?.ok) return missing;
+          const use = workflowUse(read.text);
+          if (!use.uses) return missing;
+          const state = briefState(use.jobs);
+          return { repo, state, note: state === "other" ? otherJob(use.jobs) : null };
+        }),
+      );
+      rows.push(...batch);
+    }
+    return { ok: true, rows };
+  });
+
+/** The team-wide switch's branch, so a second switch finds the first's pull request. */
+const TEAM_BRIEF_BRANCH = "aperture-bot-brief";
+
+/** What the team-wide switch did on one repository: a pull request, or why not. */
+export type TeamBriefResult =
+  /** `waiting`: the pull request was already open from an earlier switch, not opened again. */
+  | { repo: string; url: string; waiting?: true }
+  | { repo: string; skip: string }
+  | { repo: string; error: string };
+
+/**
+ * The team-wide switch: on each repository, a pull request that makes the
+ * daily brief do its top idea without asking (on), or only suggest (off),
+ * keeping every other job and setting. Merging is left to people.
+ */
+export const setTeamBrief = createServerFn({ method: "POST" })
+  .validator(botTeamBriefInput)
+  .middleware([authMiddleware])
+  .handler(
+    async ({ data, context }): Promise<{ ok: true; results: TeamBriefResult[] } | Failure> => {
+      const busy = overLimit("botAsk", context.userId);
+      if (busy) return { ok: false, error: busy };
+      const { accountToken, githubJson } = await github();
+      const token = await accountToken(context.userId);
+      if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+      const call: Call = (url, init) => githubJson(url, token, init);
+      const results: TeamBriefResult[] = [];
+      // One at a time: each is a few writes, and GitHub slows bursts of them.
+      for (const repo of [...new Set(data.repos)]) {
+        const [owner = "", name = ""] = repo.split("/");
+        const base = repoBase(owner, name);
+        if (!base) {
+          results.push({ repo, error: "That repo name is not valid." });
+          continue;
+        }
+        try {
+          const read = await readWorkflow(call, base);
+          if (!read.ok) {
+            results.push({ repo, skip: `No bot workflow at ${WORKFLOW_PATH}` });
+            continue;
+          }
+          const use = workflowUse(read.text);
+          const change = use.uses ? withTeamBrief(use.jobs, data.on) : { skip: "Not set up" };
+          if ("skip" in change) {
+            results.push({ repo, skip: change.skip });
+            continue;
+          }
+          const next = withJobs(read.text, change.jobs);
+          if (!next || next === read.text) {
+            results.push({ repo, skip: data.on ? "Already on" : "Already off" });
+            continue;
+          }
+          // An earlier switch's pull request still open: that one, not a second.
+          const open = await call(
+            `${base}/pulls?state=open&head=${encodeURIComponent(`${owner}:${TEAM_BRIEF_BRANCH}`)}`,
+          );
+          const waiting = Array.isArray(open.body)
+            ? (open.body as Array<{ html_url?: string }>)[0]?.html_url
+            : undefined;
+          if (open.status === 200 && waiting) {
+            results.push({ repo, url: waiting, waiting: true });
+            continue;
+          }
+          const opened = await proposeWorkflow(call, base, {
+            content: next,
+            sha: read.sha,
+            branch: TEAM_BRIEF_BRANCH,
+            message: data.on
+              ? "Aperture Bot: do the daily brief's top idea without asking"
+              : "Aperture Bot: the daily brief only suggests",
+            title: data.on
+              ? "Aperture Bot: do the daily brief's top idea without asking"
+              : "Aperture Bot: the daily brief only suggests",
+            body: [
+              data.on
+                ? "Turns on [Aperture Bot](https://aperturesais.grok.me/bot)'s daily brief doing its top idea without asking (`always-allow: brief`): each brief's first idea from the code becomes a pull request at once, one at a time, and only when Aperture Agent Check is clear. Ideas naming an issue still wait for a tick."
+                : "The daily brief goes back to only suggesting: its ideas wait for a tick.",
+              "",
+              "The bot's standing jobs after this:",
+              "",
+              ...jobsText(change.jobs),
+              "",
+              "The rest of the bot's settings are kept. Opened from Aperture's Bot page, for every repository of the team at once.",
+            ].join("\n"),
+          });
+          results.push(opened.ok ? { repo, url: opened.url } : { repo, error: opened.error });
+        } catch (error) {
+          results.push({
+            repo,
+            error: error instanceof Error ? error.message : "Could not reach GitHub.",
+          });
+        }
+      }
+      return { ok: true, results };
+    },
+  );
 
 /** Opens a pull request that sets the bot's standing jobs, keeping the rest of its workflow. */
 export const setBotJobs = createServerFn({ method: "POST" })

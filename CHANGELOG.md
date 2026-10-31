@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Automation on the Bot page: one switch turns on every bot's daily brief doing its top idea without asking, or turns it off again. It shows where each repository's brief stands, then opens one pull request per repository that needs it, on its bot workflow and keeping its other jobs; a repository whose schedule runs another job is left as it is, and a pull request from an earlier switch that is still open is shown rather than opened again. Needs Aperture Bot v1.7. ([#166](https://github.com/Hankaws/aperture/pull/166))
+
 ## 0.5.0 - 2026-10-31
 
 ### Added

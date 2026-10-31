@@ -65,6 +65,8 @@ function fakeGitHub(
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method, path, body });
+    // Slack's incoming webhook: recorded as /services/…, and taken.
+    if (new URL(url).host === "hooks.slack.com") return new Response("ok");
     const json = (value: unknown, status = 200) =>
       new Response(JSON.stringify(value), {
         status,
@@ -832,6 +834,46 @@ test("on Mondays the brief carries the last seven days, counted from the bot's o
   });
   assert.equal(tuesday.code, 0, tuesday.lines.join("\n"));
   assert.doesNotMatch(tuesday.replied(), /Last 7 days/);
+});
+
+const SLACK = "https://hooks.slack.com/services/T000/B000/abcDEF123";
+const slackPosts = (run: { gh: { calls: Call[] } }) =>
+  run.gh.calls
+    .filter((c) => c.method === "POST" && c.path.startsWith("/services/"))
+    .map((c) => (c.body as { text: string }).text);
+
+test("with slack-webhook, the daily brief is posted to Slack too, linking back to GitHub", async () => {
+  const brief = {
+    eventName: "schedule",
+    payload: {},
+    openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
+    model: async () => ({
+      content:
+        "All quiet: <!channel> main is green.\n\nNext:\n- Round half cents up in src/price.ts",
+    }),
+  };
+  const run = await act({
+    ...brief,
+    env: { INPUT_SCHEDULED: "look-over", "INPUT_SLACK-WEBHOOK": SLACK },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [post, ...more] = slackPosts(run);
+  assert.equal(more.length, 0);
+  assert.match(
+    post!,
+    /^\*Daily brief\* · <https:\/\/github\.com\/acme\/shop\|acme\/shop> on main at abc1234\n• ✓ main is green at abc1234\.\n/,
+  );
+  assert.match(
+    post!,
+    /\n1 idea from the code: <https:\/\/github\.com\/acme\/shop\/issues\/7#issuecomment-900\|the brief>$/,
+  );
+  // The model's words are there as words: nothing in them can ping.
+  assert.match(post!, /\n\nAll quiet: &lt;!channel&gt; main is green\.\n/);
+  assert.doesNotMatch(post!, /<!channel>/);
+  assert.ok(!run.lines.join("\n").includes("abcDEF123"), "the webhook is never logged");
+  // Without the setting, nothing goes to Slack.
+  const quiet = await act({ ...brief, env: { INPUT_SCHEDULED: "look-over" } });
+  assert.deepEqual(slackPosts(quiet), []);
 });
 
 test("a scheduled task is done on its own issue, found again on the next run", async () => {
@@ -1629,6 +1671,35 @@ test("with always-allow red, a red run is explained and fixed at once, its box m
   assert.equal(pr.title, "Fix what is red on main at abc1234");
   assert.match(pr.body, /^CI was red, on #7/);
   assert.match(git(run.origin, "show", `${pr.head}:src/price.ts`), /toFixed\(2\)/);
+});
+
+test("with slack-webhook, a red run's explanation and its unasked fix are posted to Slack", async () => {
+  const ask = answering("formatPrice returns cents (src/price.ts:2).");
+  let turn = 0;
+  const fix = scripted([[dollars]]).model;
+  const model: ReturnType<typeof scripted>["model"] = async (...args) =>
+    turn++ < 2 ? ask.model(...args) : fix(...args);
+  const run = await act({
+    eventName: "workflow_run",
+    payload: redRun,
+    red: true,
+    thread: [],
+    env: { "INPUT_ALWAYS-ALLOW": "red", "INPUT_SLACK-WEBHOOK": SLACK },
+    model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const [red, opened, ...more] = slackPosts(run);
+  assert.equal(more.length, 0);
+  assert.match(
+    red!,
+    /^\*CI is red\* on <https:\/\/github\.com\/acme\/shop\|acme\/shop> main at abc1234 · <https:\/\/github\.com\/acme\/shop\/actions\/runs\/77\|the run>\n/,
+  );
+  assert.match(red!, /\nformatPrice returns cents \(src\/price\.ts:2\)\.\n/);
+  assert.match(red!, /it is fixing it now$/);
+  assert.match(
+    opened!,
+    /^\*Opened a pull request\* on <https:\/\/github\.com\/acme\/shop\|acme\/shop>: <[^|]+\|Fix what is red on main at abc1234> · the fix for red CI$/,
+  );
 });
 
 test("a reply nobody asked for cannot ping anyone, says to read before ticking, and spends little", async () => {

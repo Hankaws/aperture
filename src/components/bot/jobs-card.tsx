@@ -3,6 +3,7 @@ import {
   CalendarClock,
   CircleAlert,
   GitPullRequest,
+  Hash,
   Loader2,
   MessageSquareCode,
   MessageSquareText,
@@ -13,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { setBotJobs, type BotSetup } from "@/lib/github/bot";
-import { WEEKLY, WORKFLOW_PATH } from "@/lib/bot/tasks";
+import { SLACK_SECRET, WEEKLY, WORKFLOW_PATH } from "@/lib/bot/tasks";
 import { cn } from "@/lib/utils";
 
 type Mode = "off" | "fix-ci" | "look-over" | "task";
@@ -51,6 +52,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const [autoRed, setAutoRed] = useState(now.autoRed);
   const [autoBrief, setAutoBrief] = useState(now.autoBrief);
   const [follow, setFollow] = useState(now.follow);
+  const [slack, setSlack] = useState(now.slack);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -69,6 +71,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
     (red && autoRed) !== now.autoRed ||
     (mode === "look-over" && autoBrief) !== now.autoBrief ||
     follow !== now.follow ||
+    slack !== now.slack ||
     scheduled !== (now.scheduled ?? "") ||
     (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -91,6 +94,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           autoRed: red && autoRed,
           autoBrief: mode === "look-over" && autoBrief,
           follow,
+          slack,
         },
       });
       if (out.ok) setOpened(out.url);
@@ -223,6 +227,44 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
             Reply to the bot without <code className="font-mono text-xs">/aperture</code>:
             &ldquo;yes&rdquo; or &ldquo;do the second one&rdquo; does that suggestion, a question
             gets an answer. Only from whoever it answered; comments to someone else are left alone.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={slack}
+          onChange={(event) => setSlack(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Hash className="size-3.5 text-subtle" />
+            Post to Slack
+          </span>
+          <span className="mt-0.5 block text-muted">
+            The daily brief, red CI it explained, and pull requests it opened unasked, in a Slack
+            channel too. Make an{" "}
+            <a
+              href="https://api.slack.com/messaging/webhooks"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              incoming webhook
+            </a>{" "}
+            for the channel and add it as the{" "}
+            <a
+              href={`https://github.com/${owner}/${name}/settings/secrets/actions/new`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              repository secret
+            </a>{" "}
+            <code className="font-mono text-xs">{SLACK_SECRET}</code>.
           </span>
         </span>
       </label>

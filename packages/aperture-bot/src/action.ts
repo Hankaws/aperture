@@ -69,6 +69,7 @@ import { MAX_IDEAS, MAX_NEXT } from "./next.ts";
 import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
+import { briefMessage, postToSlack, pullMessage, redMessage } from "./slack.ts";
 import { tasksFrom } from "../../../src/lib/bot/tasks.ts";
 import { WEEK_MS, weekFrom, weekLines } from "../../../src/lib/bot/week.ts";
 import { isSealed, sealBody, sealKey } from "./seal.ts";
@@ -392,6 +393,16 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   let edits: Promise<void> = Promise.resolve();
   /** The comment the last reply went to, and what it said: the red fix marks its box there. */
   let replied: { id: number; body: string } | null = null;
+  /** The answer's words, for Slack's line on a red run. */
+  let answeredText = "";
+  /** The bot's last reply on GitHub, for Slack's links back. */
+  const commentUrl = () =>
+    replied
+      ? `${repoUrl}/issues/${command.number}#issuecomment-${(replied as { id: number }).id}`
+      : `${repoUrl}/issues/${command.number}`;
+  /** `slack-webhook`: unasked work is told on Slack too (`slack.ts`). */
+  const toSlack = (text: string) =>
+    postToSlack(input(env, "slack-webhook"), text, deps.fetch ?? fetch, log);
   const reply = async (body: string) => {
     await edits;
     if (status === null) {
@@ -558,12 +569,23 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       day: "numeric",
       timeZone: "UTC",
     });
+    const week = await mondayDigest(view.now);
+    const needs = needsYou(view);
     await reply(
-      lookReply(
-        look,
-        { branch, sha, needs: needsYou(view), date, week: await mondayDigest(view.now) },
-        { ...asked, usage: result.usage },
-      ),
+      lookReply(look, { branch, sha, needs, date, week }, { ...asked, usage: result.usage }),
+    );
+    await toSlack(
+      briefMessage({
+        repo: `${command.owner}/${command.repo}`,
+        repoUrl,
+        branch,
+        sha,
+        needs,
+        note: look.note,
+        week,
+        ideas: look.next.length,
+        url: commentUrl(),
+      }),
     );
     setOutput(env, { outcome: "clear" });
     return 0;
@@ -635,6 +657,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       next,
     };
     log([answered.answer, ...next.map((task) => `- ${task}`)].join("\n"));
+    answeredText = result.answer;
     await reply(answerReply(answered, { ...asked, usage: result.usage }));
     setOutput(env, { outcome: "answered" });
     return 0;
@@ -783,7 +806,22 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         unasked: true,
         heading: `**${command.red.workflow} is red on ${command.red.branch}** at ${sha}.${command.red.url ? ` [The run](${command.red.url})` : ""}`,
       });
-      if (!alwaysAllowed(input(env, "always-allow")).has("red")) return code;
+      const fixing = alwaysAllowed(input(env, "always-allow")).has("red");
+      if (replied)
+        await toSlack(
+          redMessage({
+            repo: `${command.owner}/${command.repo}`,
+            repoUrl,
+            workflow: command.red.workflow,
+            branch: command.red.branch,
+            sha: command.red.sha,
+            run: command.red.url ?? "",
+            why: answeredText,
+            url: commentUrl(),
+            fixing,
+          }),
+        );
+      if (!fixing) return code;
       // Always allowed: the fix starts now, as if its box were ticked, and its box says so.
       const said = replied as { id: number; body: string } | null;
       if (said) {
@@ -866,6 +904,21 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
           body: pullBody(command, result, runUrl, ctx.tests),
         });
         await reply(doneReply(result, { url: opened.url, what: "pull" }, ctx));
+        // Unasked work (the brief's idea, a red run's fix, a standing job) is told on Slack too.
+        if (command.via === "schedule" || command.via === "red")
+          await toSlack(
+            pullMessage({
+              repo: `${command.owner}/${command.repo}`,
+              repoUrl,
+              title: titleFor(command),
+              url: opened.url,
+              why: command.idea
+                ? "an idea from its daily brief"
+                : command.via === "red"
+                  ? "the fix for red CI"
+                  : "its standing job",
+            }),
+          );
         setOutput(env, { outcome: "clear", "pull-request": opened.url, commit: sha });
       }
       return 0;

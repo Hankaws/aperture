@@ -198,6 +198,8 @@ export type Jobs = {
   autoBrief: boolean;
   /** A reply to one of the bot's replies needs no `/aperture` (`follow-threads: true`). */
   follow: boolean;
+  /** Unasked work told on Slack too, through the SLACK_WEBHOOK_URL secret (`slack-webhook`). */
+  slack: boolean;
 };
 
 export const NO_JOBS: Jobs = {
@@ -211,6 +213,7 @@ export const NO_JOBS: Jobs = {
   autoRed: false,
   autoBrief: false,
   follow: false,
+  slack: false,
 };
 
 /** What the pull request trigger does, from the bot's `pull-requests` setting: check (the default), review, or both. */
@@ -309,6 +312,7 @@ export function workflowUse(text: string): {
       autoRed: /\bred\b/i.test(setting("always-allow") ?? ""),
       autoBrief: /\bbrief\b/i.test(setting("always-allow") ?? ""),
       follow: /^(true|yes|on)$/i.test(setting("follow-threads") ?? ""),
+      slack: Boolean(setting("slack-webhook")),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -330,6 +334,9 @@ export const PROVIDER_SECRET: Record<Provider, string> = {
 };
 
 export const WORKFLOW_PATH = ".github/workflows/aperture-bot.yml";
+
+/** The repository secret that holds the Slack incoming webhook, for `slack-webhook`. */
+export const SLACK_SECRET = "SLACK_WEBHOOK_URL";
 
 /**
  * A scheduled task as a YAML string. `${{` would be read by Actions as an
@@ -378,7 +385,7 @@ export function workflowFile(
   const kept = settings
     ? settings.filter(
         (l) =>
-          !/^(scheduled|label|pull-requests|always-allow|follow-threads):/.test(l) &&
+          !/^(scheduled|label|pull-requests|always-allow|follow-threads|slack-webhook):/.test(l) &&
           !/^github-token:.*steps\.app\./.test(l),
       )
     : [
@@ -496,6 +503,7 @@ export function workflowFile(
       ? [`          always-allow: ${allowed.includes(",") ? `"${allowed}"` : allowed}`]
       : []),
     ...(jobs.follow ? ["          follow-threads: true"] : []),
+    ...(jobs.slack ? [`          slack-webhook: \${{ secrets.${SLACK_SECRET} }}`] : []),
     "",
   ].join("\n");
 }

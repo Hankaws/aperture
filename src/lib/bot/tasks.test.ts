@@ -201,6 +201,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
@@ -228,6 +229,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", look)).jobs, look);
   const weekly = {
@@ -241,6 +243,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", weekly)).jobs, weekly);
 });
@@ -274,6 +277,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   })!;
   assert.match(
     next,
@@ -291,6 +295,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   });
   const off = withJobs(next, NO_JOBS)!;
   assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
@@ -367,6 +372,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
     autoRed: false,
     autoBrief: false,
     follow: false,
+    slack: false,
   })!;
   assert.equal(workflowUse(jobs).app, true);
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
@@ -383,6 +389,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
       autoRed: false,
       autoBrief: false,
       follow: false,
+      slack: false,
     },
     false,
   )!;
@@ -433,6 +440,7 @@ test("the workflow's comment names the ways the bot is asked", () => {
       autoRed: false,
       autoBrief: false,
       follow: false,
+      slack: false,
     }),
     "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
   );
@@ -541,4 +549,14 @@ test("following its threads is written as a setting and a trigger, and reads bac
   const off = withJobs(text, { ...jobs, follow: false })!;
   assert.doesNotMatch(off, /follow-threads|author_association/);
   assert.equal(workflowUse(off).jobs.follow, false);
+});
+
+test("posting to Slack is written as the secret's setting, and reads back", () => {
+  const jobs = { ...NO_JOBS, scheduled: "look-over", cron: "17 3 * * *", slack: true };
+  const text = workflowFile("grok", "v1", jobs);
+  assert.match(text, / {10}slack-webhook: \$\{\{ secrets\.SLACK_WEBHOOK_URL \}\}\n/);
+  assert.deepEqual(workflowUse(text).jobs, jobs);
+  const off = withJobs(text, { ...jobs, slack: false })!;
+  assert.doesNotMatch(off, /slack-webhook/);
+  assert.equal(workflowUse(off).jobs.slack, false);
 });

@@ -344,6 +344,25 @@ export function forkReply(ctx: Asked): string {
   );
 }
 
+/**
+ * A ticked box in a list the bot did not sign for this thread: another bot's
+ * look-alike, a copy from elsewhere, or a reply from before the bot signed
+ * its suggestions (`seal.ts`). Nothing starts; the task is shown, quietly, so
+ * a maintainer who meant it can ask for it.
+ */
+export function unsignedTickReply(ctx: Asked, task: string, trigger: string): string {
+  return join(
+    [
+      "Ticking that box started nothing: Aperture Bot signs the suggestions it lists, and that list has no signature the bot made for this thread. It may come from another bot, be copied from elsewhere, or be older than the signatures.",
+      "",
+      `> ${quiet(task.replace(/\s+/g, " ").trim())}`,
+      "",
+      `If you want it done, comment \`${trigger}\` followed by the task.`,
+    ],
+    [summaryMarker({ v: 1, state: "declined", asked: ctx.asked, run: ctx.run })],
+  );
+}
+
 /** `/aperture check` on an issue: there is no change to check. */
 export function notPullReply(ctx: Asked, what: "check" | "review" = "check"): string {
   return join(

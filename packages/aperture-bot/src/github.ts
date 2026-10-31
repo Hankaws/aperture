@@ -39,6 +39,12 @@ export class GitHub {
     private readonly fetcher: Fetch = fetch,
   ) {}
 
+  /**
+   * Applied to every comment body as it is posted or edited: the run sets it
+   * to sign the suggestion lists in its replies (`seal.ts`).
+   */
+  seal: (body: string) => string = (body) => body;
+
   private async call<T>(
     method: string,
     path: string,
@@ -167,7 +173,7 @@ export class GitHub {
       id: number;
       html_url: string;
       user?: { login?: string; id?: number } | null;
-    }>("POST", `${this.base}/issues/${issue}/comments`, { body });
+    }>("POST", `${this.base}/issues/${issue}/comments`, { body: this.seal(body) });
     const by =
       out.user?.login && typeof out.user.id === "number"
         ? { login: out.user.login, id: out.user.id }
@@ -332,7 +338,7 @@ export class GitHub {
   }
 
   async editComment(id: number, body: string): Promise<void> {
-    await this.call("PATCH", `${this.base}/issues/comments/${id}`, { body });
+    await this.call("PATCH", `${this.base}/issues/comments/${id}`, { body: this.seal(body) });
   }
 }
 

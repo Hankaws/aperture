@@ -54,6 +54,11 @@ export type BotSummary = {
   error?: string;
   /** What the bot would suggest doing next, for the maintainer to send or not. */
   next?: string[];
+  /**
+   * The bot's signature on `next` for this thread, so a tick starts only a
+   * suggestion this bot made: see the bot's `seal.ts`. Added as it posts.
+   */
+  sig?: string;
   /** A look-over's few sentences on how the repository stands. */
   note?: string;
 };
@@ -158,6 +163,7 @@ export function readSummary(body: string): BotSummary | null {
     ?.slice(0, LIMITS.next)
     .map((task) => clip(task, LIMITS.text));
   if (next?.length) out.next = next;
+  if (typeof r.sig === "string" && /^[0-9a-f]{32}$/.test(r.sig)) out.sig = r.sig;
   if (Array.isArray(r.checks))
     out.checks = r.checks.flatMap((row) => {
       const c = row as Record<string, unknown>;

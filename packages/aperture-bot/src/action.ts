@@ -56,6 +56,7 @@ import {
   lookReply,
   notDoneReply,
   notPullReply,
+  unsignedTickReply,
   pullBody,
   reviewReply,
   titleFor,
@@ -67,6 +68,7 @@ import { MAX_IDEAS, MAX_NEXT } from "./next.ts";
 import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
+import { isSealed, sealBody, sealKey } from "./seal.ts";
 import { runTask, type BotProgress } from "./run.ts";
 import { asTestRunner, DEFAULT_IMAGE, dockerSandbox, type Sandbox } from "./sandbox.ts";
 
@@ -304,6 +306,21 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       ? {}
       : { via: command.via, by: command.author, task: command.task }),
   };
+  // Every comment the run posts or edits is on this thread, and its suggestions are signed for it.
+  const key = sealKey(input(env, "model-key") ?? "");
+  const scope = { repo: `${command.owner}/${command.repo}`, number: command.number };
+  gh.seal = (body) => sealBody(body, key, scope);
+  if (command.ticked && !isSealed(command.ticked.body, key, scope)) {
+    log(
+      "Aperture Bot: the ticked suggestion is not signed by this bot for this thread; it is not a task.",
+    );
+    const trigger = input(env, "trigger") ?? DEFAULT_TRIGGER;
+    await gh
+      .comment(command.number, unsignedTickReply(asked, command.task, trigger))
+      .catch(() => undefined);
+    setOutput(env, { outcome: "ignored" });
+    return 0;
+  }
   if (command.ticked) {
     // Marked before the work starts, so ticking it again cannot start a second run.
     const marked = markStarted(command.ticked.body, command.task, command.author, runUrl);

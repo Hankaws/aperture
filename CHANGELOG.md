@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- A ticked box starts Aperture Bot's work only in a list the bot itself made on that thread: its suggestion lists are signed with a key derived from its model key, so another bot's look-alike comment, or a list copied from another thread, starts nothing, and the bot replies with the task for you to ask for if you meant it. Suggestions posted before this are no longer tickable. ([#160](https://github.com/Hankaws/aperture/pull/160))
+
 ## 0.4.0 - 2026-10-31
 
 ### Added

@@ -1132,6 +1132,108 @@ test("ticking an idea in the daily brief opens a pull request that leaves the br
   assert.match((fixes!.body as { body: string }).body, /\nFixes #7\n/);
 });
 
+/** A thread where the bot answered @maintainer, then the comment `body` (id 55) follows it. */
+function following(body: string, by = "maintainer") {
+  const reply = sealBody(
+    [
+      "formatPrice returns cents.",
+      "",
+      "- [ ] Show prices in dollars",
+      "- [ ] Add a test for 100 cents",
+      "",
+      `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "answer", asked: 50, run: "https://github.com/acme/shop/actions/runs/41", next: ["Show prices in dollars", "Add a test for 100 cents"] })} -->`,
+    ].join("\n"),
+    KEY,
+    THREAD,
+  );
+  return {
+    body,
+    env: { "INPUT_FOLLOW-THREADS": "true" },
+    thread: [
+      {
+        id: 50,
+        body: "/aperture why does the cart show 100?",
+        user: { login: "maintainer", type: "User" },
+      },
+      { id: 51, body: reply, user: { login: "github-actions[bot]", type: "Bot" } },
+      { id: 55, body, user: { login: by, type: "User" } },
+    ],
+  };
+}
+
+test('following its thread, "yes" does the reply\'s first suggestion, as a tick would', async () => {
+  const run = await act(following("yes, please"));
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /following #7: doing Show prices in dollars/);
+  // The reply's box is marked started, so ticking it later starts nothing more.
+  const marked = run.gh.calls.find(
+    (c) => c.method === "PATCH" && c.path === "/repos/acme/shop/issues/comments/51",
+  );
+  assert.match(
+    (marked!.body as { body: string }).body,
+    /\n- \[x\] Show prices in dollars · started by @maintainer, \[the run\]/,
+  );
+  assert.ok(branchesOf(run.origin).includes("aperture/7-show-prices-in-dollars"));
+  // The follow-up is the ask: it gets the eyes, and the reply answers it.
+  assert.equal(run.posted(/\/issues\/comments\/55\/reactions$/).length, 1);
+  assert.equal(readSummary(run.replied())!.asked, 55);
+  // "do the second one" picks that one.
+  const second = await act(following("do the second one"));
+  assert.match(second.lines.join("\n"), /following #7: doing Add a test for 100 cents/);
+});
+
+test("following its thread, anything else is answered and changes nothing", async () => {
+  const ask = answering("It divides by 100 in src/price.ts:2.\n\nNext:\n- Round half cents up");
+  const run = await act({ ...following("and what about half cents"), model: ask.model });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /following #7: answering/);
+  // The thread so far is in the question: the bot's last reply too.
+  assert.match(ask.read[0]!, /formatPrice returns cents\./);
+  assert.match(ask.read[0]!, /and what about half cents/);
+  assert.equal(run.posted(/\/pulls$/).length, 0);
+  assert.deepEqual(branchesOf(run.origin), ["main"]);
+  const s = readSummary(run.replied())!;
+  assert.deepEqual([s.kind, s.asked, s.next], ["answer", 55, ["Round half cents up"]]);
+});
+
+test("the bot follows only its own thread, only whoever it answered, and only when on", async () => {
+  const quiet = async (options: Parameters<typeof act>[0], why: RegExp) => {
+    const run = await act(options);
+    assert.equal(run.code, 0, run.lines.join("\n"));
+    assert.match(run.lines.join("\n"), why);
+    assert.equal(run.gh.calls.filter((c) => c.method !== "GET").length, 0, String(why));
+  };
+  await quiet({ ...following("thanks!") }, /needs no answer/);
+  // Someone other than whoever the bot answered.
+  const grace = following("yes", "grace");
+  await quiet(
+    {
+      ...grace,
+      eventName: "issue_comment",
+      payload: {
+        action: "created",
+        comment: { id: 55, body: "yes", user: { login: "grace", type: "User" } },
+        issue: { number: 7, title: "Prices show cents", body: "" },
+        repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+      },
+    },
+    /answered @maintainer, so it follows only them/,
+  );
+  await quiet({ ...following("@grace what do you think?") }, /addressed to them/);
+  await quiet({ ...following("yes"), permission: "read" }, /cannot write/);
+  await quiet({ ...following("do the fifth one") }, /no suggestion 5 to do/);
+  // Not right after a reply of the bot's: someone else spoke in between.
+  const between = following("yes");
+  between.thread.splice(2, 0, {
+    id: 53,
+    body: "I think so too",
+    user: { login: "grace", type: "User" },
+  });
+  await quiet(between, /does not follow one of the bot's replies/);
+  // Off, a comment without /aperture is not read at all.
+  await quiet({ ...following("yes"), env: {} }, /does not start with \/aperture/);
+});
+
 test("a tick counts only from someone who can write, in a reply whose words are a writer's", async () => {
   const reader = await act({ eventName: "issue_comment", payload: ticking(), permission: "read" });
   assert.equal(reader.code, 0);

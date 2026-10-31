@@ -196,6 +196,8 @@ export type Jobs = {
   autoRed: boolean;
   /** The daily brief's first idea from the code done at once, one at a time (`always-allow: brief`). */
   autoBrief: boolean;
+  /** A reply to one of the bot's replies needs no `/aperture` (`follow-threads: true`). */
+  follow: boolean;
 };
 
 export const NO_JOBS: Jobs = {
@@ -208,6 +210,7 @@ export const NO_JOBS: Jobs = {
   red: [],
   autoRed: false,
   autoBrief: false,
+  follow: false,
 };
 
 /** What the pull request trigger does, from the bot's `pull-requests` setting: check (the default), review, or both. */
@@ -305,6 +308,7 @@ export function workflowUse(text: string): {
       red: watched(text),
       autoRed: /\bred\b/i.test(setting("always-allow") ?? ""),
       autoBrief: /\bbrief\b/i.test(setting("always-allow") ?? ""),
+      follow: /^(true|yes|on)$/i.test(setting("follow-threads") ?? ""),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -349,6 +353,16 @@ const TICKED = [
 ];
 
 /**
+ * With `follow-threads`, a new comment from someone the repository trusts
+ * (owner, member or collaborator) starts a runner too; the bot then answers
+ * it only if it follows one of its replies, and leaves the rest in seconds.
+ */
+const FOLLOWED = [
+  "      || (github.event_name == 'issue_comment' && github.event.action == 'created' && github.event.comment.user.type != 'Bot'",
+  '          && contains(fromJSON(\'["OWNER", "MEMBER", "COLLABORATOR"]\'), github.event.comment.author_association))',
+];
+
+/**
  * The bot's workflow: the README's, with the provider, version and jobs
  * filled in. `settings` are the bot step's existing `with:` lines, kept as
  * they are (but for the jobs' own) when the page changes the jobs.
@@ -364,7 +378,7 @@ export function workflowFile(
   const kept = settings
     ? settings.filter(
         (l) =>
-          !/^(scheduled|label|pull-requests|always-allow):/.test(l) &&
+          !/^(scheduled|label|pull-requests|always-allow|follow-threads):/.test(l) &&
           !/^github-token:.*steps\.app\./.test(l),
       )
     : [
@@ -382,6 +396,7 @@ export function workflowFile(
   const asks = [
     "a comment",
     "a ticked suggestion",
+    ...(jobs.follow ? ["a reply to one of its replies"] : []),
     ...(jobs.issues ? ["a new issue"] : []),
     ...(jobs.label ? ["its label"] : []),
     ...(scheduled ? ["its schedule"] : []),
@@ -414,6 +429,7 @@ export function workflowFile(
     "    if: >-",
     "      (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture'))",
     ...TICKED,
+    ...(jobs.follow ? FOLLOWED : []),
     ...(jobs.issues
       ? [
           "      || (github.event_name == 'issues' && github.event.action == 'opened' && github.event.sender.type != 'Bot')",
@@ -479,6 +495,7 @@ export function workflowFile(
     ...(allowed
       ? [`          always-allow: ${allowed.includes(",") ? `"${allowed}"` : allowed}`]
       : []),
+    ...(jobs.follow ? ["          follow-threads: true"] : []),
     "",
   ].join("\n");
 }

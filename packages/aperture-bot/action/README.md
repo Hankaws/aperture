@@ -82,6 +82,21 @@ Every reply ends with what the bot would do next, as boxes:
 
 Tick one and the bot does it, as if you had commented `/aperture` and the task: a pull request when Agent Check is clear, or a reply that says why not. The line is then marked started, with a link to the run, so ticking it again does nothing. Only a suggestion the bot made counts, and only when the person who ticks it can write: its reply carries the list, hidden and signed with a key derived from `model-key`, for that thread only. A tick on a list without that signature (another bot's look-alike, a copy from another thread, or a reply from before v1.6) starts nothing, and the bot replies with the task for you to ask for with `/aperture` if you meant it. Changing `model-key` makes older suggestions untickable for the same reason. Read a suggestion before you tick it: one in a reply nobody asked for can come from what anyone wrote. Nothing the bot posts from others' words can @mention anyone. Ticking needs the workflow above, which listens for edited comments; an older one that listens only for new comments needs `types: [created, edited]` and its `if:` line.
 
+## Talk it through
+
+With `follow-threads: true`, you reply to the bot as you would to a colleague: no `/aperture`. Right after one of its replies, "yes" or "do the second one" does that suggestion, exactly as ticking its box would, and anything else ("why?", "what about half cents?") is answered on the thread, changing nothing, with the reply it follows in mind. Its answer can end with suggestions of its own, so the conversation goes on until you say yes. "Thanks" gets no answer.
+
+It follows only whoever its reply answered (on threads it started itself, such as the daily brief, a new issue or red CI, anyone who can write), and never a comment that @mentions someone, which is meant for them. For the bot to see such comments, the workflow also runs on new comments from the repository's owner, members and collaborators; it leaves any that do not follow one of its replies within seconds:
+
+```yaml
+if: >-
+  (github.event_name == 'issue_comment' && github.event.action == 'created' && startsWith(github.event.comment.body, '/aperture'))
+  || (github.event_name == 'issue_comment' && github.event.action == 'created' && github.event.comment.user.type != 'Bot'
+      && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+```
+
+"Follow its own threads" on the Bot page writes both for you.
+
 ## What it does
 
 | Asked on                            | When Agent Check is clear                                                                                                   | Otherwise                                                 |
@@ -200,6 +215,7 @@ The task, the thread and the files the agent reads go to the model provider you 
 | `rounds`            | `2`                                  | How many times Agent Check may run before the bot gives up.                                                                                                    |
 | `pull-requests`     | `check`                              | What a push to a pull request starts: `check`, `review`, or `check, review`.                                                                                   |
 | `always-allow`      |                                      | `red` fixes a workflow red on the default branch, and `brief` does the daily brief's first idea from the code, without waiting for a tick. Both: `red, brief`. |
+| `follow-threads`    |                                      | `true`: a reply to one of the bot's replies needs no `/aperture` (see Talk it through).                                                                        |
 | `daily-limit`       | `20`                                 | Replies nobody asked for (new issues, red runs) a day at most.                                                                                                 |
 | `install`           | `auto`                               | `npm ci --ignore-scripts` when there is a package-lock.json and no `node_modules`; `none` to install yourself in an earlier step (pnpm, Yarn).                 |
 | `sandbox-image`     | `mirror.gcr.io/library/node:22-slim` | The Docker image tests run in.                                                                                                                                 |

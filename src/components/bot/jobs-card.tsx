@@ -6,6 +6,7 @@ import {
   Loader2,
   MessageSquareCode,
   MessageSquareText,
+  MessagesSquare,
   ShieldCheck,
   Tag,
 } from "lucide-react";
@@ -49,6 +50,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
   const [red, setRed] = useState(now.red.length > 0);
   const [autoRed, setAutoRed] = useState(now.autoRed);
   const [autoBrief, setAutoBrief] = useState(now.autoBrief);
+  const [follow, setFollow] = useState(now.follow);
   const [mode, setMode] = useState<Mode>(startMode);
   const [task, setTask] = useState(startMode === "task" ? now.scheduled! : "");
   const [weekly, setWeekly] = useState(now.cron === WEEKLY);
@@ -66,6 +68,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
     red !== now.red.length > 0 ||
     (red && autoRed) !== now.autoRed ||
     (mode === "look-over" && autoBrief) !== now.autoBrief ||
+    follow !== now.follow ||
     scheduled !== (now.scheduled ?? "") ||
     (timed(mode) && weekly !== (now.cron === WEEKLY));
   const ready = changed && !(mode === "task" && !task.trim());
@@ -87,6 +90,7 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           red,
           autoRed: red && autoRed,
           autoBrief: mode === "look-over" && autoBrief,
+          follow,
         },
       });
       if (out.ok) setOpened(out.url);
@@ -198,6 +202,27 @@ export function JobsCard({ setup, owner, name }: { setup: BotSetup; owner: strin
           <span className="mt-0.5 block text-muted">
             The bot reads each new issue and the code, and replies with what it would do, with a box
             to tick to have it done. At most 20 such replies a day, on your key.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-4 flex cursor-pointer gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={follow}
+          onChange={(event) => setFollow(event.target.checked)}
+          disabled={!editable}
+          className="mt-0.5 size-4 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <MessagesSquare className="size-3.5 text-subtle" />
+            Follow its own threads
+          </span>
+          <span className="mt-0.5 block text-muted">
+            Reply to the bot without <code className="font-mono text-xs">/aperture</code>:
+            &ldquo;yes&rdquo; or &ldquo;do the second one&rdquo; does that suggestion, a question
+            gets an answer. Only from whoever it answered; comments to someone else are left alone.
           </span>
         </span>
       </label>

@@ -200,6 +200,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
@@ -226,6 +227,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", look)).jobs, look);
   const weekly = {
@@ -238,6 +240,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", weekly)).jobs, weekly);
 });
@@ -270,6 +273,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   })!;
   assert.match(
     next,
@@ -286,6 +290,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   });
   const off = withJobs(next, NO_JOBS)!;
   assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
@@ -361,6 +366,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
     red: [],
     autoRed: false,
     autoBrief: false,
+    follow: false,
   })!;
   assert.equal(workflowUse(jobs).app, true);
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
@@ -376,6 +382,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
       red: [],
       autoRed: false,
       autoBrief: false,
+      follow: false,
     },
     false,
   )!;
@@ -425,6 +432,7 @@ test("the workflow's comment names the ways the bot is asked", () => {
       red: [],
       autoRed: false,
       autoBrief: false,
+      follow: false,
     }),
     "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
   );
@@ -518,4 +526,19 @@ test("doing the brief's top idea without asking is written only with the brief, 
   const off = withJobs(text2, { ...both, autoBrief: false })!;
   assert.match(off, / {10}always-allow: red\n/);
   assert.equal(workflowUse(off).jobs.autoBrief, false);
+});
+
+test("following its threads is written as a setting and a trigger, and reads back", () => {
+  const jobs = { ...NO_JOBS, follow: true };
+  const text = workflowFile("grok", "v1", jobs);
+  assert.match(text, / {10}follow-threads: true\n/);
+  assert.match(
+    text,
+    /\|\| \(github\.event_name == 'issue_comment' && github\.event\.action == 'created' && github\.event\.comment\.user\.type != 'Bot'\n {10}&& contains\(fromJSON\('\["OWNER", "MEMBER", "COLLABORATOR"\]'\), github\.event\.comment\.author_association\)\)/,
+  );
+  assert.match(text, /a reply to one of its replies/);
+  assert.equal(workflowUse(text).jobs.follow, true);
+  const off = withJobs(text, { ...jobs, follow: false })!;
+  assert.doesNotMatch(off, /follow-threads|author_association/);
+  assert.equal(workflowUse(off).jobs.follow, false);
 });

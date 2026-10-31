@@ -19,13 +19,20 @@ export function threadContext(
   const kind = command.isPull ? "Pull request" : "Issue";
   const parts = [`${kind} #${command.number}: ${command.title}`, clip(command.body.trim(), 4_000)];
   const shown = comments
-    // The bot's own replies and the asking comment itself add nothing.
-    .filter((c) => c.authorType !== "Bot" && c.id !== command.commentId)
+    // The bot's own replies and the asking comment itself add nothing, but for
+    // the reply a follow-up answers.
+    .filter(
+      (c) => (c.authorType !== "Bot" || c.id === command.follows) && c.id !== command.commentId,
+    )
     .slice(-CONTEXT_LIMITS.comments);
   if (shown.length > 0) {
     parts.push("Comments, oldest first:");
     for (const c of shown)
-      parts.push(`@${c.author}: ${clip(c.body.trim(), CONTEXT_LIMITS.commentChars)}`);
+      parts.push(
+        c.id === command.follows
+          ? `Aperture Bot (the reply this follows): ${clip(c.body.replace(/<!-- aperture-bot [\s\S]*?-->/g, "").trim(), CONTEXT_LIMITS.commentChars)}`
+          : `@${c.author}: ${clip(c.body.trim(), CONTEXT_LIMITS.commentChars)}`,
+      );
   }
   let text = clip(parts.filter(Boolean).join("\n\n"), CONTEXT_LIMITS.total);
   if (diff) text += `\n\nThe pull request's diff:\n${clip(diff, CONTEXT_LIMITS.diff)}`;

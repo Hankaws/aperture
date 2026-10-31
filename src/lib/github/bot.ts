@@ -646,6 +646,10 @@ function jobsText(jobs: Jobs): string[] {
         ? `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue and fixes it at once (\`always-allow: red\`), opening a pull request only when Aperture Agent Check is clear.`
         : `- **A red run on the default branch** of ${jobs.red.map((name) => `\`${name}\``).join(", ")}: the bot explains why on its own issue, with a box to tick to have it fixed. It changes nothing until someone ticks it.`,
     );
+  if (jobs.follow)
+    lines.push(
+      '- **Its own threads**: a reply to one of the bot\'s replies, from whoever it answered (anyone who can write, on threads the bot started), needs no `/aperture`. "Yes" or "do the second one" does that suggestion; anything else is answered, changing nothing.',
+    );
   return lines.length ? lines : ["- None: the bot answers `/aperture` comments only."];
 }
 
@@ -849,6 +853,7 @@ export const setBotJobs = createServerFn({ method: "POST" })
         red,
         autoRed: Boolean(data.autoRed) && red.length > 0,
         autoBrief: Boolean(data.autoBrief) && scheduled === "look-over",
+        follow: data.follow ?? false,
       };
       const read = await readWorkflow(call, base);
       if (!read.ok) return read;

@@ -432,3 +432,38 @@ test("/aperture review asks for a review; a sentence that starts with review is 
   assert.equal(task.review, undefined);
   assert.equal(task.task, "review the login flow and fix it");
 });
+
+test("with follow-threads, a comment without the trigger may follow the bot's reply", () => {
+  const comment = payload({
+    action: "created",
+    comment: { id: 77, body: "yes, please", user: { login: "ada", type: "User" } },
+  });
+  // Off: not read at all.
+  assert.deepEqual(parseEvent("issue_comment", comment), {
+    ignored: "the comment does not start with /aperture.",
+  });
+  const on = parseEvent("issue_comment", comment, "/aperture", "aperture", true);
+  assert.ok("follow" in on, JSON.stringify(on));
+  assert.deepEqual(on.follow, {
+    number: 3,
+    isPull: false,
+    title: "Prices",
+    body: "They show cents.",
+    text: "yes, please",
+    commentId: 77,
+    author: "ada",
+    owner: "acme",
+    repo: "shop",
+    defaultBranch: "trunk",
+  });
+  // A command is still a command, and bots are never followed.
+  assert.ok(
+    "command" in
+      parseEvent("issue_comment", payload({ action: "created" }), "/aperture", "aperture", true),
+  );
+  const bot = payload({
+    action: "created",
+    comment: { id: 78, body: "yes", user: { login: "other[bot]", type: "Bot" } },
+  });
+  assert.ok("ignored" in parseEvent("issue_comment", bot, "/aperture", "aperture", true));
+});

@@ -61,7 +61,7 @@ export type BotSummary = {
 const OPEN = "<!-- aperture-bot ";
 const CLOSE = " -->";
 
-const LIMITS = { plan: 7, checks: 30, files: 100, text: 300, error: 1_000, next: 3 };
+const LIMITS = { plan: 7, checks: 30, files: 100, text: 300, error: 1_000, next: 5 };
 
 const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`;

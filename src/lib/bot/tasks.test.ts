@@ -198,6 +198,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
@@ -222,6 +223,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", look)).jobs, look);
   const weekly = {
@@ -232,6 +234,7 @@ test("standing jobs go into the workflow and read back the same", () => {
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   };
   assert.deepEqual(workflowUse(workflowFile("grok", "v1", weekly)).jobs, weekly);
 });
@@ -262,6 +265,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   })!;
   assert.match(
     next,
@@ -276,6 +280,7 @@ test("changing the jobs keeps the bot's other settings, and a task cannot carry 
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   });
   const off = withJobs(next, NO_JOBS)!;
   assert.deepEqual(workflowUse(off).jobs, NO_JOBS);
@@ -349,6 +354,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
     review: false,
     issues: false,
     red: [],
+    autoRed: false,
   })!;
   assert.equal(workflowUse(jobs).app, true);
   assert.equal(jobs.match(/github-token:/g)?.length, 1);
@@ -362,6 +368,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
       review: false,
       issues: false,
       red: [],
+      autoRed: false,
     },
     false,
   )!;
@@ -376,7 +383,7 @@ test("posting as a GitHub App adds the token step, uses it everywhere, and comes
 });
 
 test("checking every pull request is a job: its trigger, only this repository's branches, read back", () => {
-  const jobs = { ...NO_JOBS, pulls: true, review: false, issues: false, red: [] };
+  const jobs = { ...NO_JOBS, pulls: true, review: false, issues: false, red: [], autoRed: false };
   const text = workflowFile("grok", "v1", jobs);
   assert.match(
     text,
@@ -397,7 +404,7 @@ test("the workflow's comment names the ways the bot is asked", () => {
     /# Starts a runner only (.*)\n/.exec(workflowFile("grok", "v1", jobs))![1];
   assert.equal(says(NO_JOBS), "when the bot is asked: a comment or a ticked suggestion.");
   assert.equal(
-    says({ ...NO_JOBS, pulls: true, review: false, issues: false, red: [] }),
+    says({ ...NO_JOBS, pulls: true, review: false, issues: false, red: [], autoRed: false }),
     "when the bot is asked: a comment, a ticked suggestion, or a pull request.",
   );
   assert.equal(
@@ -409,6 +416,7 @@ test("the workflow's comment names the ways the bot is asked", () => {
       review: false,
       issues: false,
       red: [],
+      autoRed: false,
     }),
     "when the bot is asked: a comment, a ticked suggestion, its label, its schedule, or a pull request.",
   );
@@ -464,4 +472,16 @@ test("reviewing every pull request sets the bot's pull-requests setting, with or
   // Turned off, the setting goes with the trigger.
   const off = withJobs(both, NO_JOBS)!;
   assert.doesNotMatch(off, /pull_request:| {10}pull-requests:/);
+});
+
+test("fixing red CI without asking is written only with the red job, and reads back", () => {
+  const jobs = { ...NO_JOBS, red: ["CI"], autoRed: true };
+  const text = workflowFile("grok", "v1", jobs);
+  assert.match(text, / {10}always-allow: red\n/);
+  assert.deepEqual(workflowUse(text).jobs, jobs);
+  // Without a red job there is nothing to fix at once: the setting is not written.
+  assert.doesNotMatch(workflowFile("grok", "v1", { ...NO_JOBS, autoRed: true }), /always-allow/);
+  const off = withJobs(text, { ...jobs, autoRed: false })!;
+  assert.doesNotMatch(off, /always-allow/);
+  assert.equal(workflowUse(off).jobs.autoRed, false);
 });

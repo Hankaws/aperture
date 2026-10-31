@@ -28,8 +28,8 @@ import { answerQuestion } from "./ask.ts";
 import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command } from "./event.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
-import { lookMessages, parseLook, type LookView } from "./look.ts";
-import { Budget, providerModel, runnerHost, type Model } from "./model.ts";
+import { briefQuestion, needsYou, type LookView } from "./look.ts";
+import type { Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
 import { readSummary } from "../../../src/lib/bot/summary.ts";
@@ -44,6 +44,7 @@ import {
   freeBranch,
   pullFiles,
   push,
+  todoLines,
 } from "./publish.ts";
 import {
   answerReply,
@@ -62,7 +63,7 @@ import {
   type Asked,
 } from "./replies.ts";
 import { jobFrom, planJob, planRed } from "./jobs.ts";
-import { MAX_NEXT } from "./next.ts";
+import { MAX_IDEAS, MAX_NEXT } from "./next.ts";
 import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
@@ -98,6 +99,16 @@ function setOutput(env: NodeJS.ProcessEnv, values: Record<string, string>): void
       .map(([k, v]) => `${k}=${v}\n`)
       .join(""),
   );
+}
+
+/**
+ * The kinds of work the bot may start without a tick, from the `always-allow`
+ * input. Only `red` for now: fixing a workflow red on the default branch,
+ * which is what the nightly fix-ci job does too.
+ */
+export function alwaysAllowed(value: string | undefined): Set<"red"> {
+  const words = (value ?? "").toLowerCase().split(/[\s,]+/);
+  return new Set(words.includes("red") ? (["red"] as const) : []);
 }
 
 /** What a push to a pull request starts, from the `pull-requests` input: Agent Check, a review, or both. */
@@ -299,10 +310,17 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
   /** Who the token posts as: a GitHub App's bot, or the workflow's. */
   let poster: { login: string; id: number } | null = null;
   let edits: Promise<void> = Promise.resolve();
+  /** The comment the last reply went to, and what it said: the red fix marks its box there. */
+  let replied: { id: number; body: string } | null = null;
   const reply = async (body: string) => {
     await edits;
-    if (status === null) await gh.comment(command.number, body);
-    else await gh.editComment(status, body);
+    if (status === null) {
+      const posted = await gh.comment(command.number, body);
+      replied = { id: posted.id, body };
+    } else {
+      await gh.editComment(status, body);
+      replied = { id: status, body };
+    }
   };
   const report = (progress: BotProgress): Promise<void> => {
     if (status === null) return Promise.resolve();
@@ -408,16 +426,39 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         title: p.title,
         draft: p.draft,
         updatedAt: p.updatedAt,
+        bots: p.headRef.startsWith("aperture/"),
       })),
       now: Date.now(),
     };
-    const budget = new Budget(number(env, "max-tokens", 1_000_000));
-    const host = runnerHost(deps.model ?? providerModel, budget);
     log(`Aperture Bot: looking ${command.owner}/${command.repo} over`);
-    const answer = await host.complete(modelConfig(env), lookMessages(view), false);
-    const look = parseLook(answer.content ?? "");
+    // The agent reads the code in Ask mode, as for a question: it can look, not change.
+    const brief = briefQuestion(view, todoLines(cwd));
+    const result = await answerQuestion(
+      {
+        cwd,
+        question: brief.question,
+        context: brief.context,
+        model: modelConfig(env),
+        maxTokens: number(env, "max-tokens", 1_000_000),
+        maxNext: MAX_IDEAS,
+      },
+      { model: deps.model },
+    );
+    if (!result.ok) throw new Error(result.error);
+    const look = { note: result.answer, next: result.next };
     log([look.note, ...look.next.map((task) => `- ${task}`)].filter(Boolean).join("\n"));
-    await reply(lookReply(look, { branch, sha }, { ...asked, usage: budget.describe() }));
+    const date = new Date(view.now).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+    await reply(
+      lookReply(
+        look,
+        { branch, sha, needs: needsYou(view), date },
+        { ...asked, usage: result.usage },
+      ),
+    );
     setOutput(env, { outcome: "clear" });
     return 0;
   };
@@ -598,11 +639,20 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       });
     if (command.red) {
       const sha = command.red.sha.slice(0, 7);
-      return await answer({
+      const code = await answer({
         question: `Why does ${command.red.workflow} fail on ${command.red.branch} at ${sha}? Explain the cause from the failing checks and the code, and say what the fix is.`,
         first: command.task,
         heading: `**${command.red.workflow} is red on ${command.red.branch}** at ${sha}.${command.red.url ? ` [The run](${command.red.url})` : ""}`,
       });
+      if (!alwaysAllowed(input(env, "always-allow")).has("red")) return code;
+      // Always allowed: the fix starts now, as if its box were ticked, and its box says so.
+      const said = replied as { id: number; body: string } | null;
+      if (said) {
+        const marked = markStarted(said.body, command.task, "always-allow", runUrl);
+        if (marked) await gh.editComment(said.id, marked).catch(() => undefined);
+      }
+      status = null;
+      log(`Aperture Bot: always-allow red: fixing ${command.red.branch} at ${sha}`);
     }
     if (command.check) return await checkPull();
     const model = modelConfig(env);

@@ -191,6 +191,8 @@ export type Jobs = {
   issues: boolean;
   /** The workflows (by name) it watches: a red run on the default branch is explained. */
   red: string[];
+  /** And fixed at once, without a tick (`always-allow: red`). */
+  autoRed: boolean;
 };
 
 export const NO_JOBS: Jobs = {
@@ -201,6 +203,7 @@ export const NO_JOBS: Jobs = {
   review: false,
   issues: false,
   red: [],
+  autoRed: false,
 };
 
 /** What the pull request trigger does, from the bot's `pull-requests` setting: check (the default), review, or both. */
@@ -296,6 +299,7 @@ export function workflowUse(text: string): {
       ...pullJobs(/^\s{2}pull_request:\s*$/m.test(text), setting("pull-requests")),
       issues: /^\s{2}issues:\s*\n\s+types:\s*\[[^\]]*\bopened\b/m.test(text),
       red: watched(text),
+      autoRed: /\bred\b/i.test(setting("always-allow") ?? ""),
     },
     app: /uses:\s*["']?actions\/create-github-app-token@/.test(text),
   };
@@ -355,7 +359,8 @@ export function workflowFile(
   const kept = settings
     ? settings.filter(
         (l) =>
-          !/^(scheduled|label|pull-requests):/.test(l) && !/^github-token:.*steps\.app\./.test(l),
+          !/^(scheduled|label|pull-requests|always-allow):/.test(l) &&
+          !/^github-token:.*steps\.app\./.test(l),
       )
     : [
         `model-key: \${{ secrets.${PROVIDER_SECRET[provider]} }}`,
@@ -456,6 +461,7 @@ export function workflowFile(
     ...(jobs.review
       ? [`          pull-requests: ${jobs.pulls ? '"check, review"' : "review"}`]
       : []),
+    ...(jobs.autoRed && red.length ? ["          always-allow: red"] : []),
     "",
   ].join("\n");
 }

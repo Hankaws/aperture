@@ -21,6 +21,9 @@ test("an answer is split from the tasks it ends with", () => {
     answer: "No list here.\n- just a bullet in the answer",
     next: [],
   });
+  // "Next: none" on one line: nothing to do, and not part of the answer.
+  assert.deepEqual(splitAnswer("All quiet.\n\nNext: none"), { answer: "All quiet.", next: [] });
+  assert.deepEqual(splitAnswer("All quiet.\nNext: nothing."), { answer: "All quiet.", next: [] });
   // A "next" in a sentence is part of the answer.
   assert.equal(splitAnswer("Next: call it twice.").answer, "Next: call it twice.");
   assert.ok(splitAnswer("x".repeat(7_000)).answer.length <= 6_000);

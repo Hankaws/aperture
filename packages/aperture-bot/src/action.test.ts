@@ -576,15 +576,21 @@ test("the nightly job does nothing on a green branch, or while its last fix wait
   assert.equal(unset.gh.calls.length, 0);
 });
 
-test("the look-over reads the repository, changes nothing, and reports on its own issue", async () => {
-  const seen: string[] = [];
+test("the daily brief says what needs you and offers ideas from the code, changing nothing", async () => {
+  const ask = answering(
+    "Main is red: the cart test expects dollars. #8 waits for review.\n\nNext:\n- Format cents as dollars in src/price.ts\n- Add a test for formatPrice in src/price.test.ts\n- Do what #3 asks: show prices in dollars\n- Round half cents up in src/price.ts\n- Name the magic 100 in src/cart.ts\n- A sixth idea",
+  );
   const run = await act({
     eventName: "schedule",
     payload: {},
     red: true,
     env: { INPUT_SCHEDULED: "look-over" },
     openIssues: [
-      { number: 3, title: "Prices show cents", updated_at: "2026-01-01T00:00:00Z" },
+      {
+        number: 3,
+        title: "Prices show cents",
+        updated_at: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+      },
       { number: 8, title: "Show dollars", pull_request: {} } as never,
     ],
     openPulls: [
@@ -595,59 +601,65 @@ test("the look-over reads the repository, changes nothing, and reports on its ow
         title: "Show dollars",
       },
     ],
-    model: async (_cfg, messages, useTools) => {
-      assert.equal(useTools, false);
-      seen.push(messages.map((m) => String(m.content)).join("\n"));
-      return {
-        content:
-          "Main is red: test fails. #8 waits for review.\n\nNext:\n- Fix the failing cart test\n- Review #8",
-        usage: { input: 900, output: 40 },
-      };
-    },
+    model: ask.model,
   });
   assert.equal(run.code, 0, run.lines.join("\n"));
   const [issue] = run.posted(/\/repos\/acme\/shop\/issues$/);
   const created = issue!.body as { title: string; body: string };
   assert.equal(created.title, "Aperture Bot: looking things over");
-  assert.match(created.body, /It changes nothing\./);
-  assert.equal(seen.length, 1, "one model call");
-  assert.match(seen[0]!, /Failing on main at abc1234: test\./);
-  assert.match(seen[0]!, /Open issues:\n- #3 Prices show cents, updated \d+ days ago\n\n/);
-  assert.match(seen[0]!, /Open pull requests:\n- #8 Show dollars/);
-  // Nothing checked out, pushed, opened or reacted to.
+  assert.match(created.body, /It changes nothing\. To have a suggestion done, tick its box/);
+  // It reads the code, in Ask mode: it can look, not change.
+  for (const tools of ask.offered.filter((t) => t.length > 0))
+    assert.ok(
+      tools.includes("read_file") &&
+        !tools.includes("propose_edit") &&
+        !tools.includes("run_script"),
+    );
+  assert.match(ask.read[0]!, /This is your daily brief/);
+  assert.match(ask.read[0]!, /<github>\nCI on main at abc1234: failing: test\n/);
+  assert.match(ask.read[0]!, /No TODO lines in the code\./);
+  // Nothing checked out, pushed, opened or reacted to; nobody's access asked.
   assert.equal(run.posted(/\/pulls$/).length, 0);
   assert.equal(run.posted(/\/reactions$/).length, 0);
   assert.equal(run.gh.calls.filter((c) => c.path.endsWith("/permission")).length, 0);
   const body = run.replied();
   assert.match(
     body,
-    /^\*\*Looked things over\*\* on main at abc1234\.\n\nMain is red: test fails\. #8 waits for review\./,
+    /^\*\*Daily brief\*\* for [A-Z][a-z]+ \d+, on main at abc1234\.\n\n\*\*What needs you\*\*\n/,
   );
   assert.match(
     body,
-    /\*\*Next, I would suggest\*\*\n- \[ \] Fix the failing cart test\n- \[ \] Review #8/,
+    /\n- ✗ main is red at abc1234: test\.\n- #8 Show dollars waits for review\.\n- #3 Prices show cents has been quiet for 40 days\.\n/,
   );
-  assert.match(body, /Nothing was changed\. Used 900 input and 40 output tokens in 1 model call\./);
+  assert.match(
+    body,
+    /\n\nMain is red: the cart test expects dollars\. #8 waits for review\.\n\n\*\*Ideas from the code\*\*\n- \[ \] Format cents as dollars in src\/price\.ts\n/,
+  );
+  // Five at most.
+  assert.doesNotMatch(body, /A sixth idea/);
   const s = readSummary(body)!;
   assert.deepEqual([s.state, s.kind, s.via, s.asked], ["clear", "look", "schedule", 0]);
-  assert.equal(s.note, "Main is red: test fails. #8 waits for review.");
-  assert.deepEqual(s.next, ["Fix the failing cart test", "Review #8"]);
+  assert.equal(s.next?.length, 5);
+  assert.equal(s.note, "Main is red: the cart test expects dollars. #8 waits for review.");
   assert.match(run.output, /^outcome=clear\n$/);
 });
 
-test("the look-over runs again on its issue even with a pull request open for it", async () => {
+test("the brief runs again on its issue, and says so when it has no ideas", async () => {
   const run = await act({
     eventName: "schedule",
     payload: {},
     env: { INPUT_SCHEDULED: "look-over" },
     openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
-    openPulls: [{ ref: "aperture/7-x", url: "https://github.com/acme/shop/pull/9" }],
+    openPulls: [
+      { ref: "aperture/7-x", url: "https://github.com/acme/shop/pull/9", number: 9, title: "x" },
+    ],
     model: async () => ({ content: "All quiet: main is green.\n\nNext: none" }),
   });
   assert.equal(run.code, 0, run.lines.join("\n"));
   assert.equal(run.posted(/\/repos\/acme\/shop\/issues$/).length, 0, "the issue is found again");
   const body = run.replied();
-  assert.match(body, /All quiet: main is green\.\n\nNothing I would do right now\./);
+  assert.match(body, /- #9 x \(the bot's\) waits for review\./);
+  assert.match(body, /All quiet: main is green\.\n\nNo ideas worth doing from the code today\./);
   assert.equal(readSummary(body)?.next, undefined);
 });
 
@@ -1242,4 +1254,35 @@ test("/aperture review on an issue says a review needs a pull request", async ()
     /^`\/aperture review` reviews a pull request's changes, and this is an issue/,
   );
   assert.equal(readSummary(run.replied())?.state, "declined");
+});
+
+test("with always-allow red, a red run is explained and fixed at once, its box marked started", async () => {
+  const ask = answering("formatPrice returns cents (src/price.ts:2).");
+  let turn = 0;
+  // The explanation first (Ask mode), then the fix (plan and build), from one model.
+  const fix = scripted([[dollars]]).model;
+  const model: ReturnType<typeof scripted>["model"] = async (...args) =>
+    turn++ < 2 ? ask.model(...args) : fix(...args);
+  const run = await act({
+    eventName: "workflow_run",
+    payload: redRun,
+    red: true,
+    thread: [],
+    env: { "INPUT_ALWAYS-ALLOW": "red" },
+    model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /always-allow red: fixing main at abc1234/);
+  const marked = run.gh.calls.find(
+    (c) =>
+      c.method === "PATCH" &&
+      c.path === "/repos/acme/shop/issues/comments/900" &&
+      /started by @always-allow/.test((c.body as { body: string }).body),
+  );
+  assert.ok(marked, "the explanation's box is marked started");
+  const [opened] = run.posted(/\/pulls$/);
+  const pr = opened!.body as { title: string; body: string; head: string };
+  assert.equal(pr.title, "Fix what is red on main at abc1234");
+  assert.match(pr.body, /^CI was red, on #7/);
+  assert.match(git(run.origin, "show", `${pr.head}:src/price.ts`), /toFixed\(2\)/);
 });

@@ -18,6 +18,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Week } from "@/lib/bot/week";
+import { WeekTiles } from "./week-tiles";
 import { ago, byDay, headline, type Activity, type ActivityKind } from "@/lib/bot/activity";
 import { sampleActivity } from "@/lib/bot/activity-sample";
 import { botActivity } from "@/lib/github/bot";
@@ -159,7 +161,7 @@ const EVERY_MS = 120_000;
 export function BotActivity({ repos }: { repos?: string[] }) {
   // A key, not the array: a new array with the same names must not reload.
   const key = (repos ?? []).join(",");
-  const [feed, setFeed] = useState<{ items: Activity[]; repos: number } | null>(null);
+  const [feed, setFeed] = useState<{ items: Activity[]; week: Week; repos: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0);
@@ -169,7 +171,7 @@ export function BotActivity({ repos }: { repos?: string[] }) {
     try {
       const out = await botActivity({ data: key ? { repos: key.split(",") } : {} });
       if (out.ok) {
-        setFeed({ items: out.activity, repos: out.repos });
+        setFeed({ items: out.activity, week: out.week, repos: out.repos });
         setError(null);
       } else setError(out.error);
     } catch (err) {
@@ -191,6 +193,7 @@ export function BotActivity({ repos }: { repos?: string[] }) {
   return (
     <ActivityPanel
       feed={feed?.items ?? null}
+      week={feed?.week ?? null}
       now={now}
       busy={busy}
       error={error}
@@ -207,6 +210,7 @@ export function BotActivity({ repos }: { repos?: string[] }) {
 /** The feed with its heading and Refresh, for data loaded elsewhere (the team's roster loads it too). */
 export function ActivityPanel({
   feed,
+  week,
   now,
   busy,
   error,
@@ -215,6 +219,8 @@ export function ActivityPanel({
 }: {
   /** Null while it loads. */
   feed: Activity[] | null;
+  /** The last seven days as stat tiles, once loaded. */
+  week?: Week | null;
   now: number;
   busy: boolean;
   error: string | null;
@@ -242,6 +248,7 @@ export function ActivityPanel({
         </Button>
       </div>
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {week && feed && feed.length > 0 && <WeekTiles week={week} />}
       <div className="mt-5">
         {feed === null ? (
           !error && <div className="h-48 animate-pulse rounded-2xl bg-elevated" />

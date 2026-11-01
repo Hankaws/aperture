@@ -4,6 +4,7 @@ import type { Activity } from "@/lib/bot/activity";
 import type { Idea } from "@/lib/bot/ideas";
 import type { Week } from "@/lib/bot/week";
 import type { WaitingPull } from "@/lib/bot/next-up";
+import type { Taste } from "@/lib/bot/taste";
 
 /**
  * What happened on the team's repositories, for the roster's faces and lines
@@ -19,6 +20,7 @@ export function useTeamActivity(repoKey: string) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [week, setWeek] = useState<Week | null>(null);
   const [pulls, setPulls] = useState<WaitingPull[]>([]);
+  const [taste, setTaste] = useState<Taste>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -33,6 +35,7 @@ export function useTeamActivity(repoKey: string) {
         setIdeas(out.ideas);
         setWeek(out.week);
         setPulls(out.pulls);
+        setTaste(out.taste);
         setError(null);
       } else setError(out.error);
     } catch (err) {
@@ -70,6 +73,7 @@ export function useTeamActivity(repoKey: string) {
     ideas,
     week,
     pulls,
+    taste,
     loaded: items !== null,
     error,
     busy,

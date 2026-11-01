@@ -6,6 +6,7 @@ import { askFor } from "@/lib/bot/ideas";
 import { nextGreeting, nextUp, type NextItem, type WaitingPull } from "@/lib/bot/next-up";
 import type { Idea } from "@/lib/bot/ideas";
 import type { BotProfile } from "@/lib/bot/team";
+import type { Taste } from "@/lib/bot/taste";
 import { askBot, setIdeaDismissed } from "@/lib/github/bot";
 import { cn } from "@/lib/utils";
 import { MascotAvatar } from "./mascot";
@@ -20,6 +21,7 @@ export function NextUpPanel({
   bots,
   ideas,
   pulls,
+  taste,
   loaded,
   now,
   busy,
@@ -33,6 +35,8 @@ export function NextUpPanel({
   bots: BotProfile[];
   ideas: Idea[];
   pulls: WaitingPull[];
+  /** What the maintainer took lately: the other ideas of those kinds come first. */
+  taste: Taste;
   loaded: boolean;
   now: number;
   busy: boolean;
@@ -48,7 +52,7 @@ export function NextUpPanel({
   const [sent, setSent] = useState<Record<string, { url: string; number: number }>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
   const main = bots.find((b) => b.main) ?? null;
-  const items = nextUp(ideas, pulls, dismissed, now);
+  const items = nextUp(ideas, pulls, dismissed, now, taste);
   const repos = new Set(bots.map((b) => b.repo.toLowerCase())).size;
   const botFor = (repo: string) => bots.find((b) => b.repo.toLowerCase() === repo.toLowerCase());
 

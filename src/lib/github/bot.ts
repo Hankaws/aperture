@@ -22,7 +22,8 @@ import {
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
-import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
+import { likedFrom, waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
+import { addTastes, tasteOf, type Taste } from "@/lib/bot/taste";
 import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
@@ -352,6 +353,8 @@ export type BotActivity =
       week: Week;
       /** The bots' pull requests still open, for Next up (`next-up.ts`). */
       pulls: WaitingPull[];
+      /** The kinds of work the maintainer took lately, most first (`taste.ts`). */
+      taste: Taste;
       repos: number;
     }
   | Failure;
@@ -395,12 +398,14 @@ export const botActivity = createServerFn({ method: "POST" })
       const ideaLists: Idea[][] = [];
       const weeks: Week[] = [];
       const pullLists: WaitingPull[][] = [];
+      const tastes: Taste[] = [];
       for (let i = 0; i < names.length; i += ACTIVITY_PARALLEL) {
         const batch = await Promise.all(
           names.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
             const [owner = "", repo = ""] = fullName.split("/");
             const base = repoBase(owner, repo);
-            if (!base) return { activity: [], ideas: [], week: EMPTY_WEEK, pulls: [] };
+            const none = { activity: [], ideas: [], week: EMPTY_WEEK, pulls: [], taste: [] };
+            if (!base) return none;
             // One repository GitHub will not show is left out, not the whole feed.
             const out = await loadTasks(base, get, { quick: true }).catch(() => null);
             return out?.ok
@@ -409,14 +414,16 @@ export const botActivity = createServerFn({ method: "POST" })
                   ideas: ideasFrom(fullName, out.tasks, Date.now(), out.threads),
                   week: weekFrom(out.tasks, out.threads),
                   pulls: waitingPulls(fullName, out.tasks, out.threads),
+                  taste: tasteOf(likedFrom(out.tasks, out.threads)),
                 }
-              : { activity: [], ideas: [], week: EMPTY_WEEK, pulls: [] };
+              : none;
           }),
         );
         lists.push(...batch.map((b) => b.activity));
         ideaLists.push(...batch.map((b) => b.ideas));
         weeks.push(...batch.map((b) => b.week));
         pullLists.push(...batch.map((b) => b.pulls));
+        tastes.push(...batch.map((b) => b.taste));
       }
       // A team's feed keeps each repository's newest: one busy one must not hide the rest.
       return {
@@ -425,6 +432,7 @@ export const botActivity = createServerFn({ method: "POST" })
         ideas: inboxOf(ideaLists),
         week: addWeeks(weeks),
         pulls: pullLists.flat(),
+        taste: addTastes(tastes),
         repos: names.length,
       };
     } catch (error) {

@@ -340,25 +340,24 @@ export class GitHub {
   }
 
   /**
-   * The bot's pull requests (`aperture/…` branches) closed without merging
-   * since then: their titles, the work the maintainer turned down.
+   * The bot's pull requests (`aperture/…` branches) closed since then, by
+   * title: those merged, the work the maintainer took, and those closed
+   * without merging, the work they turned down.
    */
-  async closedUnmerged(since: string): Promise<string[]> {
+  async closedBotPulls(since: string): Promise<{ merged: string[]; unmerged: string[] }> {
     const rows = await this.all<{
       title?: string;
       head?: { ref?: string };
       merged_at?: string | null;
       closed_at?: string | null;
     }>(`${this.base}/pulls?state=closed&sort=updated&direction=desc`, 2);
-    return rows
-      .filter(
-        (p) =>
-          (p.head?.ref ?? "").startsWith("aperture/") &&
-          !p.merged_at &&
-          (p.closed_at ?? "") >= since,
-      )
-      .map((p) => p.title ?? "")
-      .filter(Boolean);
+    const mine = rows.filter(
+      (p) => (p.head?.ref ?? "").startsWith("aperture/") && (p.closed_at ?? "") >= since && p.title,
+    );
+    return {
+      merged: mine.filter((p) => p.merged_at).map((p) => p.title!),
+      unmerged: mine.filter((p) => !p.merged_at).map((p) => p.title!),
+    };
   }
 
   /** Open pull requests: their branch and page, and what the look-over reads. */

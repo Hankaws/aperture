@@ -943,6 +943,60 @@ test("the brief does not offer again what was struck out or closed unmerged", as
   assert.deepEqual(s.next, ["Name the magic 100 in src/cart.ts"]);
 });
 
+test("the brief offers first what the maintainer took lately: ticked boxes and merged pull requests", async () => {
+  const ask = answering("All quiet.\n\nNext:\n- Add a test for src/price.ts");
+  const marker = `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "look", asked: 0, run: "https://github.com/acme/shop/actions/runs/1", next: ["Add a test for the empty cart in src/cart.ts", "Fix what is red on main at abc1234", "Rename x"] })} -->`;
+  const earlier = [
+    "**Ideas from the code**",
+    "- [x] Add a test for the empty cart in src/cart.ts · started by @ada, [the run](https://github.com/acme/shop/actions/runs/2)",
+    "- [x] Fix what is red on main at abc1234 · started without a tick (`always-allow: red`), [the run](https://github.com/acme/shop/actions/runs/3)",
+    "- [ ] Rename x",
+    "",
+    marker,
+  ].join("\n");
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
+    recent: [{ id: 900, body: earlier, user: { login: "github-actions[bot]", type: "Bot" } }],
+    closedPulls: [
+      // The ticked idea's own pull request: counted once.
+      {
+        title: "Add a test for the empty cart in src/cart.ts",
+        ref: "aperture/7-add-a-test",
+        merged: true,
+        closedAt: "2026-11-01T10:00:00Z",
+      },
+      {
+        title: "Add a test for formatPrice in src/price.ts",
+        ref: "aperture/7-format",
+        merged: true,
+        closedAt: "2026-11-01T11:00:00Z",
+      },
+      // Not the bot's: not counted.
+      {
+        title: "Fix the cart by hand",
+        ref: "feature/x",
+        merged: true,
+        closedAt: "2026-11-01T10:00:00Z",
+      },
+    ],
+    now: Date.parse("2026-11-03T03:17:00Z"),
+    model: ask.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /2 ideas taken lately; offering more like them first/);
+  assert.match(
+    ask.read[0]!,
+    /Lately the maintainer merged or asked for mostly tests \(2\)\. Put ideas like these first, when the code gives you some; never make one up to fit:\n- Add a test for the empty cart in src\/cart\.ts\n- Add a test for formatPrice in src\/price\.ts/,
+  );
+  assert.doesNotMatch(
+    ask.read[0]!,
+    /- Fix what is red|- Fix the cart by hand|turned these ideas down/,
+  );
+});
+
 test("a scheduled task is done on its own issue, found again on the next run", async () => {
   const run = await act({
     eventName: "workflow_dispatch",

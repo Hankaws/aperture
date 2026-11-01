@@ -127,3 +127,18 @@ test("the brief is told what was turned down, and leaves it out", () => {
   );
   assert.deepEqual(withoutDeclined(["Keep me"], []), ["Keep me"]);
 });
+
+test("the brief is told what the maintainer took lately, to offer more like it first", () => {
+  const { context } = briefQuestion(view(), [], [], {
+    taste: [
+      { kind: "test", count: 2 },
+      { kind: "fix", count: 1 },
+    ],
+    liked: ["Add a test for the cart", "Add a test for formatPrice", "Fix the empty total"],
+  });
+  assert.match(
+    context,
+    /Lately the maintainer merged or asked for mostly tests \(2\) and bug fixes \(1\)\. Put ideas like these first, when the code gives you some; never make one up to fit:\n- Add a test for the cart\n- Add a test for formatPrice\n- Fix the empty total$/,
+  );
+  assert.doesNotMatch(briefQuestion(view(), []).context, /Lately the maintainer/);
+});

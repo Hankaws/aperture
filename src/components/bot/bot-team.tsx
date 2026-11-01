@@ -386,6 +386,7 @@ export function BotTeam() {
                   bots={bots}
                   ideas={team.ideas}
                   pulls={team.pulls}
+                  taste={team.taste}
                   loaded={team.loaded}
                   now={team.now}
                   busy={team.busy}

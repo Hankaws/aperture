@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-01
+
 ### Added
 
 - A main bot, as Grok has one. Star a bot on its profile and it leads your team: first in the roster, and the face of Next up, a new view on the Bot page that plans your work across every bot's repository, most urgent first (red CI's fix, pull requests the bots opened that wait for your review, a review's likely bugs, then the other ideas), each one click away and handed to the bot that looks after that repository. With a main bot, the page opens on Next up. ([#170](https://github.com/Hankaws/aperture/pull/170))

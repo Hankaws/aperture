@@ -31,6 +31,7 @@ import { askerOf, followKind, mentionsSomeone } from "./follow.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
 import { briefQuestion, ideaToDo, needsYou, withoutDeclined, type LookView } from "./look.ts";
 import { struckIdeas } from "../../../src/lib/bot/struck.ts";
+import { tasteOf, tickedIdeas } from "../../../src/lib/bot/taste.ts";
 import type { Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
@@ -503,26 +504,38 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
    */
   let briefed: { ideas: string[]; waiting: string | null } = { ideas: [], waiting: null };
   /**
-   * What the maintainer turned down in the last 30 days, for the brief not to
-   * offer again: ideas struck out of the bot's replies (dismissed on the Bot
-   * page, `struck.ts`), and the bot's pull requests closed without merging.
-   * If GitHub cannot say, the brief goes on without it.
+   * What the maintainer did with the bot's work in the last 30 days, for the
+   * brief. Declined, never to offer again: ideas struck out of the bot's
+   * replies (dismissed on the Bot page, `struck.ts`), and its pull requests
+   * closed without merging. Liked, to offer more like them (`taste.ts`): its
+   * pull requests merged, and ideas someone ticked or said yes to (not those
+   * an `always-allow` setting started). If GitHub cannot say, the brief goes
+   * on without it.
    */
-  const declinedIdeas = async (now: number): Promise<string[]> => {
+  const takenLately = async (now: number): Promise<{ declined: string[]; liked: string[] }> => {
     const since = new Date(now - 30 * 86_400_000).toISOString();
     try {
       const [comments, closed] = await Promise.all([
         gh.commentsSince(since),
-        gh.closedUnmerged(since),
+        gh.closedBotPulls(since),
       ]);
-      const struck = comments.flatMap((c) => {
+      const struck: string[] = [];
+      const ticked: string[] = [];
+      for (const c of comments) {
         const s = c.authorType === "Bot" ? readSummary(c.body) : null;
-        return s?.next?.length ? struckIdeas(c.body, s.next) : [];
-      });
-      return [...new Set([...struck, ...closed])];
+        if (!s?.next?.length) continue;
+        struck.push(...struckIdeas(c.body, s.next));
+        ticked.push(...tickedIdeas(c.body, s.next));
+      }
+      // A ticked idea's pull request, merged, is one thing taken, not two.
+      const merged = closed.merged.filter((title) => !ticked.includes(title));
+      return {
+        declined: [...new Set([...struck, ...closed.unmerged])],
+        liked: [...ticked, ...merged],
+      };
     } catch (error) {
-      log(`Aperture Bot: could not read what was turned down: ${describeError(error)}`);
-      return [];
+      log(`Aperture Bot: could not read what was taken or turned down: ${describeError(error)}`);
+      return { declined: [], liked: [] };
     }
   };
   /**
@@ -571,10 +584,13 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     };
     log(`Aperture Bot: looking ${command.owner}/${command.repo} over`);
     // The agent reads the code in Ask mode, as for a question: it can look, not change.
-    const declined = await declinedIdeas(view.now);
+    const { declined, liked } = await takenLately(view.now);
     if (declined.length)
       log(`Aperture Bot: leaving out ${declined.length} ideas turned down lately`);
-    const brief = briefQuestion(view, todoLines(cwd), declined);
+    const taste = tasteOf(liked);
+    if (taste.length)
+      log(`Aperture Bot: ${liked.length} ideas taken lately; offering more like them first`);
+    const brief = briefQuestion(view, todoLines(cwd), declined, { taste, liked });
     const result = await answerQuestion(
       {
         cwd,

@@ -9,6 +9,7 @@
 import { pullNumber } from "./activity.ts";
 import type { Idea } from "./ideas.ts";
 import type { BotTask, Thread } from "./tasks.ts";
+import { byTaste, kindOf, KIND_WORDS, type Taste } from "./taste.ts";
 
 /** A pull request a bot opened that is still open: someone has to review it. */
 export type WaitingPull = { repo: string; number: number; title: string; url: string; at: string };
@@ -55,6 +56,7 @@ export function nextUp(
   pulls: WaitingPull[],
   dismissed: Iterable<string> = [],
   now = Date.now(),
+  taste: Taste = [],
 ): NextItem[] {
   const hidden = new Set(dismissed);
   const open = ideas.filter((i) => !hidden.has(i.id) && !i.dismissed);
@@ -71,20 +73,30 @@ export function nextUp(
     ...open
       .filter((i) => i.source === "review")
       .map((i) => idea(i, `A likely bug in #${i.number}`)),
-    ...open
-      .filter((i) => i.source !== "red" && i.source !== "review")
-      .map((i) =>
-        idea(
-          i,
-          i.source === "brief"
-            ? `From ${i.repo}'s daily brief`
-            : i.source === "issue"
-              ? `For new issue #${i.number}`
-              : `Suggested on #${i.number}`,
-        ),
-      ),
+    ...byTaste(
+      open.filter((i) => i.source !== "red" && i.source !== "review"),
+      (i) => i.task,
+      taste,
+    ).map((i) => idea(i, whyIdea(i, taste))),
   ];
   return items.slice(0, NEXT_MAX);
+}
+
+/**
+ * Where an idea came from, and when it is of the kind the maintainer took
+ * most lately (two at least, so one merge is not a pattern), that too.
+ */
+function whyIdea(i: Idea, taste: Taste): string {
+  const from =
+    i.source === "brief"
+      ? `From ${i.repo}'s daily brief`
+      : i.source === "issue"
+        ? `For new issue #${i.number}`
+        : `Suggested on #${i.number}`;
+  const top = taste[0];
+  return top && top.count >= 2 && kindOf(i.task) === top.kind
+    ? `${from}. You take ${KIND_WORDS[top.kind]} most`
+    : from;
 }
 
 /** The greeting over the plan, in the main bot's voice. */
@@ -99,4 +111,27 @@ export function nextGreeting(items: NextItem[], repos: number): string {
       ? `${review === 1 ? "A pull request waits" : `${review} pull requests wait`} for your review.`
       : "Here is what I would do next.";
   return `I looked across ${where}. ${first}`;
+}
+
+/**
+ * What the maintainer took from a repository's bots lately, for its taste
+ * (`taste.ts`): the bots' pull requests that were merged, and suggestions
+ * someone ticked or said yes to.
+ */
+export function likedFrom(tasks: BotTask[], threads: Map<number, Thread>): string[] {
+  const liked: string[] = [];
+  const merged = new Set<number>();
+  for (const task of tasks) {
+    if (task.via === "tick" && task.task) {
+      liked.push(task.task);
+      continue;
+    }
+    const link = task.summary?.link;
+    const number = link?.what === "pull" ? pullNumber(link.url) : null;
+    const thread = number === null ? undefined : threads.get(number);
+    if (number === null || !thread?.merged || merged.has(number)) continue;
+    merged.add(number);
+    liked.push(task.task || thread.title);
+  }
+  return liked;
 }

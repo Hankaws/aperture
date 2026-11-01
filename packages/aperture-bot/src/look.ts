@@ -7,6 +7,7 @@
  */
 import { MAX_IDEAS } from "./next.ts";
 import { quiet } from "./quiet.ts";
+import { tasteLine, type Taste } from "../../../src/lib/bot/taste.ts";
 
 export type LookThread = {
   number: number;
@@ -116,7 +117,10 @@ export function briefQuestion(
   todos: string[],
   /** What the maintainer turned down lately (`declinedIdeas`): never offered again. */
   declined: string[] = [],
+  /** What the maintainer took lately (`taste.ts`): ideas like those are offered first. */
+  lately: { taste: Taste; liked: string[] } = { taste: [], liked: [] },
 ): { question: string; context: string } {
+  const likes = tasteLine(lately.taste);
   const question = [
     "This is your daily brief on this repository. Look through its code with your tools, and the state below.",
     `First write at most 3 short sentences on how it stands. Then a line "Next:" and at most ${MAX_IDEAS} ideas worth doing now, the one most worth doing first, each one precise task under 200 characters that you, a coding bot, could do by changing the code: a likely bug, an important path with no test, a TODO worth finishing, a fix for what is red, or what an open issue asks (name it, #12).`,
@@ -143,12 +147,23 @@ export function briefQuestion(
             .join("\n")}`,
         ]
       : []),
+    ...(likes
+      ? [
+          "",
+          `${likes} Put ideas like these first, when the code gives you some; never make one up to fit:\n${lately.liked
+            .slice(0, MAX_LIKED)
+            .map((d) => `- ${d}`)
+            .join("\n")}`,
+        ]
+      : []),
   ].join("\n");
   return { question, context };
 }
 
 /** The declined ideas the brief is told of: the newest, so the context stays small. */
 const MAX_DECLINED = 30;
+/** And the ideas taken lately, as examples of what is welcome. */
+const MAX_LIKED = 10;
 
 const key = (text: string) =>
   text

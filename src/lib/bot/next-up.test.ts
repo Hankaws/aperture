@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Idea } from "./ideas.ts";
-import { NEXT_MAX, nextGreeting, nextUp, waitingPulls, type WaitingPull } from "./next-up.ts";
+import {
+  likedFrom,
+  NEXT_MAX,
+  nextGreeting,
+  nextUp,
+  waitingPulls,
+  type WaitingPull,
+} from "./next-up.ts";
 import type { BotSummary } from "./summary.ts";
 import type { BotTask, Thread } from "./tasks.ts";
 
@@ -124,5 +131,94 @@ test("waitingPulls keeps the bots' pull requests that are still open", () => {
       [22, "Also open"],
       [20, "Open one"],
     ],
+  );
+});
+
+test("the other ideas of the kinds the maintainer takes most come first, saying so", () => {
+  const ideas = [
+    idea("Format cents", "answer"),
+    idea("Fix the blank empty-cart total", "brief", { number: 3 }),
+    idea("Add a test for formatPrice", "brief", { number: 3 }),
+    idea("Fix src/cart.ts:3", "review", { number: 8 }),
+  ];
+  const taste = [
+    { kind: "test" as const, count: 3 },
+    { kind: "fix" as const, count: 1 },
+  ];
+  assert.deepEqual(
+    nextUp(ideas, [], [], NOW, taste).map((i) => (i.kind === "idea" ? [i.idea.task, i.why] : [])),
+    [
+      // A review's fix keeps its place: the taste orders only the rest.
+      ["Fix src/cart.ts:3", "A likely bug in #8"],
+      ["Add a test for formatPrice", "From acme/shop's daily brief. You take tests most"],
+      ["Fix the blank empty-cart total", "From acme/shop's daily brief"],
+      ["Format cents", "Suggested on #7"],
+    ],
+  );
+  // One merge is not a pattern: the order follows it, the words do not.
+  const once = nextUp(ideas, [], [], NOW, [{ kind: "test", count: 1 }]);
+  assert.deepEqual(
+    once.map((i) => (i.kind === "idea" ? i.why : "")),
+    [
+      "A likely bug in #8",
+      "From acme/shop's daily brief",
+      "Suggested on #7",
+      "From acme/shop's daily brief",
+    ],
+  );
+  // Without a taste, the order is the inbox's.
+  assert.deepEqual(
+    nextUp(ideas, [], [], NOW).map((i) => (i.kind === "idea" ? i.idea.task : "")),
+    [
+      "Fix src/cart.ts:3",
+      "Format cents",
+      "Fix the blank empty-cart total",
+      "Add a test for formatPrice",
+    ],
+  );
+});
+
+test("likedFrom: the bots' merged pull requests, once each, and ticked ideas", () => {
+  const RUN = "https://github.com/acme/site/actions/runs/1";
+  const task = (over: Partial<BotTask>, pull?: number): BotTask => ({
+    id: 1,
+    via: "comment",
+    number: 7,
+    thread: null,
+    task: "Do it",
+    author: "ada",
+    askedAt: ago(2),
+    askedUrl: "",
+    state: "clear",
+    replyUrl: null,
+    updatedAt: ago(1),
+    diff: null,
+    summary: {
+      v: 1,
+      state: "clear",
+      asked: 1,
+      run: RUN,
+      ...(pull ? { link: { url: `https://github.com/acme/site/pull/${pull}`, what: "pull" } } : {}),
+    } as BotSummary,
+    ...over,
+  });
+  const threads = new Map<number, Thread>([
+    [20, { title: "Add a test for the cart", isPull: true, open: false, merged: true }],
+    [21, { title: "Closed unmerged", isPull: true, open: false }],
+    [22, { title: "Still open", isPull: true, open: true }],
+  ]);
+  assert.deepEqual(
+    likedFrom(
+      [
+        task({ task: "" }, 20),
+        task({ task: "Retried the same" }, 20),
+        task({}, 21),
+        task({}, 22),
+        task({ via: "tick", task: "Fix the empty cart" }, 23),
+        task({ task: "An answer" }),
+      ],
+      threads,
+    ),
+    ["Add a test for the cart", "Fix the empty cart"],
   );
 });

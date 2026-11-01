@@ -10,6 +10,7 @@ import { overLimit } from "@/lib/security/rate-limit";
 import {
   botActivityInput,
   botAskInput,
+  botIdeaInput,
   botChatInput,
   botAppInput,
   botJobsInput,
@@ -22,6 +23,8 @@ import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
 import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
+import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
+import { readSummary } from "@/lib/bot/summary";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import {
@@ -424,6 +427,60 @@ export const botActivity = createServerFn({ method: "POST" })
         pulls: pullLists.flat(),
         repos: names.length,
       };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/**
+ * Dismisses an idea where the bot can read it: strikes its box out of the
+ * bot's reply (or, `dismissed: false`, puts it back), so the next daily brief
+ * does not offer it again and every device leaves it out. Only a reply of
+ * the bot's that offers the idea is edited, and only what the person's own
+ * token may edit: someone who can write to the repository.
+ */
+export const setIdeaDismissed = createServerFn({ method: "POST" })
+  .validator(botIdeaInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true } | Failure> => {
+    const busy = overLimit("botAsk", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const base = repoBase(data.owner, data.repo);
+    if (!base) return { ok: false, error: "That repo name is not valid." };
+    try {
+      const got = await githubJson(`${base}/issues/comments/${data.comment}`, token);
+      const comment = got.body as { body?: string; user?: { type?: string } };
+      if (got.status !== 200 || typeof comment.body !== "string")
+        return { ok: false, error: "That reply of the bot's is gone." };
+      const summary = readSummary(comment.body);
+      if (
+        comment.user?.type !== "Bot" ||
+        !summary?.next?.some((t) => t.trim() === data.task.trim())
+      )
+        return { ok: false, error: "That reply does not offer this idea." };
+      const next = data.dismissed
+        ? strikeIdea(comment.body, data.task)
+        : unstrikeIdea(comment.body, data.task);
+      // Already as asked (or started meanwhile): nothing to change.
+      if (next === null) return { ok: true };
+      const saved = await githubJson(`${base}/issues/comments/${data.comment}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ body: next }),
+      });
+      if (saved.status === 403 || saved.status === 404)
+        return {
+          ok: false,
+          error: "GitHub would not let your token edit the bot's reply: it needs write access.",
+        };
+      return saved.status === 200
+        ? { ok: true }
+        : { ok: false, error: `GitHub would not save the change (${saved.status}).` };
     } catch (error) {
       return {
         ok: false,

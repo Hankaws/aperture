@@ -97,6 +97,14 @@ export const githubChecksInput = z.object({
   sha: text(64),
 });
 export const botRepoInput = z.object({ owner: repoName, repo: repoName });
+/** Strikes an idea out of the bot's reply on GitHub, or puts its box back (`struck.ts`). */
+export const botIdeaInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  comment: z.number().int().positive(),
+  task: text(1_000),
+  dismissed: z.boolean(),
+});
 export const botAskInput = z.object({
   owner: repoName,
   repo: repoName,

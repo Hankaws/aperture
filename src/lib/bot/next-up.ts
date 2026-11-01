@@ -57,7 +57,7 @@ export function nextUp(
   now = Date.now(),
 ): NextItem[] {
   const hidden = new Set(dismissed);
-  const open = ideas.filter((i) => !hidden.has(i.id));
+  const open = ideas.filter((i) => !hidden.has(i.id) && !i.dismissed);
   const idea = (i: Idea, why: string): NextItem => ({ kind: "idea", idea: i, why });
   const items: NextItem[] = [
     ...open.filter((i) => i.source === "red").map((i) => idea(i, `CI is red on ${i.repo}`)),

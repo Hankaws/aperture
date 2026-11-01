@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { briefQuestion, ideaToDo, needsYou, QUIET_DAYS, type LookView } from "./look.ts";
+import {
+  briefQuestion,
+  ideaToDo,
+  needsYou,
+  QUIET_DAYS,
+  withoutDeclined,
+  type LookView,
+} from "./look.ts";
 
 const now = Date.parse("2026-10-13T10:00:00Z");
 const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
@@ -94,4 +101,29 @@ test("ideaToDo picks the first idea from the code; one naming an issue waits for
 
 test("the brief asks for the idea most worth doing first", () => {
   assert.match(briefQuestion(view(), []).question, /the one most worth doing first/);
+});
+
+test("the brief is told what was turned down, and leaves it out", () => {
+  const { context } = briefQuestion(
+    view(),
+    [],
+    ["Round half cents up", "Add a test for the cart in src/ca…"],
+  );
+  assert.match(
+    context,
+    /The maintainer turned these ideas down lately\. Never suggest them again, nor the same thing in other words:\n- Round half cents up\n- Add a test for the cart in src\/ca…$/,
+  );
+  assert.doesNotMatch(briefQuestion(view(), []).context, /turned these ideas down/);
+  assert.deepEqual(
+    withoutDeclined(
+      [
+        "round  half cents UP",
+        "Add a test for the cart in src/cart.ts",
+        "Name the magic 100 in src/cart.ts",
+      ],
+      ["Round half cents up", "Add a test for the cart in src/ca…"],
+    ),
+    ["Name the magic 100 in src/cart.ts"],
+  );
+  assert.deepEqual(withoutDeclined(["Keep me"], []), ["Keep me"]);
 });

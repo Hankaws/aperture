@@ -102,7 +102,7 @@ export function BotTeam() {
   const [dismissed, setDismissed] = useDismissedIdeas();
   const waiting = useMemo(() => {
     const hidden = new Set(dismissed);
-    return team.ideas.filter((i) => !hidden.has(i.id)).length;
+    return team.ideas.filter((i) => !hidden.has(i.id) && !i.dismissed).length;
   }, [team.ideas, dismissed]);
 
   useEffect(() => {

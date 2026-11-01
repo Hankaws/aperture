@@ -339,6 +339,28 @@ export class GitHub {
     return threads;
   }
 
+  /**
+   * The bot's pull requests (`aperture/…` branches) closed without merging
+   * since then: their titles, the work the maintainer turned down.
+   */
+  async closedUnmerged(since: string): Promise<string[]> {
+    const rows = await this.all<{
+      title?: string;
+      head?: { ref?: string };
+      merged_at?: string | null;
+      closed_at?: string | null;
+    }>(`${this.base}/pulls?state=closed&sort=updated&direction=desc`, 2);
+    return rows
+      .filter(
+        (p) =>
+          (p.head?.ref ?? "").startsWith("aperture/") &&
+          !p.merged_at &&
+          (p.closed_at ?? "") >= since,
+      )
+      .map((p) => p.title ?? "")
+      .filter(Boolean);
+  }
+
   /** Open pull requests: their branch and page, and what the look-over reads. */
   async openPulls(): Promise<
     Array<{

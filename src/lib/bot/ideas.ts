@@ -32,11 +32,24 @@ export type Idea = {
    * there would close it.
    */
   send: { number: number } | null;
+  /** The bot's comment that offers it (or, dismissed, the one that shows it struck out). */
+  reply: number | null;
+  /**
+   * Struck out on GitHub (`struck.ts`): dismissed on some device, so on every
+   * one, and the daily brief will not offer it again.
+   */
+  dismissed: boolean;
 };
 
 /** Ideas older than this are not shown: the code has moved on. */
 export const IDEA_DAYS = 14;
 const MAX_IDEAS = 50;
+
+/** The bot comment's id in its URL (`#issuecomment-123`), or null. */
+export function commentIdOf(url: string | null | undefined): number | null {
+  const match = /#issuecomment-(\d+)$/.exec(url ?? "");
+  return match ? Number(match[1]) : null;
+}
 
 /** The words that tell two ideas, or an idea and a task, apart: case, spaces and ZWSPs aside. */
 export function ideaKey(text: string): string {
@@ -105,6 +118,11 @@ export function ideasFrom(
           (a.key.endsWith("…") && a.key.length > 40 && key.startsWith(a.key.slice(0, -1)))),
     );
 
+  /** Ideas struck out on any reply: dismissed, and where, so they can be restored. */
+  const struck = new Map<string, number | null>();
+  for (const t of tasks)
+    for (const text of t.struck ?? []) struck.set(ideaKey(text), commentIdOf(t.replyUrl));
+
   const out: Idea[] = [];
   const seen = new Set<string>();
   const newest = [...tasks].sort(
@@ -138,6 +156,8 @@ export function ideasFrom(
             : source !== "brief" && open
               ? { number: task.number }
               : null,
+        reply: struck.has(key) ? (struck.get(key) ?? null) : commentIdOf(task.replyUrl),
+        dismissed: struck.has(key),
       });
     }
   }

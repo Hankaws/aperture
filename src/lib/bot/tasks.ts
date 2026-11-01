@@ -8,6 +8,7 @@
  */
 import { DEFAULT_TRIGGER, taskFrom } from "../../../packages/aperture-bot/src/event.ts";
 import { readSummary, unpushedDiff, type BotState, type BotSummary } from "./summary.ts";
+import { struckIdeas } from "./struck.ts";
 
 export { DEFAULT_TRIGGER };
 
@@ -49,6 +50,8 @@ export type BotTask = {
   updatedAt: string;
   /** The change the bot did not push, from its reply. */
   diff: string | null;
+  /** Ideas of the reply that the maintainer struck out, dismissed (`struck.ts`). */
+  struck?: string[];
 };
 
 /** How long a task waits for its first answer before it counts as never answered. */
@@ -95,6 +98,7 @@ export function tasksFrom(
         replyUrl: comment.html_url ?? null,
         updatedAt: comment.updated_at ?? comment.created_at ?? "",
         diff: unpushedDiff(comment.body ?? ""),
+        struck: struckIdeas(comment.body ?? "", summary.next ?? []),
       });
       continue;
     }
@@ -140,6 +144,7 @@ export function tasksFrom(
       replyUrl: replyComment?.html_url ?? null,
       updatedAt: replyComment?.updated_at ?? askedAt,
       diff: reply ? unpushedDiff(reply.comment.body ?? "") : null,
+      struck: reply ? struckIdeas(reply.comment.body ?? "", reply.summary.next ?? []) : [],
     });
   }
   return tasks.sort((a, b) => (a.askedAt < b.askedAt ? 1 : a.askedAt > b.askedAt ? -1 : 0));

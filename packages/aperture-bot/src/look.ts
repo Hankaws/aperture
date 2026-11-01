@@ -114,6 +114,8 @@ function threads(list: LookThread[], now: number): string {
 export function briefQuestion(
   view: LookView,
   todos: string[],
+  /** What the maintainer turned down lately (`declinedIdeas`): never offered again. */
+  declined: string[] = [],
 ): { question: string; context: string } {
   const question = [
     "This is your daily brief on this repository. Look through its code with your tools, and the state below.",
@@ -132,6 +134,40 @@ export function briefQuestion(
     todos.length
       ? `TODO lines in the code:\n${todos.slice(0, MAX_TODOS).join("\n")}`
       : "No TODO lines in the code.",
+    ...(declined.length
+      ? [
+          "",
+          `The maintainer turned these ideas down lately. Never suggest them again, nor the same thing in other words:\n${declined
+            .slice(0, MAX_DECLINED)
+            .map((d) => `- ${d}`)
+            .join("\n")}`,
+        ]
+      : []),
   ].join("\n");
   return { question, context };
+}
+
+/** The declined ideas the brief is told of: the newest, so the context stays small. */
+const MAX_DECLINED = 30;
+
+const key = (text: string) =>
+  text
+    .replace(/\u200b/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+/**
+ * The ideas left once the declined ones are taken out: the model is told not
+ * to offer them, and this makes sure. A pull request's title can be cut
+ * (`…`), so a declined title that ends so matches the ideas it begins.
+ */
+export function withoutDeclined(next: string[], declined: string[]): string[] {
+  const keys = declined.map(key).filter(Boolean);
+  return next.filter((idea) => {
+    const k = key(idea);
+    return !keys.some(
+      (d) => d === k || (d.endsWith("…") && d.length > 20 && k.startsWith(d.slice(0, -1))),
+    );
+  });
 }

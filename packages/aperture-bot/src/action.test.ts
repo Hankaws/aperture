@@ -52,6 +52,8 @@ function fakeGitHub(
     /** The pull request's review comments, and whether posting a review fails as GitHub does on a bad line. */
     reviewComments?: Array<{ path: string; body: string; user: { type: string } }>;
     reviewFails?: boolean;
+    /** Pull requests closed (`?state=closed`): the bot's, merged or not. */
+    closedPulls?: Array<{ title: string; ref: string; merged?: boolean; closedAt: string }>;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -104,6 +106,19 @@ function fakeGitHub(
     if (method === "GET" && path === "/repos/acme/shop/issues")
       return json(options.openIssues ?? []);
     if (method === "POST" && path === "/repos/acme/shop/issues") return json({ number: 7 }, 201);
+    if (
+      method === "GET" &&
+      path === "/repos/acme/shop/pulls" &&
+      new URL(url).searchParams.get("state") === "closed"
+    )
+      return json(
+        (options.closedPulls ?? []).map((p) => ({
+          title: p.title,
+          head: { ref: p.ref },
+          merged_at: p.merged ? p.closedAt : null,
+          closed_at: p.closedAt,
+        })),
+      );
     if (method === "GET" && path === "/repos/acme/shop/pulls")
       return json(
         (options.openPulls ?? []).map((p) => ({
@@ -236,6 +251,7 @@ async function act(
     payload?: unknown;
     /** The clock the run reads. */
     now?: number;
+    closedPulls?: Array<{ title: string; ref: string; merged?: boolean; closedAt: string }>;
   } = {},
 ) {
   const { action } = await bundled();
@@ -252,6 +268,7 @@ async function act(
     recent: options.recent,
     reviewComments: options.reviewComments,
     reviewFails: options.reviewFails,
+    closedPulls: options.closedPulls,
   });
   // GitHub keeps every pull request's head as refs/pull/<n>/head, a fork's too.
   if (options.pull && options.branches?.[options.pull.headRef])
@@ -874,6 +891,56 @@ test("with slack-webhook, the daily brief is posted to Slack too, linking back t
   // Without the setting, nothing goes to Slack.
   const quiet = await act({ ...brief, env: { INPUT_SCHEDULED: "look-over" } });
   assert.deepEqual(slackPosts(quiet), []);
+});
+
+test("the brief does not offer again what was struck out or closed unmerged", async () => {
+  const ask = answering(
+    "All quiet.\n\nNext:\n- Round half cents up in src/price.ts\n- Add a test for the empty cart in src/cart.ts\n- Name the magic 100 in src/cart.ts",
+  );
+  const marker = `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", kind: "look", asked: 0, run: "https://github.com/acme/shop/actions/runs/1", next: ["Round half cents up in src/price.ts", "Keep this one"] })} -->`;
+  const earlier = [
+    "**Ideas from the code**",
+    "- ~~Round half cents up in src/price.ts~~ · dismissed",
+    "- [ ] Keep this one",
+    "",
+    marker,
+  ].join("\n");
+  const now = Date.parse("2026-11-03T03:17:00Z");
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
+    recent: [{ id: 900, body: earlier, user: { login: "github-actions[bot]", type: "Bot" } }],
+    closedPulls: [
+      {
+        title: "Add a test for the empty cart in src/cart.ts",
+        ref: "aperture/7-add-a-test",
+        closedAt: "2026-11-01T10:00:00Z",
+      },
+      // Merged, or not the bot's, or long ago: not turned down.
+      {
+        title: "Name the magic 100 in src/cart.ts",
+        ref: "aperture/7-name",
+        merged: true,
+        closedAt: "2026-11-01T10:00:00Z",
+      },
+      { title: "Other work", ref: "feature/x", closedAt: "2026-11-01T10:00:00Z" },
+      { title: "Old idea", ref: "aperture/7-old", closedAt: "2026-09-01T10:00:00Z" },
+    ],
+    now,
+    model: ask.model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(run.lines.join("\n"), /leaving out 2 ideas turned down lately/);
+  assert.match(
+    ask.read[0]!,
+    /turned these ideas down lately\. Never suggest them again, nor the same thing in other words:\n- Round half cents up in src\/price\.ts\n- Add a test for the empty cart in src\/cart\.ts/,
+  );
+  assert.doesNotMatch(ask.read[0]!, /- Old idea|- Other work/);
+  // Even offered again, they are left out.
+  const s = readSummary(run.replied())!;
+  assert.deepEqual(s.next, ["Name the magic 100 in src/cart.ts"]);
 });
 
 test("a scheduled task is done on its own issue, found again on the next run", async () => {

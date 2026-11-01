@@ -163,6 +163,8 @@ export function pullBody(
   result: BotResult,
   runUrl: string,
   where: string | null,
+  /** Notes from reviews of its earlier pull requests it kept in mind (`lessons.ts`). */
+  lessons = 0,
 ): string {
   return join(
     [`${askedBy(command)}:`, "", `> ${quiet(firstLine(command.task))}`],
@@ -175,6 +177,11 @@ export function pullBody(
       ...checksTable(result),
     ],
     agentSaid(result),
+    lessons > 0
+      ? [
+          `Kept in mind ${lessons === 1 ? "1 note" : `${lessons} notes`} from your reviews of its earlier pull requests.`,
+        ]
+      : [],
     [footer(result, runUrl, where)],
   );
 }

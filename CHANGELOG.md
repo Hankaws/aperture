@@ -7,7 +7,7 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
-## 0.6.0 - 2026-10-31
+## 0.6.0 - 2026-11-01
 
 ### Added
 

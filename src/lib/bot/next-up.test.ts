@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Idea } from "./ideas.ts";
-import {
-  likedFrom,
-  NEXT_MAX,
-  nextGreeting,
-  nextUp,
-  waitingPulls,
-  type WaitingPull,
-} from "./next-up.ts";
+import { NEXT_MAX, nextGreeting, nextUp, waitingPulls, type WaitingPull } from "./next-up.ts";
 import type { BotSummary } from "./summary.ts";
 import type { BotTask, Thread } from "./tasks.ts";
 
@@ -175,50 +168,5 @@ test("the other ideas of the kinds the maintainer takes most come first, saying 
       "Fix the blank empty-cart total",
       "Add a test for formatPrice",
     ],
-  );
-});
-
-test("likedFrom: the bots' merged pull requests, once each, and ticked ideas", () => {
-  const RUN = "https://github.com/acme/site/actions/runs/1";
-  const task = (over: Partial<BotTask>, pull?: number): BotTask => ({
-    id: 1,
-    via: "comment",
-    number: 7,
-    thread: null,
-    task: "Do it",
-    author: "ada",
-    askedAt: ago(2),
-    askedUrl: "",
-    state: "clear",
-    replyUrl: null,
-    updatedAt: ago(1),
-    diff: null,
-    summary: {
-      v: 1,
-      state: "clear",
-      asked: 1,
-      run: RUN,
-      ...(pull ? { link: { url: `https://github.com/acme/site/pull/${pull}`, what: "pull" } } : {}),
-    } as BotSummary,
-    ...over,
-  });
-  const threads = new Map<number, Thread>([
-    [20, { title: "Add a test for the cart", isPull: true, open: false, merged: true }],
-    [21, { title: "Closed unmerged", isPull: true, open: false }],
-    [22, { title: "Still open", isPull: true, open: true }],
-  ]);
-  assert.deepEqual(
-    likedFrom(
-      [
-        task({ task: "" }, 20),
-        task({ task: "Retried the same" }, 20),
-        task({}, 21),
-        task({}, 22),
-        task({ via: "tick", task: "Fix the empty cart" }, 23),
-        task({ task: "An answer" }),
-      ],
-      threads,
-    ),
-    ["Add a test for the cart", "Fix the empty cart"],
   );
 });

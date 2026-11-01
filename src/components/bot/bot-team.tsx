@@ -36,6 +36,7 @@ import { IdentityCard } from "./identity-card";
 import { IdeasPanel } from "./ideas-panel";
 import { useDismissedIdeas } from "./use-dismissed-ideas";
 import { JobsCard } from "./jobs-card";
+import { LearnedPanel } from "./learned-panel";
 import { MascotAvatar } from "./mascot";
 import { NextUpPanel } from "./next-up";
 import { ModelPicker } from "./model-picker";
@@ -412,6 +413,19 @@ export function BotTeam() {
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
               <PanelBoundary name="Automation" className={PANEL_CARD}>
                 <AutomationPanel bots={bots} />
+              </PanelBoundary>
+              <PanelBoundary name="What your bots learned" className={cn(PANEL_CARD, "mt-4")}>
+                <LearnedPanel
+                  taste={team.taste}
+                  learned={team.learned}
+                  loaded={team.loaded}
+                  now={team.now}
+                  busy={team.busy}
+                  error={team.error}
+                  dismissed={dismissed}
+                  onDismissed={setDismissed}
+                  onRefresh={() => void team.reload()}
+                />
               </PanelBoundary>
             </div>
           </>

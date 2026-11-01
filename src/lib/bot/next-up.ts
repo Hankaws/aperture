@@ -112,26 +112,3 @@ export function nextGreeting(items: NextItem[], repos: number): string {
       : "Here is what I would do next.";
   return `I looked across ${where}. ${first}`;
 }
-
-/**
- * What the maintainer took from a repository's bots lately, for its taste
- * (`taste.ts`): the bots' pull requests that were merged, and suggestions
- * someone ticked or said yes to.
- */
-export function likedFrom(tasks: BotTask[], threads: Map<number, Thread>): string[] {
-  const liked: string[] = [];
-  const merged = new Set<number>();
-  for (const task of tasks) {
-    if (task.via === "tick" && task.task) {
-      liked.push(task.task);
-      continue;
-    }
-    const link = task.summary?.link;
-    const number = link?.what === "pull" ? pullNumber(link.url) : null;
-    const thread = number === null ? undefined : threads.get(number);
-    if (number === null || !thread?.merged || merged.has(number)) continue;
-    merged.add(number);
-    liked.push(task.task || thread.title);
-  }
-  return liked;
-}

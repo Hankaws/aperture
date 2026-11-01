@@ -5,6 +5,7 @@ import type { Idea } from "@/lib/bot/ideas";
 import type { Week } from "@/lib/bot/week";
 import type { WaitingPull } from "@/lib/bot/next-up";
 import type { Taste } from "@/lib/bot/taste";
+import { EMPTY_LEARNED, type Learned } from "@/lib/bot/learned";
 
 /**
  * What happened on the team's repositories, for the roster's faces and lines
@@ -21,6 +22,7 @@ export function useTeamActivity(repoKey: string) {
   const [week, setWeek] = useState<Week | null>(null);
   const [pulls, setPulls] = useState<WaitingPull[]>([]);
   const [taste, setTaste] = useState<Taste>([]);
+  const [learned, setLearned] = useState<Learned>(EMPTY_LEARNED);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -36,6 +38,7 @@ export function useTeamActivity(repoKey: string) {
         setWeek(out.week);
         setPulls(out.pulls);
         setTaste(out.taste);
+        setLearned(out.learned);
         setError(null);
       } else setError(out.error);
     } catch (err) {
@@ -74,6 +77,7 @@ export function useTeamActivity(repoKey: string) {
     week,
     pulls,
     taste,
+    learned,
     loaded: items !== null,
     error,
     busy,

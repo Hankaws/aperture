@@ -3,7 +3,7 @@ import { ArrowUpRight, Check, Lightbulb, Loader2, RefreshCw, Undo2, X, Zap } fro
 import { Button } from "@/components/ui/button";
 import { ago } from "@/lib/bot/activity";
 import { askFor, sourceLine, type Idea } from "@/lib/bot/ideas";
-import { askBot } from "@/lib/github/bot";
+import { askBot, setIdeaDismissed } from "@/lib/github/bot";
 import { cn } from "@/lib/utils";
 
 type Sent = { url: string; number: number };
@@ -42,8 +42,31 @@ export function IdeasPanel({
   const [sent, setSent] = useState<Record<string, Sent>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
 
-  const dismiss = (id: string) => onDismissed([...dismissed.filter((d) => d !== id), id]);
-  const restore = (id: string) => onDismissed(dismissed.filter((d) => d !== id));
+  /**
+   * Dismissed here at once, and struck out of the bot's reply on GitHub so
+   * the next daily brief leaves it out and every device does too. If GitHub
+   * will not take the edit, the idea stays dismissed in this browser.
+   */
+  async function dismiss(idea: Idea, on: boolean) {
+    onDismissed(
+      on
+        ? [...dismissed.filter((d) => d !== idea.id), idea.id]
+        : dismissed.filter((d) => d !== idea.id),
+    );
+    if (!idea.reply) return;
+    const [owner = "", repo = ""] = idea.repo.split("/");
+    try {
+      const out = await setIdeaDismissed({
+        data: { owner, repo, comment: idea.reply, task: idea.task, dismissed: on },
+      });
+      setFailed(({ [idea.id]: _, ...rest }) => rest);
+      if (!out.ok) setFailed((f) => ({ ...f, [idea.id]: `Only in this browser: ${out.error}` }));
+      // Restored on GitHub: read it back, so its box shows again.
+      else if (!on) onSent();
+    } catch {
+      setFailed((f) => ({ ...f, [idea.id]: "Only in this browser: could not reach GitHub." }));
+    }
+  }
 
   async function doIt(idea: Idea) {
     setSending(idea.id);
@@ -64,7 +87,11 @@ export function IdeasPanel({
     }
   }
 
-  const hidden = new Set(dismissed);
+  // Dismissed in this browser, or struck out on GitHub from any device.
+  const hidden = new Set([
+    ...dismissed,
+    ...(ideas ?? []).filter((i) => i.dismissed).map((i) => i.id),
+  ]);
   // An idea sent here stays, marked sent, until the next refresh drops it.
   const open = (ideas ?? []).filter((i) => !hidden.has(i.id) || sent[i.id]);
   const gone = (ideas ?? []).filter((i) => hidden.has(i.id) && !sent[i.id]);
@@ -118,7 +145,7 @@ export function IdeasPanel({
                 sent={sent[idea.id] ?? null}
                 error={failed[idea.id] ?? null}
                 onDo={() => void doIt(idea)}
-                onDismiss={() => dismiss(idea.id)}
+                onDismiss={() => void dismiss(idea, true)}
               />
             ))}
           </ul>
@@ -139,7 +166,7 @@ export function IdeasPanel({
                 {gone.map((idea) => (
                   <li
                     key={idea.id}
-                    className="flex items-center gap-3 rounded-xl border border-border px-3 py-2 text-sm text-muted"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border px-3 py-2 text-sm text-muted"
                   >
                     <span className="min-w-0 flex-1 truncate [overflow-wrap:anywhere]">
                       {idea.task}
@@ -147,12 +174,15 @@ export function IdeasPanel({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => restore(idea.id)}
+                      onClick={() => void dismiss(idea, false)}
                       aria-label={`Restore: ${idea.task}`}
                     >
                       <Undo2 className="size-4" />
                       Restore
                     </Button>
+                    {failed[idea.id] && (
+                      <span className="w-full text-xs text-warn">{failed[idea.id]}</span>
+                    )}
                   </li>
                 ))}
               </ul>

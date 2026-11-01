@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Aperture Bot learns what you do not want. Dismissing an idea on the Bot page (in Ideas, or Not now on Next up) also strikes it out of the bot's reply on GitHub, so it stays dismissed on every device, and the daily brief no longer offers what you turned down in the last 30 days: ideas struck out, and its pull requests closed without merging. Restore puts the idea's box back. The reply's signature still holds; a struck idea can no longer be ticked. ([#172](https://github.com/Hankaws/aperture/pull/172))
+
 ## 0.6.0 - 2026-11-01
 
 ### Added

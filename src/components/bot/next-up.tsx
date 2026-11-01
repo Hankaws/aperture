@@ -6,7 +6,7 @@ import { askFor } from "@/lib/bot/ideas";
 import { nextGreeting, nextUp, type NextItem, type WaitingPull } from "@/lib/bot/next-up";
 import type { Idea } from "@/lib/bot/ideas";
 import type { BotProfile } from "@/lib/bot/team";
-import { askBot } from "@/lib/github/bot";
+import { askBot, setIdeaDismissed } from "@/lib/github/bot";
 import { cn } from "@/lib/utils";
 import { MascotAvatar } from "./mascot";
 
@@ -51,6 +51,17 @@ export function NextUpPanel({
   const items = nextUp(ideas, pulls, dismissed, now);
   const repos = new Set(bots.map((b) => b.repo.toLowerCase())).size;
   const botFor = (repo: string) => bots.find((b) => b.repo.toLowerCase() === repo.toLowerCase());
+
+  /** Not now: dismissed here, and struck out on GitHub so the brief leaves it out too. */
+  function notNow(idea: Idea) {
+    onDismissed([...dismissed.filter((d) => d !== idea.id), idea.id]);
+    if (!idea.reply) return;
+    const [owner = "", repo = ""] = idea.repo.split("/");
+    // Best effort, as in the Ideas inbox: the idea stays dismissed in this browser either way.
+    void setIdeaDismissed({
+      data: { owner, repo, comment: idea.reply, task: idea.task, dismissed: true },
+    }).catch(() => undefined);
+  }
 
   async function hand(idea: Idea) {
     setSending(idea.id);
@@ -139,10 +150,7 @@ export function NextUpPanel({
                 sent={item.kind === "idea" ? (sent[item.idea.id] ?? null) : null}
                 error={item.kind === "idea" ? (failed[item.idea.id] ?? null) : null}
                 onHand={() => item.kind === "idea" && void hand(item.idea)}
-                onDismiss={() =>
-                  item.kind === "idea" &&
-                  onDismissed([...dismissed.filter((d) => d !== item.idea.id), item.idea.id])
-                }
+                onDismiss={() => item.kind === "idea" && notNow(item.idea)}
               />
             ))}
           </ol>

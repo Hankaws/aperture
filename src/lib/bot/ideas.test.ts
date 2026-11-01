@@ -203,3 +203,27 @@ test("the inbox mixes repositories, newest first", () => {
 test("ideaKey ignores case, spacing and the quiet zero-width space", () => {
   assert.equal(ideaKey("  Ping @\u200bbob   NOW "), "ping @bob now");
 });
+
+test("an idea struck out on GitHub is dismissed on every device, wherever it is offered again", () => {
+  const older = task({
+    updatedAt: ago(30),
+    replyUrl: "https://github.com/acme/shop/issues/3#issuecomment-500",
+    summary: { kind: "look", next: ["Round half cents up", "Add a test"] },
+    struck: ["Round half cents up"],
+  });
+  // Tomorrow's brief offers it again: it stays dismissed, and restoring it unstrikes the old reply.
+  const newer = task({
+    updatedAt: ago(2),
+    replyUrl: "https://github.com/acme/shop/issues/3#issuecomment-600",
+    summary: { kind: "look", next: ["Round half cents up", "Name the magic 100"] },
+  });
+  const ideas = ideasFrom("acme/shop", [older, newer], NOW);
+  assert.deepEqual(
+    ideas.map((i) => [i.task, i.dismissed, i.reply]),
+    [
+      ["Round half cents up", true, 500],
+      ["Name the magic 100", false, 600],
+      ["Add a test", false, 500],
+    ],
+  );
+});

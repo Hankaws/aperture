@@ -18,6 +18,8 @@ const idea = (task: string, source: Idea["source"], over: Partial<Idea> = {}): I
   url: "https://github.com/acme/shop/issues/7#issuecomment-1",
   at: ago(1),
   send: { number: 7 },
+  reply: 1,
+  dismissed: false,
   ...over,
 });
 const pull = (number: number, days: number): WaitingPull => ({

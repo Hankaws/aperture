@@ -29,7 +29,8 @@ import { threadContext } from "./context.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command, type Parsed } from "./event.ts";
 import { askerOf, followKind, mentionsSomeone } from "./follow.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
-import { briefQuestion, ideaToDo, needsYou, type LookView } from "./look.ts";
+import { briefQuestion, ideaToDo, needsYou, withoutDeclined, type LookView } from "./look.ts";
+import { struckIdeas } from "../../../src/lib/bot/struck.ts";
 import type { Model } from "./model.ts";
 import { check } from "../../agent-check/src/main.ts";
 import { summaryMarkdown } from "../../agent-check/src/report.ts";
@@ -502,6 +503,29 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
    */
   let briefed: { ideas: string[]; waiting: string | null } = { ideas: [], waiting: null };
   /**
+   * What the maintainer turned down in the last 30 days, for the brief not to
+   * offer again: ideas struck out of the bot's replies (dismissed on the Bot
+   * page, `struck.ts`), and the bot's pull requests closed without merging.
+   * If GitHub cannot say, the brief goes on without it.
+   */
+  const declinedIdeas = async (now: number): Promise<string[]> => {
+    const since = new Date(now - 30 * 86_400_000).toISOString();
+    try {
+      const [comments, closed] = await Promise.all([
+        gh.commentsSince(since),
+        gh.closedUnmerged(since),
+      ]);
+      const struck = comments.flatMap((c) => {
+        const s = c.authorType === "Bot" ? readSummary(c.body) : null;
+        return s?.next?.length ? struckIdeas(c.body, s.next) : [];
+      });
+      return [...new Set([...struck, ...closed])];
+    } catch (error) {
+      log(`Aperture Bot: could not read what was turned down: ${describeError(error)}`);
+      return [];
+    }
+  };
+  /**
    * On Mondays (UTC), the brief carries the week's digest: what the bot did in
    * the last seven days, counted from its own summaries on GitHub as the Bot
    * page counts them. No model call; if GitHub cannot say, the brief goes
@@ -547,7 +571,10 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     };
     log(`Aperture Bot: looking ${command.owner}/${command.repo} over`);
     // The agent reads the code in Ask mode, as for a question: it can look, not change.
-    const brief = briefQuestion(view, todoLines(cwd));
+    const declined = await declinedIdeas(view.now);
+    if (declined.length)
+      log(`Aperture Bot: leaving out ${declined.length} ideas turned down lately`);
+    const brief = briefQuestion(view, todoLines(cwd), declined);
     const result = await answerQuestion(
       {
         cwd,
@@ -560,7 +587,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       { model: deps.model },
     );
     if (!result.ok) throw new Error(result.error);
-    const look = { note: result.answer, next: result.next };
+    const look = { note: result.answer, next: withoutDeclined(result.next, declined) };
     const waiting = pulls.find((p) => p.headRef.startsWith(`aperture/${command.number}-`));
     briefed = { ideas: look.next, waiting: waiting?.url ?? null };
     log([look.note, ...look.next.map((task) => `- ${task}`)].filter(Boolean).join("\n"));

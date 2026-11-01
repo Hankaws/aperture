@@ -26,6 +26,7 @@ import type { CompletionCfg, EngineId } from "../../../src/lib/agent/complete.se
 import { failingContext } from "./answer.ts";
 import { answerQuestion } from "./ask.ts";
 import { threadContext } from "./context.ts";
+import { LESSON_DAYS, LESSON_PULLS, lessonsContext, lessonsFrom } from "./lessons.ts";
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command, type Parsed } from "./event.ts";
 import { askerOf, followKind, mentionsSomeone } from "./follow.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
@@ -560,6 +561,21 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       return undefined;
     }
   };
+  /**
+   * What the maintainer asked for in reviews of the bot's pull requests
+   * lately (`lessons.ts`), for the work to do it that way from the start.
+   * If GitHub cannot say, the work goes on without it.
+   */
+  const reviewLessons = async (): Promise<string[]> => {
+    const now = deps.now?.() ?? Date.now();
+    const since = new Date(now - LESSON_DAYS * 86_400_000).toISOString();
+    try {
+      return lessonsFrom(await gh.reviewNotes(since, LESSON_PULLS));
+    } catch (error) {
+      log(`Aperture Bot: could not read reviews of its pull requests: ${describeError(error)}`);
+      return [];
+    }
+  };
   const lookOver = async (): Promise<number> => {
     const branch = command.defaultBranch;
     const sha = await gh.head(branch);
@@ -899,14 +915,20 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     }
     install(cwd, input(env, "install") ?? "auto", log);
     const sandbox = await sandboxFor();
-    const comments = await gh.comments(command.number);
+    const [comments, lessons] = await Promise.all([gh.comments(command.number), reviewLessons()]);
 
     log(`Aperture Bot: working on #${command.number} for @${command.author}: ${command.task}`);
+    if (lessons.length)
+      log(
+        `Aperture Bot: keeping in mind ${lessons.length} notes from reviews of its pull requests`,
+      );
     const result = await runTask(
       {
         cwd,
         task: command.task,
-        context: threadContext(command, comments, diff),
+        context: [threadContext(command, comments, diff), lessonsContext(lessons)]
+          .filter(Boolean)
+          .join("\n\n"),
         model,
         sandbox,
         testScript: input(env, "test-script") ?? "test",
@@ -944,7 +966,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
           title: titleFor(command),
           head: branch,
           base: command.defaultBranch,
-          body: pullBody(command, result, runUrl, ctx.tests),
+          body: pullBody(command, result, runUrl, ctx.tests, lessons.length),
         });
         await reply(doneReply(result, { url: opened.url, what: "pull" }, ctx));
         // Unasked work (the brief's idea, a red run's fix, a standing job) is told on Slack too.

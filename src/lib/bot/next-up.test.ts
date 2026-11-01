@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Idea } from "./ideas.ts";
-import {
-  likedFrom,
-  NEXT_MAX,
-  nextGreeting,
-  nextUp,
-  waitingPulls,
-  type WaitingPull,
-} from "./next-up.ts";
+import { NEXT_MAX, nextGreeting, nextUp, waitingPulls, type WaitingPull } from "./next-up.ts";
+import { learnedFrom } from "./learned.ts";
 import type { BotSummary } from "./summary.ts";
+import { tasteOf } from "./taste.ts";
 import type { BotTask, Thread } from "./tasks.ts";
 
 const NOW = Date.parse("2026-10-31T12:00:00Z");
@@ -178,7 +173,7 @@ test("the other ideas of the kinds the maintainer takes most come first, saying 
   );
 });
 
-test("likedFrom: the bots' merged pull requests, once each, and ticked ideas", () => {
+test("Next up's order comes from the bots' merged pull requests, once each, and ticked ideas", () => {
   const RUN = "https://github.com/acme/site/actions/runs/1";
   const task = (over: Partial<BotTask>, pull?: number): BotTask => ({
     id: 1,
@@ -207,18 +202,35 @@ test("likedFrom: the bots' merged pull requests, once each, and ticked ideas", (
     [21, { title: "Closed unmerged", isPull: true, open: false }],
     [22, { title: "Still open", isPull: true, open: true }],
   ]);
+  const { liked } = learnedFrom(
+    "acme/site",
+    [
+      task({ task: "" }, 20),
+      task({ task: "Retried the same" }, 20),
+      task({}, 21),
+      task({}, 22),
+      task({ via: "tick", task: "Add a test for the empty cart" }, 23),
+      task({ task: "An answer" }),
+    ],
+    threads,
+    NOW,
+  );
   assert.deepEqual(
-    likedFrom(
-      [
-        task({ task: "" }, 20),
-        task({ task: "Retried the same" }, 20),
-        task({}, 21),
-        task({}, 22),
-        task({ via: "tick", task: "Fix the empty cart" }, 23),
-        task({ task: "An answer" }),
-      ],
-      threads,
-    ),
-    ["Add a test for the cart", "Fix the empty cart"],
+    liked.map((l) => l.task),
+    ["Add a test for the cart", "Add a test for the empty cart"],
+  );
+  const taste = tasteOf(liked.map((l) => l.task));
+  assert.deepEqual(
+    nextUp(
+      [idea("Dark mode", "answer"), idea("Add a test for 100 cents", "answer")],
+      [],
+      [],
+      NOW,
+      taste,
+    ).map((i) => (i.kind === "idea" ? [i.idea.task, i.why] : [])),
+    [
+      ["Add a test for 100 cents", "Suggested on #7. You take tests most"],
+      ["Dark mode", "Suggested on #7"],
+    ],
   );
 });

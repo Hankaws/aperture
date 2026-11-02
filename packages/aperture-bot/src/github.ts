@@ -3,7 +3,7 @@
  * workflow's token. `fetch` is injectable so the tests run against an API
  * that lives in memory.
  */
-import type { ReviewNote } from "./lessons.ts";
+import { notesFrom, type ReviewNote } from "./lessons.ts";
 import { retryStale } from "./retry.ts";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -283,33 +283,13 @@ export class GitHub {
     const mine = rows
       .filter((p) => (p.head?.ref ?? "").startsWith("aperture/") && (p.updated_at ?? "") >= since)
       .slice(0, pulls);
-    type Row = {
-      body?: string | null;
-      path?: string;
-      user?: { login?: string; type?: string };
-      author_association?: string;
-      submitted_at?: string;
-      created_at?: string;
-    };
-    const note = (pull: number, r: Row, path?: string): ReviewNote => ({
-      pull,
-      author: r.user?.login ?? "someone",
-      authorType: r.user?.type ?? "User",
-      association: r.author_association ?? "NONE",
-      body: r.body ?? "",
-      ...(path ? { path } : {}),
-      at: r.submitted_at ?? r.created_at ?? "",
-    });
     const lists = await Promise.all(
       mine.map(async (p) => {
         const [reviews, lines] = await Promise.all([
-          this.all<Row>(`${this.base}/pulls/${p.number}/reviews`, 1),
-          this.all<Row>(`${this.base}/pulls/${p.number}/comments`, 1),
+          this.all<unknown>(`${this.base}/pulls/${p.number}/reviews`, 1),
+          this.all<unknown>(`${this.base}/pulls/${p.number}/comments`, 1),
         ]);
-        return [
-          ...reviews.map((r) => note(p.number, r)),
-          ...lines.map((r) => note(p.number, r, r.path)),
-        ];
+        return notesFrom(p.number, reviews, lines);
       }),
     );
     return lists.flat();

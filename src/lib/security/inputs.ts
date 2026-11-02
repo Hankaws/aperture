@@ -105,6 +105,15 @@ export const botIdeaInput = z.object({
   task: text(1_000),
   dismissed: z.boolean(),
 });
+/** A note from a review of one of the bot's pull requests, ignored by the bot or brought back. */
+export const botLessonInput = z.object({
+  owner: repoName,
+  repo: repoName,
+  pull: z.number().int().positive(),
+  kind: z.enum(["review", "line"]),
+  id: z.number().int().positive(),
+  ignored: z.boolean(),
+});
 export const botAskInput = z.object({
   owner: repoName,
   repo: repoName,

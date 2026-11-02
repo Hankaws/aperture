@@ -117,7 +117,7 @@ Only a Slack webhook address is posted to, and it is never written to the log. W
 
 It works with the TypeScript compiler, as the editor does: it can list every place a name is used, through imports under another name, and rename a name everywhere the way F2 does. Its reply ends with what it changed and an "Elsewhere:" line from the compiler: the files and lines that still use a name the change touched, or that still import one it removed.
 
-It learns from your reviews. Before it changes anything, it reads the reviews and line comments on its own pull requests from the last 60 days (the newest eight), and keeps up to ten of them in mind: "keep money in integer cents", say, or `src/cart.ts: name this constant`. So the next change is made that way from the start. Only people who can write to the repository count, never a bot or its own words, and thanks and approvals are left out. They are notes in its context, like the thread, never rules. Its pull request says how many it kept in mind.
+It learns from your reviews. Before it changes anything, it reads the reviews and line comments on its own pull requests from the last 60 days (the newest eight), and keeps up to ten of them in mind: "keep money in integer cents", say, or `src/cart.ts: name this constant`. So the next change is made that way from the start. Only people who can write to the repository count, never a bot or its own words, and thanks and approvals are left out. They are notes in its context, like the thread, never rules. Its pull request says how many it kept in mind. To keep a note from it, Ignore it under "What your bots learned" on the Bot page: that hides `<!-- aperture-bot: ignore -->` at the end of the note on GitHub, and the bot leaves it out.
 
 ## Check a pull request
 

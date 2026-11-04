@@ -11,6 +11,7 @@ import {
   botActivityInput,
   botAskInput,
   botIdeaInput,
+  botLessonInput,
   botChatInput,
   botAppInput,
   botJobsInput,
@@ -24,6 +25,14 @@ import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
 import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
 import { addLearned, EMPTY_LEARNED, learnedFrom, type Learned } from "@/lib/bot/learned";
+import {
+  LESSON_DAYS,
+  LESSON_PULLS,
+  lessonsOf,
+  notesFrom,
+  withIgnored,
+  type Lesson,
+} from "@/lib/bot/lessons";
 import { addTastes, tasteOf, type Taste } from "@/lib/bot/taste";
 import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
@@ -499,6 +508,127 @@ export const setIdeaDismissed = createServerFn({ method: "POST" })
         return {
           ok: false,
           error: "GitHub would not let your token edit the bot's reply: it needs write access.",
+        };
+      return saved.status === 200
+        ? { ok: true }
+        : { ok: false, error: `GitHub would not save the change (${saved.status}).` };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/** What the team's bots took from reviews of their pull requests: shown, and ignored or not. */
+export type BotLessons = { ok: true; lessons: Array<Lesson & { repo: string }> } | Failure;
+
+/**
+ * The notes from reviews of the bots' pull requests that the bots keep in
+ * mind (`lessons.ts`), read as each bot reads them before it changes
+ * anything: the newest LESSON_PULLS of its pull requests from the last
+ * LESSON_DAYS. Read when asked, not on every refresh: two requests a pull
+ * request.
+ */
+export const botLessons = createServerFn({ method: "POST" })
+  .validator(botTeamInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<BotLessons> => {
+    const busy = overLimit("bot", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const get: Get = (url) => githubJson(url, token);
+    const since = new Date(Date.now() - LESSON_DAYS * 86_400_000).toISOString();
+    const list = (got: { status: number; body: unknown }) =>
+      got.status === 200 && Array.isArray(got.body) ? (got.body as unknown[]) : [];
+    try {
+      const out: Array<Lesson & { repo: string }> = [];
+      const repos = [...new Set(data.repos)];
+      for (let i = 0; i < repos.length; i += ACTIVITY_PARALLEL) {
+        const batch = await Promise.all(
+          repos.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
+            const [owner = "", repo = ""] = fullName.split("/");
+            const base = repoBase(owner, repo);
+            if (!base) return [];
+            const pulls = await get(
+              `${base}/pulls?state=all&sort=updated&direction=desc&per_page=50`,
+            );
+            if (pulls.status === 401) throw new Error("GitHub rejected the token on your account.");
+            const mine = (
+              list(pulls) as Array<{
+                number?: number;
+                head?: { ref?: string };
+                updated_at?: string;
+              }>
+            )
+              .filter(
+                (p) =>
+                  typeof p.number === "number" &&
+                  (p.head?.ref ?? "").startsWith("aperture/") &&
+                  (p.updated_at ?? "") >= since,
+              )
+              .slice(0, LESSON_PULLS);
+            const notes = await Promise.all(
+              mine.map(async (p) => {
+                const [reviews, lines] = await Promise.all([
+                  get(`${base}/pulls/${p.number}/reviews?per_page=100`),
+                  get(`${base}/pulls/${p.number}/comments?per_page=100`),
+                ]);
+                return notesFrom(p.number!, list(reviews), list(lines));
+              }),
+            );
+            return lessonsOf(notes.flat()).map((l) => ({ ...l, repo: fullName }));
+          }),
+        );
+        out.push(...batch.flat());
+      }
+      return { ok: true, lessons: out };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/**
+ * Ignores a note from a review, or brings it back: a mark hidden at the end
+ * of its text (`IGNORE_MARK`), so the bot leaves it out on every run and
+ * every device. Only what the person's own token may edit: their own notes,
+ * and on a repository they can write to, often others' line comments.
+ */
+export const setLessonIgnored = createServerFn({ method: "POST" })
+  .validator(botLessonInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<{ ok: true } | Failure> => {
+    const busy = overLimit("botAsk", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const base = repoBase(data.owner, data.repo);
+    if (!base) return { ok: false, error: "That repo name is not valid." };
+    const url =
+      data.kind === "review"
+        ? `${base}/pulls/${data.pull}/reviews/${data.id}`
+        : `${base}/pulls/comments/${data.id}`;
+    try {
+      const got = await githubJson(url, token);
+      const note = got.body as { body?: string | null };
+      if (got.status !== 200 || typeof note.body !== "string")
+        return { ok: false, error: "That note is gone from GitHub." };
+      const next = withIgnored(note.body, data.ignored);
+      if (next === note.body) return { ok: true };
+      const saved = await githubJson(url, token, {
+        method: data.kind === "review" ? "PUT" : "PATCH",
+        body: JSON.stringify({ body: next }),
+      });
+      if (saved.status === 403 || saved.status === 404 || saved.status === 422)
+        return {
+          ok: false,
+          error: "GitHub lets only the note's author change it. Ask them, or edit it on GitHub.",
         };
       return saved.status === 200
         ? { ok: true }

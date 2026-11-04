@@ -7,6 +7,7 @@ import { LEARN_DAYS, type Declined, type Learned } from "@/lib/bot/learned";
 import { KIND_WORDS, type Taste } from "@/lib/bot/taste";
 import { setIdeaDismissed } from "@/lib/github/bot";
 import { cn } from "@/lib/utils";
+import { ReviewLessons } from "./review-lessons";
 
 /** Shown at first; the rest behind "Show all". */
 const SHORT = 5;
@@ -29,6 +30,7 @@ export function LearnedPanel({
   dismissed,
   onDismissed,
   onRefresh,
+  repos,
 }: {
   taste: Taste;
   learned: Learned;
@@ -40,7 +42,14 @@ export function LearnedPanel({
   dismissed: string[];
   onDismissed: (ids: string[]) => void;
   onRefresh: () => void;
+  /** The team's repositories, for the notes from reviews (`review-lessons.tsx`). */
+  repos: string[];
 }) {
+  const [tick, setTick] = useState(0);
+  const refresh = () => {
+    setTick((t) => t + 1);
+    onRefresh();
+  };
   const [forgetting, setForgetting] = useState<string | null>(null);
   const [forgotten, setForgotten] = useState<string[]>([]);
   const [failed, setFailed] = useState<Record<string, string>>({});
@@ -86,13 +95,14 @@ export function LearnedPanel({
           </h2>
           <p className="mt-1 text-sm text-pretty text-muted">
             From the last {LEARN_DAYS} days on GitHub. Each morning&apos;s brief offers ideas like
-            the work you take first, and never what you turned down.
+            the work you take first, and never what you turned down. Each change starts out the way
+            your reviews asked.
           </p>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          onClick={onRefresh}
+          onClick={refresh}
           disabled={busy}
           aria-label="Refresh what your bots learned"
         >
@@ -207,6 +217,7 @@ export function LearnedPanel({
           </div>
         </div>
       )}
+      <ReviewLessons repos={repos} now={now} tick={tick} />
     </section>
   );
 }

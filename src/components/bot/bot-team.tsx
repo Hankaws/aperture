@@ -425,6 +425,7 @@ export function BotTeam() {
                   dismissed={dismissed}
                   onDismissed={setDismissed}
                   onRefresh={() => void team.reload()}
+                  repos={bots.map((b) => b.repo)}
                 />
               </PanelBoundary>
             </div>

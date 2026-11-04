@@ -4,6 +4,9 @@ import { lessonsContext, lessonsFrom, MAX_LESSONS, type ReviewNote } from "./les
 
 const note = (body: string, over: Partial<ReviewNote> = {}): ReviewNote => ({
   pull: 5,
+  id: 1,
+  kind: over.path ? "line" : "review",
+  url: null,
   author: "ada",
   authorType: "User",
   association: "OWNER",

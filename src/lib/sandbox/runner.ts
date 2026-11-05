@@ -14,6 +14,8 @@ export type StepResult = {
   exitCode: number;
   /** Combined stdout and stderr, already clipped for the model. */
   output: string;
+  /** The same, whole (up to KEEP_OUTPUT_CHARS), for the agent to read back (`guards.ts`). */
+  full?: string;
   durationMs: number;
 };
 
@@ -39,6 +41,9 @@ export interface SandboxRunner {
 /** Keep the tail: a failing run puts the reason at the end, not the start. */
 export const MAX_OUTPUT_CHARS = 6_000;
 
+/** Kept of a step's output for the agent to read back: whole, up to this. */
+export const KEEP_OUTPUT_CHARS = 200_000;
+
 export function clipOutput(text: string, max = MAX_OUTPUT_CHARS): string {
   // Stripping ANSI colour means matching the escape byte; the rule is aimed at
   // control characters arriving by accident, which is not the case here.
@@ -54,7 +59,7 @@ export function clipOutput(text: string, max = MAX_OUTPUT_CHARS): string {
  * A failure has to lead with what failed and why, because this text is the
  * whole signal the next step acts on.
  */
-export function formatOutcome(outcome: RunOutcome): string {
+export function formatOutcome(outcome: RunOutcome, whole = false): string {
   if (!outcome.ok) return `The run could not start: ${outcome.error}`;
   const failed = outcome.steps.find((s) => s.exitCode !== 0);
   if (!failed) {
@@ -64,7 +69,7 @@ export function formatOutcome(outcome: RunOutcome): string {
   return [
     `Run failed at "${failed.label}" with exit code ${failed.exitCode}.`,
     "",
-    failed.output || "(no output)",
+    (whole ? (failed.full ?? failed.output) : failed.output) || "(no output)",
   ].join("\n");
 }
 

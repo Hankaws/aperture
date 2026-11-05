@@ -1,5 +1,11 @@
 export function isReadTool(name: string): boolean {
-  return name === "semantic_search" || name === "grep" || name === "read_file" || name === "list_dir";
+  return (
+    name === "semantic_search" ||
+    name === "grep" ||
+    name === "read_file" ||
+    name === "list_dir" ||
+    name === "read_output"
+  );
 }
 
 export type ParsedCall = {

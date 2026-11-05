@@ -16,7 +16,10 @@
  */
 import { env } from "../env.server.ts";
 import { approvalForRun, SANDBOX_ALLOWED_DOMAINS } from "./policy.ts";
-import { clipOutput, type RunOutcome, type RunRequest, type SandboxRunner, type StepResult } from "./runner.ts";
+import {
+  clipOutput,
+  KEEP_OUTPUT_CHARS,
+  type RunOutcome, type RunRequest, type SandboxRunner, type StepResult } from "./runner.ts";
 
 export { SANDBOX_ALLOWED_DOMAINS } from "./policy.ts";
 
@@ -143,8 +146,16 @@ export class VercelSandboxRunner implements SandboxRunner {
           signal: request.signal,
           timeoutMs: remaining,
         });
-        const output = clipOutput(await finished.output("both"));
-        steps.push({ label: step.label, exitCode: finished.exitCode, output, durationMs: Date.now() - stepStarted });
+        const raw = await finished.output("both");
+        const output = clipOutput(raw);
+        const full = clipOutput(raw, KEEP_OUTPUT_CHARS);
+        steps.push({
+          label: step.label,
+          exitCode: finished.exitCode,
+          output,
+          ...(full.length > output.length ? { full } : {}),
+          durationMs: Date.now() - stepStarted,
+        });
         // A failed install makes every later step meaningless noise.
         if (finished.exitCode !== 0) break;
       }

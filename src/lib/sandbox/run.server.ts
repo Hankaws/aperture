@@ -54,7 +54,7 @@ export async function runScript(
   ctx: RunContext,
   script: string,
   timeoutMs?: number,
-): Promise<{ text: string; passed: boolean; counted: boolean; ran: boolean }> {
+): Promise<{ text: string; passed: boolean; counted: boolean; ran: boolean; full?: string }> {
   const plan = planRun(ctx.files, script);
   if (!plan.ok) return { text: plan.error, passed: false, counted: false, ran: false };
 
@@ -110,8 +110,12 @@ export async function runScript(
     timeoutMs: clampTimeout(timeoutMs),
     signal: ctx.signal,
   });
+  const text = formatOutcome(outcome);
+  const full = formatOutcome(outcome, true);
   return {
-    text: formatOutcome(outcome),
+    text,
+    // The whole log, when the agent was shown only its end: it can read the rest back.
+    ...(full.length > text.length ? { full } : {}),
     passed: outcome.ok && outcome.steps.every((s) => s.exitCode === 0),
     counted: true,
     // Billed either way, but a sandbox that never started ran none of the project's code.

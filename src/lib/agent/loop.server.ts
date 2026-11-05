@@ -21,7 +21,7 @@ const SERVER_HOST: LoopHost = {
     // The run's usual timeout, shortened when the turn has less time left than that.
     const timeoutMs = maxMs === undefined ? undefined : Math.min(DEFAULT_RUN_MS, maxMs);
     const result = await runScript({ userId, runner, files, signal }, script, timeoutMs);
-    return { text: result.text, passed: result.passed, ran: result.ran };
+    return { text: result.text, passed: result.passed, ran: result.ran, ...(result.full ? { full: result.full } : {}) };
   },
   mcp: async (userId, files) => {
     const { invokeMcp, mcpToolsFor } = await import("@/lib/mcp/account.server");

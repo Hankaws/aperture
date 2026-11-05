@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   briefQuestion,
   ideaToDo,
+  learnedLine,
   needsYou,
   QUIET_DAYS,
   withoutDeclined,
@@ -141,4 +142,24 @@ test("the brief is told what the maintainer took lately, to offer more like it f
     /Lately the maintainer merged or asked for mostly tests \(2\) and bug fixes \(1\)\. Put ideas like these first, when the code gives you some; never make one up to fit:\n- Add a test for the cart\n- Add a test for formatPrice\n- Fix the empty total$/,
   );
   assert.doesNotMatch(briefQuestion(view(), []).context, /Lately the maintainer/);
+});
+
+test("the Monday digest's line says what the bot keeps in mind, in words", () => {
+  assert.equal(
+    learnedLine({
+      taste: [
+        { kind: "test", count: 4 },
+        { kind: "fix", count: 3 },
+        { kind: "docs", count: 1 },
+      ],
+      declined: 2,
+      lessons: 3,
+    }),
+    "- **What it keeps in mind**: you take mostly tests and bug fixes; 2 ideas you turned down are left out; 3 notes from your reviews are kept in mind.",
+  );
+  assert.equal(
+    learnedLine({ taste: [], declined: 1, lessons: 1 }),
+    "- **What it keeps in mind**: 1 idea you turned down is left out; 1 note from your reviews is kept in mind.",
+  );
+  assert.equal(learnedLine({ taste: [], declined: 0, lessons: 0 }), null);
 });

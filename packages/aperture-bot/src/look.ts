@@ -7,7 +7,7 @@
  */
 import { MAX_IDEAS } from "./next.ts";
 import { quiet } from "./quiet.ts";
-import { tasteLine, type Taste } from "../../../src/lib/bot/taste.ts";
+import { KIND_WORDS, tasteLine, type Taste } from "../../../src/lib/bot/taste.ts";
 
 export type LookThread = {
   number: number;
@@ -185,4 +185,30 @@ export function withoutDeclined(next: string[], declined: string[]): string[] {
       (d) => d === k || (d.endsWith("…") && d.length > 20 && k.startsWith(d.slice(0, -1))),
     );
   });
+}
+
+/**
+ * For the Monday digest: what the bot keeps in mind from the maintainer, as
+ * the Bot page's "What your bots learned" shows it. The kinds of work they
+ * took (`taste.ts`), how many ideas they turned down are left out, and how
+ * many notes from their reviews it reads (`lessons.ts`). Null when it has
+ * learned nothing yet.
+ */
+export function learnedLine(learned: {
+  taste: Taste;
+  declined: number;
+  lessons: number;
+}): string | null {
+  const parts: string[] = [];
+  const top = learned.taste.slice(0, 2).filter((t) => t.count > 0);
+  if (top.length) parts.push(`you take mostly ${top.map((t) => KIND_WORDS[t.kind]).join(" and ")}`);
+  if (learned.declined)
+    parts.push(
+      `${learned.declined === 1 ? "1 idea" : `${learned.declined} ideas`} you turned down ${learned.declined === 1 ? "is" : "are"} left out`,
+    );
+  if (learned.lessons)
+    parts.push(
+      `${learned.lessons === 1 ? "1 note" : `${learned.lessons} notes`} from your reviews ${learned.lessons === 1 ? "is" : "are"} kept in mind`,
+    );
+  return parts.length ? `- **What it keeps in mind**: ${parts.join("; ")}.` : null;
 }

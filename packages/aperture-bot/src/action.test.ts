@@ -32,6 +32,15 @@ function checkout(branches: Record<string, Record<string, string>> = {}) {
 type Call = { method: string; path: string; body?: unknown };
 
 /** GitHub's REST API, in memory: records every call and answers the ones the bot makes. */
+/** Pull requests (`?state=all`) with their reviews and comments on lines, as GitHub gives them. */
+type Reviewed = Array<{
+  number: number;
+  ref: string;
+  updatedAt: string;
+  reviews: unknown[];
+  lines: unknown[];
+}>;
+
 function fakeGitHub(
   options: {
     /** Everyone's access, or each person's by login (`none` for anyone not named). */
@@ -54,14 +63,7 @@ function fakeGitHub(
     reviewFails?: boolean;
     /** Pull requests closed (`?state=closed`): the bot's, merged or not. */
     closedPulls?: Array<{ title: string; ref: string; merged?: boolean; closedAt: string }>;
-    /** Pull requests (`?state=all`) with their reviews and comments on lines, as GitHub gives them. */
-    reviewed?: Array<{
-      number: number;
-      ref: string;
-      updatedAt: string;
-      reviews: unknown[];
-      lines: unknown[];
-    }>;
+    reviewed?: Reviewed;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -275,6 +277,8 @@ async function act(
     payload?: unknown;
     /** The clock the run reads. */
     now?: number;
+    /** The bot's pull requests with their reviews (see fakeGitHub). */
+    reviewed?: Reviewed;
     closedPulls?: Array<{ title: string; ref: string; merged?: boolean; closedAt: string }>;
   } = {},
 ) {
@@ -292,6 +296,7 @@ async function act(
     recent: options.recent,
     reviewComments: options.reviewComments,
     reviewFails: options.reviewFails,
+    reviewed: options.reviewed,
     closedPulls: options.closedPulls,
   });
   // GitHub keeps every pull request's head as refs/pull/<n>/head, a fork's too.
@@ -941,6 +946,8 @@ test("on Mondays the brief carries the last seven days, counted from the bot's o
     body,
     /\n\*\*Last 7 days\*\*\n- \*\*Pull requests opened\*\*: 1 \(1 merged\)\n- \*\*Likely bugs caught\*\*: 2 \(In 1 review\)\n- \*\*Answered\*\*: none\n- \*\*Pull requests checked\*\*: none\n/,
   );
+  // Nothing learned yet: no line for it.
+  assert.doesNotMatch(body, /What it keeps in mind/);
   // Any other day, the brief goes without it.
   const tuesday = await act({
     eventName: "schedule",
@@ -953,6 +960,48 @@ test("on Mondays the brief carries the last seven days, counted from the bot's o
   });
   assert.equal(tuesday.code, 0, tuesday.lines.join("\n"));
   assert.doesNotMatch(tuesday.replied(), /Last 7 days/);
+});
+
+test("the Monday digest says what the bot keeps in mind from you", async () => {
+  const monday = Date.parse("2026-11-02T03:17:00Z");
+  const at = new Date(monday - 86_400_000).toISOString();
+  const review = (id: number, body: string) => ({
+    id,
+    user: { login: "ada", type: "User" },
+    author_association: "OWNER",
+    body,
+    submitted_at: at,
+  });
+  const run = await act({
+    eventName: "schedule",
+    payload: {},
+    env: { INPUT_SCHEDULED: "look-over" },
+    openIssues: [{ number: 7, title: "Aperture Bot: looking things over" }],
+    closedPulls: [
+      { title: "Add a test for the cart", ref: "aperture/7-a", merged: true, closedAt: at },
+      { title: "Add a test for prices", ref: "aperture/7-b", merged: true, closedAt: at },
+      { title: "Rename the magic 100", ref: "aperture/7-c", closedAt: at },
+    ],
+    reviewed: [
+      {
+        number: 12,
+        ref: "aperture/7-a",
+        updatedAt: at,
+        reviews: [
+          review(1, "Keep money in integer cents, never floats."),
+          review(2, "Name constants instead of bare numbers."),
+        ],
+        lines: [],
+      },
+    ],
+    now: monday,
+    model: async () => ({ content: "All quiet.\n\nNext: none" }),
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.match(
+    run.replied(),
+    /\n- \*\*What it keeps in mind\*\*: you take mostly tests; 1 idea you turned down is left out; 2 notes from your reviews are kept in mind\.\n/,
+  );
 });
 
 const SLACK = "https://hooks.slack.com/services/T000/B000/abcDEF123";

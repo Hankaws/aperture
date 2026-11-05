@@ -11,6 +11,7 @@ release notes are every line from there down to the previous version.
 
 - Aperture Bot learns from your reviews. Before it changes anything, it reads what you asked for in reviews and line comments on its own pull requests in the last 60 days and keeps up to ten notes in mind, so the next change is made that way from the start. Only people who can write to the repository count, never a bot or its own words, and thanks and approvals are left out. Its pull request says how many notes it kept in mind. Needs Aperture Bot v1.10. ([#176](https://github.com/Hankaws/aperture/pull/176))
 - "What your bots learned" on the Bot page shows the notes from your reviews too: what each bot keeps in mind before it changes anything, with the pull request and who wrote it. Ignore keeps a note from the bot, with a mark hidden in the note on GitHub, so it holds on every run and every device; Bring back takes it away. GitHub lets only a note's author change it, and the page says so. The bot leaves ignored notes out from Aperture Bot v1.10. ([#177](https://github.com/Hankaws/aperture/pull/177))
+- The Monday digest in Aperture Bot's daily brief says what it keeps in mind from you, as "What your bots learned" on the Bot page does: the kinds of work you take, how many ideas you turned down are left out, and how many notes from your reviews it reads. It is left out until there is something to say. Needs Aperture Bot v1.10. ([#179](https://github.com/Hankaws/aperture/pull/179))
 
 ## 0.7.0 - 2026-11-01
 

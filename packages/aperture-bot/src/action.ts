@@ -30,7 +30,14 @@ import { LESSON_DAYS, LESSON_PULLS, lessonsContext, lessonsFrom } from "./lesson
 import { DEFAULT_LABEL, DEFAULT_TRIGGER, parseEvent, type Command, type Parsed } from "./event.ts";
 import { askerOf, followKind, mentionsSomeone } from "./follow.ts";
 import { canWrite, GitHub, GitHubError, type Fetch, type Pull } from "./github.ts";
-import { briefQuestion, ideaToDo, needsYou, withoutDeclined, type LookView } from "./look.ts";
+import {
+  briefQuestion,
+  ideaToDo,
+  learnedLine,
+  needsYou,
+  withoutDeclined,
+  type LookView,
+} from "./look.ts";
 import { struckIdeas } from "../../../src/lib/bot/struck.ts";
 import { tasteOf, tickedIdeas } from "../../../src/lib/bot/taste.ts";
 import type { Model } from "./model.ts";
@@ -628,7 +635,12 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       day: "numeric",
       timeZone: "UTC",
     });
-    const week = await mondayDigest(view.now);
+    const digest = await mondayDigest(view.now);
+    // The digest also says what the bot keeps in mind from you, as the Bot page does.
+    const learned = digest
+      ? learnedLine({ taste, declined: declined.length, lessons: (await reviewLessons()).length })
+      : null;
+    const week = digest && learned ? [...digest, learned] : digest;
     const needs = needsYou(view);
     await reply(
       lookReply(look, { branch, sha, needs, date, week }, { ...asked, usage: result.usage }),

@@ -1,5 +1,6 @@
 import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search";
 import { applySearchReplace } from "./apply-edit";
+import { keptNote, readOutput, spillLong, type OutputStore } from "./guards";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
@@ -240,6 +241,24 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "read_output",
+      description:
+        "Read back a long output kept earlier in this turn (a run's log, a server's answer), which you were shown only the start and end of. Give its id, then either a line range or a word to search for.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "The output's number, from the note that says it was kept." },
+          startLine: { type: "number" },
+          endLine: { type: "number" },
+          grep: { type: "string", description: "Show only the lines containing this text (any case)." },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "note_diff",
       description:
         "Typed review decision for one line. bug is true only for a real bug. confidence is 0 to 1. A note is kept only when bug is true and confidence is at least 0.8.",
@@ -303,7 +322,9 @@ export type ToolContext = {
   /** Counts review decisions so the turn can say what it kept and what it dropped. */
   reviewTally?: { kept: number; dropped: number };
   /** Set when this request may run code; absent leaves `run_script` answering that it cannot. */
-  runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean }>;
+  runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean; full?: string }>;
+  /** This turn's long outputs, kept whole for `read_output` (`guards.ts`). */
+  outputs?: OutputStore;
   /**
    * Set when the tab can run scripts in its browser: returns the tool's answer
    * when `script` is handed to the tab at the end of this turn, or null when
@@ -332,9 +353,17 @@ function countReview(ctx: ToolContext, kind: "kept" | "dropped") {
   ctx.reviewTally[kind] += 1;
 }
 
-function clip(text: string, max = 8000): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}\n… truncated`;
+/** A file's numbered lines, cut where they pass `max`, saying where to read on. */
+function clipLines(lines: string[], start: number, max = 8000): string {
+  const out: string[] = [];
+  let size = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (size + lines[i]!.length > max && out.length > 0)
+      return `${out.join("\n")}\n… cut here; read on with startLine: ${start + i}`;
+    out.push(lines[i]!);
+    size += lines[i]!.length + 1;
+  }
+  return out.join("\n");
 }
 
 function nearbySnippet(content: string, search: string): string {
@@ -428,11 +457,10 @@ export async function executeTool(
     const lines = content.split("\n");
     const start = Math.max(1, Number(args.startLine ?? 1));
     const end = Math.min(lines.length, Number(args.endLine ?? lines.length));
-    const body = lines
+    const numbered = lines
       .slice(start - 1, end)
-      .map((line, i) => `${String(start + i).padStart(4, " ")} ${line}`)
-      .join("\n");
-    return clip(body);
+      .map((line, i) => `${String(start + i).padStart(4, " ")} ${line}`);
+    return clipLines(numbered, start);
   }
 
   if (name === "list_dir") {
@@ -669,7 +697,13 @@ export async function executeTool(
       return "Running is not available for this request. Verify by reading the code instead.";
     }
     const result = await ctx.runScript(script);
-    return result.text;
+    // Shown the end of a long log: the whole is kept, to read back.
+    const id = result.full && ctx.outputs ? ctx.outputs.keep(result.full) : null;
+    return id === null ? result.text : `${result.text}\n\n${keptNote(id, result.full!)}`;
+  }
+
+  if (name === "read_output") {
+    return readOutput(ctx.outputs, args);
   }
 
   if (name === "note_diff") {
@@ -708,7 +742,7 @@ export async function executeTool(
     const tool = String(args.tool ?? "").trim();
     const raw = typeof args.arguments === "string" ? args.arguments : JSON.stringify(args.arguments ?? {});
     if (!server || !tool) return "mcp_call needs server and tool.";
-    return ctx.mcpCall(server, tool, raw || "{}");
+    return spillLong(ctx.outputs, await ctx.mcpCall(server, tool, raw || "{}"));
   }
 
   return `Unknown tool: ${name}`;

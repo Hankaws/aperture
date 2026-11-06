@@ -7,6 +7,7 @@ import type { AgentToolDef } from "./tools";
 import type { AgentStreamEvent } from "./events";
 import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
+import { OutputStore, RepeatGuard, withTimeLimit } from "./guards";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { RuleLoader } from "@/lib/workspace/scoped-rules";
@@ -224,7 +225,11 @@ function buildContextMessage(
 }
 
 /** One script run in a sandbox, as the server's runner reports it. */
-export type ScriptOutcome = { text: string; passed: boolean; ran: boolean };
+/** Calls that stage an edit, and so change what a read or a run would find. */
+const EDIT_TOOLS = new Set(["propose_edit", "rename_symbol", "move_file", "delete_file"]);
+
+/** `full`: the whole log when `text` shows only its end, for the agent to read back (`guards.ts`). */
+export type ScriptOutcome = { text: string; passed: boolean; ran: boolean; full?: string };
 
 /** MCP tools for this account, and a way to call one. */
 export type McpTools = {
@@ -324,6 +329,10 @@ export async function runLoop(
   let browserRun: { script: string } | undefined;
   /** The agent's own last sandbox run: the verify step reuses it when the edits have not changed since. */
   let lastRun: { script: string; editsKey: string; result: { text: string; passed: boolean; ran: boolean } } | undefined;
+  /** The turn's calls, so a stuck model is told it is repeating itself (`guards.ts`). */
+  const repeats = new RepeatGuard();
+  /** Bumped by every call that stages an edit: a read after one is a new read. */
+  let editCalls = 0;
   /** run_script calls made before any edit. Two of those end the turn instead of spending it. */
   let scriptsWithoutEdits = 0;
   // A server turn wraps up before the function's time limit (turn-budget.ts); one in the browser has none.
@@ -371,6 +380,7 @@ export async function runLoop(
     role: input.role,
     reviewTally,
     leftOut: new Set(leftOut),
+    outputs: new OutputStore(),
     // Only a request with a known owner may run code: the allowance is per
     // account, and an unattributed run cannot be counted or capped.
     runScript: cfg.userId && host.runScript
@@ -385,7 +395,12 @@ export async function runLoop(
             type: "status",
             text: !result.ran ? `Could not run ${script}` : result.passed ? `Ran ${script} · passed` : `Ran ${script} · failed`,
           });
-          const outcome = { text: result.text, passed: result.passed, ran: result.ran };
+          const outcome = {
+            text: result.text,
+            passed: result.passed,
+            ran: result.ran,
+            ...(result.full ? { full: result.full } : {}),
+          };
           lastRun = { script, editsKey: editsKeyOf(ctx.edits), result: outcome };
           return outcome;
         }
@@ -675,8 +690,19 @@ export async function runLoop(
 
         const runOne = async (call: (typeof parsed)[number]) => {
           const started = Date.now();
-          let result = await executeTool(call.name, call.args, ctx);
-          if (!reviewing && (call.name === "read_file" || call.name === "propose_edit")) {
+          // The same read, nothing staged since: the same answer, and a nudge to move on.
+          const state = String(editCalls);
+          const repeated = repeats.before(call.name, call.args, state);
+          let result =
+            repeated ??
+            repeats.after(
+              call.name,
+              call.args,
+              state,
+              await withTimeLimit(call.name, executeTool(call.name, call.args, ctx)),
+            );
+          if (EDIT_TOOLS.has(call.name)) editCalls += 1;
+          if (!repeated && !reviewing && (call.name === "read_file" || call.name === "propose_edit")) {
             const path = safeRelPath(String(call.args.path ?? "")) ?? "";
             const reached = call.name === "read_file" ? !result.startsWith("File not found") : result.startsWith("Edit staged");
             if (path && reached) result += ruleLoader.forPath(path, call.name === "read_file" ? "read" : "edit");

@@ -245,6 +245,7 @@ export const agentInput = z
     userMove: z.string().optional(),
     runtime: z.string().max(4000).optional(),
     browserRuns: object<BrowserRuns>().optional(),
+    unattended: z.boolean().optional(),
     images: z
       .array(z.object({ name: z.string().max(200), mediaType: z.string().max(40), data: z.string() }))
       .max(10)

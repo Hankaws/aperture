@@ -9,6 +9,7 @@ import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import { OutputStore, RepeatGuard, withTimeLimit } from "./guards";
 import { checkWebUrl, MAX_FETCHES, pastedHosts } from "./web";
+import { questionReply, type AgentQuestion } from "./ask";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { RuleLoader } from "@/lib/workspace/scoped-rules";
@@ -390,6 +391,8 @@ export async function runLoop(
     reviewTally,
     leftOut: new Set(leftOut),
     outputs: new OutputStore(),
+    // Someone is there to answer a question: not a background run, and not a review.
+    canAsk: !input.unattended && !reviewing,
     // Pages on the sites the person linked to in this thread, a few a turn.
     webFetch: host.webFetch
       ? async (url: string) => {
@@ -554,7 +557,14 @@ export async function runLoop(
   const userBlob = `${userCtx}\n\n${input.instruction}`;
 
   const succeed = async (
-    body: { text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean },
+    body: {
+      text: string;
+      traces: ToolTrace[];
+      edits: ProposedEdit[];
+      plan?: PlanEntry[];
+      awaitingBuild?: boolean;
+      question?: AgentQuestion;
+    },
     steps: number,
   ): Promise<AgentResult> => {
     const edits = body.edits;
@@ -772,6 +782,19 @@ export async function runLoop(
         }
       }
 
+      // It asked: the turn ends here, keeping what it staged, and the answer is the next message.
+      if (ctx.question) {
+        return await succeed(
+          {
+            text: questionReply(completion.content, ctx.question),
+            traces,
+            edits: mergeEdits(ctx.edits),
+            plan: ctx.plan,
+            question: ctx.question,
+          },
+          step + 1,
+        );
+      }
       if (reviewing) {
         return await succeed(
           {

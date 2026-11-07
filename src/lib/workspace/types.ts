@@ -1,3 +1,4 @@
+import type { AgentQuestion } from "../agent/ask.ts";
 import type { AgentImage } from "../agent/images.ts";
 import type { ModelSource } from "../billing/plans.ts";
 export type LanguageId =
@@ -143,6 +144,8 @@ export type ChatMessage = {
   retry?: RetrySend;
   /** On a user message: images they attached, such as a screenshot (`agent/images.ts`). Older ones are not saved. */
   images?: AgentImage[];
+  /** On a reply: the agent stopped to ask this, with answers to click (`agent/ask.ts`). */
+  question?: AgentQuestion;
 };
 
 /** The arguments of a send, kept on its failed reply so Retry repeats it exactly. */

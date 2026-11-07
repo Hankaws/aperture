@@ -7,5 +7,5 @@ export type AgentStreamEvent =
   | { type: "text"; delta: string }
   | { type: "plan"; entries: PlanEntry[] }
   | { type: "edits"; edits: ProposedEdit[] }
-  | { type: "done"; text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean; debug?: AgentDebug; verify?: VerifyReport; browserRun?: { script: string }; mcpCalls?: McpCall[]; rules?: string[]; question?: AgentQuestion }
+  | { type: "done"; text: string; traces: ToolTrace[]; edits: ProposedEdit[]; plan?: PlanEntry[]; awaitingBuild?: boolean; debug?: AgentDebug; verify?: VerifyReport; browserRun?: { script: string }; mcpCalls?: McpCall[]; rules?: string[]; question?: AgentQuestion; skills?: string[] }
   | { type: "error"; error: string };

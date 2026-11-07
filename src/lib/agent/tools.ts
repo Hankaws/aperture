@@ -2,6 +2,7 @@ import { grepFiles, semanticSearch, type SearchHit } from "@/lib/indexer/search"
 import { applySearchReplace } from "./apply-edit";
 import { keptNote, readOutput, spillLong, type OutputStore } from "./guards";
 import { ASKED, ASKED_ALREADY, NO_ONE_TO_ASK, parseQuestion, type AgentQuestion } from "./ask";
+import { loadSkill, type Skill } from "@/lib/workspace/skills";
 import { checkLabel, previewNotesForEdit } from "@/lib/workspace/preview-check";
 import { keepEdit, keepReviewNote, parseConfidence } from "@/lib/workspace/diff-notes";
 import { isSecretPath, safeRelPath } from "@/lib/security/redact";
@@ -242,6 +243,21 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "load_skill",
+      description:
+        "Load one of the project's skills (named in your instructions) when the task is one it is for. It returns the skill's steps; follow them.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "The skill's name, as listed." },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "ask_user",
       description:
         "Ask the user one question you cannot go on without: which of two designs, a name, a value only they know. Give 2 to 4 short options when the answer is a choice. Never ask what the code, the thread or a quick check would tell you. Your turn stops; their answer is the next message.",
@@ -357,6 +373,9 @@ export type ToolContext = {
   runScript?: (script: string) => Promise<{ text: string; passed: boolean; ran: boolean; full?: string }>;
   /** This turn's long outputs, kept whole for `read_output` (`guards.ts`). */
   outputs?: OutputStore;
+  /** The project's skills, and the paths of those loaded this turn (`workspace/skills.ts`). */
+  skills?: Skill[];
+  loadedSkills?: string[];
   /** True when someone is there to answer `ask_user`; the question asked, once (`ask.ts`). */
   canAsk?: boolean;
   question?: AgentQuestion;
@@ -737,6 +756,13 @@ export async function executeTool(
     // Shown the end of a long log: the whole is kept, to read back.
     const id = result.full && ctx.outputs ? ctx.outputs.keep(result.full) : null;
     return id === null ? result.text : `${result.text}\n\n${keptNote(id, result.full!)}`;
+  }
+
+  if (name === "load_skill") {
+    const loaded = loadSkill(ctx.skills ?? [], String(args.name ?? ""));
+    if ("error" in loaded) return loaded.error;
+    if (ctx.loadedSkills && !ctx.loadedSkills.includes(loaded.skill.path)) ctx.loadedSkills.push(loaded.skill.path);
+    return loaded.text;
   }
 
   if (name === "ask_user") {

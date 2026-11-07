@@ -78,6 +78,8 @@ export type AgentResult =
       rules?: string[];
       /** The agent stopped to ask this; the answer is the next message (`ask.ts`). */
       question?: AgentQuestion;
+      /** Skills from .aperture/skills this turn loaded, by path. */
+      skills?: string[];
     }
   | {
       ok: false;

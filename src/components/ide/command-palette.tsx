@@ -9,6 +9,7 @@ import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
 import { abortAgent } from "@/lib/agent/run";
 import { RULES_DIR, RULE_TEMPLATE } from "@/lib/workspace/scoped-rules";
+import { SKILLS_DIR, skillName, skillTemplate } from "@/lib/workspace/skills";
 import { openHooksFile, runSaveHooks } from "./save-hooks";
 import { parseGoto, resolveGotoPath } from "@/lib/editor/goto";
 import { fuzzyMatch } from "@/lib/utils";
@@ -369,6 +370,19 @@ export function CommandPalette() {
             >
               <FileCheck className="size-3.5 text-subtle" />
               Add a rule for some files
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                const ws = useWorkspace.getState();
+                let path = `${SKILLS_DIR}release.md`;
+                for (let n = 2; ws.files[path] !== undefined; n += 1) path = `${SKILLS_DIR}skill-${n}.md`;
+                ws.createFile(path, skillTemplate(skillName(path.slice(SKILLS_DIR.length))));
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <FileCheck className="size-3.5 text-subtle" />
+              Add a skill the agent loads when needed
             </Command.Item>
             <Command.Item
               onSelect={() => {

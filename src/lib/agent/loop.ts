@@ -13,6 +13,7 @@ import { questionReply, type AgentQuestion } from "./ask";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { RuleLoader } from "@/lib/workspace/scoped-rules";
+import { projectSkills, skillsIndex } from "@/lib/workspace/skills";
 import { LESSONS_PATH, formatSpot, lessonsForPrompt, refusalsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
@@ -393,6 +394,9 @@ export async function runLoop(
     outputs: new OutputStore(),
     // Someone is there to answer a question: not a background run, and not a review.
     canAsk: !input.unattended && !reviewing,
+    // The project's skills: named in the prompt, their steps loaded when a task needs them.
+    skills: reviewing ? [] : projectSkills(fileMap),
+    loadedSkills: [],
     // Pages on the sites the person linked to in this thread, a few a turn.
     webFetch: host.webFetch
       ? async (url: string) => {
@@ -514,6 +518,7 @@ export async function runLoop(
     : [
         systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role),
         scoped,
+        skillsIndex(ctx.skills ?? []),
         standing ? `Rules for every project. Follow them:\n${standing}` : "",
         lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
         refused ? `The user already refused these. Do not propose them again:\n${refused}` : "",
@@ -591,6 +596,7 @@ export async function runLoop(
       ...(browserRun ? { browserRun } : {}),
       ...(mcpPending.length > 0 ? { mcpCalls: mcpPending } : {}),
       ...(ruleLoader.loaded.length > 0 ? { rules: [...ruleLoader.loaded] } : {}),
+      ...(ctx.loadedSkills?.length ? { skills: [...ctx.loadedSkills] } : {}),
     };
     emit({ type: "done", ...body, text: verifiedText, ...extra });
     return { ok: true, ...body, text: verifiedText, ...extra };

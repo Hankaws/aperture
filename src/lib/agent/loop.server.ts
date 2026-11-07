@@ -23,6 +23,10 @@ const SERVER_HOST: LoopHost = {
     const result = await runScript({ userId, runner, files, signal }, script, timeoutMs);
     return { text: result.text, passed: result.passed, ran: result.ran, ...(result.full ? { full: result.full } : {}) };
   },
+  webFetch: async (url, hosts, signal) => {
+    const { fetchPage } = await import("./web-fetch.server");
+    return fetchPage(url, hosts, signal);
+  },
   mcp: async (userId, files) => {
     const { invokeMcp, mcpToolsFor } = await import("@/lib/mcp/account.server");
     const mcp = await mcpToolsFor(userId, files);

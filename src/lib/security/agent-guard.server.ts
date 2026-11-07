@@ -189,6 +189,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     spot: parseSpot(input.spot),
     userMove: parseUserMove(input.userMove),
     images: attached.images.length ? attached.images : undefined,
+    unattended: input.unattended === true ? true : undefined,
   };
 }
 

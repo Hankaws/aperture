@@ -3,6 +3,7 @@ import { useLatest } from "@/lib/use-keyed-async";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ImageTray, MessageImages } from "./image-tray";
+import { QuestionCard } from "./question-card";
 import { useAttachedImages } from "./use-attached-images";
 import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -662,6 +663,9 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         }}
         onBuild={buildPlan}
         onSendNotes={sendNotes}
+        onAnswer={(text) => {
+          if (canSend && !blocked && !acpBlocked) void send(text);
+        }}
       />
 
       <div>
@@ -1196,6 +1200,7 @@ function MessageList({
   planFirst,
   onBuild,
   onSendNotes,
+  onAnswer,
 }: {
   running: boolean;
   quoteLabel: string;
@@ -1207,6 +1212,8 @@ function MessageList({
   planFirst: boolean;
   onBuild: (message: ChatMessage) => void;
   onSendNotes: (edits: ChatMessage["edits"]) => void;
+  /** Sends an answer to the agent's question as the next message. */
+  onAnswer: (text: string) => void;
 }) {
   const messages = useWorkspace((s) => s.messages);
   const listRef = useRef<HTMLDivElement>(null);
@@ -1214,8 +1221,11 @@ function MessageList({
   const messageCount = useRef(0);
   const buildRef = useRef(onBuild);
   const notesRef = useRef(onSendNotes);
+  const answerRef = useRef(onAnswer);
   buildRef.current = onBuild;
   notesRef.current = onSendNotes;
+  answerRef.current = onAnswer;
+  const answer = useCallback((text: string) => answerRef.current(text), []);
   const last = messages[messages.length - 1];
   const streamKey = `${messages.length}:${last?.id ?? ""}:${last?.content.length ?? 0}:${last?.edits?.length ?? 0}:${last?.traces?.length ?? 0}:${running ? "1" : "0"}`;
 
@@ -1268,6 +1278,8 @@ function MessageList({
                 }
                 onBuild={buildById}
                 onSendNotes={notesById}
+                answerable={!running && message.id === last?.id}
+                onAnswer={answer}
               />
             </div>
           ))}
@@ -1477,12 +1489,17 @@ const MessageBlock = memo(function MessageBlock({
   quoteLabel,
   onBuild,
   onSendNotes,
+  answerable = false,
+  onAnswer,
 }: {
   message: ChatMessage;
   running: boolean;
   quoteLabel: string;
   onBuild: (id: string) => void;
   onSendNotes: (id: string) => void;
+  /** The latest reply, and nothing running: its question's answers can be clicked. */
+  answerable?: boolean;
+  onAnswer?: (text: string) => void;
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
   const content = typeof message.content === "string" ? message.content : "";
@@ -1564,8 +1581,11 @@ const MessageBlock = memo(function MessageBlock({
       {running && empty && plan.length > 0 && message.status && (
         <p className="shimmer-text mt-2 text-sm text-muted">{message.status}</p>
       )}
-      {!empty && (
+      {!empty && !(message.question && content.trim() === message.question.text) && (
         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg">{content}</p>
+      )}
+      {message.question && onAnswer && (
+        <QuestionCard question={message.question} answerable={answerable} onAnswer={onAnswer} />
       )}
       {content.trim() && !message.automatic && !live && !message.failed && (
         <LessonBar messageId={message.id} saved={message.lesson} disabled={running} />

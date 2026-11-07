@@ -112,6 +112,7 @@ async function turn(
     pendingEdits: staged,
     files: snapshot,
     fresh: true,
+    unattended: true,
   });
   const opened = await openAgentStream(input, source, signal);
   if (!opened.ok) {

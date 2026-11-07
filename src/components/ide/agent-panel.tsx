@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore
 import { useLatest } from "@/lib/use-keyed-async";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { ImageTray, MessageImages } from "./image-tray";
+import { useAttachedImages } from "./use-attached-images";
 import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -142,6 +144,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const [target, setTarget] = useState<RunTarget>({ kind: "model", source: "hosted" });
   const [dropOn, setDropOn] = useState(false);
   const attachRef = useRef<HTMLInputElement>(null);
+  /** Screenshots for the next message: pasted, dropped or picked (`use-attached-images.ts`). */
+  const shots = useAttachedImages();
 
   const jobsOn = Boolean(account && (account.backgroundJobs > 0 || account.acp));
   const { jobs, setJobs, refresh: refreshJobs, liveCount } = useJobs(jobsOn);
@@ -234,7 +238,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     });
   }
 
-  async function attachFiles(list: File[]) {
+  async function attachFiles(all: File[]) {
+    // Images go with the next message for the model to look at; text files become project files.
+    const pictures = all.filter((file) => file.type.startsWith("image/"));
+    if (pictures.length) void shots.add(pictures);
+    const list = all.filter((file) => !file.type.startsWith("image/"));
     if (list.length === 0) return;
     try {
       const result = await importLocalFiles(list, "attach");
@@ -324,8 +332,22 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
 
   async function send(text: string, background = false, phase?: AgentPhase) {
     const captures = useIdeUi.getState().captures;
-    const trimmed = text.trim() || (captures.length > 0 ? "Revise the captured element. Keep the rest of the page." : "");
-    if (!trimmed || !canSend) return;
+    const images = shots.images;
+    const trimmed =
+      text.trim() ||
+      (captures.length > 0 ? "Revise the captured element. Keep the rest of the page." : "") ||
+      (images.length > 0 ? "Look at the attached image." : "");
+    if (!trimmed || !canSend || shots.busy) return;
+    if (images.length > 0 && (background || agentRunning || target.kind === "acp")) {
+      toast.error(
+        target.kind === "acp"
+          ? "External agents do not take images here. Pick an Aperture model, or remove the images."
+          : background
+            ? "Images go with a normal send, not a background run."
+            : "Images go with your next message, once this run finishes.",
+      );
+      return;
+    }
     // A background run does not wait for the turn on screen: that is the point of it.
     if (background) {
       if (blocked || acpBlocked) return;
@@ -357,6 +379,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     if (blocked || acpBlocked) return;
     setDraft("");
     setDismissMention(false);
+    shots.clear();
     const parsed = parseSlash(trimmed);
     const ws = useWorkspace.getState();
     const slashRun = parsed
@@ -382,6 +405,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       phase: resolved.phase,
       approvedPlan: resolved.approvedPlan,
       apiInstruction: slashRun?.instruction,
+      ...(images.length ? { images } : {}),
     });
     useIdeUi.getState().clearCaptures();
     void refresh();
@@ -497,7 +521,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     useIdeUi.getState().setMobilePane("editor");
   }
 
-  const sendBlocked = (!draft.trim() && captures.length === 0) || isPending || !canSend || blocked || acpBlocked;
+  const sendBlocked =
+    (!draft.trim() && captures.length === 0 && shots.images.length === 0) || shots.busy || isPending || !canSend || blocked || acpBlocked;
   const autoPhase: AgentPhase =
     phaseHint === "awaiting" && isBuildIntent(draft) ? "build" : phaseHint === "edits" ? "skip" : "plan";
   const sendPhase: AgentPhase = mode === "composer" ? (phaseLock === "auto" ? autoPhase : phaseLock) : "plan";
@@ -757,13 +782,22 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           >
             {dropOn && (
               <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[11px] bg-list-drop/80">
-                <p className="text-sm font-medium text-fg">Drop files for Composer</p>
+                <p className="text-sm font-medium text-fg">Drop files or screenshots for Composer</p>
               </div>
             )}
+            <div className="rounded-[11px] bg-bg">
+            <ImageTray images={shots.images} busy={shots.busy} onRemove={shots.remove} />
             <textarea
               ref={composerRef}
               value={draft}
               suppressHydrationWarning
+              onPaste={(e) => {
+                // A pasted screenshot goes with the message; pasted text is left to the box.
+                const pictures = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                if (pictures.length === 0) return;
+                e.preventDefault();
+                void shots.add(pictures);
+              }}
               onChange={(e) => {
                 setDraft(e.target.value);
                 setDismissMention(false);
@@ -786,6 +820,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
               rows={2}
               className="min-h-14 w-full resize-none rounded-[11px] border-0 bg-bg px-2.5 py-2 text-sm leading-snug text-fg placeholder:text-subtle focus-visible:outline-none"
             />
+            </div>
           </div>
           {autoPaths.length > 0 && (
             <p className="mt-1.5 truncate text-[11px] text-subtle" title={autoPaths.join(" · ")}>
@@ -812,8 +847,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                 </button>
                 <button
                   type="button"
-                  aria-label="Add files"
-                  title="Add files to Composer"
+                  aria-label="Add files or screenshots"
+                  title="Add files or screenshots to Composer"
                   className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
                   onClick={() => attachRef.current?.click()}
                 >
@@ -848,8 +883,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                 </button>
                 <button
                   type="button"
-                  aria-label="Add files"
-                  title="Add files to Composer"
+                  aria-label="Add files or screenshots"
+                  title="Add files or screenshots to Composer"
                   className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
                   onClick={() => attachRef.current?.click()}
                 >
@@ -897,6 +932,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         <input
           ref={attachRef}
           type="file"
+          aria-label="Files or screenshots to attach"
           multiple
           className="hidden"
           suppressHydrationWarning
@@ -1469,6 +1505,7 @@ const MessageBlock = memo(function MessageBlock({
       <div className="rounded-xl border border-border bg-bg px-3 py-2">
         <p className="text-xs font-medium text-subtle">You</p>
         <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{content}</p>
+        <MessageImages images={message.images} />
       </div>
     );
   }

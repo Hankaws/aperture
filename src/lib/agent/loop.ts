@@ -515,7 +515,12 @@ export async function runLoop(
       messages.push({ role: turn.role, content: turn.content });
     }
   }
-  messages.push({ role: "user", content: input.instruction, cache: true });
+  messages.push({
+    role: "user",
+    content: input.instruction,
+    cache: true,
+    ...(input.images?.length ? { images: input.images } : {}),
+  });
 
   let planNudged = false;
   let verifyRuns = 0;

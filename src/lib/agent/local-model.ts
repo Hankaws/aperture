@@ -8,6 +8,7 @@
  */
 import type { ChatMessage, Completion, CompletionCfg } from "./complete.server";
 import type { LoopHost } from "./loop";
+import { toOpenAiMessages } from "./images.ts";
 import { readOpenAiStream } from "./openai-stream.ts";
 import type { AgentToolDef } from "./tools";
 
@@ -117,7 +118,7 @@ async function post(model: LocalModel, body: Record<string, unknown>, signal?: A
 function bodyFor(messages: ChatMessage[], useTools: boolean, tools: AgentToolDef[] | undefined, stream: boolean) {
   const body: Record<string, unknown> = {
     // The prompt-cache marker is for hosted providers; a local server would reject the field.
-    messages: messages.map(({ cache: _cache, ...message }) => message),
+    messages: toOpenAiMessages(messages, false),
     temperature: 0.2,
     max_tokens: 1800,
     stream,

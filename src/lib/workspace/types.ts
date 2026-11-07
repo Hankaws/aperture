@@ -1,3 +1,4 @@
+import type { AgentImage } from "../agent/images.ts";
 import type { ModelSource } from "../billing/plans.ts";
 export type LanguageId =
   | "typescript"
@@ -140,6 +141,8 @@ export type ChatMessage = {
   failed?: true;
   /** What to send again, for a send the person made (not a follow-up the editor chained). */
   retry?: RetrySend;
+  /** On a user message: images they attached, such as a screenshot (`agent/images.ts`). Older ones are not saved. */
+  images?: AgentImage[];
 };
 
 /** The arguments of a send, kept on its failed reply so Retry repeats it exactly. */
@@ -152,6 +155,7 @@ export type RetrySend = {
   apiInstruction?: string;
   agentId?: string | null;
   agentLabel?: string | null;
+  images?: AgentImage[];
 };
 
 export type McpCall = {

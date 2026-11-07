@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { trimHistory, validCheckpoints, validFiles, validMessages } from "./persist.ts";
+import { trimHistory, validCheckpoints, validFiles, validMessages, withoutOldImages } from "./persist.ts";
 import { editsAfterRevert } from "./commits.ts";
 import type { ChatMessage, ProposedEdit } from "./types.ts";
 
@@ -89,4 +89,32 @@ test("a trimmed edit loads with its counts and is never staged again", () => {
   // A pending edit saved without its texts could only empty the file: it is dropped on load.
   const bad = validMessages([msg("m9", [{ ...edit("p", "pending"), oldText: "", newText: "", trimmed: true }])]);
   assert.deepEqual(bad[0]?.edits ?? [], []);
+});
+
+test("only the newest images are saved whole; older ones keep their names", () => {
+  const shot = (name: string) => ({ name, mediaType: "image/jpeg" as const, data: "AAAA" });
+  const user = (id: string, images?: ReturnType<typeof shot>[]): ChatMessage => ({
+    id,
+    role: "user",
+    content: id,
+    createdAt: 1,
+    ...(images ? { images } : {}),
+  });
+  const failed: ChatMessage = {
+    id: "a2",
+    role: "assistant",
+    content: "Failed",
+    createdAt: 1,
+    retry: { instruction: "Look", mode: "composer", images: [shot("retry.png")] },
+  };
+  const saved = withoutOldImages([user("u1", [shot("old.png")]), failed, user("u3", [shot("new.png")]), user("u4")]);
+  assert.deepEqual(saved[0]!.images, [{ name: "old.png", mediaType: "image/jpeg", data: "" }]);
+  assert.deepEqual(saved[2]!.images, [shot("new.png")]);
+  // The one Retry with images keeps them; its message is otherwise untouched.
+  assert.deepEqual(saved[1]!.retry?.images, [shot("retry.png")]);
+  assert.equal(saved[3]!.images, undefined);
+  // Saving again changes nothing more.
+  assert.deepEqual(withoutOldImages(saved), saved);
+  // trimHistory does it on the way to storage.
+  assert.equal(trimHistory([user("u1", [shot("a.png")]), user("u2", [shot("b.png")])], [])[0]!.images![0]!.data, "");
 });

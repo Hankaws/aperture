@@ -4,6 +4,7 @@ import type { ProviderId } from "@/lib/billing/plans";
 import { replayCompletion, replayInline, streamPieces } from "./replay";
 import { iterateSseData, readOpenAiStream } from "./openai-stream";
 import { anthropicUsage, openAiUsage, type TokenUsage } from "./usage";
+import { NO_IMAGES_ERROR, anthropicContent, seesImages, toOpenAiMessages, type AgentImage } from "./images";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -16,6 +17,8 @@ export type ChatMessage = {
   }>;
   /** Stable prefix. The provider bills these bytes once across the steps of a turn. */
   cache?: boolean;
+  /** On the user's message: images they attached to this turn (`images.ts`). */
+  images?: AgentImage[];
 };
 
 export type Completion = {
@@ -158,6 +161,11 @@ function asAnthropicTools(tools: AgentToolDef[]) {
   }));
 }
 
+/** A model that reads text only is not sent a turn with images: it would refuse it, or answer blind. */
+function refuseImages(cfg: CompletionCfg, messages: ChatMessage[]) {
+  if (!seesImages(cfg.provider) && messages.some((m) => m.images?.length)) throw new Error(NO_IMAGES_ERROR);
+}
+
 export async function complete(
   cfg: CompletionCfg,
   messages: ChatMessage[],
@@ -172,8 +180,9 @@ export async function complete(
   if (cfg.provider === "anthropic") {
     return completeAnthropic(cfg.apiKey, messages, useTools, signal, tools);
   }
+  refuseImages(cfg, messages);
   const body: Record<string, unknown> = {
-    messages,
+    messages: toOpenAiMessages(messages),
     temperature: 0.2,
     max_tokens: 1800,
   };
@@ -211,8 +220,9 @@ export async function completeStreaming(
   if (cfg.provider === "anthropic") {
     return streamAnthropic(cfg.apiKey, messages, useTools, onText, signal, tools);
   }
+  refuseImages(cfg, messages);
   const body: Record<string, unknown> = {
-    messages,
+    messages: toOpenAiMessages(messages),
     temperature: 0.2,
     max_tokens: 1800,
     stream: true,
@@ -386,6 +396,13 @@ function toAnthropic(messages: ChatMessage[]) {
           })),
         ],
       });
+      return;
+    }
+    if (m.images?.length) {
+      const content = anthropicContent(m.content ?? "", m.images) as Array<Record<string, unknown>>;
+      // The prefix ends at this message: its last block carries the marker.
+      if (cache) content[content.length - 1] = { ...content[content.length - 1], cache_control: { type: "ephemeral" } };
+      converted.push({ role: m.role, content });
       return;
     }
     converted.push({ role: m.role, content: cache ? cachedText(m.content ?? "") : (m.content ?? "") });

@@ -93,7 +93,7 @@ export function trimHistory(
   commits: Array<Pick<LocalCommit, "paths" | "messageId" | "editIds" | "rejectedIds">>,
 ): ChatMessage[] {
   const last = commits[commits.length - 1];
-  return messages.map((message) => {
+  return withoutOldImages(messages).map((message) => {
     const edits = message.edits;
     if (!edits?.length) return message;
     const back = last ? editsAfterRevert(edits, last, message.id) : edits;
@@ -105,6 +105,29 @@ export function trimHistory(
       return { ...edit, oldText: "", newText: "", trimmed: true as const, stats: countsOf(edit) };
     });
     return changed ? { ...message, edits: next } : message;
+  });
+}
+
+/**
+ * Images kept whole only on the newest message that has some (and the newest
+ * Retry): a few screenshots would fill this browser's storage. Older ones keep
+ * their names, so the thread still says they were attached.
+ */
+export function withoutOldImages(messages: ChatMessage[]): ChatMessage[] {
+  const has = (images: ChatMessage["images"]) => images?.some((image) => image.data) ?? false;
+  let newest = -1;
+  let newestRetry = -1;
+  messages.forEach((message, index) => {
+    if (has(message.images)) newest = index;
+    if (has(message.retry?.images)) newestRetry = index;
+  });
+  const names = (images: NonNullable<ChatMessage["images"]>) => images.map((image) => ({ ...image, data: "" }));
+  return messages.map((message, index) => {
+    let next = message;
+    if (index !== newest && has(message.images)) next = { ...next, images: names(message.images!) };
+    if (index !== newestRetry && next.retry && has(next.retry.images))
+      next = { ...next, retry: { ...next.retry, images: undefined } };
+    return next;
   });
 }
 

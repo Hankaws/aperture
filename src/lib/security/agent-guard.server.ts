@@ -7,6 +7,7 @@ import { isModelSource } from "@/lib/billing/plans";
 import { redactSecrets, safeRelPath } from "./redact";
 import { cleanPaths, pickAgentFileSet } from "./agent-files";
 import { normalizePlan } from "@/lib/workspace/plan";
+import { validImages } from "@/lib/agent/images";
 
 // Under Vercel's 4.5 MB request limit, with room for JSON escaping of 2.5 MB of files.
 export const MAX_AGENT_BODY = 4_000_000;
@@ -155,6 +156,9 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
   }
 
   const keepWorkers = workers.length >= 2 || workers.some((w) => w.role === "review");
+  // Screenshots go with Composer and Ask; inline rewrites a selection and has no use for them.
+  const attached = mode === "inline" ? { images: [] } : validImages(input.images);
+  if ("error" in attached) return { error: attached.error };
 
   return {
     mode,
@@ -184,6 +188,7 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     refusals: parseStanding(input.refusals),
     spot: parseSpot(input.spot),
     userMove: parseUserMove(input.userMove),
+    images: attached.images.length ? attached.images : undefined,
   };
 }
 

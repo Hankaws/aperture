@@ -75,3 +75,11 @@ test("compactLoopMessages clips stale tool dumps and keeps the last two", () => 
   assert.equal(next[7]!.content?.length, dump.length);
   assert.equal(next[5]!.content?.length, dump.length);
 });
+
+test("a turn's images reach later turns as a note, not as images", () => {
+  const { history } = compactHistory([
+    { role: "user", content: "Why is the total cut off?", images: [{ name: "cart.png" }] },
+    { role: "assistant", content: "The column is too narrow." },
+  ]);
+  assert.equal(history[0]!.content, "Why is the total cut off?\n[The user attached an image: cart.png]");
+});

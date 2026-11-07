@@ -1,4 +1,5 @@
 /** Fold older Composer turns into a short thread-memory block. No extra model call. */
+import { imagesNote } from "./images.ts";
 
 export const HISTORY_KEEP = 4;
 export const HISTORY_BUDGET = 8_000;
@@ -10,6 +11,8 @@ export const TOOL_CLIP = 400;
 export type Compactable = {
   role: "user" | "assistant";
   content: string;
+  /** A user's attached images: later turns are told of them, not sent them again. */
+  images?: Array<{ name: string }>;
   edits?: Array<{ path: string; status: string; description?: string }>;
   plan?: Array<{ content: string; status: string }>;
 };
@@ -33,8 +36,14 @@ function oneLine(text: string, n = 140): string {
   return text.replace(/\s+/g, " ").trim().slice(0, n);
 }
 
+/** A turn's words, and a note of the images it came with. */
+function turnText(message: Compactable): string {
+  const note = imagesNote(message.images ?? []);
+  return note ? `${message.content}\n${note}` : message.content;
+}
+
 export function summarizeTurn(message: Compactable): string {
-  if (message.role === "user") return `- User: ${oneLine(message.content)}`;
+  if (message.role === "user") return `- User: ${oneLine(turnText(message))}`;
   const edits = message.edits ?? [];
   const applied = [...new Set(edits.filter((e) => e.status === "applied").map((e) => e.path))];
   const pending = [...new Set(edits.filter((e) => e.status === "pending").map((e) => e.path))];
@@ -64,7 +73,7 @@ export function compactHistory(
 ): { history: HistoryTurn[]; compacted: number } {
   const clipped: HistoryTurn[] = messages.map((m) => ({
     role: m.role,
-    content: clipText(m.content, TURN_CLIP),
+    content: clipText(turnText(m), TURN_CLIP),
   }));
   const chars = clipped.reduce((n, m) => n + m.content.length, 0);
   if (messages.length <= keep + 2 && chars <= HISTORY_BUDGET) {

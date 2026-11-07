@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Send the agent a screenshot. Paste an image into the agent panel, drop it there, or pick it with the paperclip: up to 3 to a message, each made smaller in the browser before it is sent, shown as thumbnails you can take off, and kept with your message in the thread. Grok, OpenAI, Gemini, Claude, a custom endpoint and a local model are sent the images; DeepSeek's model reads text only, and says so. Later turns are told the images were attached rather than sent them again, and only the newest are kept in this browser's storage. ([#182](https://github.com/Hankaws/aperture/pull/182))
+
 ## 0.8.0 - 2026-11-06
 
 ### Added

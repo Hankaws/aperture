@@ -1,3 +1,4 @@
+import type { AgentImage } from "./images";
 import type { ModelSource } from "@/lib/billing/plans";
 import type { AgentMode, AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
 import type { AgentPhase } from "./phase";
@@ -53,6 +54,8 @@ export type AgentInput = {
   browserRuns?: BrowserRuns;
   /** Project files too large to send: the agent must not write them. */
   leftOut?: string[];
+  /** Images the person attached to this turn, such as a screenshot of a broken UI (`images.ts`). */
+  images?: AgentImage[];
 };
 
 export type AgentResult =

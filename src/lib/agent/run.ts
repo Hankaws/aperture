@@ -1,4 +1,5 @@
 import { runAgent } from "./api";
+import type { AgentImage } from "./images";
 import { getBearerToken } from "@/lib/auth/client";
 import { useIdeUi } from "@/lib/ui-store";
 import { useWorkspace } from "@/lib/workspace/store";
@@ -63,8 +64,10 @@ export function retrySend(messageId: string) {
   const retry = state.messages.find((m) => m.id === messageId)?.retry;
   if (!retry || state.agentRunning) return;
   state.patchMessage(messageId, { retry: undefined });
-  const { instruction, mode, source, ...opts } = retry;
-  return submitAgent(instruction, mode, source, opts);
+  const { instruction, mode, source, images, ...opts } = retry;
+  // An image not kept on this device (`withoutOldImages`) cannot go again.
+  const kept = images?.filter((image) => image.data);
+  return submitAgent(instruction, mode, source, { ...opts, ...(kept?.length ? { images: kept } : {}) });
 }
 
 let currentAbort: AbortController | null = null;
@@ -196,6 +199,8 @@ export function agentPayload(
     files?: Record<string, string>;
     /** A task of its own: none of the thread's history goes with it. */
     fresh?: boolean;
+    /** Images the person attached to this turn. */
+    images?: AgentImage[];
   },
 ) {
   const state = useWorkspace.getState();
@@ -263,6 +268,7 @@ export function agentPayload(
     debug: useIdeUi.getState().debug,
     compacted: compacted || undefined,
     browserRuns: extra?.browserRuns,
+    ...(extra?.images?.length ? { images: extra.images } : {}),
     standing: readStanding().map((rule) => rule.line),
     refusals,
     spot: spotFrom(latest, useIdeUi.getState()),
@@ -298,6 +304,8 @@ export async function submitAgent(
     copyId?: string;
     /** Sent by the editor itself, not typed by the person: the message says so. */
     automatic?: boolean;
+    /** Images the person attached to this message (`images.ts`). */
+    images?: AgentImage[];
   },
 ) {
   const trimmed = instruction.trim();
@@ -321,6 +329,7 @@ export async function submitAgent(
         ...(opts?.approvedPlan ? { approvedPlan: opts.approvedPlan } : {}),
         ...(opts?.apiInstruction ? { apiInstruction: opts.apiInstruction } : {}),
         ...(opts?.agentId ? { agentId: opts.agentId, agentLabel: opts.agentLabel ?? null } : {}),
+        ...(opts?.images?.length ? { images: opts.images } : {}),
       };
 
   const followUp = Boolean(
@@ -353,6 +362,7 @@ export async function submitAgent(
     runId,
     ...(copyId ? { copyId } : {}),
     ...(opts?.automatic ? { automatic: true } : {}),
+    ...(opts?.images?.length ? { images: opts.images } : {}),
   });
   state.addMessage({
     id: asstId,
@@ -402,6 +412,7 @@ export async function submitAgent(
     pendingEdits: opts?.pendingEdits,
     browserRuns,
     copyId,
+    images: opts?.images,
   });
   // The server hides secret-looking lines from the agent, so its edits come back on that
   // copy: carry them onto the real text that was sent, or accepting one writes [redacted].

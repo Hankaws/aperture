@@ -201,6 +201,8 @@ export function agentPayload(
     fresh?: boolean;
     /** Images the person attached to this turn. */
     images?: AgentImage[];
+    /** Nobody is watching (a background run): the agent decides instead of asking. */
+    unattended?: boolean;
   },
 ) {
   const state = useWorkspace.getState();
@@ -269,6 +271,7 @@ export function agentPayload(
     compacted: compacted || undefined,
     browserRuns: extra?.browserRuns,
     ...(extra?.images?.length ? { images: extra.images } : {}),
+    ...(extra?.unattended ? { unattended: true } : {}),
     standing: readStanding().map((rule) => rule.line),
     refusals,
     spot: spotFrom(latest, useIdeUi.getState()),
@@ -539,6 +542,7 @@ export async function submitAgent(
           verify: edits.length ? event.verify : undefined,
           ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
           ...(event.rules?.length ? { rules: event.rules } : {}),
+          ...(event.question ? { question: event.question } : {}),
         });
         const firstPending = edits.find((e) => e.status === "pending");
         if (firstPending?.path) ws.openFile(firstPending.path);

@@ -1,3 +1,4 @@
+import type { AgentQuestion } from "./ask";
 import type { AgentImage } from "./images";
 import type { ModelSource } from "@/lib/billing/plans";
 import type { AgentMode, AgentDebug, McpCall, PlanEntry, ProposedEdit, ToolTrace, VerifyReport } from "@/lib/workspace/types";
@@ -56,6 +57,8 @@ export type AgentInput = {
   leftOut?: string[];
   /** Images the person attached to this turn, such as a screenshot of a broken UI (`images.ts`). */
   images?: AgentImage[];
+  /** Nobody is watching this turn (a background run): the agent does not ask, it decides. */
+  unattended?: boolean;
 };
 
 export type AgentResult =
@@ -73,6 +76,8 @@ export type AgentResult =
       mcpCalls?: McpCall[];
       /** Rules from .aperture/rules this turn was given, by path. */
       rules?: string[];
+      /** The agent stopped to ask this; the answer is the next message (`ask.ts`). */
+      question?: AgentQuestion;
     }
   | {
       ok: false;

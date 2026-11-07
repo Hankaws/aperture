@@ -8,6 +8,7 @@ import type { AgentStreamEvent } from "./events";
 import { executeTool, toolsForStep, type ToolContext } from "./tools";
 import { isReadTool, parseCall, partitionCalls } from "./parallel";
 import { OutputStore, RepeatGuard, withTimeLimit } from "./guards";
+import { checkWebUrl, MAX_FETCHES, pastedHosts } from "./web";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { RuleLoader } from "@/lib/workspace/scoped-rules";
@@ -267,6 +268,8 @@ export type LoopHost = {
     maxMs?: number,
   ) => Promise<ScriptOutcome>;
   mcp?: (userId: string | undefined, files: Record<string, string>) => Promise<McpTools>;
+  /** Reads a web page for `web_fetch`, on a host in `hosts` only (`web.ts`); the server has it, a tab does not. */
+  webFetch?: (url: string, hosts: Set<string>, signal?: AbortSignal) => Promise<string>;
   /** Loads TypeScript's parser, where the host has it, for an edit Lezer says does not parse. */
   parser?: () => Promise<ParseCheck>;
   /** Or asks it elsewhere, about one text: the tab's worker, for a model on this machine. */
@@ -329,6 +332,12 @@ export async function runLoop(
   let browserRun: { script: string } | undefined;
   /** The agent's own last sandbox run: the verify step reuses it when the edits have not changed since. */
   let lastRun: { script: string; editsKey: string; result: { text: string; passed: boolean; ran: boolean } } | undefined;
+  /** The hosts the person linked to, the only ones `web_fetch` reads (`web.ts`), and the pages read so far. */
+  const linkedHosts = pastedHosts([
+    input.instruction,
+    ...input.history.filter((turn) => turn.role === "user").map((turn) => turn.content),
+  ]);
+  let fetches = 0;
   /** The turn's calls, so a stuck model is told it is repeating itself (`guards.ts`). */
   const repeats = new RepeatGuard();
   /** Bumped by every call that stages an edit: a read after one is a new read. */
@@ -381,6 +390,19 @@ export async function runLoop(
     reviewTally,
     leftOut: new Set(leftOut),
     outputs: new OutputStore(),
+    // Pages on the sites the person linked to in this thread, a few a turn.
+    webFetch: host.webFetch
+      ? async (url: string) => {
+          // A page it may not read costs nothing from the turn's few.
+          const checked = checkWebUrl(url, linkedHosts);
+          if ("error" in checked) return checked.error;
+          if (fetches >= MAX_FETCHES)
+            return `This turn has read ${MAX_FETCHES} pages, as many as it may. Go on with what they said.`;
+          fetches += 1;
+          emit({ type: "status", text: `Reading ${url.slice(0, 80)}…` });
+          return host.webFetch!(url, linkedHosts, stepSignal);
+        }
+      : undefined,
     // Only a request with a known owner may run code: the allowance is per
     // account, and an unattributed run cannot be counted or capped.
     runScript: cfg.userId && host.runScript

@@ -24,6 +24,7 @@ const CACHED = new Set([
   "find_references",
   "run_script",
   "read_output",
+  "web_fetch",
 ]);
 
 /** Arguments as one stable string: the same call in another key order is the same call. */
@@ -96,6 +97,7 @@ const TIMED = new Set([
   "find_references",
   "mcp_call",
   "read_output",
+  "web_fetch",
 ]);
 export const TOOL_TIMEOUT_MS = 90_000;
 

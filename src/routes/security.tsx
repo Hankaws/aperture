@@ -69,6 +69,13 @@ function SecurityPage() {
             app&apos;s database URL, session secrets, or provider keys. Network is limited to package registries.
           </li>
           <li>
+            <span className="text-fg">A web page steering the agent.</span> The agent&apos;s{" "}
+            <span className="text-fg">web_fetch</span> reads only pages on sites you linked to in the conversation, and
+            same-site links from them, so a page cannot send it to a host nobody chose. It reads over GET with no
+            cookies or credentials, only from public addresses, at most 2 MB and six pages a turn, and the page is
+            handed to the model as content to read, never as instructions.
+          </li>
+          <li>
             <span className="text-fg">Account and session abuse.</span> Sign-in holds the saved project and encrypted
             keys. Sessions can be ended by signing out. See the privacy page for what is stored on the account.
           </li>

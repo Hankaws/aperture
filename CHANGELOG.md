@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Save a run as a skill. When the agent has finished a task you will want again, "Save as skill" under its last reply writes a draft in `.aperture/skills/` and opens it: the request as what the skill is for, the run's plan as its steps, the check it ran as the last step, and the files it changed as examples. It is named for the request and never takes a name a skill already has. Edit the steps to fit every task like it, and from then on the agent, and Aperture Bot once the skill is pushed, load it when a task matches. ([#189](https://github.com/Hankaws/aperture/pull/189))
+
 ## 0.10.0 - 2026-11-08
 
 ### Added

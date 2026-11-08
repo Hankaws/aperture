@@ -146,6 +146,8 @@ export type ChatMessage = {
   images?: AgentImage[];
   /** On a reply: the agent stopped to ask this, with answers to click (`agent/ask.ts`). */
   question?: AgentQuestion;
+  /** On a reply: skills from .aperture/skills it loaded, by path (`workspace/skills.ts`). */
+  skills?: string[];
 };
 
 /** The arguments of a send, kept on its failed reply so Retry repeats it exactly. */

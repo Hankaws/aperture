@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ImageTray, MessageImages } from "./image-tray";
 import { QuestionCard } from "./question-card";
+import { skillName } from "@/lib/workspace/skills";
 import { useAttachedImages } from "./use-attached-images";
 import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1555,6 +1556,22 @@ const MessageBlock = memo(function MessageBlock({
       )}
       {Array.isArray(message.mcpCalls) && message.mcpCalls.length > 0 && (
         <McpCallList messageId={message.id} calls={message.mcpCalls} />
+      )}
+      {Array.isArray(message.skills) && message.skills.length > 0 && (
+        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-subtle">
+          <span>Used {message.skills.length === 1 ? "skill" : "skills"}</span>
+          {message.skills.map((path) => (
+            <button
+              key={path}
+              type="button"
+              title={`Open ${path}`}
+              className="rounded border border-border px-1.5 py-px font-mono text-[11px] text-muted hover:text-fg"
+              onClick={() => useWorkspace.getState().openFile(path)}
+            >
+              {skillName(path.replace(/\/SKILL\.md$/i, "").split("/").pop() ?? path)}
+            </button>
+          ))}
+        </p>
       )}
       {Array.isArray(message.rules) && message.rules.length > 0 && (
         <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-subtle">

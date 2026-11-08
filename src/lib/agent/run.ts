@@ -543,6 +543,7 @@ export async function submitAgent(
           ...(event.mcpCalls?.length ? { mcpCalls: event.mcpCalls } : {}),
           ...(event.rules?.length ? { rules: event.rules } : {}),
           ...(event.question ? { question: event.question } : {}),
+          ...(event.skills?.length ? { skills: event.skills } : {}),
         });
         const firstPending = edits.find((e) => e.status === "pending");
         if (firstPending?.path) ws.openFile(firstPending.path);

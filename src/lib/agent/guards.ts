@@ -25,6 +25,7 @@ const CACHED = new Set([
   "run_script",
   "read_output",
   "web_fetch",
+  "load_skill",
 ]);
 
 /** Arguments as one stable string: the same call in another key order is the same call. */

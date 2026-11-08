@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.10.0 - 2026-11-08
+
 ### Added
 
 - Skills: a project's know-how for one kind of task, in `.aperture/skills/` (`<name>.md` or `<name>/SKILL.md`, with a name and a description). The agent is told each skill's name and what it is for, and loads one with the new `load_skill` tool when a task needs it, so its steps reach the agent then rather than on every turn as rules do. The reply says which skills it used, and each opens its file. "Add a skill the agent loads when needed" in the command palette starts one. ([#186](https://github.com/Hankaws/aperture/pull/186))

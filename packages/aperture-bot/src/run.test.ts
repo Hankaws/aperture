@@ -346,3 +346,51 @@ test("a finished change ends with what the bot would suggest next; a failed sugg
   assert.equal(quiet.outcome, "clear");
   assert.deepEqual(quiet.next, []);
 });
+
+test("a run follows the project's skills, and decides instead of asking: no one is watching", async () => {
+  const { run } = await bundled();
+  const dir = repo({
+    ...shop,
+    ".aperture/skills/prices.md":
+      "---\nname: prices\ndescription: How money is shown.\n---\nAlways show dollars with two decimals.",
+  });
+  const { model: build } = scripted([[dollars]]);
+  const told: string[] = [];
+  let system = "";
+  const tool = (id: string, name: string, args: unknown) => ({
+    id,
+    type: "function" as const,
+    function: { name, arguments: JSON.stringify(args) },
+  });
+  // Planning: load the skill, ask a question nobody is there to answer, then plan.
+  const planning = [
+    tool("p1", "load_skill", { name: "Prices" }),
+    tool("p2", "ask_user", { question: "Dollars or euros?", options: ["Dollars", "Euros"] }),
+    tool("p3", "set_plan", { entries: [{ content: "Show dollars" }] }),
+  ];
+  let step = 0;
+  const model: Model = async (cfg, messages, useTools, signal, tools) => {
+    if (!system) system = String(messages[0]?.content ?? "");
+    const last = messages[messages.length - 1];
+    if (last?.role === "tool") told.push(String(last.content));
+    if (!(tools ?? []).some((t) => t.function.name === "propose_edit")) {
+      const next = planning[step++];
+      return next
+        ? { content: "", usage: { input: 10, output: 5 }, tool_calls: [next] }
+        : { content: "Plan ready.", usage: { input: 10, output: 5 } };
+    }
+    return build(cfg, messages, useTools, signal, tools);
+  };
+  const result = await run.runTask(options(dir), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.match(system, /Skills in this project\.[^\n]*\n- prices: How money is shown\./);
+  assert.ok(
+    told.some((t) => t.startsWith("Skill prices, from .aperture/skills/prices.md.")),
+    told.join("\n---\n"),
+  );
+  assert.ok(
+    told.some((t) => t.startsWith("No one is here to answer right now.")),
+    told.join("\n---\n"),
+  );
+  assert.deepEqual(result.skills, [".aperture/skills/prices.md"]);
+});

@@ -12,6 +12,7 @@ import {
 } from "../../../src/lib/bot/summary.ts";
 import type { Command } from "./event.ts";
 import { quiet } from "./quiet.ts";
+import { skillName } from "../../../src/lib/workspace/skills.ts";
 import { suggestionBoxes } from "./suggestions.ts";
 import type { BotResult } from "./run.ts";
 
@@ -89,6 +90,23 @@ function agentSaid(result: BotResult): string[] {
     quiet(result.summary.trim()),
     "",
     "</details>",
+  ];
+}
+
+/** Which of the project's skills (`.aperture/skills/`) the agent followed, when it loaded any. */
+export function skillsLine(paths: string[] | undefined): string[] {
+  if (!paths?.length) return [];
+  const names = paths.map(
+    (path) =>
+      `\`${skillName(
+        path
+          .replace(/\/SKILL\.md$/i, "")
+          .split("/")
+          .pop() ?? path,
+      )}\``,
+  );
+  return [
+    `Followed the project's ${names.length === 1 ? "skill" : "skills"} ${names.join(", ")} (\`.aperture/skills/\`).`,
   ];
 }
 
@@ -177,6 +195,7 @@ export function pullBody(
       ...checksTable(result),
     ],
     agentSaid(result),
+    skillsLine(result.skills),
     lessons > 0
       ? [
           `Kept in mind ${lessons === 1 ? "1 note" : `${lessons} notes`} from your reviews of its earlier pull requests.`,
@@ -222,6 +241,7 @@ export function doneReply(
   return join(
     [text],
     plan(result),
+    skillsLine(result.skills),
     nextList(result.next),
     [footer(result, ctx.run, ctx.tests)],
     [summaryMarker(resultSummary(result, ctx, link))],
@@ -262,13 +282,14 @@ export function notDoneReply(result: BotResult, diff: string, ctx: ReplyContext)
 
 /** A question, answered on the thread: the answer, what the bot would do about it, and nothing changed. */
 export function answerReply(
-  answer: { answer: string; next: string[] },
+  answer: { answer: string; next: string[]; skills?: string[] },
   ctx: Asked & { usage: string },
 ): string {
   // A reply nobody asked for read what anyone wrote: its suggestions say to read them first.
   const wary = ctx.via === "issue" || ctx.via === "red";
   return join(
     [quiet(answer.answer)],
+    skillsLine(answer.skills),
     nextList(answer.next, undefined, wary),
     [`Nothing was changed. Used ${ctx.usage}. [The run](${ctx.run}) · [Aperture Bot](${SITE})`],
     [

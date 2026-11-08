@@ -59,6 +59,8 @@ export type BotResult = {
   /** What the bot would suggest doing next: for the maintainer to send or not. */
   next: string[];
   text: string;
+  /** The project's skills (`.aperture/skills/`) the agent loaded, by path. */
+  skills: string[];
 };
 
 const OWNER = "aperture-bot";
@@ -134,6 +136,7 @@ export async function runTask(
     usage: "",
     text: "",
     next: [],
+    skills: [],
   };
   /**
    * A finished change (clear or still red) ends with suggestions for next
@@ -175,6 +178,8 @@ export async function runTask(
         standing: BOT_RULES,
         instruction,
         files: working.files,
+        // No one watches a run: the agent decides instead of asking (`ask_user`), and says what it assumed.
+        unattended: true,
         ...input,
       },
       cfg,
@@ -182,6 +187,9 @@ export async function runTask(
       undefined,
       host,
     );
+    if (out.ok)
+      for (const path of out.skills ?? [])
+        if (!result.skills.includes(path)) result.skills.push(path);
     return { out, before: Object.fromEntries(working.files.map((f) => [f.path, f.content])) };
   };
   const stopped = (error: string) => finish("stopped", error);

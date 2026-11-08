@@ -36,7 +36,7 @@ export type AskOptions = {
 };
 
 export type AskResult =
-  | { ok: true; answer: string; next: string[]; usage: string }
+  | { ok: true; answer: string; next: string[]; usage: string; skills: string[] }
   | { ok: false; error: string; usage: string };
 
 /** One Ask-mode turn on the checkout. No user id, so no script can run; Ask mode has no edit tool. */
@@ -54,6 +54,8 @@ export async function answerQuestion(
       standing: askRules(options.maxNext),
       instruction: instructionFor(options.question, options.context),
       files: working.files,
+      // No one watches a run: the agent decides instead of asking.
+      unattended: true,
     },
     { ...options.model },
     () => undefined,
@@ -64,5 +66,5 @@ export async function answerQuestion(
   const split = splitAnswer(out.text, options.maxNext);
   if (!split.answer)
     return { ok: false, error: "The model gave no answer.", usage: budget.describe() };
-  return { ok: true, ...split, usage: budget.describe() };
+  return { ok: true, ...split, usage: budget.describe(), skills: out.skills ?? [] };
 }

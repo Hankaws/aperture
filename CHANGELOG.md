@@ -10,6 +10,7 @@ release notes are every line from there down to the previous version.
 ### Added
 
 - Skills: a project's know-how for one kind of task, in `.aperture/skills/` (`<name>.md` or `<name>/SKILL.md`, with a name and a description). The agent is told each skill's name and what it is for, and loads one with the new `load_skill` tool when a task needs it, so its steps reach the agent then rather than on every turn as rules do. The reply says which skills it used, and each opens its file. "Add a skill the agent loads when needed" in the command palette starts one. ([#186](https://github.com/Hankaws/aperture/pull/186))
+- Aperture Bot follows your project's skills too. It reads the same `.aperture/skills/` as the editor, is told each skill's name and what it is for, and loads the one its task needs, so a "release" or "add a migration" skill works the same on GitHub as in the editor. Its pull request, or its reply to a question, says which skills it followed. A bot run never stops to ask, since no one is watching: where the editor's agent would ask you, it decides and says what it chose. Needs Aperture Bot v1.12. ([#187](https://github.com/Hankaws/aperture/pull/187))
 
 ## 0.9.0 - 2026-11-07
 

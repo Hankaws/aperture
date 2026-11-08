@@ -726,6 +726,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     const answered = {
       answer: how.heading ? `${how.heading}\n\n${result.answer}` : result.answer,
       next,
+      skills: result.skills,
     };
     log([answered.answer, ...next.map((task) => `- ${task}`)].join("\n"));
     answeredText = result.answer;

@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Command } from "./event.ts";
 import { readSummary } from "../../../src/lib/bot/summary.ts";
-import { doneReply, notDoneReply, pullBody, titleFor, workingReply } from "./replies.ts";
+import {
+  answerReply,
+  doneReply,
+  notDoneReply,
+  pullBody,
+  skillsLine,
+  titleFor,
+  workingReply,
+} from "./replies.ts";
 import type { BotResult } from "./run.ts";
 
 const command: Command = {
@@ -38,6 +46,7 @@ const result = (more: Partial<BotResult> = {}): BotResult => ({
   checks: 1,
   usage: "1,000 input and 50 output tokens in 2 model calls",
   text: "",
+  skills: [],
   next: [],
   ...more,
 });
@@ -171,4 +180,37 @@ test("a finished run lists what it would do next, and the Bot page reads them ba
   );
   assert.doesNotMatch(quiet, /Next, I would suggest/);
   assert.equal(readSummary(quiet)?.next, undefined);
+});
+
+test("a run that followed the project's skills says which, in the pull request and the replies", () => {
+  assert.deepEqual(skillsLine(undefined), []);
+  assert.deepEqual(skillsLine([]), []);
+  assert.deepEqual(skillsLine([".aperture/skills/release.md"]), [
+    "Followed the project's skill `release` (`.aperture/skills/`).",
+  ]);
+  assert.deepEqual(
+    skillsLine([".aperture/skills/release.md", ".aperture/skills/Add Migration/SKILL.md"]),
+    ["Followed the project's skills `release`, `add-migration` (`.aperture/skills/`)."],
+  );
+  const skills = [".aperture/skills/prices.md"];
+  const line = "Followed the project's skill `prices` (`.aperture/skills/`).";
+  assert.ok(pullBody(command, result({ skills }), "r", null).includes(line));
+  assert.ok(!pullBody(command, result(), "r", null).includes("Followed the project's"));
+  const ctx = { asked: 1, run: "https://github.com/acme/shop/actions/runs/1", tests: null };
+  assert.ok(
+    doneReply(
+      result({ skills }),
+      { url: "https://github.com/acme/shop/pull/13", what: "pull" },
+      ctx,
+    ).includes(line),
+  );
+  const answer = answerReply(
+    { answer: "Prices are shown with two decimals.", next: [], skills },
+    { ...ctx, usage: "10 tokens" },
+  );
+  assert.ok(answer.includes(line));
+  assert.ok(answer.indexOf(line) < answer.indexOf("Nothing was changed."));
+  assert.ok(
+    !answerReply({ answer: "Yes.", next: [] }, { ...ctx, usage: "10 tokens" }).includes("Followed"),
+  );
 });

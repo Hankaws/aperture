@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ImageTray, MessageImages } from "./image-tray";
 import { QuestionCard } from "./question-card";
 import { skillName } from "@/lib/workspace/skills";
+import { isLastReplyOfRun, skillFromRun } from "@/lib/workspace/skill-draft";
 import { useAttachedImages } from "./use-attached-images";
 import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1290,6 +1291,55 @@ function MessageList({
   );
 }
 
+/** "Save as skill": the run this reply ends, as a draft in .aperture/skills/ (`skill-draft.ts`). Once per run. */
+function SaveSkillButton({ messageId }: { messageId: string }) {
+  const last = useWorkspace((s) => isLastReplyOfRun(s.messages, messageId));
+  const [saved, setSaved] = useState<{ path: string; name: string } | null>(null);
+  const exists = useWorkspace((s) => (saved ? s.files[saved.path] !== undefined : false));
+  if (!last) return null;
+  if (saved && exists) {
+    return (
+      <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-subtle">
+        <span>Saved as skill</span>
+        <button
+          type="button"
+          title={`Open ${saved.path}`}
+          className="rounded border border-border px-1.5 py-px font-mono text-[11px] text-muted hover:text-fg"
+          onClick={() => {
+            useWorkspace.getState().openFile(saved.path);
+            useIdeUi.getState().setMobilePane("editor");
+          }}
+        >
+          {saved.name}
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        title="Turn this run into a skill in .aperture/skills/: the agent, and Aperture Bot, load it for tasks like this one"
+        className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-fg"
+        onClick={() => {
+          const ws = useWorkspace.getState();
+          const draft = skillFromRun(ws.messages, messageId, ws.files);
+          if (!draft) {
+            toast.error("This run has no plan or change to make a skill from.");
+            return;
+          }
+          ws.createFile(draft.path, draft.text);
+          useIdeUi.getState().setMobilePane("editor");
+          setSaved({ path: draft.path, name: draft.name });
+          toast.success(`Saved as skill ${draft.name}. Edit its steps, and the agent loads it for tasks like this.`);
+        }}
+      >
+        Save as skill
+      </button>
+    </div>
+  );
+}
+
 function LessonBar({
   messageId,
   saved,
@@ -1606,6 +1656,9 @@ const MessageBlock = memo(function MessageBlock({
       )}
       {content.trim() && !message.automatic && !live && !message.failed && (
         <LessonBar messageId={message.id} saved={message.lesson} disabled={running} />
+      )}
+      {!running && !live && !waiting && !message.failed && (plan.length > 0 || edits.length > 0) && (
+        <SaveSkillButton messageId={message.id} />
       )}
       {message.failed && message.retry && !live && (
         <Button

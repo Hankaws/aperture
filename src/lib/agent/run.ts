@@ -21,6 +21,7 @@ import type { WorkerRole, WorkerSpec } from "./crew";
 import { continuationInstruction, continuationLabel, type BrowserRuns, type HandoffOutcome } from "./browser-handoff";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { restoreRedacted } from "./unredact";
+import { skillsForEdits, skillsOfPlan } from "./skill-checks";
 import { cutOffLine, describeSendError } from "./send-error";
 import { compactFiles, RESEND_FILES } from "./wire";
 import { savedBaseline } from "@/lib/workspace/sync-controller";
@@ -203,6 +204,8 @@ export function agentPayload(
     images?: AgentImage[];
     /** Nobody is watching (a background run): the agent decides instead of asking. */
     unattended?: boolean;
+    /** Skills an earlier turn of this change loaded. Default: those of the turns that staged the pending edits. */
+    skillsInRun?: string[];
   },
 ) {
   const state = useWorkspace.getState();
@@ -244,6 +247,22 @@ export function agentPayload(
       ...(isUiTask(instruction) ? nearestUiFiles(latest.files, instruction, latest.activePath, 3) : []),
     ],
   });
+  const pendingEdits =
+    extra?.pendingEdits ??
+    pendingForRun(
+      listPendingEdits(latest.messages),
+      extra?.copyId,
+      latest.activeCopyId,
+    );
+  const skillsInRun =
+    extra?.skillsInRun ??
+    [
+      ...skillsForEdits(
+        latest.messages,
+        pendingEdits.map((edit) => edit.id),
+      ),
+      ...(extra?.phase === "build" ? skillsOfPlan(latest.messages) : []),
+    ].filter((path, i, all) => all.indexOf(path) === i);
   return {
     mode,
     instruction: [captures, observations, instruction].filter(Boolean).join("\n\n"),
@@ -260,13 +279,8 @@ export function agentPayload(
     approvedPlan: extra?.approvedPlan,
     workers: extra?.workers,
     role: extra?.role,
-    pendingEdits:
-      extra?.pendingEdits ??
-      pendingForRun(
-        listPendingEdits(latest.messages),
-        extra?.copyId,
-        latest.activeCopyId,
-      ),
+    pendingEdits,
+    ...(skillsInRun.length ? { skillsInRun } : {}),
     debug: useIdeUi.getState().debug,
     compacted: compacted || undefined,
     browserRuns: extra?.browserRuns,

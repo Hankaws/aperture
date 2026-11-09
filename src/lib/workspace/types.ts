@@ -1,5 +1,6 @@
 import type { AgentQuestion } from "../agent/ask.ts";
 import type { AgentImage } from "../agent/images.ts";
+import type { SkillCheckResult } from "../agent/skill-checks.ts";
 import type { ModelSource } from "../billing/plans.ts";
 export type LanguageId =
   | "typescript"
@@ -102,6 +103,8 @@ export type VerifyReport = {
   detail: string;
   /** True when this is the re-run after the agent revised a failing edit. */
   rechecked?: boolean;
+  /** The checks of the skills this turn loaded, as they last ran (`agent/skill-checks.ts`). */
+  skills?: SkillCheckResult[];
 };
 
 export type ChatMessage = {

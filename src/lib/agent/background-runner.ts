@@ -96,7 +96,7 @@ function get(id: string): BackgroundRun | undefined {
   return useBackgroundRuns.getState().runs.find((run) => run.id === id);
 }
 
-type TurnResult = { text: string; edits: ProposedEdit[]; verify?: VerifyReport; rules?: string[] };
+type TurnResult = { text: string; edits: ProposedEdit[]; verify?: VerifyReport; rules?: string[]; skills?: string[] };
 
 /** One agent turn on the run's snapshot. Null when it failed; the run then says why. */
 async function turn(
@@ -106,6 +106,7 @@ async function turn(
   source: ModelSource,
   staged: ProposedEdit[],
   signal: AbortSignal,
+  skillsInRun: string[] = [],
 ): Promise<TurnResult | null> {
   const input = agentPayload(instruction, "composer", source, null, {
     phase: "skip",
@@ -113,6 +114,8 @@ async function turn(
     files: snapshot,
     fresh: true,
     unattended: true,
+    // The fix is held to the skills the first turn followed; the board's own chat is not this run's.
+    skillsInRun,
   });
   const opened = await openAgentStream(input, source, signal);
   if (!opened.ok) {
@@ -139,7 +142,7 @@ async function turn(
       patch(id, { steps: run.steps + 1, status: `${event.trace.name}${path}` }, false);
     } else if (event.type === "edits") patch(id, { edits: event.edits }, false);
     else if (event.type === "done")
-      result = { text: event.text, edits: event.edits, verify: event.verify, rules: event.rules };
+      result = { text: event.text, edits: event.edits, verify: event.verify, rules: event.rules, skills: event.skills };
     else if (event.type === "error") error = event.error || "The agent stopped.";
   });
   if (signal.aborted) return null;
@@ -276,6 +279,7 @@ async function drive(
         source,
         edits,
         signal,
+        first.skills ?? [],
       );
       if (!second) return;
       const next = pendingEdits(second);

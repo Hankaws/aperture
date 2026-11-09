@@ -394,3 +394,154 @@ test("a run follows the project's skills, and decides instead of asking: no one 
   );
   assert.deepEqual(result.skills, [".aperture/skills/prices.md"]);
 });
+
+test("a skill's checks must pass: a change that fails one is red, and the next round fixes it", async () => {
+  const { run } = await bundled();
+  const dir = repo({
+    ...shop,
+    "package.json": JSON.stringify({
+      name: "shop",
+      private: true,
+      scripts: { "prices:check": "node check-prices.mjs" },
+    }),
+    "check-prices.mjs": [
+      'import { readFileSync } from "node:fs";',
+      'if (!readFileSync("src/price.ts", "utf8").includes("toFixed(2)")) {',
+      '  throw new Error("prices must show two decimals");',
+      "}",
+      'console.log("prices ok");',
+    ].join("\n"),
+    ".aperture/skills/prices.md":
+      "---\nname: prices\ndescription: How money is shown.\nchecks: prices:check\n---\nAlways show dollars with two decimals.",
+  });
+  // The first build shows dollars without cents; only the second round's fix adds them.
+  const { model: build, asked } = scripted([
+    [
+      {
+        path: "src/price.ts",
+        search: "return String(cents);",
+        replace: 'return "$" + cents / 100;',
+      },
+    ],
+    [
+      {
+        path: "src/price.ts",
+        search: 'return "$" + cents / 100;',
+        replace: "return `$${(cents / 100).toFixed(2)}`;",
+      },
+    ],
+  ]);
+  let planned = 0;
+  const told: string[] = [];
+  const usage = { input: 10, output: 5 };
+  const model: Model = async (cfg, messages, useTools, signal, tools) => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "user") told.push(String(last.content));
+    if (!(tools ?? []).some((t) => t.function.name === "propose_edit")) {
+      planned += 1;
+      const call = (name: string, args: unknown) => ({
+        id: `p${planned}`,
+        type: "function" as const,
+        function: { name, arguments: JSON.stringify(args) },
+      });
+      if (planned === 1)
+        return { content: "", usage, tool_calls: [call("load_skill", { name: "prices" })] };
+      if (planned === 2)
+        return {
+          content: "",
+          usage,
+          tool_calls: [call("set_plan", { entries: [{ content: "Show dollars" }] })],
+        };
+      return { content: "Plan ready.", usage };
+    }
+    return build(cfg, messages, useTools, signal, tools);
+  };
+  const result = await run.runTask(options(dir, { sandbox: localSandbox() }), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.equal(result.checks, 2, result.text);
+  // Round one: the skill's check ran on the build, failed, and the agent was told why.
+  assert.ok(
+    told.some(
+      (t) =>
+        t.startsWith("Skill prices says `npm run prices:check` must pass") &&
+        t.includes("prices must show two decimals"),
+    ),
+    told.join("\n---\n"),
+  );
+  // It held the change red, so round two was asked to fix it.
+  assert.match(asked[1] ?? "", /Skill prices: npm run prices:check failed/);
+  assert.match(readFileSync(join(dir, "src/price.ts"), "utf8"), /toFixed\(2\)/);
+  const row = result.check?.rows.find((r) => r.id === "skill:prices:check");
+  assert.equal(row?.status, "pass", result.text);
+  assert.deepEqual(result.skills, [".aperture/skills/prices.md"]);
+});
+
+test("a skill's failing check is handed back in the same turn, and one fix there is enough", async () => {
+  const { run } = await bundled();
+  const dir = repo({
+    ...shop,
+    "package.json": JSON.stringify({
+      name: "shop",
+      private: true,
+      scripts: { "prices:check": "node check-prices.mjs" },
+    }),
+    "check-prices.mjs": [
+      'import { readFileSync } from "node:fs";',
+      'if (!readFileSync("src/price.ts", "utf8").includes("toFixed(2)")) throw new Error("no cents");',
+    ].join("\n"),
+    ".aperture/skills/prices.md":
+      "---\nname: prices\ndescription: How money is shown.\nchecks: prices:check\n---\nAlways show dollars with two decimals.",
+  });
+  const usage = { input: 10, output: 5 };
+  let n = 0;
+  const call = (name: string, args: unknown) => ({
+    id: `c${(n += 1)}`,
+    type: "function" as const,
+    function: { name, arguments: JSON.stringify(args) },
+  });
+  const edit = (search: string, replace: string) =>
+    call("propose_edit", {
+      path: "src/price.ts",
+      search,
+      replace,
+      description: "edit",
+      confidence: 0.95,
+    });
+  let planned = 0;
+  let fixAsked = 0;
+  const model: Model = async (_cfg, messages, _useTools, _signal, tools) => {
+    const last = messages[messages.length - 1];
+    if (!(tools ?? []).some((t) => t.function.name === "propose_edit")) {
+      planned += 1;
+      if (planned === 1)
+        return { content: "", usage, tool_calls: [call("load_skill", { name: "prices" })] };
+      if (planned === 2)
+        return {
+          content: "",
+          usage,
+          tool_calls: [call("set_plan", { entries: [{ content: "Show dollars" }] })],
+        };
+      return { content: "Plan ready.", usage };
+    }
+    if (last?.role === "user" && String(last.content).startsWith("Skill prices says")) {
+      fixAsked += 1;
+      return {
+        content: "",
+        usage,
+        tool_calls: [edit('return "$" + cents / 100;', "return `$${(cents / 100).toFixed(2)}`;")],
+      };
+    }
+    if (last?.role === "tool") return { content: "Done.", usage };
+    return {
+      content: "",
+      usage,
+      tool_calls: [edit("return String(cents);", 'return "$" + cents / 100;')],
+    };
+  };
+  const result = await run.runTask(options(dir, { sandbox: localSandbox() }), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.equal(fixAsked, 1);
+  assert.equal(result.checks, 1, result.text);
+  assert.match(result.summary, /Skill prices: `npm run prices:check` passed\./);
+  assert.equal(result.check?.rows.find((r) => r.id === "skill:prices:check")?.status, "pass");
+});

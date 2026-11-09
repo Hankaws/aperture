@@ -20,8 +20,8 @@ import { testTampering } from "../runner/tampering.ts";
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
 
-/** `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). */
-export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | `hook:${string}`;
+/** `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). `skill:<script>`: a loaded skill's check (`agent/skill-checks.ts`). */
+export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | `hook:${string}` | `skill:${string}`;
 /** `warn`: failing, but failing the same way before this change. */
 export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
@@ -339,7 +339,24 @@ export function changeChecks(input: {
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
   const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testTampering(files, edits));
-  return [parsesRow, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow)];
+  return [parsesRow, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow), ...skillRows(verify ?? null)];
+}
+
+/**
+ * A loaded skill's checks, as the agent's sandbox run left them: red holds
+ * Apply, as a failing test does, because the skill says the task is not done.
+ */
+export function skillRows(verify: VerifyReport | null): CheckRow[] {
+  return (verify?.skills ?? []).map((check) => {
+    const id: CheckId = `skill:${check.script}`;
+    // The script names the row, as a hook's name does; the skill that asks for it opens the line.
+    const label = check.script;
+    const by = `Skill ${check.skill}:`;
+    const after = verify?.rechecked ? " after the agent's fix" : "";
+    if (check.status === "passed") return { id, label, status: "pass", detail: `${by} npm run ${check.script} passed${after}.` };
+    if (check.status === "not_run") return { id, label, status: "skip", detail: `${by} not run. ${check.detail}` };
+    return { id, label, status: "fail", detail: `${by} npm run ${check.script} failed${after}: ${check.detail}` };
+  });
 }
 
 /**

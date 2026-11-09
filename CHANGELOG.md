@@ -10,6 +10,7 @@ release notes are every line from there down to the previous version.
 ### Added
 
 - Save a run as a skill. When the agent has finished a task you will want again, "Save as skill" under its last reply writes a draft in `.aperture/skills/` and opens it: the request as what the skill is for, the run's plan as its steps, the check it ran as the last step, and the files it changed as examples. It is named for the request and never takes a name a skill already has. Edit the steps to fit every task like it, and from then on the agent, and Aperture Bot once the skill is pushed, load it when a task matches. ([#189](https://github.com/Hankaws/aperture/pull/189))
+- A skill can name its own checks. Add `checks: test, migrate:check` to a skill's front matter: package.json scripts that must pass before a task the skill was loaded for is done. The agent runs them in the sandbox on its edits, gets one try to fix a failure, and its reply ends with each check's result, "Not done: …" when one still fails. In the check list each is a row of its own, and a red one holds Apply as a failing test does. A follow-up on the same change, and the Build it of a plan made with the skill, are held to its checks too. "Save as skill" writes the checks its run was held to. Aperture Bot does the same from v1.13: a skill's failing check holds its change red, and the next round is asked to fix it. ([#190](https://github.com/Hankaws/aperture/pull/190))
 
 ## 0.10.0 - 2026-11-08
 

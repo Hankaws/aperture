@@ -4,8 +4,8 @@
  * task matches (`skills.ts`), in the editor and in Aperture Bot.
  *
  * The draft is written from what the run did, with no model call: the request
- * as what the skill is for, the run's plan as its steps, the check it ran as
- * the last step, and the files it changed as examples. It is a start: the
+ * as what the skill is for, the run's plan as its steps, the checks it ran as
+ * the skill's `checks`, and the files it changed as examples. It is a start: the
  * person makes the steps fit every task like this one, not only that one.
  * Pure, for tests.
  */
@@ -85,14 +85,18 @@ export function skillFromRun(
     for (const edit of reply.edits ?? []) changed.set(edit.path, edit.status !== "rejected");
   const paths = [...changed].filter(([, kept]) => kept).map(([path]) => path);
   if (plan.length === 0 && paths.length === 0) return null;
-  const script = latest((m) => m.verify?.script);
+  // The checks the run was held to: the project's own, and those of skills it followed. They become the skill's.
+  const verify = latest((m) => m.verify);
+  const checks = [verify?.script, ...(verify?.skills ?? []).map((c) => c.script)]
+    .filter((c): c is string => Boolean(c))
+    .filter((c, i, all) => all.indexOf(c) === i)
+    .slice(0, SKILL_LIMIT.checks);
 
   const steps = (
     plan.length > 0
       ? plan.map((entry) => oneLine(entry.content)).filter(Boolean)
       : paths.map((path) => `Change \`${path}\`.`)
   ).slice(0, MAX_STEPS);
-  if (script) steps.push(`Run \`npm run ${script}\` and fix what fails before you finish.`);
 
   const taken = new Set(projectSkills(files).map((skill) => skill.name));
   const base = nameFromRequest(run.request);
@@ -111,6 +115,7 @@ export function skillFromRun(
     "---",
     `name: ${name}`,
     `description: For tasks like: ${like}`,
+    ...(checks.length > 0 ? [`checks: ${checks.join(", ")}`] : []),
     "---",
     `Made on ${day} from an agent run that did this. Make the name, the description and the steps fit every task like it, not only that one: the agent sees the description, and loads these steps when a task matches.`,
     "",

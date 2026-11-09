@@ -6,19 +6,25 @@
  *   ---
  *   name: release
  *   description: Cut a release: changelog, version, notes.
+ *   checks: test, changelog:check
  *   ---
  *   1. Move Unreleased under a dated heading …
  *
  * The agent is told each skill's name and description, and calls
  * `load_skill` for the one a task needs: the steps reach it then, not on
  * every turn as rules do (`scoped-rules.ts`). They are the project's own
- * instructions, written by whoever can edit it. Pure, for tests.
+ * instructions, written by whoever can edit it.
+ *
+ * `checks` names package.json scripts that must pass before a task the skill
+ * was loaded for is done: the agent runs them on its edits with the project's
+ * own check, and gets one try to fix a failure (`agent/skill-checks.ts`).
+ * Pure, for tests.
  */
 
 export const SKILLS_DIR = ".aperture/skills/";
 
 /** A skill's steps at most, the skills listed, and a description's length. */
-export const SKILL_LIMIT = { chars: 12_000, skills: 30, description: 160 } as const;
+export const SKILL_LIMIT = { chars: 12_000, skills: 30, description: 160, checks: 4 } as const;
 
 export const SKILL_TEMPLATE = `---
 name: release
@@ -41,7 +47,33 @@ description: What this skill is for, in one line. The agent sees only this until
 `;
 }
 
-export type Skill = { name: string; path: string; description: string; text: string };
+export type Skill = {
+  name: string;
+  path: string;
+  description: string;
+  text: string;
+  /** package.json scripts that must pass before the task is done; only when it names some. */
+  checks?: string[];
+};
+
+/** A script name as package.json has it, from "test", "npm run test" or "`npm test`". */
+const SCRIPT = /^[A-Za-z0-9][\w:.@/-]*$/;
+
+/** The scripts a `checks:` line names: comma separated, `npm run` optional, at most four. */
+export function parseChecks(value: string): string[] {
+  const out: string[] = [];
+  for (const raw of value.replace(/^\[|\]$/g, "").split(/,/)) {
+    const script = raw
+      .trim()
+      .replace(/^[`"']|[`"']$/g, "")
+      .replace(/^npm\s+(run(-script)?\s+)?/i, "")
+      .trim();
+    if (!script || !SCRIPT.test(script) || out.includes(script)) continue;
+    out.push(script);
+    if (out.length === SKILL_LIMIT.checks) break;
+  }
+  return out;
+}
 
 /** `.aperture/skills/<name>.md`, or `.aperture/skills/<name>/SKILL.md`. */
 export function isSkillPath(path: string): boolean {
@@ -73,11 +105,13 @@ export function parseSkill(path: string, raw: string): Skill | null {
   if (!body) return null;
   let name = "";
   let description = "";
+  let checks: string[] = [];
   for (const line of front?.[1]?.split("\n") ?? []) {
     const match = /^([A-Za-z]+)\s*:\s*(.*)$/.exec(line);
     if (!match) continue;
     if (match[1]!.toLowerCase() === "name") name = unquote(match[2]!);
     if (match[1]!.toLowerCase() === "description") description = unquote(match[2]!);
+    if (match[1]!.toLowerCase() === "checks") checks = parseChecks(match[2]!);
   }
   const rest = path.slice(SKILLS_DIR.length);
   const fromPath = rest.includes("/") ? rest.split("/")[0]! : rest;
@@ -101,6 +135,7 @@ export function parseSkill(path: string, raw: string): Skill | null {
       body.length > SKILL_LIMIT.chars
         ? `${body.slice(0, SKILL_LIMIT.chars)}\n… (skill cut at ${SKILL_LIMIT.chars} characters)`
         : body,
+    ...(checks.length > 0 ? { checks } : {}),
   };
 }
 
@@ -123,7 +158,10 @@ export function skillsIndex(skills: Skill[]): string {
   if (skills.length === 0) return "";
   return [
     "Skills in this project. When the task is one a skill is for, call load_skill with its name before you start, then follow it:",
-    ...skills.map((s) => `- ${s.name}${s.description ? `: ${s.description}` : ""}`),
+    ...skills.map(
+      (s) =>
+        `- ${s.name}${s.description ? `: ${s.description}` : ""}${s.checks?.length ? ` (must pass: ${s.checks.map((c) => `npm run ${c}`).join(", ")})` : ""}`,
+    ),
   ].join("\n");
 }
 
@@ -146,6 +184,10 @@ export function loadSkill(
     };
   return {
     skill,
-    text: `Skill ${skill.name}, from ${skill.path}. Follow it for this task:\n<skill>\n${skill.text}\n</skill>`,
+    text: `Skill ${skill.name}, from ${skill.path}. Follow it for this task:\n<skill>\n${skill.text}\n</skill>${
+      skill.checks?.length
+        ? `\nThis skill's checks must pass before you are done: ${skill.checks.map((c) => `\`npm run ${c}\``).join(", ")}. They run on your edits when you finish, and you get one try to fix a failure.`
+        : ""
+    }`,
   };
 }

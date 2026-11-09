@@ -65,13 +65,13 @@ test("a finished run becomes a skill: the request is what it is for, the plan it
       "---",
       "name: add-a-migration",
       "description: For tasks like: Please add a migration for the orders table",
+      "checks: test",
       "---",
       "Made on 2026-11-08 from an agent run that did this. Make the name, the description and the steps fit every task like it, not only that one: the agent sees the description, and loads these steps when a task matches.",
       "",
       "1. Read the latest migration",
       "2. Write the next one",
       "3. Update the schema type",
-      "4. Run `npm run test` and fix what fails before you finish.",
       "",
       "Files that run changed, as examples:",
       "- `migrations/0003_orders.sql`",
@@ -141,4 +141,30 @@ test("Save as skill is offered on the last reply of a run only", () => {
   assert.equal(isLastReplyOfRun(messages, messages[3]!.id), true);
   assert.equal(isLastReplyOfRun(messages, messages[5]!.id), true);
   assert.equal(isLastReplyOfRun(messages, messages[0]!.id), false);
+});
+
+test("a draft is held to the checks its run was: the project's own and its skills'", () => {
+  const messages = [
+    user("Add a migration"),
+    reply({
+      edits: [edit("migrations/0004.sql")],
+      verify: {
+        script: "test",
+        status: "passed",
+        detail: "",
+        skills: [
+          { script: "migrate:check", skill: "db", status: "passed", detail: "" },
+          { script: "test", skill: "db", status: "passed", detail: "" },
+        ],
+      },
+    }),
+  ];
+  const draft = skillFromRun(messages, messages[1]!.id, {}, day)!;
+  assert.match(
+    draft.text,
+    /\ndescription: For tasks like: Add a migration\nchecks: test, migrate:check\n---\n/,
+  );
+  assert.deepEqual(parseSkill(draft.path, draft.text)!.checks, ["test", "migrate:check"]);
+  const none = [user("Rename it"), reply({ edits: [edit("a.ts")] })];
+  assert.doesNotMatch(skillFromRun(none, none[1]!.id, {}, day)!.text, /checks:/);
 });

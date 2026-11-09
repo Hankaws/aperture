@@ -10,6 +10,9 @@
 import { join } from "node:path";
 import { check, type Result as CheckResult } from "../../agent-check/src/main.ts";
 import { git } from "../../agent-check/src/git.ts";
+import { consoleText, verdict } from "../../agent-check/src/report.ts";
+import { skillRows } from "../../../src/lib/workspace/checks.ts";
+import type { VerifyReport } from "../../../src/lib/workspace/types.ts";
 import type { CompletionCfg } from "../../../src/lib/agent/complete.server.ts";
 import { runLoop } from "../../../src/lib/agent/loop.ts";
 import { planReadyText } from "../../../src/lib/agent/phase.ts";
@@ -180,6 +183,8 @@ export async function runTask(
         files: working.files,
         // No one watches a run: the agent decides instead of asking (`ask_user`), and says what it assumed.
         unattended: true,
+        // A later round on the change is held to the skills an earlier one followed: their checks still run.
+        ...(result.skills.length > 0 ? { skillsInRun: [...result.skills] } : {}),
         ...input,
       },
       cfg,
@@ -223,18 +228,21 @@ export async function runTask(
     if (result.written.length === 0) return finish("no-change");
 
     await progress({ phase: "checking", round });
-    result.check = check({
-      cwd,
-      base: start,
-      runTests: sandbox !== null,
-      testScript: options.testScript,
-      timeoutMs: options.timeoutMs,
-      failOn: "red",
-      baseline: "recompute",
-      baselineDir: join(cwd, ".aperture", "check-baseline"),
-      testRunner: sandbox ? asTestRunner(sandbox) : undefined,
-      testsWhere: sandbox?.where,
-    });
+    result.check = withSkillChecks(
+      check({
+        cwd,
+        base: start,
+        runTests: sandbox !== null,
+        testScript: options.testScript,
+        timeoutMs: options.timeoutMs,
+        failOn: "red",
+        baseline: "recompute",
+        baselineDir: join(cwd, ".aperture", "check-baseline"),
+        testRunner: sandbox ? asTestRunner(sandbox) : undefined,
+        testsWhere: sandbox?.where,
+      }),
+      built.out.verify ?? null,
+    );
     result.checks += 1;
     if (result.check.verdict === "clear") return suggest("clear");
     if (round >= options.rounds) return suggest("red");
@@ -242,6 +250,25 @@ export async function runTask(
     history.push({ role: "user", content: ask }, { role: "assistant", content: built.out.text });
     ask = fixInstruction(result.check.text);
   }
+}
+
+/**
+ * The checks of the skills the change followed, as the agent's sandbox run
+ * left them, are part of the verdict: a skill that says the task is not done
+ * holds the change red, and the next round is asked to fix it.
+ */
+export function withSkillChecks(report: CheckResult, verify: VerifyReport | null): CheckResult {
+  const rows = skillRows(verify);
+  if (rows.length === 0) return report;
+  const all = [...report.rows, ...rows];
+  const result = verdict(all);
+  return {
+    ...report,
+    rows: all,
+    verdict: result,
+    exitCode: result === "red" ? 1 : report.exitCode,
+    text: consoleText(all, report.meta),
+  };
 }
 
 const OUTCOME_LINE: Record<BotOutcome, string> = {

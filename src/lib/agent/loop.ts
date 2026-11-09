@@ -13,7 +13,7 @@ import { questionReply, type AgentQuestion } from "./ask";
 import type { AgentInput, AgentResult } from "./types";
 import { findRules } from "@/lib/workspace/rules";
 import { RuleLoader } from "@/lib/workspace/scoped-rules";
-import { projectSkills, skillsIndex } from "@/lib/workspace/skills";
+import { isSkillPath, projectSkills, skillsIndex } from "@/lib/workspace/skills";
 import { LESSONS_PATH, formatSpot, lessonsForPrompt, refusalsForPrompt, standingForPrompt } from "@/lib/workspace/lessons";
 import { expandMentions, mentionQuery, parseMentions } from "@/lib/workspace/mentions";
 import { autoContextPaths, formatAutoContext } from "./auto-context";
@@ -44,6 +44,16 @@ import {
   verifiedLine,
 } from "@/lib/sandbox/auto-verify";
 import { MIN_STEP_MS, noTimeToRunText, outOfTimeText, runAllowance, timeLeft } from "./turn-budget";
+import { runnableScripts } from "@/lib/sandbox/policy";
+import {
+  carriedSkillsLine,
+  missingResult,
+  skillCheckLines,
+  skillCheckResult,
+  skillChecksFor,
+  skillFixPrompt,
+  type SkillCheckResult,
+} from "./skill-checks";
 
 const MAX_PLAN_STEPS = 8;
 const MAX_BUILD_STEPS = 12;
@@ -396,7 +406,10 @@ export async function runLoop(
     canAsk: !input.unattended && !reviewing,
     // The project's skills: named in the prompt, their steps loaded when a task needs them.
     skills: reviewing ? [] : projectSkills(fileMap),
-    loadedSkills: [],
+    // A follow-up on a change is held to the skills it was made under: their checks still run.
+    loadedSkills: reviewing
+      ? []
+      : (input.skillsInRun ?? []).filter((path, i, all) => all.indexOf(path) === i && isSkillPath(path) && fileMap[path] !== undefined),
     // Pages on the sites the person linked to in this thread, a few a turn.
     webFetch: host.webFetch
       ? async (url: string) => {
@@ -519,6 +532,7 @@ export async function runLoop(
         systemPrompt(input.mode, rules, flavor?.kind ?? null, phase, input.role),
         scoped,
         skillsIndex(ctx.skills ?? []),
+        carriedSkillsLine(ctx.skills ?? [], ctx.loadedSkills ?? []),
         standing ? `Rules for every project. Follow them:\n${standing}` : "",
         lessons ? `Lessons from earlier turns in this project. Follow them:\n${lessons}` : "",
         refused ? `The user already refused these. Do not propose them again:\n${refused}` : "",
@@ -557,6 +571,8 @@ export async function runLoop(
   /** Staged edits as of the last verify run, to tell a real fix from a shrug. */
   let lastVerifiedEdits = "";
   let verify: VerifyReport | undefined;
+  /** The checks of the skills loaded this turn, as they last ran (`skill-checks.ts`). */
+  let skillResults: SkillCheckResult[] | undefined;
   let checkedInTurn = false;
   const maxSteps = reviewing ? 1 : phase === "build" ? MAX_BUILD_STEPS : MAX_PLAN_STEPS;
   const userBlob = `${userCtx}\n\n${input.instruction}`;
@@ -588,7 +604,13 @@ export async function runLoop(
         : verify?.script && verify.status === "failed"
           ? failedLine(verify.script)
           : "";
-    const verifiedText = line ? `${text}\n\n${line}` : text;
+    const skillLines = skillResults ? skillCheckLines(skillResults).join("\n") : "";
+    const verifiedText = [text, line, skillLines].filter(Boolean).join("\n\n");
+    if (skillResults?.length)
+      verify = {
+        ...(verify ?? { script: null, status: "not_run", detail: "No project check ran." }),
+        skills: skillResults,
+      };
     const debug = packDebug(input, cfg.provider, sys, userBlob, verifiedText, steps);
     const extra = {
       ...(debug ? { debug } : {}),
@@ -616,6 +638,39 @@ export async function runLoop(
           ? "Stopped after the tool-call limit. Review the staged edits."
           : "Stopped after the tool-call limit. Nothing was staged.";
     return await succeed({ text, traces, edits: awaitingBuild ? [] : staged, plan: ctx.plan, awaitingBuild }, steps);
+  };
+
+  /** The loaded skills' checks, but `skip`, the script the project's own check runs (`skill-checks.ts`). */
+  const skillChecksNow = (skip: string | null) =>
+    skillChecksFor(ctx.skills ?? [], ctx.loadedSkills ?? [], runnableScripts(ctx.files), skip);
+  /** Said, not run: no runner here, or the tab runs this turn's check. */
+  const skillChecksNotRun = (checks: ReturnType<typeof skillChecksNow>): SkillCheckResult[] => [
+    ...checks.run.map((check) => ({
+      ...check,
+      status: "not_run" as const,
+      detail: "Running is not available for this request.",
+    })),
+    ...checks.missing.map(missingResult),
+  ];
+  /** Runs them on the staged edits: the first failure's fix prompt, null when none failed, undefined when stopped. */
+  const runSkillChecks = async (
+    checks: ReturnType<typeof skillChecksNow>,
+    editsKey: string,
+  ): Promise<string | null | undefined> => {
+    const results: SkillCheckResult[] = [];
+    let fix: string | null = null;
+    for (const check of checks.run) {
+      if (signal?.aborted) return undefined;
+      // The agent just ran this script on these very edits: that run is the check.
+      const fresh = lastRun?.script === check.script && lastRun.editsKey === editsKey && lastRun.result.ran;
+      if (!fresh) emit({ type: "status", text: `Checking skill ${check.skill} with ${check.script}…` });
+      const run = fresh ? lastRun!.result : await ctx.runScript!(check.script);
+      const result = skillCheckResult(check, run);
+      results.push(result);
+      if (result.status === "failed" && !fix) fix = skillFixPrompt(check, run.text);
+    }
+    skillResults = [...results, ...checks.missing.map(missingResult)];
+    return fix;
   };
 
   try {
@@ -679,6 +734,11 @@ export async function runLoop(
         const staged = mergeEdits(ctx.edits);
         const verifyScript = chooseVerifyScript(ctx.files);
         const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
+        // A loaded skill's checks run with the project's own; one package.json lacks cannot pass.
+        const fromSkills = skillChecksNow(verifyScript);
+        const wantsSkillChecks = fromSkills.run.length + fromSkills.missing.length > 0;
+        if (phase !== "plan" && staged.length > 0 && wantsSkillChecks && (!ctx.runScript || browserRun))
+          skillResults = skillChecksNotRun(fromSkills);
         // The tab runs the agent's own check when this turn ends and reports back: no second run here.
         if (browserRun) {
           return await succeed({ text: completion.content.trim() || "Done.", traces, edits: staged, plan: ctx.plan }, step + 1);
@@ -693,24 +753,34 @@ export async function runLoop(
             hasRunner: Boolean(ctx.runScript),
             runs: verifyRuns,
             editedSinceLastRun: editsKey !== lastVerifiedEdits,
-            script: verifyScript,
+            script: verifyScript ?? fromSkills.run[0]?.script ?? null,
           }) &&
           ctx.runScript &&
-          verifyScript
+          (verifyScript || wantsSkillChecks)
         ) {
           verifyRuns += 1;
           lastVerifiedEdits = editsKey;
-          // The agent just ran this script on these very edits: that run is the check.
-          const fresh = lastRun?.script === verifyScript && lastRun.editsKey === editsKey && lastRun.result.ran;
-          if (!fresh) emit({ type: "status", text: `Checking with ${verifyScript}…` });
-          const check = fresh ? lastRun!.result : await ctx.runScript(verifyScript);
-          verify = reportFromRun(verifyScript, check, verifyRuns);
+          /** The first failure, handed back as this turn's task. */
+          let fix: string | null = null;
+          if (verifyScript) {
+            // The agent just ran this script on these very edits: that run is the check.
+            const fresh = lastRun?.script === verifyScript && lastRun.editsKey === editsKey && lastRun.result.ran;
+            if (!fresh) emit({ type: "status", text: `Checking with ${verifyScript}…` });
+            const check = fresh ? lastRun!.result : await ctx.runScript(verifyScript);
+            verify = reportFromRun(verifyScript, check, verifyRuns);
+            if (verify.status === "failed") fix = fixPrompt(verifyScript, check.text);
+          }
+          if (wantsSkillChecks) {
+            const skillFix = await runSkillChecks(fromSkills, editsKey);
+            if (skillFix === undefined) return { ok: false, error: "Stopped." };
+            fix ??= skillFix;
+          }
           // Only a real failure of the edits is worth a fix. Hand it back as
           // this turn's task, once, before the person ever sees the diff; a
           // run that never started is reported, not "fixed".
-          if (verify.status === "failed" && verifyRuns === 1) {
+          if (fix && verifyRuns === 1) {
             messages.push({ role: "assistant", content: completion.content ?? "" });
-            messages.push({ role: "user", content: fixPrompt(verifyScript, check.text) });
+            messages.push({ role: "user", content: fix });
             continue;
           }
         }
@@ -824,6 +894,33 @@ export async function runLoop(
               messages.push({ role: "user", content: prompt });
               continue;
             }
+          }
+          // A clean edit settles the turn, but not past a loaded skill's checks: they run now, with one try to fix.
+          if (stop === "settle") {
+            const checks = skillChecksNow(null);
+            const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
+            if (checks.run.length + checks.missing.length > 0 && (!ctx.runScript || browserRun))
+              skillResults = skillChecksNotRun(checks);
+            else if (
+              checks.run.length + checks.missing.length > 0 &&
+              shouldAutoVerify({
+                phase,
+                editCount: staged.length,
+                hasRunner: true,
+                runs: verifyRuns,
+                editedSinceLastRun: editsKey !== lastVerifiedEdits,
+                script: checks.run[0]?.script ?? null,
+              })
+            ) {
+              verifyRuns += 1;
+              lastVerifiedEdits = editsKey;
+              const fix = await runSkillChecks(checks, editsKey);
+              if (fix === undefined) return { ok: false, error: "Stopped." };
+              if (fix && verifyRuns === 1) {
+                messages.push({ role: "user", content: fix });
+                continue;
+              }
+            } else if (checks.missing.length > 0 && checks.run.length === 0) skillResults = skillChecksNotRun(checks);
           }
           return await succeed(
             {

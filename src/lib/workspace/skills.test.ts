@@ -4,6 +4,7 @@ import {
   findSkill,
   isSkillPath,
   loadSkill,
+  parseChecks,
   parseSkill,
   projectSkills,
   SKILL_LIMIT,
@@ -96,5 +97,33 @@ test("a new skill is named for its file, so it never shares the example's name",
       ".aperture/skills/skill-2.md": skillTemplate("skill-2"),
     }).length,
     2,
+  );
+});
+
+test("a skill can name checks: package.json scripts that must pass, told to the agent", () => {
+  assert.deepEqual(parseChecks("test, migrate:check"), ["test", "migrate:check"]);
+  assert.deepEqual(parseChecks('npm run lint, `npm test`, "npm run-script e2e"'), [
+    "lint",
+    "test",
+    "e2e",
+  ]);
+  assert.deepEqual(parseChecks("[test, test, , rm -rf /, a;b]"), ["test"]);
+  assert.deepEqual(parseChecks("a, b, c, d, e"), ["a", "b", "c", "d"]);
+  assert.deepEqual(parseChecks(""), []);
+  const skill = parseSkill(
+    ".aperture/skills/migration.md",
+    "---\nname: migration\ndescription: Add a migration.\nchecks: test, migrate:check\n---\nWrite the next one.",
+  )!;
+  assert.deepEqual(skill.checks, ["test", "migrate:check"]);
+  assert.equal(parseSkill(".aperture/skills/release.md", SKILL_TEMPLATE)!.checks, undefined);
+  assert.match(
+    skillsIndex([skill]),
+    /- migration: Add a migration\. \(must pass: npm run test, npm run migrate:check\)/,
+  );
+  const loaded = loadSkill([skill], "migration");
+  assert.ok("text" in loaded);
+  assert.match(
+    loaded.text,
+    /<\/skill>\nThis skill's checks must pass before you are done: `npm run test`, `npm run migrate:check`\./,
   );
 });

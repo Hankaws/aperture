@@ -59,6 +59,8 @@ export type AgentInput = {
   images?: AgentImage[];
   /** Nobody is watching this turn (a background run): the agent does not ask, it decides. */
   unattended?: boolean;
+  /** Skills an earlier turn of this change loaded, by path: their checks still have to pass (`skill-checks.ts`). */
+  skillsInRun?: string[];
 };
 
 export type AgentResult =

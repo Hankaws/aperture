@@ -545,3 +545,76 @@ test("a skill's failing check is handed back in the same turn, and one fix there
   assert.match(result.summary, /Skill prices: `npm run prices:check` passed\./);
   assert.equal(result.check?.rows.find((r) => r.id === "skill:prices:check")?.status, "pass");
 });
+
+test("a clean edit that ends the turn is checked first: the project's tests run, and a failure comes back to fix", async () => {
+  const { run } = await bundled();
+  const dir = repo({
+    ...shop,
+    "package.json": JSON.stringify({
+      name: "shop",
+      private: true,
+      scripts: { test: "node price.check.mjs" },
+    }),
+    "price.check.mjs": [
+      'import { readFileSync } from "node:fs";',
+      'if (!readFileSync("src/price.ts", "utf8").includes("toFixed(2)")) throw new Error("expected two decimals");',
+    ].join("\n"),
+  });
+  const usage = { input: 10, output: 5 };
+  let n = 0;
+  const call = (name: string, args: unknown) => ({
+    id: `c${(n += 1)}`,
+    type: "function" as const,
+    function: { name, arguments: JSON.stringify(args) },
+  });
+  const edit = (search: string, replace: string) =>
+    call("propose_edit", {
+      path: "src/price.ts",
+      search,
+      replace,
+      description: "edit",
+      confidence: 0.95,
+    });
+  let planned = 0;
+  const fixes: string[] = [];
+  let builds = 0;
+  const model: Model = async (_cfg, messages, _useTools, _signal, tools) => {
+    const last = messages[messages.length - 1];
+    if (!(tools ?? []).some((t) => t.function.name === "propose_edit")) {
+      planned += 1;
+      return planned === 1
+        ? {
+            content: "",
+            usage,
+            tool_calls: [call("set_plan", { entries: [{ content: "Show dollars" }] })],
+          }
+        : { content: "Plan ready.", usage };
+    }
+    if (
+      last?.role === "user" &&
+      String(last.content).startsWith("Your edits do not pass `npm run test`")
+    ) {
+      fixes.push(String(last.content));
+      return {
+        content: "",
+        usage,
+        tool_calls: [edit('return "$" + cents / 100;', "return `$${(cents / 100).toFixed(2)}`;")],
+      };
+    }
+    builds += 1;
+    // One clean edit and nothing else: the turn settles on it, as most turns do.
+    return {
+      content: "",
+      usage,
+      tool_calls: [edit("return String(cents);", 'return "$" + cents / 100;')],
+    };
+  };
+  const result = await run.runTask(options(dir, { sandbox: localSandbox() }), { model });
+  assert.equal(result.outcome, "clear", result.text);
+  assert.equal(builds, 1);
+  assert.equal(fixes.length, 1);
+  assert.match(fixes[0]!, /expected two decimals/);
+  assert.equal(result.checks, 1, result.text);
+  assert.match(result.summary, /Verified: `npm run test` passed against these edits\./);
+  assert.match(readFileSync(join(dir, "src/price.ts"), "utf8"), /toFixed\(2\)/);
+});

@@ -672,6 +672,59 @@ export async function runLoop(
     skillResults = [...results, ...checks.missing.map(missingResult)];
     return fix;
   };
+  /**
+   * The project's own check and the loaded skills' checks on the edits as
+   * staged now, under one bound (`shouldAutoVerify`): at most two runs, the
+   * second only after the edits changed. Leaves `verify` and `skillResults`
+   * saying what ran, or why not. Returns the first failure's fix prompt on
+   * the first run (the one try to fix), else null; undefined when stopped.
+   */
+  const checkStaged = async (staged: ProposedEdit[]): Promise<string | null | undefined> => {
+    if (phase === "plan" || staged.length === 0) return null;
+    const verifyScript = chooseVerifyScript(ctx.files);
+    const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
+    // A loaded skill's checks run with the project's own; one package.json lacks cannot pass.
+    const fromSkills = skillChecksNow(verifyScript);
+    const wantsSkillChecks = fromSkills.run.length + fromSkills.missing.length > 0;
+    if (wantsSkillChecks && (!ctx.runScript || browserRun)) skillResults = skillChecksNotRun(fromSkills);
+    // The tab runs the agent's own check when this turn ends and reports back: no second run here.
+    if (browserRun) return null;
+    if (!verifyScript || !ctx.runScript) verify = notRunReport({ script: verifyScript, hasRunner: Boolean(ctx.runScript) });
+    const run =
+      shouldAutoVerify({
+        phase,
+        editCount: staged.length,
+        hasRunner: Boolean(ctx.runScript),
+        runs: verifyRuns,
+        editedSinceLastRun: editsKey !== lastVerifiedEdits,
+        script: verifyScript ?? fromSkills.run[0]?.script ?? null,
+      }) &&
+      ctx.runScript &&
+      (verifyScript || wantsSkillChecks);
+    if (!run) {
+      if (wantsSkillChecks && skillResults === undefined) skillResults = skillChecksNotRun(fromSkills);
+      return null;
+    }
+    verifyRuns += 1;
+    lastVerifiedEdits = editsKey;
+    let fix: string | null = null;
+    if (verifyScript) {
+      // The agent just ran this script on these very edits: that run is the check.
+      const fresh = lastRun?.script === verifyScript && lastRun.editsKey === editsKey && lastRun.result.ran;
+      if (!fresh) emit({ type: "status", text: `Checking with ${verifyScript}…` });
+      const check = fresh ? lastRun!.result : await ctx.runScript!(verifyScript);
+      if (signal?.aborted) return undefined;
+      verify = reportFromRun(verifyScript, check, verifyRuns);
+      // A run that never started is reported, not "fixed".
+      if (verify.status === "failed") fix = fixPrompt(verifyScript, check.text);
+    }
+    if (wantsSkillChecks) {
+      const skillFix = await runSkillChecks(fromSkills, editsKey);
+      if (skillFix === undefined) return undefined;
+      fix ??= skillFix;
+    }
+    return fix && verifyRuns === 1 ? fix : null;
+  };
 
   try {
     for (let step = 0; step < maxSteps; step++) {
@@ -732,57 +785,14 @@ export async function runLoop(
           return await succeed({ text: planReadyText(completion.content), traces, edits: [], plan: ctx.plan, awaitingBuild: true }, step + 1);
         }
         const staged = mergeEdits(ctx.edits);
-        const verifyScript = chooseVerifyScript(ctx.files);
-        const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
-        // A loaded skill's checks run with the project's own; one package.json lacks cannot pass.
-        const fromSkills = skillChecksNow(verifyScript);
-        const wantsSkillChecks = fromSkills.run.length + fromSkills.missing.length > 0;
-        if (phase !== "plan" && staged.length > 0 && wantsSkillChecks && (!ctx.runScript || browserRun))
-          skillResults = skillChecksNotRun(fromSkills);
-        // The tab runs the agent's own check when this turn ends and reports back: no second run here.
-        if (browserRun) {
-          return await succeed({ text: completion.content.trim() || "Done.", traces, edits: staged, plan: ctx.plan }, step + 1);
-        }
-        if (phase !== "plan" && staged.length > 0 && (!verifyScript || !ctx.runScript)) {
-          verify = notRunReport({ script: verifyScript, hasRunner: Boolean(ctx.runScript) });
-        }
-        if (
-          shouldAutoVerify({
-            phase,
-            editCount: staged.length,
-            hasRunner: Boolean(ctx.runScript),
-            runs: verifyRuns,
-            editedSinceLastRun: editsKey !== lastVerifiedEdits,
-            script: verifyScript ?? fromSkills.run[0]?.script ?? null,
-          }) &&
-          ctx.runScript &&
-          (verifyScript || wantsSkillChecks)
-        ) {
-          verifyRuns += 1;
-          lastVerifiedEdits = editsKey;
-          /** The first failure, handed back as this turn's task. */
-          let fix: string | null = null;
-          if (verifyScript) {
-            // The agent just ran this script on these very edits: that run is the check.
-            const fresh = lastRun?.script === verifyScript && lastRun.editsKey === editsKey && lastRun.result.ran;
-            if (!fresh) emit({ type: "status", text: `Checking with ${verifyScript}…` });
-            const check = fresh ? lastRun!.result : await ctx.runScript(verifyScript);
-            verify = reportFromRun(verifyScript, check, verifyRuns);
-            if (verify.status === "failed") fix = fixPrompt(verifyScript, check.text);
-          }
-          if (wantsSkillChecks) {
-            const skillFix = await runSkillChecks(fromSkills, editsKey);
-            if (skillFix === undefined) return { ok: false, error: "Stopped." };
-            fix ??= skillFix;
-          }
-          // Only a real failure of the edits is worth a fix. Hand it back as
-          // this turn's task, once, before the person ever sees the diff; a
-          // run that never started is reported, not "fixed".
-          if (fix && verifyRuns === 1) {
-            messages.push({ role: "assistant", content: completion.content ?? "" });
-            messages.push({ role: "user", content: fix });
-            continue;
-          }
+        const fix = await checkStaged(staged);
+        if (fix === undefined) return { ok: false, error: "Stopped." };
+        // Only a real failure of the edits is worth a fix. Hand it back as
+        // this turn's task, once, before the person ever sees the diff.
+        if (fix) {
+          messages.push({ role: "assistant", content: completion.content ?? "" });
+          messages.push({ role: "user", content: fix });
+          continue;
         }
         const text = completion.content.trim() || "Done.";
         return await succeed({ text, traces, edits: staged, plan: ctx.plan }, step + 1);
@@ -895,32 +905,15 @@ export async function runLoop(
               continue;
             }
           }
-          // A clean edit settles the turn, but not past a loaded skill's checks: they run now, with one try to fix.
+          // A clean edit settles the turn, but only after the checks: the project's own, and the
+          // loaded skills'. Most turns end here, so this is where checking the work has to happen.
           if (stop === "settle") {
-            const checks = skillChecksNow(null);
-            const editsKey = JSON.stringify(staged.map((e) => [e.path, e.newText]));
-            if (checks.run.length + checks.missing.length > 0 && (!ctx.runScript || browserRun))
-              skillResults = skillChecksNotRun(checks);
-            else if (
-              checks.run.length + checks.missing.length > 0 &&
-              shouldAutoVerify({
-                phase,
-                editCount: staged.length,
-                hasRunner: true,
-                runs: verifyRuns,
-                editedSinceLastRun: editsKey !== lastVerifiedEdits,
-                script: checks.run[0]?.script ?? null,
-              })
-            ) {
-              verifyRuns += 1;
-              lastVerifiedEdits = editsKey;
-              const fix = await runSkillChecks(checks, editsKey);
-              if (fix === undefined) return { ok: false, error: "Stopped." };
-              if (fix && verifyRuns === 1) {
-                messages.push({ role: "user", content: fix });
-                continue;
-              }
-            } else if (checks.missing.length > 0 && checks.run.length === 0) skillResults = skillChecksNotRun(checks);
+            const fix = await checkStaged(staged);
+            if (fix === undefined) return { ok: false, error: "Stopped." };
+            if (fix) {
+              messages.push({ role: "user", content: fix });
+              continue;
+            }
           }
           return await succeed(
             {

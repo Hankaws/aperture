@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- The agent checks its work before it hands it over, as it says it does. Most turns end right after the first clean edit, and that ending skipped the run of the project's own tests in the sandbox, so the one try to fix a failure before you see the diff rarely happened. Now the tests (or the typecheck, lint or build script) run there too, under the same limits: one try to fix, one re-run, and a run the agent already made on the same edits counts. The reply says "Verified" or "Not verified", and the check list shows the result. Aperture Bot gets it in its next release. ([#192](https://github.com/Hankaws/aperture/pull/192))
+
 ## 0.11.0 - 2026-11-10
 
 ### Added

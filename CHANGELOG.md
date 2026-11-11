@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.12.0 - 2026-11-11
+
 ### Added
 
 - A Skills card on the Bot page, under Automation. It lists the skills in each bot's repository (`.aperture/skills/` on its default branch), with what each is for and a link to its file, and how the bot used them in its recent runs: how many followed each skill and when last, and how the checks it names went ("migrate:check failed in 2 of 5 runs" in red). A skill no run follows stands out. Each bot reply now records the skills it followed and their checks' results, from Aperture Bot v1.13. ([#193](https://github.com/Hankaws/aperture/pull/193))

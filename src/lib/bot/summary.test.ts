@@ -40,3 +40,46 @@ test("a look-over reads back as one, with its note", () => {
   assert.equal(readSummary(odd)?.kind, undefined);
   assert.equal(readSummary(odd)?.note, undefined);
 });
+
+test("a run's skills and their checks read back, and only as skill files and plain names", () => {
+  const body = `Done.\n\n${summaryMarker({
+    v: 1,
+    state: "clear",
+    asked: 1,
+    run: "https://github.com/acme/shop/actions/runs/1",
+    skills: [".aperture/skills/prices.md", ".aperture/skills/Add Migration/SKILL.md"],
+    skillChecks: [
+      { skill: "prices", script: "prices:check", status: "failed" },
+      { skill: "add-migration", script: "test", status: "passed" },
+    ],
+  })}`;
+  const read = readSummary(body)!;
+  assert.deepEqual(read.skills, [
+    ".aperture/skills/prices.md",
+    ".aperture/skills/Add Migration/SKILL.md",
+  ]);
+  assert.deepEqual(read.skillChecks, [
+    { skill: "prices", script: "prices:check", status: "failed" },
+    { skill: "add-migration", script: "test", status: "passed" },
+  ]);
+  // Anyone can comment: what is not a skill file, a name or a status is dropped.
+  const forged = readSummary(
+    `<!-- aperture-bot ${JSON.stringify({
+      v: 1,
+      state: "clear",
+      asked: 1,
+      run: "",
+      skills: ["src/app.ts", ".aperture/skills/a/b/c.md", ".aperture/skills/ok.md", 7],
+      skillChecks: [
+        { skill: "ok", script: "rm -rf", status: "passed" },
+        { skill: "ok", script: "test", status: "great" },
+        { skill: "ok", script: "test", status: "not_run" },
+      ],
+    })} -->`,
+  )!;
+  assert.deepEqual(forged.skills, [".aperture/skills/ok.md"]);
+  assert.deepEqual(forged.skillChecks, [{ skill: "ok", script: "test", status: "not_run" }]);
+  const none = readSummary(summaryMarker({ v: 1, state: "clear", asked: 1, run: "" }))!;
+  assert.equal(none.skills, undefined);
+  assert.equal(none.skillChecks, undefined);
+});

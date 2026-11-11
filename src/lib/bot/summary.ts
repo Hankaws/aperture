@@ -61,12 +61,37 @@ export type BotSummary = {
   sig?: string;
   /** A look-over's few sentences on how the repository stands. */
   note?: string;
+  /** The project's skills the run followed, by path (`.aperture/skills/<name>.md` or `<name>/SKILL.md`). */
+  skills?: string[];
+  /** How the checks those skills name went on the change (`agent/skill-checks.ts`). */
+  skillChecks?: BotSkillCheck[];
+};
+
+export type BotSkillCheck = {
+  skill: string;
+  script: string;
+  status: "passed" | "failed" | "not_run";
 };
 
 const OPEN = "<!-- aperture-bot ";
 const CLOSE = " -->";
 
-const LIMITS = { plan: 7, checks: 30, files: 100, text: 300, error: 1_000, next: 5 };
+const LIMITS = {
+  plan: 7,
+  checks: 30,
+  files: 100,
+  text: 300,
+  error: 1_000,
+  next: 5,
+  skills: 10,
+  name: 80,
+};
+
+/** A skill's or a script's name: short, and no more than a name may hold. */
+const NAME = /^[A-Za-z0-9][\w:.@/-]*$/;
+/** A skill's file, as `workspace/skills.ts` finds them. */
+const SKILL_PATH = /^\.aperture\/skills\/(?:[^/<>"`]+\.md|[^/<>"`]+\/SKILL\.md)$/i;
+const SKILL_STATUS = new Set(["passed", "failed", "not_run"]);
 
 const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`;
@@ -86,6 +111,12 @@ function bounded(summary: BotSummary): BotSummary {
     task: summary.task === undefined ? undefined : clip(summary.task, LIMITS.error),
     error: summary.error === undefined ? undefined : clip(summary.error, LIMITS.error),
     note: summary.note === undefined ? undefined : clip(summary.note, LIMITS.error),
+    skills: summary.skills?.filter((path) => path.length <= LIMITS.text).slice(0, LIMITS.skills),
+    skillChecks: summary.skillChecks?.slice(0, LIMITS.skills).map((c) => ({
+      skill: clip(c.skill, LIMITS.name),
+      script: clip(c.script, LIMITS.name),
+      status: c.status,
+    })),
   };
 }
 
@@ -180,6 +211,26 @@ export function readSummary(body: string): BotSummary | null {
   if (typeof r.usage === "string") out.usage = r.usage;
   if (typeof r.error === "string") out.error = r.error;
   if (typeof r.note === "string" && r.note.trim()) out.note = clip(r.note, LIMITS.error);
+  const skills = strings(r.skills)
+    ?.filter((path) => path.length <= LIMITS.text && SKILL_PATH.test(path))
+    .slice(0, LIMITS.skills);
+  if (skills?.length) out.skills = skills;
+  if (Array.isArray(r.skillChecks)) {
+    const checks = r.skillChecks.flatMap((row) => {
+      const c = row as Record<string, unknown>;
+      return typeof c?.skill === "string" &&
+        typeof c.script === "string" &&
+        typeof c.status === "string" &&
+        NAME.test(c.skill) &&
+        NAME.test(c.script) &&
+        c.skill.length <= LIMITS.name &&
+        c.script.length <= LIMITS.name &&
+        SKILL_STATUS.has(c.status)
+        ? [{ skill: c.skill, script: c.script, status: c.status as BotSkillCheck["status"] }]
+        : [];
+    });
+    if (checks.length) out.skillChecks = checks.slice(0, LIMITS.skills);
+  }
   return out;
 }
 

@@ -34,6 +34,8 @@ import {
   type Lesson,
 } from "@/lib/bot/lessons";
 import { addTastes, tasteOf, type Taste } from "@/lib/bot/taste";
+import { skillUsage, type SkillUse } from "@/lib/bot/skill-usage";
+import { isSkillPath, projectSkills, SKILLS_DIR, type Skill } from "@/lib/workspace/skills";
 import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
@@ -585,6 +587,96 @@ export const botLessons = createServerFn({ method: "POST" })
         out.push(...batch.flat());
       }
       return { ok: true, lessons: out };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not reach GitHub.",
+      };
+    }
+  });
+
+/** Each repository's skills, and how its bot used them (`skill-usage.ts`). */
+export type BotSkills =
+  { ok: true; repos: Array<{ repo: string; skills: SkillUse[]; read: number }> } | Failure;
+
+/** Skill files read from one repository at most. */
+const MAX_SKILL_FILES = 30;
+
+/** A path as the contents API takes it: each part encoded. */
+const contentsPath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
+/**
+ * The repository's skills, as the agent and the bot find them
+ * (`workspace/skills.ts`), on its default branch, with each file's GitHub link.
+ */
+export async function readSkills(base: string, get: Get): Promise<Array<Skill & { url: string }>> {
+  const dir = await get(`${base}/contents/${SKILLS_DIR.replace(/\/$/, "")}`);
+  if (dir.status === 401) throw new Error("GitHub rejected the token on your account.");
+  if (dir.status !== 200 || !Array.isArray(dir.body)) return [];
+  const entries = dir.body as Array<{ type?: string; name?: string; path?: string }>;
+  const wanted = entries
+    .flatMap((e) =>
+      e.type === "file" && typeof e.path === "string" && /\.md$/i.test(e.path)
+        ? [e.path]
+        : e.type === "dir" && typeof e.path === "string"
+          ? [`${e.path}/SKILL.md`]
+          : [],
+    )
+    .filter(isSkillPath)
+    .slice(0, MAX_SKILL_FILES);
+  const files: Record<string, string> = {};
+  const urls = new Map<string, string>();
+  await Promise.all(
+    wanted.map(async (path) => {
+      const got = await get(`${base}/contents/${contentsPath(path)}`);
+      const body = got.body as { content?: string; encoding?: string; html_url?: string } | null;
+      if (got.status !== 200 || typeof body?.content !== "string" || body.encoding !== "base64")
+        return;
+      files[path] = fromBase64(body.content);
+      if (typeof body.html_url === "string" && body.html_url.startsWith("https://github.com/"))
+        urls.set(path, body.html_url);
+    }),
+  );
+  return projectSkills(files).map((skill) => ({ ...skill, url: urls.get(skill.path) ?? "" }));
+}
+
+/**
+ * The team's skills, and how each bot used them: two requests a repository
+ * and one a skill file. Read when the card opens, not on every refresh.
+ */
+export const botSkills = createServerFn({ method: "POST" })
+  .validator(botTeamInput)
+  .middleware([authMiddleware])
+  .handler(async ({ data, context }): Promise<BotSkills> => {
+    const busy = overLimit("bot", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { accountToken, githubJson } = await github();
+    const token = await accountToken(context.userId);
+    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+    const get: Get = (url) => githubJson(url, token);
+    try {
+      const out: Array<{ repo: string; skills: SkillUse[]; read: number }> = [];
+      const repos = [...new Set(data.repos)];
+      for (let i = 0; i < repos.length; i += ACTIVITY_PARALLEL) {
+        const batch = await Promise.all(
+          repos.slice(i, i + ACTIVITY_PARALLEL).map(async (fullName) => {
+            const [owner = "", repo = ""] = fullName.split("/");
+            const base = repoBase(owner, repo);
+            if (!base) return null;
+            const skills = await readSkills(base, get);
+            if (skills.length === 0) return { repo: fullName, skills: [], read: 0 };
+            const loaded = await loadTasks(base, get, { quick: true });
+            const tasks = loaded.ok ? loaded.tasks : [];
+            return {
+              repo: fullName,
+              skills: skillUsage(fullName, skills, tasks),
+              read: tasks.length,
+            };
+          }),
+        );
+        for (const row of batch) if (row) out.push(row);
+      }
+      return { ok: true, repos: out };
     } catch (error) {
       return {
         ok: false,

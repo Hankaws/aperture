@@ -141,6 +141,17 @@ export function resultSummary(
     usage: result.usage,
     error: result.error,
     ...(result.next.length ? { next: result.next.map(quiet) } : {}),
+    // For the Bot page's Skills card: which skills the run followed, and how their checks went.
+    ...(result.skills.length ? { skills: result.skills } : {}),
+    ...(result.skillChecks.length
+      ? {
+          skillChecks: result.skillChecks.map((c) => ({
+            skill: c.skill,
+            script: c.script,
+            status: c.status,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -301,6 +312,7 @@ export function answerReply(
         run: ctx.run,
         ...askedFields(ctx),
         ...(answer.next.length ? { next: answer.next.map(quiet) } : {}),
+        ...(answer.skills?.length ? { skills: answer.skills } : {}),
         usage: ctx.usage,
       }),
     ],

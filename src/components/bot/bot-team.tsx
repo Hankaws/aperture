@@ -37,6 +37,7 @@ import { IdeasPanel } from "./ideas-panel";
 import { useDismissedIdeas } from "./use-dismissed-ideas";
 import { JobsCard } from "./jobs-card";
 import { LearnedPanel } from "./learned-panel";
+import { SkillsPanel } from "./skills-panel";
 import { MascotAvatar } from "./mascot";
 import { NextUpPanel } from "./next-up";
 import { ModelPicker } from "./model-picker";
@@ -427,6 +428,9 @@ export function BotTeam() {
                   onRefresh={() => void team.reload()}
                   repos={bots.map((b) => b.repo)}
                 />
+              </PanelBoundary>
+              <PanelBoundary name="Skills" className={cn(PANEL_CARD, "mt-4")}>
+                <SkillsPanel repos={bots.map((b) => b.repo)} now={team.now} />
               </PanelBoundary>
             </div>
           </>

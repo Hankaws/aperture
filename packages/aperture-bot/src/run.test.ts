@@ -544,6 +544,11 @@ test("a skill's failing check is handed back in the same turn, and one fix there
   assert.equal(result.checks, 1, result.text);
   assert.match(result.summary, /Skill prices: `npm run prices:check` passed\./);
   assert.equal(result.check?.rows.find((r) => r.id === "skill:prices:check")?.status, "pass");
+  // Recorded for the Bot page's Skills card, as the run left them.
+  assert.deepEqual(
+    result.skillChecks.map((c) => [c.skill, c.script, c.status]),
+    [["prices", "prices:check", "passed"]],
+  );
 });
 
 test("a clean edit that ends the turn is checked first: the project's tests run, and a failure comes back to fix", async () => {

@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- A Skills card on the Bot page, under Automation. It lists the skills in each bot's repository (`.aperture/skills/` on its default branch), with what each is for and a link to its file, and how the bot used them in its recent runs: how many followed each skill and when last, and how the checks it names went ("migrate:check failed in 2 of 5 runs" in red). A skill no run follows stands out. Each bot reply now records the skills it followed and their checks' results, from Aperture Bot v1.13. ([#193](https://github.com/Hankaws/aperture/pull/193))
+
 ### Fixed
 
 - The agent checks its work before it hands it over, as it says it does. Most turns end right after the first clean edit, and that ending skipped the run of the project's own tests in the sandbox, so the one try to fix a failure before you see the diff rarely happened. Now the tests (or the typecheck, lint or build script) run there too, under the same limits: one try to fix, one re-run, and a run the agent already made on the same edits counts. The reply says "Verified" or "Not verified", and the check list shows the result. Aperture Bot gets it in its next release. ([#192](https://github.com/Hankaws/aperture/pull/192))

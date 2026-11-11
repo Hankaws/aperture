@@ -13,6 +13,7 @@ import { git } from "../../agent-check/src/git.ts";
 import { consoleText, verdict } from "../../agent-check/src/report.ts";
 import { skillRows } from "../../../src/lib/workspace/checks.ts";
 import type { VerifyReport } from "../../../src/lib/workspace/types.ts";
+import type { SkillCheckResult } from "../../../src/lib/agent/skill-checks.ts";
 import type { CompletionCfg } from "../../../src/lib/agent/complete.server.ts";
 import { runLoop } from "../../../src/lib/agent/loop.ts";
 import { planReadyText } from "../../../src/lib/agent/phase.ts";
@@ -64,6 +65,8 @@ export type BotResult = {
   text: string;
   /** The project's skills (`.aperture/skills/`) the agent loaded, by path. */
   skills: string[];
+  /** How the checks those skills name went on the change, as the latest round left them. */
+  skillChecks: SkillCheckResult[];
 };
 
 const OWNER = "aperture-bot";
@@ -140,6 +143,7 @@ export async function runTask(
     text: "",
     next: [],
     skills: [],
+    skillChecks: [],
   };
   /**
    * A finished change (clear or still red) ends with suggestions for next
@@ -243,6 +247,7 @@ export async function runTask(
       }),
       built.out.verify ?? null,
     );
+    result.skillChecks = built.out.verify?.skills ?? [];
     result.checks += 1;
     if (result.check.verdict === "clear") return suggest("clear");
     if (round >= options.rounds) return suggest("red");

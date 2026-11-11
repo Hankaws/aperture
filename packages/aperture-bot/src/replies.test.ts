@@ -47,6 +47,7 @@ const result = (more: Partial<BotResult> = {}): BotResult => ({
   usage: "1,000 input and 50 output tokens in 2 model calls",
   text: "",
   skills: [],
+  skillChecks: [],
   next: [],
   ...more,
 });
@@ -213,4 +214,38 @@ test("a run that followed the project's skills says which, in the pull request a
   assert.ok(
     !answerReply({ answer: "Yes.", next: [] }, { ...ctx, usage: "10 tokens" }).includes("Followed"),
   );
+});
+
+test("the hidden summary says which skills a run followed and how their checks went, for the Bot page", () => {
+  const ctx = { asked: 1, run: "https://github.com/acme/shop/actions/runs/1", tests: null };
+  const done = doneReply(
+    result({
+      skills: [".aperture/skills/prices.md"],
+      skillChecks: [
+        {
+          skill: "prices",
+          script: "prices:check",
+          status: "passed",
+          detail: "npm run prices:check passed.",
+        },
+      ],
+    }),
+    { url: "https://github.com/acme/shop/pull/13", what: "pull" },
+    ctx,
+  );
+  const read = readSummary(done)!;
+  assert.deepEqual(read.skills, [".aperture/skills/prices.md"]);
+  assert.deepEqual(read.skillChecks, [
+    { skill: "prices", script: "prices:check", status: "passed" },
+  ]);
+  const plain = readSummary(
+    doneReply(result(), { url: "https://github.com/acme/shop/pull/13", what: "pull" }, ctx),
+  )!;
+  assert.equal(plain.skills, undefined);
+  assert.equal(plain.skillChecks, undefined);
+  const answer = answerReply(
+    { answer: "Two decimals.", next: [], skills: [".aperture/skills/prices.md"] },
+    { ...ctx, usage: "10 tokens" },
+  );
+  assert.deepEqual(readSummary(answer)?.skills, [".aperture/skills/prices.md"]);
 });

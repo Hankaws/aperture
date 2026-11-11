@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Use a skill on purpose: type `/` in the agent panel and the project's skills are listed after the commands, each with what it is for. Pick one, or type `/release cut 0.13.0`, and the agent loads that skill first and follows it for the task, held to the checks it names, instead of waiting to match it to the task itself. Your message shows as you typed it. ([#195](https://github.com/Hankaws/aperture/pull/195))
+
+### Fixed
+
+- A follow-up on a change in the editor is held to the skills the change was made under again, as 0.11.0 said: a fix, your notes, or the Build it of a plan made with a skill. The server dropped the list of those skills on the way in, so their checks did not run on those turns. Aperture Bot was not affected. ([#195](https://github.com/Hankaws/aperture/pull/195))
+
 ## 0.12.0 - 2026-11-11
 
 ### Added

@@ -82,6 +82,19 @@ export function isSkillPath(path: string): boolean {
   return /^[^/]+\.md$/i.test(rest) || /^[^/]+\/SKILL\.md$/i.test(rest);
 }
 
+/** Skill paths from a request (`AgentInput.skillsInRun`): skill files only, each once, at most ten. */
+export function skillPaths(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: string[] = [];
+  for (const path of raw) {
+    if (typeof path !== "string" || path.length > 300 || path.includes("..")) continue;
+    if (!isSkillPath(path) || out.includes(path)) continue;
+    out.push(path);
+    if (out.length === 10) break;
+  }
+  return out.length ? out : undefined;
+}
+
 /** A name as the agent calls it: lowercase words joined by hyphens. */
 export function skillName(raw: string): string {
   return raw

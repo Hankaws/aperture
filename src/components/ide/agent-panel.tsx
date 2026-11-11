@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ImageTray, MessageImages } from "./image-tray";
 import { QuestionCard } from "./question-card";
-import { skillName } from "@/lib/workspace/skills";
+import { isSkillPath, projectSkills, skillName } from "@/lib/workspace/skills";
 import { isLastReplyOfRun, skillFromRun } from "@/lib/workspace/skill-draft";
 import { useAttachedImages } from "./use-attached-images";
 import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
@@ -56,7 +56,7 @@ import { nextAction } from "@/lib/workspace/next-action";
 import type { AgentMode, AgentDebug, ChatMessage, ToolTrace } from "@/lib/workspace/types";
 import type { AgentPhase } from "@/lib/agent/phase";
 import { nextComposerPhase, isBuildIntent } from "@/lib/agent/phase";
-import { activeSlash, expandSlash, filterSlash, parseSlash } from "@/lib/agent/slash";
+import { activeSlash, expandSlash, filterSlash, parseSkillSlash, parseSlash, skillInstruction } from "@/lib/agent/slash";
 import { autoContextPaths } from "@/lib/agent/auto-context";
 
 const DEMO_SUGGESTIONS = [
@@ -178,7 +178,20 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const mention = dismissMention ? null : activeMention(draft, caret);
   const mentionHits = mention ? filterMentions(catalog, mention.query) : [];
   const slash = dismissMention ? null : activeSlash(draft, caret);
-  const slashHits = slash ? filterSlash(slash.query) : [];
+  // The project's skills, offered after the commands: `/release` uses that skill. Keyed on the skill files alone.
+  const skillFiles = useWorkspace((s) =>
+    Object.keys(s.files)
+      .filter(isSkillPath)
+      .sort()
+      .map((path) => `${path}\u0000${s.files[path]}`)
+      .join("\u0001"),
+  );
+  const skills = useMemo(
+    () => projectSkills(useWorkspace.getState().files),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the skill files are the key
+    [skillFiles],
+  );
+  const slashHits = slash ? filterSlash(slash.query, skills) : [];
   const autoPaths = autoContextPaths({
     activePath,
     openTabs,
@@ -363,9 +376,12 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             pending: listPendingEdits(ws.messages),
           })
         : null;
+      const skillUse = parsed ? null : parseSkillSlash(trimmed, projectSkills(ws.files));
       setDraft("");
       setDismissMention(false);
-      await queueBackground(slashRun?.instruction ?? trimmed);
+      await queueBackground(
+        slashRun?.instruction ?? (skillUse ? skillInstruction(skillUse.skill, skillUse.rest) : trimmed),
+      );
       useIdeUi.getState().clearCaptures();
       return;
     }
@@ -392,6 +408,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           pending: listPendingEdits(ws.messages),
         })
       : null;
+    // `/release …`: the skill is loaded for this turn, and its checks hold the change.
+    const skillUse = parsed ? null : parseSkillSlash(trimmed, projectSkills(ws.files));
     const resolved =
       slashRun
         ? { phase: slashRun.phase, approvedPlan: undefined }
@@ -407,7 +425,9 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
       agentLabel: target.kind === "acp" ? target.name : "Aperture",
       phase: resolved.phase,
       approvedPlan: resolved.approvedPlan,
-      apiInstruction: slashRun?.instruction,
+      apiInstruction:
+        slashRun?.instruction ?? (skillUse ? skillInstruction(skillUse.skill, skillUse.rest) : undefined),
+      ...(skillUse ? { withSkills: [skillUse.skill.path] } : {}),
       ...(images.length ? { images } : {}),
     });
     useIdeUi.getState().clearCaptures();

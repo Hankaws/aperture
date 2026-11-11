@@ -8,6 +8,7 @@ import { redactSecrets, safeRelPath } from "./redact";
 import { cleanPaths, pickAgentFileSet } from "./agent-files";
 import { normalizePlan } from "@/lib/workspace/plan";
 import { validImages } from "@/lib/agent/images";
+import { skillPaths } from "@/lib/workspace/skills";
 
 // Under Vercel's 4.5 MB request limit, with room for JSON escaping of 2.5 MB of files.
 export const MAX_AGENT_BODY = 4_000_000;
@@ -190,6 +191,8 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     userMove: parseUserMove(input.userMove),
     images: attached.images.length ? attached.images : undefined,
     unattended: input.unattended === true ? true : undefined,
+    // The skills this change was made under, or that the person named (`/release`): their checks still run.
+    skillsInRun: skillPaths(input.skillsInRun),
   };
 }
 

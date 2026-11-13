@@ -10,6 +10,7 @@ import {
   SKILL_LIMIT,
   SKILL_TEMPLATE,
   skillName,
+  skillPaths,
   skillsIndex,
   skillTemplate,
 } from "./skills.ts";
@@ -125,5 +126,27 @@ test("a skill can name checks: package.json scripts that must pass, told to the 
   assert.match(
     loaded.text,
     /<\/skill>\nThis skill's checks must pass before you are done: `npm run test`, `npm run migrate:check`\./,
+  );
+});
+
+test("skill paths sent with a request are only skill files, each once, at most ten", () => {
+  assert.equal(skillPaths(undefined), undefined);
+  assert.equal(skillPaths("x"), undefined);
+  assert.deepEqual(
+    skillPaths([
+      ".aperture/skills/release.md",
+      ".aperture/skills/release.md",
+      ".aperture/skills/Add Migration/SKILL.md",
+      ".aperture/skills/../../src/app.ts",
+      "src/app.ts",
+      ".aperture/rules/a.md",
+      7,
+    ]),
+    [".aperture/skills/release.md", ".aperture/skills/Add Migration/SKILL.md"],
+  );
+  assert.equal(skillPaths(["src/app.ts"]), undefined);
+  assert.equal(
+    skillPaths(Array.from({ length: 15 }, (_, i) => `.aperture/skills/s${i}.md`))!.length,
+    10,
   );
 });

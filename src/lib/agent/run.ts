@@ -206,6 +206,8 @@ export function agentPayload(
     unattended?: boolean;
     /** Skills an earlier turn of this change loaded. Default: those of the turns that staged the pending edits. */
     skillsInRun?: string[];
+    /** Skills the person named for this turn (`/release`), by path: added to those carried. */
+    withSkills?: string[];
   },
 ) {
   const state = useWorkspace.getState();
@@ -257,6 +259,7 @@ export function agentPayload(
   const skillsInRun =
     extra?.skillsInRun ??
     [
+      ...(extra?.withSkills ?? []),
       ...skillsForEdits(
         latest.messages,
         pendingEdits.map((edit) => edit.id),
@@ -323,6 +326,8 @@ export async function submitAgent(
     automatic?: boolean;
     /** Images the person attached to this message (`images.ts`). */
     images?: AgentImage[];
+    /** Skills the person named for this turn (`/release`), by path: loaded, and held to their checks. */
+    withSkills?: string[];
   },
 ) {
   const trimmed = instruction.trim();
@@ -430,6 +435,7 @@ export async function submitAgent(
     browserRuns,
     copyId,
     images: opts?.images,
+    ...(opts?.withSkills?.length ? { withSkills: opts.withSkills } : {}),
   });
   // The server hides secret-looking lines from the agent, so its edits come back on that
   // copy: carry them onto the real text that was sent, or accepting one writes [redacted].

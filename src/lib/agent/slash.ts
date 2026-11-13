@@ -2,6 +2,7 @@ import { lineDiff } from "./apply-edit.ts";
 import type { AgentMode } from "../workspace/types.ts";
 import type { ProposedEdit } from "../workspace/types.ts";
 import type { AgentPhase } from "./phase.ts";
+import type { Skill } from "../workspace/skills.ts";
 
 export const SLASH_COMMANDS = [
   { name: "review" as const, description: "Review staged diffs" },
@@ -11,7 +12,10 @@ export const SLASH_COMMANDS = [
 
 export type SlashName = (typeof SLASH_COMMANDS)[number]["name"];
 
-export type SlashHit = { name: SlashName; description: string };
+/** A built-in command, or one of the project's skills (`.aperture/skills/`): `/release` uses that skill. */
+export type SlashHit =
+  | { name: SlashName; description: string; skill?: undefined }
+  | { name: string; description: string; skill: { path: string } };
 
 export function activeSlash(text: string, caret: number): { query: string } | null {
   if (!text.startsWith("/")) return null;
@@ -22,9 +26,36 @@ export function activeSlash(text: string, caret: number): { query: string } | nu
   return { query: head };
 }
 
-export function filterSlash(query: string): SlashHit[] {
+/** The commands, then the project's skills, matching what was typed. A skill named as a command is left out: the command wins. */
+export function filterSlash(query: string, skills: Skill[] = []): SlashHit[] {
   const q = query.trim().toLowerCase();
-  return SLASH_COMMANDS.filter((c) => !q || c.name.startsWith(q) || c.description.toLowerCase().includes(q));
+  const hit = (name: string, description: string) => !q || name.startsWith(q) || description.toLowerCase().includes(q);
+  const commands: SlashHit[] = SLASH_COMMANDS.filter((c) => hit(c.name, c.description));
+  const taken = new Set<string>(SLASH_COMMANDS.map((c) => c.name));
+  const fromSkills: SlashHit[] = skills
+    .filter((s) => !taken.has(s.name) && hit(s.name, s.description))
+    .map((s) => ({ name: s.name, description: s.description || "A skill of this project", skill: { path: s.path } }));
+  return [...commands, ...fromSkills];
+}
+
+/** `/release cut 0.13` when the project has a skill named `release`: the skill, and what else was asked. */
+export function parseSkillSlash(text: string, skills: Skill[]): { skill: Skill; rest: string } | null {
+  if (parseSlash(text)) return null;
+  const match = /^\/([a-z0-9][a-z0-9-]*)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  if (!match) return null;
+  const skill = skills.find((s) => s.name === match[1]!.toLowerCase());
+  return skill ? { skill, rest: (match[2] ?? "").trim() } : null;
+}
+
+/** What the agent is asked when a skill is named: load it first, then follow it for the task. */
+export function skillInstruction(skill: Pick<Skill, "name" | "checks">, rest: string): string {
+  const checks = skill.checks?.length
+    ? ` Its checks (${skill.checks.map((c) => `\`npm run ${c}\``).join(", ")}) must pass before you are done.`
+    : "";
+  return [
+    `Use the project's skill "${skill.name}" for this task: call load_skill with the name "${skill.name}" first, then follow it.${checks}`,
+    rest || "Do what the skill describes.",
+  ].join("\n\n");
 }
 
 export function parseSlash(text: string): { name: SlashName; rest: string } | null {

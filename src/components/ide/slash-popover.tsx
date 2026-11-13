@@ -1,10 +1,11 @@
-import { Search, Sparkles, Wrench } from "lucide-react";
+import { BookOpen, Search, Sparkles, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SlashHit } from "@/lib/agent/slash";
 
-function iconFor(name: SlashHit["name"]) {
-  if (name === "fix") return Wrench;
-  if (name === "explain") return Search;
+function iconFor(item: SlashHit) {
+  if (item.skill) return BookOpen;
+  if (item.name === "fix") return Wrench;
+  if (item.name === "explain") return Search;
   return Sparkles;
 }
 
@@ -21,9 +22,9 @@ export function SlashPopover({
   return (
     <ul className="mb-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-elevated py-1">
       {items.map((item, index) => {
-        const Icon = iconFor(item.name);
+        const Icon = iconFor(item);
         return (
-          <li key={item.name}>
+          <li key={`${item.skill ? "skill" : "command"}:${item.name}`}>
             <button
               type="button"
               onMouseDown={(e) => {
@@ -37,7 +38,10 @@ export function SlashPopover({
             >
               <Icon className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.7} />
               <span className="min-w-0 flex-1">
-                <span className="block font-mono text-[13px] text-fg">/{item.name}</span>
+                <span className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-[13px] text-fg">/{item.name}</span>
+                  {item.skill && <span className="text-[10px] tracking-wide text-subtle uppercase">skill</span>}
+                </span>
                 <span className="block text-[11px] leading-snug text-subtle">{item.description}</span>
               </span>
             </button>

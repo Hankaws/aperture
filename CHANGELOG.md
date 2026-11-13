@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.13.0 - 2026-11-13
+
 ### Added
 
 - Use a skill on purpose: type `/` in the agent panel and the project's skills are listed after the commands, each with what it is for. Pick one, or type `/release cut 0.13.0`, and the agent loads that skill first and follows it for the task, held to the checks it names, instead of waiting to match it to the task itself. Your message shows as you typed it. ([#195](https://github.com/Hankaws/aperture/pull/195))

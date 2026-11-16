@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.13.1 - 2026-11-16
+
 ### Changed
 
 - The landing page's benchmark line says what the numbers are: "Stopped 27 of 27 mistakes a check can see. 6 that no check can see got through." It read "27 of 27 caught. 6 missed.", which looked like a contradiction. ([#198](https://github.com/Hankaws/aperture/pull/198))

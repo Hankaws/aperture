@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- The agent sees your live preview's script errors. Since October the editor has sent the errors the running app reported with each turn, so the agent can fix what is broken on the page, but the server dropped them on the way in, as it did the skills before 0.13.0: only a model on your own machine got them. A test now sends every field the editor can send and fails if the server drops one, and a new field cannot be added without it. ([#197](https://github.com/Hankaws/aperture/pull/197))
+
 ## 0.13.0 - 2026-11-13
 
 ### Added

@@ -1,14 +1,14 @@
-import type { AgentInput } from "@/lib/agent/types";
-import type { WorkerSpec } from "@/lib/agent/crew";
-import { parseWorkerRole } from "@/lib/agent/crew";
-import { parseAgentPhase } from "@/lib/agent/phase";
-import { isAgentRef } from "@/lib/acp/kinds";
-import { isModelSource } from "@/lib/billing/plans";
-import { redactSecrets, safeRelPath } from "./redact";
-import { cleanPaths, pickAgentFileSet } from "./agent-files";
-import { normalizePlan } from "@/lib/workspace/plan";
-import { validImages } from "@/lib/agent/images";
-import { skillPaths } from "@/lib/workspace/skills";
+import type { AgentInput } from "../agent/types.ts";
+import type { WorkerSpec } from "../agent/crew.ts";
+import { parseWorkerRole } from "../agent/crew.ts";
+import { parseAgentPhase } from "../agent/phase.ts";
+import { isAgentRef } from "../acp/kinds.ts";
+import { isModelSource } from "../billing/plans.ts";
+import { redactSecrets, safeRelPath } from "./redact.ts";
+import { cleanPaths, pickAgentFileSet } from "./agent-files.ts";
+import { normalizePlan } from "../workspace/plan.ts";
+import { validImages } from "../agent/images.ts";
+import { skillPaths } from "../workspace/skills.ts";
 
 // Under Vercel's 4.5 MB request limit, with room for JSON escaping of 2.5 MB of files.
 export const MAX_AGENT_BODY = 4_000_000;
@@ -17,7 +17,7 @@ export const MAX_HISTORY = 8;
 export const MAX_HISTORY_CHARS = 4_000;
 export const MAX_SELECTION_CHARS = 12_000;
 
-export { rateLimit } from "./rate-limit";
+export { rateLimit } from "./rate-limit.ts";
 
 export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "Invalid request" };
@@ -189,6 +189,8 @@ export function sanitizeAgentInput(raw: unknown): AgentInput | { error: string }
     refusals: parseStanding(input.refusals),
     spot: parseSpot(input.spot),
     userMove: parseUserMove(input.userMove),
+    // The live preview's script errors (`runtimeFrom` in run.ts): what the running app reported.
+    runtime: typeof input.runtime === "string" && input.runtime.trim() ? redactSecrets(input.runtime.slice(0, 4000)) : undefined,
     images: attached.images.length ? attached.images : undefined,
     unattended: input.unattended === true ? true : undefined,
     // The skills this change was made under, or that the person named (`/release`): their checks still run.

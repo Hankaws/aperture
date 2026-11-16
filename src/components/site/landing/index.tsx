@@ -12,6 +12,8 @@ const bench = benchData as BenchResults;
 const stopped = bench.summary.caughtCatchable;
 const visible = bench.summary.catchable;
 const missed = bench.summary.bad - bench.summary.caught;
+/** Misses among the mistakes no check can see (behaviour no test covers): the rest of the misses are in `stopped of visible`. */
+const unseen = missed - (visible - stopped);
 
 const FAQ = [
   {
@@ -92,7 +94,8 @@ export function Landing() {
             </h1>
             <p className="mt-6 text-lg text-muted sm:text-xl">Nothing is written until you press Apply.</p>
             <p className="mt-3 text-base text-muted">
-              {stopped} of {visible} caught. {missed} missed.{" "}
+              Stopped {stopped} of {visible} mistakes a check can see.{" "}
+              {unseen > 0 ? `${unseen} that no check can see got through. ` : ""}
               <Link to="/benchmark" className="text-fg underline underline-offset-2">
                 See the list →
               </Link>

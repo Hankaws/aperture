@@ -7,9 +7,18 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- The landing page's benchmark line says what the numbers are: "Stopped 27 of 27 mistakes a check can see. 6 that no check can see got through." It read "27 of 27 caught. 6 missed.", which looked like a contradiction. ([#198](https://github.com/Hankaws/aperture/pull/198))
+
 ### Fixed
 
+- Easier to tap and to use with a screen reader, from a walk of every page on desktop and phone: the site's Menu and the Dark switch are 36px tall on a phone instead of 20, "Import patch" in the agent panel is 24px instead of 17, the "Cap this session" switch in Settings has a name, and the headings on "What the editor knows" go in order. ([#198](https://github.com/Hankaws/aperture/pull/198))
 - The agent sees your live preview's script errors. Since October the editor has sent the errors the running app reported with each turn, so the agent can fix what is broken on the page, but the server dropped them on the way in, as it did the skills before 0.13.0: only a model on your own machine got them. A test now sends every field the editor can send and fails if the server drops one, and a new field cannot be added without it. ([#197](https://github.com/Hankaws/aperture/pull/197))
+
+### Security
+
+- Patched packages with known advisories: `undici` 7.30.2 (eight, among them a TLS check that could be skipped and cross-user cache disclosure), `vite` 8.3.8, `zod` 4.6.7 (memory exhaustion on oversized input), `seroval` and `fast-uri`. Better Auth moves to 1.6.34, the newest patch of the version sign-in is built on. `npm audit` goes from 15 advisories, four of them high or critical, to 10 with none high: what is left is Better Auth's (in features Aperture does not use: magic links, the OAuth proxy and device sign-in; the fix is a minor version up) and the linter's, which has no fix yet and runs only in development. ([#198](https://github.com/Hankaws/aperture/pull/198))
 
 ## 0.13.0 - 2026-11-13
 

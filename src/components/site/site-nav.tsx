@@ -21,7 +21,7 @@ function ThemeToggle() {
       aria-checked={!light}
       aria-label="Dark mode"
       title="Dark mode"
-      className="flex shrink-0 items-center gap-2 text-sm text-muted hover:text-fg"
+      className="flex min-h-9 shrink-0 items-center gap-2 text-sm text-muted hover:text-fg"
       onClick={() => {
         const next = document.documentElement.dataset.theme === "light" ? "cursor" : "light";
         applyAppearance(next, readDensity());

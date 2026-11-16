@@ -61,16 +61,22 @@ function useDevUser(): CurrentUserState {
 function useSessionUser(): CurrentUserState {
   const { data, isPending } = authClient.useSession();
   const raw = data?.user;
+  // The fields, not the object: the session hands back a new object on every read.
+  const signedIn = Boolean(raw);
+  const id = raw?.id;
+  const name = raw?.name;
+  const email = raw?.email;
+  const image = raw?.image;
   const user = useMemo<AppUser | null>(() => {
-    if (!raw) return null;
+    if (!signedIn || id === undefined) return null;
     return {
-      id: raw.id,
-      displayName: raw.name ?? null,
-      primaryEmail: raw.email ?? null,
-      profileImageUrl: raw.image ?? null,
+      id,
+      displayName: name ?? null,
+      primaryEmail: email ?? null,
+      profileImageUrl: image ?? null,
       isDevFallback: false,
     };
-  }, [raw?.id, raw?.name, raw?.email, raw?.image]);
+  }, [signedIn, id, name, email, image]);
   return { user, isPending };
 }
 

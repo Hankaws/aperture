@@ -66,7 +66,7 @@ export function JobsTray({
         {acp && (
           <button
             type="button"
-            className="text-[11px] text-muted hover:text-fg"
+            className="min-h-6 px-1 text-[11px] text-muted hover:text-fg"
             onClick={() => setPatchOpen((v) => !v)}
           >
             Import patch

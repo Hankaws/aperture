@@ -31,8 +31,10 @@ async function signInWith(
           linkedAccount: linkedAccount ?? null,
         };
       },
+      // Returns the saved account, as the real adapter does: Better Auth 1.6.34 treats nothing as a failed link.
       async linkAccount(account: Account) {
         linked.push({ providerId: account.providerId, accountId: account.accountId });
+        return account;
       },
       async updateUser() {
         return null;

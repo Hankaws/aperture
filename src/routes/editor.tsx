@@ -12,7 +12,7 @@ function Feature({ feature }: { feature: EditorFeature }) {
       <kbd className="rounded-md border border-border bg-surface px-2 py-0.5 font-mono text-xs text-muted">
         {feature.key}
       </kbd>
-      <h3 className="mt-3 text-xl font-medium tracking-tight">{feature.title}</h3>
+      <h2 className="mt-3 text-xl font-medium tracking-tight">{feature.title}</h2>
       <p className="mt-2 max-w-prose text-base leading-relaxed text-muted">{feature.body}</p>
       {feature.shot && (
         <img

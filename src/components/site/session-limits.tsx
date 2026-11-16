@@ -62,6 +62,7 @@ export function SessionLimits({
             type="button"
             role="switch"
             aria-checked={on}
+            aria-label="Cap this session"
             onClick={() => setOn((v) => !v)}
             className={`relative h-6 w-10 rounded-full ${on ? "bg-accent" : "bg-elevated"}`}
           >

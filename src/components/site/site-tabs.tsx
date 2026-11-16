@@ -79,7 +79,7 @@ export function SiteTabs() {
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-1 text-sm text-muted hover:text-fg"
+        className="flex min-h-9 items-center gap-1 text-sm text-muted hover:text-fg"
         onClick={() => {
           setOpen((v) => !v);
           setQ("");

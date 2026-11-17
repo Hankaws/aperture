@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- The Bot page's Skills card suggests a skill when a bot keeps getting the same kind of task ("Add a migration for orders", then "Add a migration for invoices") and no skill covers it yet. Each suggestion links the tasks it came from and has a draft made from them (the newest plan as the steps, every file they changed as examples) that you can read and copy. "Add on GitHub" opens GitHub's new-file page with the path and text filled in, so you can commit it or open a pull request, and the bot follows it from then on. "Not now" hides it in that browser. Only finished changes count, not answers, reviews or failed runs. ([#204](https://github.com/Hankaws/aperture/pull/204))
+
 ### Changed
 
 - Every release keeps its notes with it. The notes for each version from 0.13.0 are in `docs/releases`, and a test fails when a release has none, when they have no summary for people, or when the changelog lines they quote have since changed, so a release can't go out with its notes lost or stale. ([#203](https://github.com/Hankaws/aperture/pull/203))

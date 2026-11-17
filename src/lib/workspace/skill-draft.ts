@@ -131,6 +131,91 @@ export function repeatOf(
   return found;
 }
 
+/** What one run gives a draft: its request, its plan's steps, the files it kept changes to, and its checks. */
+export type DraftSource = { request: string; plan: string[]; paths: string[]; checks: string[] };
+
+/** What did the work, in the draft's words: the editor's agent runs, or Aperture Bot's tasks. */
+export type DraftUnit = "agent run" | "Aperture Bot task";
+
+/** Requests quoted in a draft's first line at most; the rest are counted. */
+const MAX_QUOTED = 3;
+
+/**
+ * A skill's text, from one run or several of the same kind (oldest first, the
+ * newest last): the newest request is what it is for, the newest plan its
+ * steps (the newest is usually the better one), and the files and checks of
+ * all of them. `taken` are the names and files skills already have, so the
+ * draft takes neither.
+ */
+export function draftSkill(
+  runs: DraftSource[],
+  taken: { names: Set<string>; paths: Set<string> },
+  now: Date = new Date(),
+  unit: DraftUnit = "agent run",
+): SkillDraft | null {
+  const latest = runs.at(-1);
+  if (!latest) return null;
+  const plan = [...runs].reverse().find((r) => r.plan.length > 0)?.plan ?? [];
+  const paths = [...new Set(runs.flatMap((r) => r.paths))];
+  if (plan.length === 0 && paths.length === 0) return null;
+  const checks = [...new Set(runs.flatMap((r) => r.checks))].slice(0, SKILL_LIMIT.checks);
+
+  const steps = (
+    plan.length > 0
+      ? plan.map(oneLine).filter(Boolean)
+      : paths.map((path) => `Change \`${path}\`.`)
+  ).slice(0, MAX_STEPS);
+
+  const base = nameFromRequest(latest.request);
+  let name = base;
+  let path = `${SKILLS_DIR}${name}.md`;
+  for (let n = 2; taken.names.has(name) || taken.paths.has(path); n += 1) {
+    name = `${base}-${n}`;
+    path = `${SKILLS_DIR}${name}.md`;
+  }
+
+  const firstLine = (text: string) => oneLine(text.split("\n")[0] ?? "");
+  const request = firstLine(latest.request);
+  const room = SKILL_LIMIT.description - "For tasks like: ".length;
+  const like = request.length > room ? `${request.slice(0, room - 1)}…` : request;
+  const day = now.toISOString().slice(0, 10);
+  const quoted = (text: string) => {
+    const line = firstLine(text);
+    return `"${line.length > 80 ? `${line.slice(0, 79)}…` : line}"`;
+  };
+  const many = runs.length > 1;
+  const shown = runs.slice(0, MAX_QUOTED).map((r) => quoted(r.request));
+  const more = runs.length - shown.length;
+  const listed =
+    more > 0
+      ? `${shown.join(", ")} and ${more} more`
+      : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
+  const from = many
+    ? `Made on ${day} from ${runs.length} ${unit}s that did this: ${listed}.`
+    : `Made on ${day} from ${unit === "agent run" ? "an" : "a"} ${unit} that did this.`;
+  const short = unit === "agent run" ? "run" : "task";
+  const text = [
+    "---",
+    `name: ${name}`,
+    `description: For tasks like: ${like}`,
+    ...(checks.length > 0 ? [`checks: ${checks.join(", ")}`] : []),
+    "---",
+    `${from} Make the name, the description and the steps fit every task like it, not only ${many ? "those" : "that one"}: the agent sees the description, and loads these steps when a task matches.`,
+    "",
+    ...steps.map((step, i) => `${i + 1}. ${step}`),
+    ...(paths.length > 0
+      ? [
+          "",
+          `Files ${many ? `those ${short}s` : `that ${short}`} changed, as examples:`,
+          ...paths.slice(0, MAX_FILES).map((p) => `- \`${p}\``),
+          ...(paths.length > MAX_FILES ? [`- and ${paths.length - MAX_FILES} more`] : []),
+        ]
+      : []),
+    "",
+  ].join("\n");
+  return { path, name, text };
+}
+
 /**
  * The draft for the run `replyId` is in, or null when there is nothing to learn
  * from it: no request, or no plan and no file it changed. `files` are the
@@ -151,56 +236,18 @@ export function skillFromRun(
   const earlier = alsoFrom ? factsOf(messages, alsoFrom) : null;
   const runs =
     useful(earlier) && earlier.first !== latestRun.first ? [earlier, latestRun] : [latestRun];
-  const plan = latestRun.plan.length > 0 ? latestRun.plan : (runs[0]!.plan ?? []);
-  const paths = [...new Set(runs.flatMap((r) => r.paths))];
-  const checks = [...new Set(runs.flatMap((r) => r.checks))].slice(0, SKILL_LIMIT.checks);
-
-  const steps = (
-    plan.length > 0
-      ? plan.map((entry) => oneLine(entry.content)).filter(Boolean)
-      : paths.map((path) => `Change \`${path}\`.`)
-  ).slice(0, MAX_STEPS);
-
-  const taken = new Set(projectSkills(files).map((skill) => skill.name));
-  const base = nameFromRequest(latestRun.request);
-  let name = base;
-  let path = `${SKILLS_DIR}${name}.md`;
-  for (let n = 2; taken.has(name) || files[path] !== undefined; n += 1) {
-    name = `${base}-${n}`;
-    path = `${SKILLS_DIR}${name}.md`;
-  }
-
-  const firstLine = (text: string) => oneLine(text.split("\n")[0] ?? "");
-  const request = firstLine(latestRun.request);
-  const room = SKILL_LIMIT.description - "For tasks like: ".length;
-  const like = request.length > room ? `${request.slice(0, room - 1)}…` : request;
-  const day = now.toISOString().slice(0, 10);
-  const quoted = (text: string) => {
-    const line = firstLine(text);
-    return `"${line.length > 80 ? `${line.slice(0, 79)}…` : line}"`;
+  const taken = {
+    names: new Set(projectSkills(files).map((skill) => skill.name)),
+    paths: new Set(Object.keys(files)),
   };
-  const from =
-    runs.length > 1
-      ? `Made on ${day} from ${runs.length} agent runs that did this: ${runs.map((r) => quoted(r.request)).join(" and ")}.`
-      : `Made on ${day} from an agent run that did this.`;
-  const text = [
-    "---",
-    `name: ${name}`,
-    `description: For tasks like: ${like}`,
-    ...(checks.length > 0 ? [`checks: ${checks.join(", ")}`] : []),
-    "---",
-    `${from} Make the name, the description and the steps fit every task like it, not only that one: the agent sees the description, and loads these steps when a task matches.`,
-    "",
-    ...steps.map((step, i) => `${i + 1}. ${step}`),
-    ...(paths.length > 0
-      ? [
-          "",
-          `Files ${runs.length > 1 ? "those runs" : "that run"} changed, as examples:`,
-          ...paths.slice(0, MAX_FILES).map((p) => `- \`${p}\``),
-          ...(paths.length > MAX_FILES ? [`- and ${paths.length - MAX_FILES} more`] : []),
-        ]
-      : []),
-    "",
-  ].join("\n");
-  return { path, name, text };
+  return draftSkill(
+    runs.map((r) => ({
+      request: r.request,
+      plan: r.plan.map((entry) => entry.content),
+      paths: r.paths,
+      checks: r.checks,
+    })),
+    taken,
+    now,
+  );
 }

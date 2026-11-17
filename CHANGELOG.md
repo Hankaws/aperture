@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.15.0 - 2026-11-17
+
 ### Added
 
 - The Bot page's Skills card suggests a skill when a bot keeps getting the same kind of task ("Add a migration for orders", then "Add a migration for invoices") and no skill covers it yet. Each suggestion links the tasks it came from and has a draft made from them (the newest plan as the steps, every file they changed as examples) that you can read and copy. "Add on GitHub" opens GitHub's new-file page with the path and text filled in, so you can commit it or open a pull request, and the bot follows it from then on. "Not now" hides it in that browser. Only finished changes count, not answers, reviews or failed runs. ([#204](https://github.com/Hankaws/aperture/pull/204))

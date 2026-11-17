@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import {
   GROUPS,
   inlineParts,
@@ -152,5 +152,43 @@ test("package.json's version is the newest one CHANGELOG.md releases", () => {
     PACKAGE.version,
     latestVersion(parseChangelog(FILE)),
     "bump package.json and the changelog's version heading together",
+  );
+});
+
+/** Releases since this one keep their notes in docs/releases (AGENTS.project.md, "Releasing a version"). */
+const NOTES_SINCE = [0, 13, 0];
+const atLeast = (version: string, floor: number[]) => {
+  const v = version.split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) if (v[i] !== floor[i]) return v[i]! > floor[i]!;
+  return true;
+};
+
+test("every release from 0.13.0 has its notes in docs/releases, with a summary and every line it shipped", () => {
+  const log = parseChangelog(FILE);
+  const dir = new URL("../../docs/releases/", import.meta.url);
+  const files = new Set(readdirSync(dir).filter((name) => name.endsWith(".md")));
+  const versions = log.sections.flatMap((section) => parseHeading(section.title).version ?? []);
+  for (const version of versions.filter((v) => atLeast(v, NOTES_SINCE))) {
+    const name = `${version}.md`;
+    assert.ok(
+      files.has(name),
+      `docs/releases/${name} is missing: add the release notes in the release pull request`,
+    );
+    const notes = readFileSync(new URL(name, dir), "utf8");
+    const lines = releaseNotes(log, version)!;
+    assert.ok(
+      notes.includes(lines),
+      `docs/releases/${name} does not hold ${version}'s changelog lines as they are now`,
+    );
+    assert.ok(
+      notes.indexOf(lines) > 0 && notes.slice(0, notes.indexOf(lines)).trim(),
+      `docs/releases/${name} has no summary above the changelog lines`,
+    );
+    files.delete(name);
+  }
+  assert.deepEqual(
+    [...files],
+    [],
+    "notes in docs/releases for a version CHANGELOG.md does not have",
   );
 });

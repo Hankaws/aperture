@@ -26,6 +26,8 @@ A release is one pull request and one tag:
    `npm run -s release-notes -- X.Y.Z` (every line from that heading down to
    the previous version). Keep them in this repository, not a scratch folder
    or another repository, so they are there when the release is published.
+   `changelog.test.ts` fails while they are missing, have no summary, or no
+   longer hold that version's changelog lines.
 4. Once that pull request merges, tag its merge commit `vX.Y.Z` and publish a
    GitHub release with the notes from `docs/releases/X.Y.Z.md`.
 

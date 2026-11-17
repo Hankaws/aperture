@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.16.0 - 2026-11-17
+
 ### Added
 
 - Aperture Bot offers to save a skill in its own reply. When a change it finished repeats a kind of task it did in the last 30 days ("Add a migration for orders", then "Add a migration for invoices") and no skill covers it, its suggestions end with "Save tasks like this as a skill: `.aperture/skills/add-a-migration.md`". Tick it and the bot drafts the skill from those tasks, fits it to every task of that kind, and opens a pull request with it, through Agent Check like any other change. Its pull request is titled "Add the add-a-migration skill", and saving a skill is never itself offered as one. Needs Aperture Bot v1.14. ([#207](https://github.com/Hankaws/aperture/pull/207))

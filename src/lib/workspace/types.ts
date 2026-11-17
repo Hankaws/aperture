@@ -151,6 +151,8 @@ export type ChatMessage = {
   question?: AgentQuestion;
   /** On a reply: skills from .aperture/skills it loaded, by path (`workspace/skills.ts`). */
   skills?: string[];
+  /** On a run's last reply: the person said "Not now" to saving this repeated task as a skill (`skill-draft.ts`). */
+  skillHint?: "dismissed";
 };
 
 /** The arguments of a send, kept on its failed reply so Retry repeats it exactly. */

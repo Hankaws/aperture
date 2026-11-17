@@ -21,9 +21,13 @@ A release is one pull request and one tag:
    Leave `## Unreleased` in place, empty.
 2. `npm version X.Y.Z --no-git-tag-version`. `changelog.test.ts` fails while
    `package.json` and the newest version heading disagree.
-3. Once that pull request merges, tag its merge commit `vX.Y.Z` and publish a
-   GitHub release whose notes are `npm run -s release-notes -- X.Y.Z`: every
-   line from that heading down to the previous version.
+3. In the same pull request, save the release notes as
+   `docs/releases/X.Y.Z.md`: a short summary for people, then
+   `npm run -s release-notes -- X.Y.Z` (every line from that heading down to
+   the previous version). Keep them in this repository, not a scratch folder
+   or another repository, so they are there when the release is published.
+4. Once that pull request merges, tag its merge commit `vX.Y.Z` and publish a
+   GitHub release with the notes from `docs/releases/X.Y.Z.md`.
 
 ## Imports in `src/lib` that tests reach
 

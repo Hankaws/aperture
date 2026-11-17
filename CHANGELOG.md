@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- Every release keeps its notes with it. The notes for each version from 0.13.0 are in `docs/releases`, and a test fails when a release has none, when they have no summary for people, or when the changelog lines they quote have since changed, so a release can't go out with its notes lost or stale. ([#203](https://github.com/Hankaws/aperture/pull/203))
+
 ## 0.14.0 - 2026-11-17
 
 ### Added

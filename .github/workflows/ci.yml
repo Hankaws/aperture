@@ -40,6 +40,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm test
 
+      - name: The Chromium install script retries and skips apt
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci-install-chromium.test.sh
+
   e2e:
     name: end to end (replay demo)
     runs-on: ubuntu-latest
@@ -54,7 +58,10 @@ jobs:
 
       - run: npm ci
 
-      - run: npx playwright install --with-deps chromium
+      # Downloads the browser and installs system packages only if it needs them,
+      # with retries: an apt mirror outage once failed both browser jobs here.
+      - name: Install Chromium
+        run: bash scripts/ci-install-chromium.sh
 
       # The demo's settings: no sign-in, recorded runs instead of a model.
       - name: Build
@@ -96,7 +103,10 @@ jobs:
 
       - run: npm ci
 
-      - run: npx playwright install --with-deps chromium
+      # Downloads the browser and installs system packages only if it needs them,
+      # with retries: an apt mirror outage once failed both browser jobs here.
+      - name: Install Chromium
+        run: bash scripts/ci-install-chromium.sh
 
       # The live site's settings: sign-in on, no model configured. The smoke
       # script serves this build itself and poses as the public demo host.

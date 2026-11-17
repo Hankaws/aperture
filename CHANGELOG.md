@@ -11,6 +11,10 @@ release notes are every line from there down to the previous version.
 
 - When you ask for the same kind of task again ("Add a migration for orders", then "Add a migration for invoices"), the reply offers to save it as a skill: "You asked for this before". The draft is made from both runs: both requests as examples, the newer plan as the steps, and every file and check either run had. "Not now" keeps the plain Save as skill button, and the offer does not come back for that run. It is not offered when the run already followed a skill, or a skill by that name exists. ([#200](https://github.com/Hankaws/aperture/pull/200))
 
+### Fixed
+
+- Checks on a pull request ride out a short network outage. The two browser checks installed the browser's system packages from Ubuntu's mirrors every time, and when the runner could not reach them both failed before any test ran. Now the browser is downloaded with retries, the system packages are installed only when it does not launch without them, and a failing try is cut off after five minutes and tried again. ([#201](https://github.com/Hankaws/aperture/pull/201))
+
 ## 0.13.1 - 2026-11-16
 
 ### Changed

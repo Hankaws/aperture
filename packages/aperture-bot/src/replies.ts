@@ -13,6 +13,7 @@ import {
 import type { Command } from "./event.ts";
 import { quiet } from "./quiet.ts";
 import { skillName } from "../../../src/lib/workspace/skills.ts";
+import { SAVE_SKILL, skillNameOf } from "../../../src/lib/bot/skill-suggest.ts";
 import { suggestionBoxes } from "./suggestions.ts";
 import type { BotResult } from "./run.ts";
 
@@ -60,6 +61,9 @@ export function titleFor(command: Command): string {
     return `${job.charAt(0).toUpperCase()}${job.slice(1)}`.slice(0, 72);
   }
   const asked = firstLine(command.task);
+  // A ticked "save as skill" box: the pull request adds that skill.
+  const saving = SAVE_SKILL.exec(asked.trim());
+  if (saving) return `Add the ${skillNameOf(saving[1]!)} skill`.slice(0, 72);
   const title = asked.startsWith("Do what this ") ? command.title : asked;
   return title.length <= 72 ? title : `${title.slice(0, 71)}…`;
 }

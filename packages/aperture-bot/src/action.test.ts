@@ -2028,3 +2028,106 @@ test("a reply nobody asked for stops at 150,000 tokens, whatever max-tokens allo
   assert.equal(asked.code, 0, asked.lines.join("\n"));
   assert.match(asked.replied(), /^It is fine\./);
 });
+
+/** The repository's recent comments: an earlier task of the same kind, and the bot's reply to it. */
+const earlierTask = (ask: string) => {
+  const at = new Date(Date.now() - 3 * 86_400_000).toISOString();
+  const raw = (id: number, user: string, body: string) => ({
+    id,
+    issue_url: "https://api.github.com/repos/acme/shop/issues/5",
+    html_url: `https://github.com/acme/shop/issues/5#issuecomment-${id}`,
+    user: { login: user, type: user.endsWith("[bot]") ? "Bot" : "User" },
+    body,
+    created_at: at,
+    updated_at: at,
+  });
+  const summary = {
+    v: 1,
+    state: "clear",
+    asked: 51,
+    run: "https://github.com/acme/shop/actions/runs/1",
+    plan: ["Read formatPrice", "Format the cart's total"],
+    files: ["src/cart.ts"],
+    link: { url: "https://github.com/acme/shop/pull/10", what: "pull" },
+  };
+  return [
+    raw(51, "ada", `/aperture ${ask}`),
+    raw(
+      52,
+      "github-actions[bot]",
+      `Opened #10.\n\n<!-- aperture-bot ${JSON.stringify(summary)} -->`,
+    ),
+  ];
+};
+
+const SAVE = "Save tasks like this as a skill: `.aperture/skills/show-prices-in-dollars.md`";
+
+test("a change that repeats a kind of task done lately offers, in its reply, to save it as a skill", async () => {
+  const run = await act({ recent: earlierTask("show prices in dollars on the cart") });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const reply = run.replied();
+  assert.ok(reply.includes(`\n- [ ] ${SAVE}\n`), reply);
+  assert.equal(readSummary(reply)!.next?.at(-1), SAVE);
+  assert.ok(run.lines.some((l) => /tasks like this came 2 times/.test(l)));
+  // The first time, or another kind of task: no offer.
+  const first = await act();
+  assert.doesNotMatch(first.replied(), /Save tasks like this as a skill/);
+  const other = await act({ recent: earlierTask("fix the login page") });
+  assert.doesNotMatch(other.replied(), /Save tasks like this as a skill/);
+});
+
+test("ticking it saves the skill: the run gets the draft, and its pull request adds that skill", async () => {
+  const text = [
+    "Opened #8.",
+    "",
+    "**Next, I would suggest**",
+    `- [MARK] ${SAVE}`,
+    "",
+    `<!-- aperture-bot ${JSON.stringify({ v: 1, state: "clear", asked: 55, run: "https://github.com/acme/shop/actions/runs/41", next: [SAVE] })} -->`,
+  ].join("\n");
+  const comment = (mark: string) => ({
+    id: 900,
+    body: sealBody(text.replace("MARK", mark), KEY, { repo: "acme/shop", number: 7 }),
+    user: { login: "github-actions[bot]", type: "Bot" },
+  });
+  const done = (ask: string, id: number) =>
+    earlierTask(ask).map((c, i) => ({
+      ...c,
+      id: id + i,
+      body: c.body.replace('"asked":51', `"asked":${id}`),
+      issue_url: c.issue_url.replace(/5$/, String(id)),
+    }));
+  const seen: string[] = [];
+  const scriptedModel = scripted([[dollars]]).model;
+  const model: typeof scriptedModel = (cfg, messages, ...rest) => {
+    for (const m of messages) seen.push(String(m.content ?? ""));
+    return scriptedModel(cfg, messages, ...rest);
+  };
+  const run = await act({
+    eventName: "issue_comment",
+    payload: {
+      action: "edited",
+      sender: { login: "maintainer", type: "User" },
+      comment: comment("x"),
+      changes: { body: { from: comment(" ").body } },
+      issue: { number: 7, title: "Prices show cents", body: "" },
+      repository: { name: "shop", owner: { login: "acme" }, default_branch: "main" },
+    },
+    recent: [
+      ...done("show prices in dollars on the cart", 61),
+      ...done("show prices in dollars in emails", 71),
+    ],
+    model,
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  const asked = seen.join("\n");
+  assert.match(
+    asked,
+    /Write the skill `\.aperture\/skills\/show-prices-in-dollars\.md`, named `show-prices-in-dollars`/,
+  );
+  assert.match(asked, /The draft:\n\n```markdown\n---\nname: show-prices-in-dollars\n/);
+  const [opened] = run.posted(/\/pulls$/);
+  assert.equal((opened!.body as { title: string }).title, "Add the show-prices-in-dollars skill");
+  // Saving a skill is not itself a kind of task to save.
+  assert.doesNotMatch(run.replied(), /- \[ \] Save tasks like this as a skill/);
+});

@@ -21,6 +21,17 @@ export type SkillSuggestion = {
   tasks: Array<{ task: string; url: string; at: string }>;
 };
 
+/**
+ * The suggestion Aperture Bot adds to its reply when a task repeats an earlier
+ * kind: ticked, it saves the skill (`aperture-bot`'s `skill-offer.ts`). Its
+ * runs are never a kind of task themselves.
+ */
+export const SAVE_SKILL = /^Save tasks like this as a skill: `(\.aperture\/skills\/[^`\s]+\.md)`$/;
+export const saveSkillLine = (path: string) => `Save tasks like this as a skill: \`${path}\``;
+/** The skill's name, from its file: `.aperture/skills/add-a-migration.md` is `add-a-migration`. */
+export const skillNameOf = (path: string) =>
+  path.replace(/^\.aperture\/skills\//, "").replace(/\.md$/, "");
+
 /** Tasks of one kind it takes before a skill is suggested, as in the editor. */
 export const SUGGEST_AFTER = 2;
 /** Suggestions a repository shows at most: the most asked for first. */
@@ -31,7 +42,7 @@ const MAX_SOURCES = 5;
 /** A task worth a skill: a change the bot finished, with a plan or files to learn from. */
 function useful(task: BotTask): boolean {
   const s = task.summary;
-  if (!s || s.kind || !task.task.trim()) return false;
+  if (!s || s.kind || !task.task.trim() || SAVE_SKILL.test(task.task.trim())) return false;
   if (s.state !== "clear" && s.state !== "red") return false;
   return (s.plan?.length ?? 0) > 0 || (s.files?.length ?? 0) > 0;
 }
@@ -41,6 +52,7 @@ export function skillSuggestions(
   skills: Skill[],
   tasks: BotTask[],
   now: Date = new Date(),
+  max = MAX_SUGGESTIONS,
 ): SkillSuggestion[] {
   const taken = {
     names: new Set(skills.map((s) => s.name)),
@@ -85,7 +97,7 @@ export function skillSuggestions(
   }
   return out
     .sort((a, b) => b.tasks.length - a.tasks.length || b.newest.localeCompare(a.newest))
-    .slice(0, MAX_SUGGESTIONS)
+    .slice(0, max)
     .map(({ newest: _, ...s }) => s);
 }
 

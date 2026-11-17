@@ -28,8 +28,11 @@ A release is one pull request and one tag:
    or another repository, so they are there when the release is published.
    `changelog.test.ts` fails while they are missing, have no summary, or no
    longer hold that version's changelog lines.
-4. Once that pull request merges, tag its merge commit `vX.Y.Z` and publish a
-   GitHub release with the notes from `docs/releases/X.Y.Z.md`.
+4. Once that pull request merges, `npm run -s release-url -- X.Y.Z` prints
+   the link that publishes it: GitHub's new-release form with the tag
+   `vX.Y.Z` on that pull request's merge commit, the title and the notes from
+   `docs/releases/X.Y.Z.md` filled in. Open it, read it over, and publish.
+   If the version is already tagged, it prints the release instead.
 
 ## Imports in `src/lib` that tests reach
 

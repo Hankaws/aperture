@@ -30,6 +30,7 @@
     "build:aperture-bot": "node packages/aperture-bot/build.mjs",
     "bench": "node --experimental-strip-types scripts/bench.ts",
     "release-notes": "node --experimental-strip-types scripts/release-notes.ts",
+    "release-url": "node --experimental-strip-types scripts/release-url.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -80,7 +80,9 @@ import { questionText } from "./question.ts";
 import { describeError } from "./retry.ts";
 import { markStarted } from "./suggestions.ts";
 import { briefMessage, postToSlack, pullMessage, redMessage } from "./slack.ts";
-import { tasksFrom } from "../../../src/lib/bot/tasks.ts";
+import { tasksFrom, type BotTask } from "../../../src/lib/bot/tasks.ts";
+import { SAVE_SKILL, saveSkillLine } from "../../../src/lib/bot/skill-suggest.ts";
+import { draftFor, localSkills, OFFER_DAYS, saveSkillTask, skillOffer } from "./skill-offer.ts";
 import { WEEK_MS, weekFrom, weekLines } from "../../../src/lib/bot/week.ts";
 import { isSealed, sealBody, sealKey } from "./seal.ts";
 import { runTask, type BotProgress } from "./run.ts";
@@ -547,6 +549,22 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
     }
   };
   /**
+   * The repository's bot tasks of the last few weeks, read from its comments
+   * as the Bot page reads them: what a skill offer looks for repeats in. If
+   * GitHub cannot say, there is no offer.
+   */
+  const recentTasks = async (now: number): Promise<BotTask[]> => {
+    try {
+      const since = new Date(now - OFFER_DAYS * 86_400_000).toISOString();
+      const raw = await gh.rawCommentsSince(since);
+      const trigger = input(env, "trigger") ?? DEFAULT_TRIGGER;
+      return tasksFrom(raw, new Map(), { now, trigger });
+    } catch (error) {
+      log(`Aperture Bot: could not read recent tasks for a skill: ${describeError(error)}`);
+      return [];
+    }
+  };
+  /**
    * On Mondays (UTC), the brief carries the week's digest: what the bot did in
    * the last seven days, counted from its own summaries on GitHub as the Bot
    * page counts them. No model call; if GitHub cannot say, the brief goes
@@ -935,10 +953,24 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       log(
         `Aperture Bot: keeping in mind ${lessons.length} notes from reviews of its pull requests`,
       );
+    // A ticked "save as skill" box: the run saves the skill, from the draft its tasks make.
+    const saving = command.via === "tick" ? SAVE_SKILL.exec(command.task.trim()) : null;
+    const repoName = `${command.owner}/${command.repo}`;
+    const task = saving
+      ? saveSkillTask(
+          saving[1]!,
+          draftFor(
+            repoName,
+            saving[1]!,
+            await recentTasks(deps.now?.() ?? Date.now()),
+            localSkills(cwd),
+          ),
+        )
+      : command.task;
     const result = await runTask(
       {
         cwd,
-        task: command.task,
+        task,
         context: [threadContext(command, comments, diff), lessonsContext(lessons)]
           .filter(Boolean)
           .join("\n\n"),
@@ -958,6 +990,39 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
         `### Aperture Bot\n\n\`\`\`\n${result.text}\n\`\`\`\n`,
       );
     const ctx = { ...asked, tests: sandbox?.where ?? null };
+    /**
+     * When this change repeats a kind of task the bot did lately and no skill
+     * covers it, its suggestions end with one to save it as a skill.
+     */
+    const offerSkill = async (url: string) => {
+      if (saving) return;
+      const now = deps.now?.() ?? Date.now();
+      // An extra: whatever goes wrong here, the change is published and its reply posted.
+      const offer = await Promise.resolve()
+        .then(async () =>
+          skillOffer(
+            repoName,
+            {
+              task: command.task,
+              plan: result.plan.map((s) => s.content),
+              files: result.written,
+              followed: result.skills,
+              url,
+              at: new Date(now).toISOString(),
+            },
+            await recentTasks(now),
+            localSkills(cwd),
+            new Date(now),
+          ),
+        )
+        .catch((error: unknown) => {
+          log(`Aperture Bot: no skill offered: ${describeError(error)}`);
+          return null;
+        });
+      if (!offer) return;
+      log(`Aperture Bot: tasks like this came ${offer.tasks.length} times: offering ${offer.path}`);
+      result.next = [...result.next, saveSkillLine(offer.path)];
+    };
 
     if (result.outcome === "clear") {
       await report({ phase: "publishing", plan: result.plan.map((s) => s.content) });
@@ -970,6 +1035,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
       if (pull) {
         push(cwd, pull.headRef);
         const url = `${repoUrl}/commit/${sha}`;
+        await offerSkill(url);
         await reply(doneReply(result, { url, what: "commit" }, ctx));
         setOutput(env, { outcome: "clear", commit: sha });
       } else {
@@ -981,6 +1047,7 @@ export async function runAction(env: NodeJS.ProcessEnv, deps: ActionDeps = {}): 
           base: command.defaultBranch,
           body: pullBody(command, result, runUrl, ctx.tests, lessons.length),
         });
+        await offerSkill(opened.url);
         await reply(doneReply(result, { url: opened.url, what: "pull" }, ctx));
         // Unasked work (the brief's idea, a red run's fix, a standing job) is told on Slack too.
         if (command.via === "schedule" || command.via === "red")

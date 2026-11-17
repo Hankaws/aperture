@@ -35,6 +35,7 @@ import {
 } from "@/lib/bot/lessons";
 import { addTastes, tasteOf, type Taste } from "@/lib/bot/taste";
 import { skillUsage, type SkillUse } from "@/lib/bot/skill-usage";
+import { skillSuggestions, type SkillSuggestion } from "@/lib/bot/skill-suggest";
 import { isSkillPath, projectSkills, SKILLS_DIR, type Skill } from "@/lib/workspace/skills";
 import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
@@ -596,8 +597,20 @@ export const botLessons = createServerFn({ method: "POST" })
   });
 
 /** Each repository's skills, and how its bot used them (`skill-usage.ts`). */
-export type BotSkills =
-  { ok: true; repos: Array<{ repo: string; skills: SkillUse[]; read: number }> } | Failure;
+export type BotSkills = { ok: true; repos: RepoSkills[] } | Failure;
+
+/**
+ * A repository's skills and how its bot used them, with the skills suggested
+ * for tasks it keeps being asked for (`skill-suggest.ts`) and its default
+ * branch, where those would go (null when GitHub did not say).
+ */
+export type RepoSkills = {
+  repo: string;
+  skills: SkillUse[];
+  read: number;
+  suggestions: SkillSuggestion[];
+  branch: string | null;
+};
 
 /** Skill files read from one repository at most. */
 const MAX_SKILL_FILES = 30;
@@ -641,8 +654,9 @@ export async function readSkills(base: string, get: Get): Promise<Array<Skill & 
 }
 
 /**
- * The team's skills, and how each bot used them: two requests a repository
- * and one a skill file. Read when the card opens, not on every refresh.
+ * The team's skills, how each bot used them, and the skills its repeated
+ * tasks suggest: two requests a repository (three with a suggestion, for its
+ * branch) and one a skill file. Read when the card opens, not on every refresh.
  */
 export const botSkills = createServerFn({ method: "POST" })
   .validator(botTeamInput)
@@ -655,7 +669,7 @@ export const botSkills = createServerFn({ method: "POST" })
     if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
     const get: Get = (url) => githubJson(url, token);
     try {
-      const out: Array<{ repo: string; skills: SkillUse[]; read: number }> = [];
+      const out: RepoSkills[] = [];
       const repos = [...new Set(data.repos)];
       for (let i = 0; i < repos.length; i += ACTIVITY_PARALLEL) {
         const batch = await Promise.all(
@@ -663,14 +677,25 @@ export const botSkills = createServerFn({ method: "POST" })
             const [owner = "", repo = ""] = fullName.split("/");
             const base = repoBase(owner, repo);
             if (!base) return null;
-            const skills = await readSkills(base, get);
-            if (skills.length === 0) return { repo: fullName, skills: [], read: 0 };
-            const loaded = await loadTasks(base, get, { quick: true });
+            const [skills, loaded] = await Promise.all([
+              readSkills(base, get),
+              loadTasks(base, get, { quick: true }),
+            ]);
             const tasks = loaded.ok ? loaded.tasks : [];
+            const suggestions = skillSuggestions(fullName, skills, tasks);
+            // Where a suggestion's file goes: GitHub's new-file page needs the branch.
+            const repoInfo = suggestions.length > 0 ? await get(base) : null;
+            const branch =
+              repoInfo?.status === 200
+                ? String((repoInfo.body as { default_branch?: string }).default_branch ?? "") ||
+                  null
+                : null;
             return {
               repo: fullName,
               skills: skillUsage(fullName, skills, tasks),
               read: tasks.length,
+              suggestions,
+              branch,
             };
           }),
         );

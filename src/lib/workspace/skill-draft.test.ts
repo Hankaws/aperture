@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isLastReplyOfRun, nameFromRequest, skillFromRun } from "./skill-draft.ts";
+import {
+  isLastReplyOfRun,
+  nameFromRequest,
+  repeatOf,
+  requestOf,
+  skillFromRun,
+} from "./skill-draft.ts";
 import { parseSkill, projectSkills } from "./skills.ts";
 import type { ChatMessage, PlanEntry, ProposedEdit } from "./types.ts";
 
@@ -167,4 +173,88 @@ test("a draft is held to the checks its run was: the project's own and its skill
   assert.deepEqual(parseSkill(draft.path, draft.text)!.checks, ["test", "migrate:check"]);
   const none = [user("Rename it"), reply({ edits: [edit("a.ts")] })];
   assert.doesNotMatch(skillFromRun(none, none[1]!.id, {}, day)!.text, /checks:/);
+});
+
+test("the same kind of task asked for twice is offered as a skill, made from both runs", () => {
+  const messages = [
+    user("Add a migration for the orders table", { runId: "r1" }),
+    reply({
+      runId: "r1",
+      plan: plan("Read the latest migration", "Write the next one"),
+      edits: [edit("migrations/0003_orders.sql")],
+      verify: { script: "test", status: "passed", detail: "" },
+    }),
+    user("Explain the cart", { runId: "r2" }),
+    reply({ runId: "r2" }),
+    user("Please add a migration for invoices", { runId: "r3" }),
+    reply({
+      runId: "r3",
+      plan: plan("Read the latest migration", "Write the next one", "Update the schema type"),
+      edits: [edit("migrations/0004_invoices.sql"), edit("src/db/schema.ts")],
+      verify: {
+        script: "test",
+        status: "passed",
+        detail: "",
+        skills: [{ script: "migrate:check", skill: "db", status: "passed", detail: "" }],
+      },
+    }),
+  ];
+  const now = messages[5]!.id;
+  assert.equal(repeatOf(messages, now, {}), messages[1]!.id);
+  assert.equal(requestOf(messages, messages[1]!.id), "Add a migration for the orders table");
+  // The first time is not a repeat, and neither is a question.
+  assert.equal(repeatOf(messages, messages[1]!.id, {}), null);
+  assert.equal(repeatOf(messages, messages[3]!.id, {}), null);
+
+  const draft = skillFromRun(messages, now, {}, day, repeatOf(messages, now, {})!)!;
+  assert.equal(draft.name, "add-a-migration");
+  assert.match(
+    draft.text,
+    /\ndescription: For tasks like: Please add a migration for invoices\nchecks: test, migrate:check\n---\n/,
+  );
+  assert.match(
+    draft.text,
+    /Made on 2026-11-08 from 2 agent runs that did this: "Add a migration for the orders table" and "Please add a migration for invoices"\./,
+  );
+  // The newer plan, and every file both runs changed.
+  assert.match(draft.text, /\n3\. Update the schema type\n/);
+  assert.match(
+    draft.text,
+    /Files those runs changed, as examples:\n- `migrations\/0003_orders\.sql`\n- `migrations\/0004_invoices\.sql`\n- `src\/db\/schema\.ts`\n/,
+  );
+  assert.equal(parseSkill(draft.path, draft.text)!.name, "add-a-migration");
+});
+
+test("no offer once a skill does it, or when the run already followed one", () => {
+  const twice = (extra: Partial<ChatMessage> = {}) => [
+    user("Add a migration for orders", { runId: "a" }),
+    reply({ runId: "a", edits: [edit("migrations/1.sql")] }),
+    user("Add a migration for invoices", { runId: "b" }),
+    reply({ runId: "b", edits: [edit("migrations/2.sql")], ...extra }),
+  ];
+  const plain = twice();
+  assert.ok(repeatOf(plain, plain[3]!.id, {}));
+  assert.equal(
+    repeatOf(plain, plain[3]!.id, { ".aperture/skills/add-a-migration.md": "Steps." }),
+    null,
+    "a skill by that name exists",
+  );
+  const followed = twice({ skills: [".aperture/skills/db.md"] });
+  assert.equal(repeatOf(followed, followed[3]!.id, {}), null, "it followed a skill already");
+  // A different task that starts the same way only past its first words is not the same kind.
+  const other = [
+    user("Fix the login page", { runId: "a" }),
+    reply({ runId: "a", edits: [edit("src/login.tsx")] }),
+    user("Fix the cart total", { runId: "b" }),
+    reply({ runId: "b", edits: [edit("src/cart.ts")] }),
+  ];
+  assert.equal(repeatOf(other, other[3]!.id, {}), null);
+  // An earlier run that changed nothing does not count.
+  const idle = [
+    user("Add a migration for orders", { runId: "a" }),
+    reply({ runId: "a" }),
+    user("Add a migration for invoices", { runId: "b" }),
+    reply({ runId: "b", edits: [edit("migrations/2.sql")] }),
+  ];
+  assert.equal(repeatOf(idle, idle[3]!.id, {}), null);
 });

@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- When you ask for the same kind of task again ("Add a migration for orders", then "Add a migration for invoices"), the reply offers to save it as a skill: "You asked for this before". The draft is made from both runs: both requests as examples, the newer plan as the steps, and every file and check either run had. "Not now" keeps the plain Save as skill button, and the offer does not come back for that run. It is not offered when the run already followed a skill, or a skill by that name exists. ([#200](https://github.com/Hankaws/aperture/pull/200))
+
 ## 0.13.1 - 2026-11-16
 
 ### Changed

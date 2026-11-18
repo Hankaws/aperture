@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUp, Lock, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowUp, Lock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat-saved";
 import { loadPrivateChat, privateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
-import { PRIVATE_SUGGESTIONS, replyBlocks } from "@/lib/bot/private-chat";
+import {
+  PRIVATE_SUGGESTIONS,
+  replyActions,
+  replyBlocks,
+  type ReplyAction,
+} from "@/lib/bot/private-chat";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 
@@ -34,12 +40,15 @@ export function PrivateChat({
   className,
   lead,
   actions,
+  onNavigate,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
   lead?: ReactNode;
   /** At the header's end: a bubble's minimize button. */
   actions?: ReactNode;
+  /** A reply's button was followed: a bubble puts its window away, to show the page. */
+  onNavigate?: () => void;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
@@ -224,7 +233,7 @@ export function PrivateChat({
                       )}
                     </div>
                   ) : (
-                    <Reply text={entry.text} />
+                    <Reply text={entry.text} onNavigate={onNavigate} />
                   )}
                 </div>
               </div>
@@ -280,10 +289,11 @@ export function PrivateChat({
   );
 }
 
-function Reply({ text }: { text: string }) {
+function Reply({ text, onNavigate }: { text: string; onNavigate?: () => void }) {
+  const { text: shown, actions } = replyActions(text);
   return (
     <div className="space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
-      {replyBlocks(text).map((block, i) =>
+      {replyBlocks(shown).map((block, i) =>
         block.type === "ul" || block.type === "ol" ? (
           (() => {
             const List = block.type === "ol" ? "ol" : "ul";
@@ -318,8 +328,65 @@ function Reply({ text }: { text: string }) {
           </p>
         ),
       )}
+      {actions.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {actions.map((action) => (
+            <ActionLink key={action.id} action={action} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/** A place on the site a reply points to, as a button that goes there. */
+function ActionLink({ action, onNavigate }: { action: ReplyAction; onNavigate?: () => void }) {
+  const className = cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5");
+  const label = (
+    <>
+      {action.label}
+      <ArrowRight className="size-3.5" aria-hidden />
+    </>
+  );
+  const props = { className, onClick: onNavigate };
+  switch (action.id) {
+    case "model-key":
+      return (
+        <Link to="/settings" search={{ tab: "models" }} {...props}>
+          {label}
+        </Link>
+      );
+    case "github":
+      return (
+        <Link to="/settings" search={{ tab: "plan" }} {...props}>
+          {label}
+        </Link>
+      );
+    case "new-bot":
+      return (
+        <Link to="/bot" {...props}>
+          {label}
+        </Link>
+      );
+    case "editor":
+      return (
+        <Link to="/app" {...props}>
+          {label}
+        </Link>
+      );
+    case "check":
+      return (
+        <Link to="/bot" search={{ tab: "check" }} {...props}>
+          {label}
+        </Link>
+      );
+    case "pricing":
+      return (
+        <Link to="/pricing" {...props}>
+          {label}
+        </Link>
+      );
+  }
 }
 
 function Thinking() {

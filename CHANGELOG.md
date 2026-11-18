@@ -9,10 +9,12 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- A Test button for each model key in Settings, on the Models tab, and for the custom endpoint. It sends one tiny request with the saved key, resolved as a chat would resolve it, and says right there "Works: it answered in 1.2 s.", or what is wrong and what to do ("It needs an API key…", "can't be read anymore…", or no answer in 30 s). It spends a few tokens of your own key. ([#215](https://github.com/Hankaws/aperture/pull/215))
 - A welcome tour in Aperture Bot's chat for someone new: "Get set up", three steps with a button each (add a model key, connect GitHub, make your first bot), ticking themselves off from your account as you do them, wherever you do them. Aperture Bot's bubble shows how many are left. It goes once all three are done, or when you press Hide. ([#214](https://github.com/Hankaws/aperture/pull/214))
 
 ### Fixed
 
+- A provider key saved before the server's secrets key changed is no longer reported as missing ("No Grok key on this account") while Settings shows it linked: it says the key can't be read anymore, and to enter it again. A custom endpoint's own words and the hint after them are now separated by a full stop. ([#215](https://github.com/Hankaws/aperture/pull/215))
 - A custom endpoint that turns the key away now says what to do. OpenRouter with no key saved answered "No cookie auth credentials found"; the chat now adds that the endpoint needs an API key, in Settings on the Models tab (or that the key sent is wrong). A key saved before the server's secrets key changed, which can no longer be read, is no longer sent as nothing: you are asked to enter it again. The tour counts a custom endpoint as ready only with a key, unless it runs on your own machine. And "How do I make my first bot?" is asked as it is, not with a colon after it. ([#214](https://github.com/Hankaws/aperture/pull/214))
 
 ## 0.17.0 - 2026-11-18

@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { saveProviderKey, saveCustomEndpoint, setModelSource, type AccountSnapshot } from "@/lib/billing/api";
+import { testModel } from "@/lib/billing/model-test.api";
+import { testLine, type ModelTest } from "@/lib/billing/model-test";
 import { CUSTOM_PRESETS } from "@/lib/agent/custom-endpoint";
 import {
   LOCAL_DEFAULT_BASE,
@@ -262,11 +264,61 @@ function ProviderPanel({
             Remove
           </Button>
         )}
+        {status.set && <TestModel source={provider} label={label} />}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-subtle">
         Encrypted at rest. Composer uses the model you pick — never Auto, never a silent fallback.
       </p>
     </div>
+  );
+}
+
+/**
+ * Tests a saved key, or the custom endpoint, with one tiny request: "Works",
+ * or what is wrong and what to do, right under it. Spends a few tokens of
+ * the person's own key.
+ */
+function TestModel({ source, label }: { source: ProviderId | "custom"; label: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ModelTest | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await testModel({ data: { source } }));
+    } catch (error) {
+      setResult({ ok: false, error: error instanceof Error ? error.message : "The test could not run." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() => void run()}
+        aria-label={`Test ${label}`}
+        title="Send one tiny request with this key"
+      >
+        {busy ? "Testing…" : "Test"}
+      </Button>
+      {result && (
+        <p
+          role="status"
+          className={cn(
+            "w-full text-xs text-pretty [overflow-wrap:anywhere]",
+            result.ok ? "text-ok" : "text-danger",
+          )}
+        >
+          {testLine(result)}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -388,6 +440,7 @@ function CustomPanel({
               Remove key
             </Button>
           )}
+          {saved?.base && saved.model ? <TestModel source="custom" label="the endpoint" /> : null}
           {selected ? (
             <span className="text-xs text-subtle">Composer is using this endpoint.</span>
           ) : null}

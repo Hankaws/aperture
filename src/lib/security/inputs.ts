@@ -45,6 +45,8 @@ export const providerInput = z.enum(PROVIDERS);
 export const modelSourceInput = z.enum(["hosted", "custom", "local", ...PROVIDERS]);
 
 export const providerKeyInput = z.object({ provider: providerInput, key: text(1000) });
+/** A saved key, or the custom endpoint, to test with one tiny request (`billing/model-test.ts`). */
+export const modelTestInput = z.object({ source: z.enum(["custom", ...PROVIDERS]) });
 export const customEndpointInput = z.object({
   base: text(500),
   model: text(200),

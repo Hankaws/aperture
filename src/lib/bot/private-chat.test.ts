@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CHAT_LIMITS } from "./chat.ts";
 import {
+  ACTIONS,
   APERTURE_GUIDE,
+  replyActions,
   PRIVATE_SUGGESTIONS,
   privateChatId,
   privateMessages,
@@ -95,4 +97,39 @@ test("it shows someone new around Aperture, in the words of the site's own pages
   ])
     assert.ok(APERTURE_GUIDE.includes(words), words);
   assert.equal(PRIVATE_SUGGESTIONS[0], "How do I make my first bot?");
+});
+
+test("a reply's buttons: the places the site has, each once, at most three, out of the text", () => {
+  const out = replyActions(
+    [
+      "First, add your model key, then make a bot.",
+      "",
+      "[[go:model-key]]",
+      "- [[go:new-bot]]",
+      "[[go:model-key]] [[go:nowhere]] [[go:constructor]]",
+      "Or open the editor: [[go:editor]] it checks every change.",
+      "[[go:pricing]]",
+    ].join("\n"),
+  );
+  assert.deepEqual(out.actions, [
+    { id: "model-key", label: "Add a model key" },
+    { id: "new-bot", label: "Make a bot" },
+    { id: "editor", label: "Open the editor" },
+  ]);
+  assert.equal(
+    out.text,
+    "First, add your model key, then make a bot.\n\nOr open the editor: it checks every change.",
+  );
+  // No markers: the text as it was, and no buttons.
+  assert.deepEqual(replyActions("Just an answer.\n\n- a point"), {
+    text: "Just an answer.\n\n- a point",
+    actions: [],
+  });
+});
+
+test("the model is told every button, by the marker the chat reads, and no other", () => {
+  const system = privateSystem("2026-11-18");
+  for (const id of Object.keys(ACTIONS)) assert.ok(system.includes(`[[go:${id}]]`), id);
+  assert.equal(system.match(/\[\[go:/g)?.length, Object.keys(ACTIONS).length);
+  assert.match(system, /never make up another/);
 });

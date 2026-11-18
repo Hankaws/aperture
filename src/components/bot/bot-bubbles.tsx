@@ -200,7 +200,7 @@ export function BotBubbles() {
               }
             />
           ) : (
-            <PrivateChat actions={minimize} />
+            <PrivateChat actions={minimize} onNavigate={() => setOpen(null)} />
           )}
         </div>
       )}

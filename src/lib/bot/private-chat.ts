@@ -34,7 +34,63 @@ export const APERTURE_GUIDE = [
   "- The editor (Open, in the top bar): an agent works on a project in the browser, and every change is checked (it parses, imports resolve, types pass, the preview renders, the tests pass) before they press Apply.",
   "- Skills: steps the bots and the editor's agent follow for one kind of task, kept in the repository's `.aperture/skills/`. A bot offers to save one when the same kind of task comes up twice.",
   "If you are not sure how something on the site works, say so rather than guess.",
+  "When your reply tells them to go to a place on the site, end it with that place's button, each on a line of its own, at most three. These are the only buttons; never make up another:",
+  ...Object.entries({
+    "model-key": "Settings, Models: add a model key",
+    github: "Settings: connect GitHub",
+    "new-bot": "the Bot page: make a bot",
+    editor: "the editor",
+    check: "the Bot page's Check tab: check a pull request",
+    pricing: "the plans",
+  }).map(([id, what]) => `- [[go:${id}]] ${what}`),
 ].join("\n");
+
+/** A place a reply's button opens: its marker, `[[go:<id>]]`, and its label. */
+export type ReplyAction = { id: ActionId; label: string };
+
+export const ACTIONS = {
+  "model-key": "Add a model key",
+  github: "Connect GitHub",
+  "new-bot": "Make a bot",
+  editor: "Open the editor",
+  check: "Check a pull request",
+  pricing: "See the plans",
+} as const;
+
+export type ActionId = keyof typeof ACTIONS;
+
+/** Buttons a reply shows at most. */
+const MAX_ACTIONS = 3;
+const MARKER = /\[\[go:([a-z-]{1,20})\]\]/g;
+
+/**
+ * A reply's text without its button markers, and the buttons: those the
+ * site has, in the order named, each once, at most three. A marker for
+ * anything else is dropped, so a reply can only open the places listed.
+ */
+export function replyActions(text: string): { text: string; actions: ReplyAction[] } {
+  const actions: ReplyAction[] = [];
+  for (const [, id] of text.matchAll(MARKER)) {
+    // Own names only: "constructor" is in every object, and is no button.
+    if (!Object.hasOwn(ACTIONS, id!) || actions.some((a) => a.id === id)) continue;
+    if (actions.length >= MAX_ACTIONS) break;
+    actions.push({ id: id as ActionId, label: ACTIONS[id as ActionId] });
+  }
+  const clean = text
+    .split("\n")
+    .flatMap((line) => {
+      const bare = line.replace(MARKER, "");
+      // A line that held only buttons (and a bullet) goes; any other just loses them.
+      if (bare === line) return [line.trimEnd()];
+      if (/^\s*([-*]\s*)?$/.test(bare)) return [];
+      // Where a button was, its spaces close up.
+      return [bare.replace(/(\S) {2,}(?=\S)/g, "$1 ").trimEnd()];
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text: clean, actions };
+}
 
 export function privateSystem(today: string): string {
   return [

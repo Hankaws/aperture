@@ -34,6 +34,29 @@ A release is one pull request and one tag:
    `docs/releases/X.Y.Z.md` filled in. Open it, read it over, and publish.
    If the version is already tagged, it prints the release instead.
 
+## Releasing Aperture Bot or Agent Check
+
+Each is published from its own repository, `Hankaws/aperture-bot` and
+`Hankaws/aperture-agent-check`, built from this one by that repository's
+"Build from Aperture" workflow. `packages/aperture-bot/action/` and
+`packages/agent-check/action/` hold copies of their `action.yml`, README and
+workflows (`.github/workflows/`): the build copies `action.yml` and the README
+over, but not the workflows, so a change to a workflow is made in both places.
+
+- **Aperture Bot.** Once the change is merged here, run the bot repository's
+  workflow with `aperture-ref` set to the merge commit and `release` set to
+  the next version (`v1.15`). It builds, runs the smoke test, commits `dist/`,
+  tags that commit, publishes the release, and moves `v1` to it. Never publish
+  the release or push the tag by hand first: the workflow refuses a version
+  that already exists, and a tag made before the build lands on the previous
+  build (v1.14 had to be redone on 2026-11-17).
+- **Agent Check.** Its workflow only builds. Run it with `aperture-ref`, then
+  publish `vX.Y` on the commit it made, and move `v1` to it
+  (`git tag -f v1 vX.Y && git push -f origin v1`).
+
+When an Aperture release ships a change that needs one of them, release it
+first, so the release notes can link it.
+
 ## Imports in `src/lib` that tests reach
 
 `npm test` runs `src/**/*.test.ts` under bare node (`--experimental-strip-types`),
@@ -817,7 +840,8 @@ HTTP, JSON answers, no sessions, no SDK); `check.server.ts` runs the checks;
 the editor's checks on a pull request. It is published from its own repo
 (`Hankaws/aperture-agent-check`, which needs `action.yml` at its root);
 `packages/agent-check/action/` holds that repo's `action.yml`, README and
-build workflow, and the source stays here.
+workflows, and the source stays here (see "Releasing Aperture Bot or Agent
+Check").
 
 - **Same checks.** `staticChangeChecks` from `src/lib/workspace/static-checks.ts`,
   given the pull request's files: `git.ts` reads the base (`git merge-base`,
@@ -869,7 +893,7 @@ build workflow, and the source stays here.
 change, and Agent Check judges it before anything is published. It is a
 command line (`aperture-bot run --task "…"`, `main.ts`) and a GitHub Action
 (`action.ts`, published from its own repo like Agent Check; `action/` holds
-that repo's `action.yml`, README and build workflow), and the site's Bot
+that repo's `action.yml`, README and workflows), and the site's Bot
 page (`/bot`).
 
 - **The same agent.** `runLoop` from `src/lib/agent/loop.ts` with a runner

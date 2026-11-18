@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- The copies of Aperture Bot's and Agent Check's build workflows in this repository match the ones that run in their own repositories again, and their test workflows are copied too. The bot's copy had fallen behind: it lacked the `release` input that tags a build, publishes the release and moves `v1`. `AGENTS.project.md` now says how to release each one, so a bot release is no longer published by hand ahead of its build. ([#209](https://github.com/Hankaws/aperture/pull/209))
+
 ## 0.16.0 - 2026-11-17
 
 ### Added

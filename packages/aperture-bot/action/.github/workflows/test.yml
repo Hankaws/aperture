@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: The bundle finishes a clear change, refuses a red one, and opens a pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The CLI and the Action, against a stand-in model and a fake GitHub,
+      # with tests in the real Docker sandbox.
+      - run: node test/smoke.mjs dist/index.cjs
+
+  action:
+    name: The action loads and ignores what is not a command
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # This repository's own action, as a user's workflow runs it. A pull
+      # request is not a command, so it must answer "ignored" without a call.
+      - id: bot
+        uses: ./
+        with:
+          model-key: not-used
+      - name: The outcome is ignored
+        run: test "${{ steps.bot.outputs.outcome }}" = ignored

@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: The bundle catches a broken change
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node test/smoke.mjs dist/index.cjs
+
+  example:
+    name: Aperture Agent Check on example/
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # This repository's own action, exactly as a user's workflow runs it.
+      - uses: ./
+        with:
+          working-directory: example

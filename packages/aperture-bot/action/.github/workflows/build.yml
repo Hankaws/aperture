@@ -1,5 +1,7 @@
 # Builds dist/ from the Aperture source and commits it, so `uses:` runs it
 # with no install. Run it by hand with the Aperture tag or branch to build.
+# Give it a release (v1.5) and it also tags the build, publishes a release,
+# and moves the major tag (v1) to it, which is what `@v1` workflows run.
 name: Build from Aperture
 
 on:
@@ -9,6 +11,10 @@ on:
         description: Tag, branch or commit of Hankaws/aperture to build
         required: true
         default: main
+      release:
+        description: "Version to release, such as v1.5 (empty: build only, nothing tagged)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -17,7 +23,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: The release is a version
+        if: inputs.release != ''
+        run: |
+          if ! [[ "${{ inputs.release }}" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "release must look like v1.5 or v1.5.1"; exit 1
+          fi
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/checkout@v4
         with:
@@ -40,17 +55,44 @@ jobs:
       - name: Check the bundle on a clear change and a red one
         run: node aperture/packages/aperture-bot/smoke.mjs aperture/packages/aperture-bot/dist/index.cjs
 
-      # action.yml and the README come along, so the inputs the bundle reads are the ones declared.
-      - name: Commit dist/, action.yml and README.md
+      # action.yml and the README come along, so the inputs the bundle reads are
+      # the ones declared; the smoke test too, so this repository's Test checks
+      # the bundle it ships, not an older one's expectations.
+      - name: Commit dist/, action.yml, README.md and the smoke test
+        id: commit
         run: |
+          source="$(git -C aperture rev-parse HEAD)"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
           rm -rf dist
           cp -r aperture/packages/aperture-bot/dist dist
           cp aperture/packages/aperture-bot/action/action.yml action.yml
           cp aperture/packages/aperture-bot/action/README.md README.md
+          mkdir -p test
+          cp aperture/packages/aperture-bot/smoke.mjs test/smoke.mjs
           rm -rf aperture
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist action.yml README.md
+          git add dist action.yml README.md test/smoke.mjs
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
-          git commit -m "Build dist from Hankaws/aperture@${{ inputs.aperture-ref }}"
+          git commit -m "Build dist from Hankaws/aperture@${source:0:7}" -m "Asked for: ${{ inputs.aperture-ref }}"
           git push
+
+      # The version's own tag never moves; the major tag (v1) moves to it.
+      - name: Tag, release, and move the major tag
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          SOURCE: ${{ steps.commit.outputs.source }}
+        run: |
+          major="${RELEASE%%.*}"
+          if git rev-parse -q --verify "refs/tags/$RELEASE" >/dev/null; then
+            echo "$RELEASE already exists: pick the next version."; exit 1
+          fi
+          git tag -a "$RELEASE" -m "Aperture Bot $RELEASE"
+          git push origin "refs/tags/$RELEASE"
+          gh release create "$RELEASE" --title "$RELEASE" --verify-tag \
+            --notes "Built from [Hankaws/aperture@${SOURCE:0:7}](https://github.com/Hankaws/aperture/commit/$SOURCE). See its [changelog](https://github.com/Hankaws/aperture/blob/$SOURCE/CHANGELOG.md)."
+          git tag -f -a "$major" -m "Aperture Bot $RELEASE"
+          git push --force origin "refs/tags/$major"
+          echo "Released $RELEASE; $major now points at it."

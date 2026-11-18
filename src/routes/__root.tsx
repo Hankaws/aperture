@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { THEME_BOOT_SCRIPT } from "@/lib/appearance";
 import { NotFound } from "@/components/site/not-found";
+import { BotBubbles } from "@/components/bot/bot-bubbles";
 import { PAGES, pageTitle } from "@/lib/page-head";
 
 const APP_NAME = "Aperture";
@@ -103,6 +104,7 @@ export const Route = createRootRoute({
         <PreviewHostBridge />
         <AuthProvider>
           <Outlet />
+          <BotBubbles />
           <ToastHost />
         </AuthProvider>
         <Scripts />

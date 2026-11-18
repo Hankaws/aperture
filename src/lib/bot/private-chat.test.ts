@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CHAT_LIMITS } from "./chat.ts";
 import {
+  APERTURE_GUIDE,
+  PRIVATE_SUGGESTIONS,
   privateChatId,
   privateMessages,
   privateReply,
@@ -76,4 +78,21 @@ test("a reply keeps its numbered lists as lists, and code as it is", () => {
   assert.deepEqual(replyBlocks("4. Fourth\n5. Fifth"), [
     { type: "ol", start: 4, items: ["Fourth", "Fifth"] },
   ]);
+});
+
+test("it shows someone new around Aperture, in the words of the site's own pages and buttons", () => {
+  const system = privateSystem("2026-11-18");
+  assert.ok(system.endsWith(APERTURE_GUIDE));
+  for (const words of [
+    "Settings, on the Models tab",
+    "connect GitHub first",
+    'under "Your bots", press + (New bot)',
+    "Name, pick the repository it Looks after, and say How it works",
+    "chat bubble appears in the corner of every page",
+    "Open, in the top bar",
+    "`.aperture/skills/`",
+    "say so rather than guess",
+  ])
+    assert.ok(APERTURE_GUIDE.includes(words), words);
+  assert.equal(PRIVATE_SUGGESTIONS[0], "How do I make my first bot?");
 });

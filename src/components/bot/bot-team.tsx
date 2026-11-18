@@ -34,6 +34,7 @@ import { AskCard, SetupCard, TaskList } from "./bot-console";
 import { BotChat } from "./bot-chat";
 import { BotAvatar } from "./bot-avatar";
 import { PrivateChat } from "./private-chat";
+import { announceBubble } from "@/lib/bot/bubbles";
 import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
 import { IdentityCard } from "./identity-card";
 import { IdeasPanel } from "./ideas-panel";
@@ -549,6 +550,8 @@ export function BotTeam() {
                 start={start}
                 onCreated={(bot, next) => {
                   setBots(next);
+                  // Its chat bubble pops up in the corner, to talk to it from any page.
+                  announceBubble(bot);
                   open({ kind: "bot", id: bot.id });
                 }}
               />

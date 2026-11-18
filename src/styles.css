@@ -1072,6 +1072,15 @@ html[data-theme="light"] {
   animation: logo-marquee 28s linear infinite;
 }
 
+/* The bot bubbles (components/bot/bot-bubbles.tsx): a new one pops in, and its greeting rises beside it. */
+.bubble-pop {
+  animation: pop-in 0.35s var(--ease-smooth-out) both;
+}
+
+.bubble-rise {
+  animation: rise-in 0.3s var(--ease-smooth-out) both;
+}
+
 .marquee-fade {
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }

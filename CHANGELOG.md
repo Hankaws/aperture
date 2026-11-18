@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Chat bubbles, like a messenger's chat heads. Aperture Bot sits in the corner of every page (not in the editor), and says hello once to someone new: "Ask me anything, or how to make your first bot." A bot you make pops up as a bubble of its own with a hello of its own, so you can talk to it from any page. A bubble opens a chat window beside it, the whole screen on a phone; Escape or Minimize puts it away, and a bot's bubble can be closed. On the Bot page, which has the private chat in it, Aperture Bot's bubble steps aside. The private chat also knows its way around Aperture now: ask it how to add a model key, make a bot, or use the editor, and it answers with the site's own pages and buttons. ([#211](https://github.com/Hankaws/aperture/pull/211))
 - A private chat with Aperture Bot, like Grok: ask it anything (questions, writing, planning, code) with no repository and no GitHub. On the Bot page it comes first when GitHub is not connected, and with GitHub it is "Private chat" at the top of your bots. It answers with your own model key and no tools, nothing said there is posted anywhere, and the conversation is kept on your account, so every device shows the same. Numbered lists, bullets and code show as such. ([#210](https://github.com/Hankaws/aperture/pull/210))
 
 ### Changed

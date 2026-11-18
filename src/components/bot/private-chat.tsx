@@ -33,10 +33,13 @@ function askedBefore(entries: Entry[], at: number): string | null {
 export function PrivateChat({
   className,
   lead,
+  actions,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
   lead?: ReactNode;
+  /** At the header's end: a bubble's minimize button. */
+  actions?: ReactNode;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
@@ -141,18 +144,21 @@ export function PrivateChat({
             </p>
           </div>
         </div>
-        {entries.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => update([])}
-            disabled={busy}
-            aria-label="Clear the chat"
-            title="Clear the chat"
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {entries.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => update([])}
+              disabled={busy}
+              aria-label="Clear the chat"
+              title="Clear the chat"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
+          {actions}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">

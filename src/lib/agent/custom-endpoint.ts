@@ -160,3 +160,16 @@ export function cleanCustomModel(raw: string): string | null {
   if (!/^[A-Za-z0-9_.:@+/-]+$/.test(model)) return null;
   return model;
 }
+
+/**
+ * What to do when a custom endpoint turns the key away (401 or 403): with no
+ * key sent, it needs one, as OpenRouter does ("No cookie auth credentials
+ * found" says only that nothing came); with one, that key is wrong. Empty for
+ * any other status.
+ */
+export function endpointKeyHint(status: number, keySent: boolean): string {
+  if (status !== 401 && status !== 403) return "";
+  return keySent
+    ? " Check the endpoint's key in Settings, on the Models tab."
+    : " It needs an API key: add the endpoint's key in Settings, on the Models tab.";
+}

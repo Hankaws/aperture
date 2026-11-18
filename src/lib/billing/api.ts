@@ -41,6 +41,18 @@ import { checkoutInput, customEndpointInput, modelSourceInput, planInput, provid
 
 export type KeyStatus = { set: boolean; last4: string | null };
 
+/**
+ * A custom endpoint's key that was saved but cannot be read back: the
+ * server's secrets key changed since. Sending no key instead would make the
+ * endpoint answer with a riddle ("No cookie auth credentials found").
+ */
+export const CUSTOM_KEY_UNREADABLE =
+  "Your custom endpoint's key can't be read anymore: the server's secrets key changed since you saved it. Enter the key again in Settings, on the Models tab.";
+
+function customKeyUnreadable(stored: string | null, decrypt: (s: string | null) => string | null): boolean {
+  return Boolean(stored) && decrypt(stored) === null;
+}
+
 export type AccountSnapshot = {
   plan: PlanId;
   hostedUsed: number;
@@ -712,6 +724,7 @@ export async function resolveModel(
     if (!base || !model) {
       return { ok: false, error: "Set an Ollama, LM Studio, or OpenRouter endpoint in Settings." };
     }
+    if (customKeyUnreadable(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
     return {
       ok: true,
       provider: "custom",
@@ -754,6 +767,7 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
     const base = normalizeCustomBase(row.custom_base);
     const model = cleanCustomModel(row.custom_model);
     if (base && model) {
+      if (customKeyUnreadable(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
       return {
         ok: true,
         provider: "custom",

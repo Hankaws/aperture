@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- A welcome tour in Aperture Bot's chat for someone new: "Get set up", three steps with a button each (add a model key, connect GitHub, make your first bot), ticking themselves off from your account as you do them, wherever you do them. Aperture Bot's bubble shows how many are left. It goes once all three are done, or when you press Hide. ([#214](https://github.com/Hankaws/aperture/pull/214))
+
+### Fixed
+
+- A custom endpoint that turns the key away now says what to do. OpenRouter with no key saved answered "No cookie auth credentials found"; the chat now adds that the endpoint needs an API key, in Settings on the Models tab (or that the key sent is wrong). A key saved before the server's secrets key changed, which can no longer be read, is no longer sent as nothing: you are asked to enter it again. The tour counts a custom endpoint as ready only with a key, unless it runs on your own machine. And "How do I make my first bot?" is asked as it is, not with a colon after it. ([#214](https://github.com/Hankaws/aperture/pull/214))
+
 ## 0.17.0 - 2026-11-18
 
 ### Added

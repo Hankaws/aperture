@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanCustomModel, isMetadataAddress, isPrivateAddress, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
+import { cleanCustomModel, endpointKeyHint, isMetadataAddress, isPrivateAddress, localEndpointsAllowed, normalizeCustomBase } from "./custom-endpoint.ts";
 import { assertFetchableBase } from "./custom-endpoint.server.ts";
 
 test("normalizeCustomBase accepts the three presets and strips a completions suffix", () => {
@@ -49,4 +49,14 @@ test("loopback endpoints are for local dev only, unless the server opts in", asy
   assert.equal(await assertFetchableBase(ollama, { NODE_ENV: "development" }), ollama);
   await assert.rejects(assertFetchableBase(ollama, { NODE_ENV: "production" }), /your own machine/);
   await assert.rejects(assertFetchableBase("http://localhost:1234/v1", { VERCEL: "1" }), /your own machine/);
+});
+
+test("an endpoint that turns the key away says what to do: add one, or check the one sent", () => {
+  assert.equal(
+    endpointKeyHint(401, false),
+    " It needs an API key: add the endpoint's key in Settings, on the Models tab.",
+  );
+  assert.equal(endpointKeyHint(403, true), " Check the endpoint's key in Settings, on the Models tab.");
+  assert.equal(endpointKeyHint(404, false), "");
+  assert.equal(endpointKeyHint(500, true), "");
 });

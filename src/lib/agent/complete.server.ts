@@ -106,6 +106,11 @@ async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signa
   const res = pinned?.response ?? (await fetch(`${base}/chat/completions`, { ...init, redirect: "manual" }));
   if (!res.ok) {
     const error = await refused(cfg.provider === "custom" ? "Endpoint" : cfg.provider, res, cfg.apiKey);
+    // A custom endpoint that turns the key away says what to do about it, in Settings.
+    if (cfg.provider === "custom") {
+      const { endpointKeyHint } = await import("./custom-endpoint");
+      error.message += endpointKeyHint(res.status, Boolean(cfg.apiKey));
+    }
     await pinned?.close();
     throw error;
   }

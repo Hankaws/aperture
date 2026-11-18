@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ArrowUp, Lock, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowUp, Check, Lock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,7 @@ import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat-saved";
 import { loadPrivateChat, privateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
 import {
+  ACTIONS,
   PRIVATE_SUGGESTIONS,
   replyActions,
   replyBlocks,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/bot/private-chat";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
+import { useTour } from "./use-tour";
 
 /** This browser's copy, beside the account's: what shows at once, and all a visitor has. */
 const LOCAL_KEY = "private";
@@ -172,6 +174,7 @@ export function PrivateChat({
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
+          <WelcomeTour onNavigate={onNavigate} />
           {entries.length === 0 && !busy && (
             <div className="flex flex-col items-center px-2 py-6 text-center">
               <BotAvatar size="lg" />
@@ -186,6 +189,11 @@ export function PrivateChat({
                     key={s}
                     type="button"
                     onClick={() => {
+                      // A whole question is asked as it is; the rest are a start to finish.
+                      if (s.endsWith("?")) {
+                        void send(s);
+                        return;
+                      }
                       setDraft(`${s}: `);
                       requestAnimationFrame(() => box.current?.focus());
                     }}
@@ -289,6 +297,83 @@ export function PrivateChat({
   );
 }
 
+/**
+ * Getting someone new set up (`tour.ts`): three steps, each with its button,
+ * ticking themselves off from the account. It goes when all are done, or when
+ * the person hides it.
+ */
+function WelcomeTour({ onNavigate }: { onNavigate?: () => void }) {
+  const tour = useTour();
+  if (!tour.show || !tour.progress) return null;
+  const { done, total, next } = tour.progress;
+  return (
+    <section
+      aria-label="Get set up"
+      className="rounded-2xl border border-border bg-elevated/40 p-3.5 sm:p-4"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">
+          Get set up{" "}
+          <span className="font-normal text-subtle">
+            · {done} of {total} done
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={tour.hide}
+          className="min-h-6 px-1 text-xs text-subtle hover:text-fg"
+        >
+          Hide
+        </button>
+      </div>
+      <div
+        className="mt-2 h-1 overflow-hidden rounded-full bg-border"
+        role="progressbar"
+        aria-label="Steps done"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={done}
+      >
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-500"
+          style={{ width: `${(done / total) * 100}%` }}
+        />
+      </div>
+      <ol className="mt-3 space-y-3">
+        {tour.steps.map((step, i) => (
+          <li key={step.id} className="flex items-start gap-3">
+            <span
+              className={cn(
+                "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium",
+                step.done ? "bg-ok/15 text-ok" : "bg-elevated text-muted ring-1 ring-border",
+              )}
+              aria-hidden
+            >
+              {step.done ? <Check className="size-3.5" /> : i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className={cn("text-sm", step.done && "text-subtle line-through")}>
+                {step.title}
+                {step.done && <span className="sr-only"> (done)</span>}
+              </p>
+              {!step.done && <p className="text-xs text-pretty text-muted">{step.why}</p>}
+              {!step.done && (
+                <div className="mt-2">
+                  <ActionLink
+                    action={{ id: step.id, label: ACTIONS[step.id] }}
+                    onNavigate={onNavigate}
+                    primary={step.id === next?.id}
+                  />
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function Reply({ text, onNavigate }: { text: string; onNavigate?: () => void }) {
   const { text: shown, actions } = replyActions(text);
   return (
@@ -340,8 +425,20 @@ function Reply({ text, onNavigate }: { text: string; onNavigate?: () => void }) 
 }
 
 /** A place on the site a reply points to, as a button that goes there. */
-function ActionLink({ action, onNavigate }: { action: ReplyAction; onNavigate?: () => void }) {
-  const className = cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5");
+function ActionLink({
+  action,
+  onNavigate,
+  primary = false,
+}: {
+  action: ReplyAction;
+  onNavigate?: () => void;
+  /** The one to press next: a solid button. */
+  primary?: boolean;
+}) {
+  const className = cn(
+    buttonVariants({ variant: primary ? "default" : "outline", size: "sm" }),
+    "gap-1.5",
+  );
   const label = (
     <>
       {action.label}

@@ -23,6 +23,7 @@ import { BotChat } from "./bot-chat";
 import { MascotAvatar } from "./mascot";
 import { PrivateChat } from "./private-chat";
 import { useRepoBot } from "./use-repo-bot";
+import { useTour } from "./use-tour";
 
 /** Pages with a chat of their own: the editor has its agent, sign-in has nothing to chat about yet. */
 const HIDDEN = new Set(["/app", "/login"]);
@@ -50,6 +51,7 @@ export function BotBubbles() {
   const [bots, setBots] = useState<BotProfile[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [peek, setPeek] = useState<string | null>(null);
+  const tour = useTour();
 
   /** The bubbles changed: kept in this browser, for every page. */
   const change = useCallback((next: (prev: Bubbles) => Bubbles) => {
@@ -222,6 +224,9 @@ export function BotBubbles() {
             greeting={peek === PRIVATE_BUBBLE ? greetingFor(null) : null}
             onToggle={() => toggle(PRIVATE_BUBBLE)}
             onDismissGreeting={() => setPeek(null)}
+            badge={
+              tour.show && tour.progress ? tour.progress.total - tour.progress.done : undefined
+            }
           >
             <BotAvatar size="lg" />
           </Bubble>
@@ -252,6 +257,7 @@ function Bubble({
   onToggle,
   onDismissGreeting,
   onClose,
+  badge,
   children,
 }: {
   name: string;
@@ -260,6 +266,8 @@ function Bubble({
   onToggle: () => void;
   onDismissGreeting: () => void;
   onClose?: () => void;
+  /** Steps of the welcome tour left: a count on the bubble until they are done. */
+  badge?: number;
   children: ReactNode;
 }) {
   return (
@@ -285,15 +293,26 @@ function Bubble({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={open ? `Minimize the chat with ${name}` : `Chat with ${name}`}
+        aria-label={
+          (open ? `Minimize the chat with ${name}` : `Chat with ${name}`) +
+          (badge ? `, ${badge} setup ${badge === 1 ? "step" : "steps"} left` : "")
+        }
         aria-expanded={open}
         title={name}
         className={cn(
-          "bubble-pop grid size-14 shrink-0 place-items-center rounded-full bg-surface shadow-lg ring-1 ring-border transition-transform hover:scale-105",
+          "bubble-pop relative grid size-14 shrink-0 place-items-center rounded-full bg-surface shadow-lg ring-1 ring-border transition-transform hover:scale-105",
           open && "ring-2 ring-accent",
         )}
       >
         {children}
+        {badge ? (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -left-0.5 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-semibold text-bg ring-2 ring-bg"
+          >
+            {badge}
+          </span>
+        ) : null}
       </button>
       {onClose && (
         <button

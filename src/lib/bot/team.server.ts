@@ -134,6 +134,28 @@ export async function chatFor(
   return { entries: savedEntries(parsed), updatedAt: new Date(row.updated_at).toISOString() };
 }
 
+/**
+ * Keeps the person's private chat on the account (`private-chat.ts`): the
+ * same table as their bots', under an id made from their own user id, so no
+ * one names another's. No bot owns it, so it is never on the roster.
+ */
+export async function savePrivateChatFor(
+  userId: string,
+  id: string,
+  raw: unknown,
+): Promise<{ ok: true }> {
+  const entries = fitEntries(savedEntries(raw));
+  const db = await sql();
+  await db`
+    insert into user_bot_chats (bot_id, user_id, entries, last_line, updated_at)
+    values (${id}, ${userId}, ${JSON.stringify(entries)}, ${lastLineOf(entries)}, now())
+    on conflict (bot_id) do update set entries = excluded.entries,
+      last_line = excluded.last_line, updated_at = now()
+    where user_bot_chats.user_id = excluded.user_id
+  `;
+  return { ok: true };
+}
+
 /** Keeps the conversation on the account, the newest that fits; the last line goes to the roster. */
 export async function saveChatFor(
   userId: string,

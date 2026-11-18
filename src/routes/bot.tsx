@@ -13,6 +13,7 @@ import { CheckGuide } from "@/components/bot/check-guide";
 import { CheckPull } from "@/components/bot/check-pull";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
+import { PrivateChat } from "@/components/bot/private-chat";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -146,13 +147,21 @@ function BotPage() {
           ) : !user ? (
             <SignedOut />
           ) : !github?.connected ? (
-            <div className="space-y-3">
-              <p className="text-sm text-pretty text-muted">
-                The Bot page reads and writes GitHub as you. Connect your GitHub account first: a
-                token with repo access, and the workflow scope if you want Aperture to add the bot
-                to a repo for you.
-              </p>
-              <GithubAccountCard onAccount={setGithub} />
+            <div className="space-y-8">
+              <div className="h-[34rem] overflow-hidden rounded-2xl border border-border bg-surface">
+                <PanelBoundary name="Private chat" className="h-full rounded-2xl">
+                  <PrivateChat />
+                </PanelBoundary>
+              </div>
+              <div className="space-y-3">
+                <h2 className="text-base font-medium">Give it your repositories</h2>
+                <p className="text-sm text-pretty text-muted">
+                  To work on your code, the bot reads and writes GitHub as you. Connect your GitHub
+                  account: a token with repo access, and the workflow scope if you want Aperture to
+                  add the bot to a repo for you.
+                </p>
+                <GithubAccountCard onAccount={setGithub} />
+              </div>
             </div>
           ) : (
             <PanelBoundary
@@ -219,8 +228,9 @@ function SignedOut() {
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
       <p className="text-sm text-pretty text-muted">
-        Sign in and connect GitHub to ask the bot, follow each run as it goes, and see every
-        task&apos;s plan, checks and pull request in one place. The same bot checks pull requests
+        Sign in to talk to the bot privately about anything, with no repository. Connect GitHub
+        too, to ask it for changes, follow each run as it goes, and see every task&apos;s plan,
+        checks and pull request in one place. The same bot checks pull requests
         with Aperture Agent Check, and the Agents tab lets any agent check its own changes.
       </p>
       <div className="mt-5 flex flex-wrap gap-3">

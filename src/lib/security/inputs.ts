@@ -132,6 +132,17 @@ export const botChatInput = z.object({
     .min(1)
     .max(60),
 });
+/** A private chat's turns: no repository, no bot (`bot/private-chat.ts`). */
+export const privateChatInput = z.object({
+  turns: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), text: text(20_000) }))
+    .min(1)
+    .max(60),
+});
+/** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
+export const privateChatSaveInput = z.object({
+  entries: z.array(z.custom<Record<string, unknown>>(isRecord)).max(40),
+});
 export const botProfileInput = z.object({
   id: botId.optional(),
   name: text(40).min(1),

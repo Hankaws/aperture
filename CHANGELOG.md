@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- A private chat with Aperture Bot, like Grok: ask it anything (questions, writing, planning, code) with no repository and no GitHub. On the Bot page it comes first when GitHub is not connected, and with GitHub it is "Private chat" at the top of your bots. It answers with your own model key and no tools, nothing said there is posted anywhere, and the conversation is kept on your account, so every device shows the same. Numbered lists, bullets and code show as such. ([#210](https://github.com/Hankaws/aperture/pull/210))
+
 ### Changed
 
 - The copies of Aperture Bot's and Agent Check's build workflows in this repository match the ones that run in their own repositories again, and their test workflows are copied too. The bot's copy had fallen behind: it lacked the `release` input that tags a build, publishes the release and moves `v1`. `AGENTS.project.md` now says how to release each one, so a bot release is no longer published by hand ahead of its build. ([#209](https://github.com/Hankaws/aperture/pull/209))

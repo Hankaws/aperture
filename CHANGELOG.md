@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.17.0 - 2026-11-18
+
 ### Added
 
 - Aperture Bot's answers carry buttons to where they point. When it tells you to add a model key, connect GitHub, make a bot, open the editor, check a pull request or see the plans, its reply ends with a button that goes there ("Add a model key →"), at most three; in a bubble, following one puts the chat away so the page shows. Only those places can be buttons: anything else the model names is left out. ([#212](https://github.com/Hankaws/aperture/pull/212))

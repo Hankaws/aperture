@@ -46,10 +46,13 @@ export type KeyStatus = { set: boolean; last4: string | null };
  * server's secrets key changed since. Sending no key instead would make the
  * endpoint answer with a riddle ("No cookie auth credentials found").
  */
-export const CUSTOM_KEY_UNREADABLE =
-  "Your custom endpoint's key can't be read anymore: the server's secrets key changed since you saved it. Enter the key again in Settings, on the Models tab.";
+export function keyUnreadable(whose: string): string {
+  return `Your ${whose} key can't be read anymore: the server's secrets key changed since you saved it. Enter the key again in Settings, on the Models tab.`;
+}
+export const CUSTOM_KEY_UNREADABLE = keyUnreadable("custom endpoint's");
 
-function customKeyUnreadable(stored: string | null, decrypt: (s: string | null) => string | null): boolean {
+/** Saved, but not readable back: a key that would otherwise be reported missing, or sent as nothing. */
+function unreadableKey(stored: string | null, decrypt: (s: string | null) => string | null): boolean {
   return Boolean(stored) && decrypt(stored) === null;
 }
 
@@ -703,6 +706,7 @@ export async function resolveModel(
 
   if (source === "hosted") {
     const own = decryptSecret(row.grok_key);
+    if (unreadableKey(row.grok_key, decryptSecret)) return { ok: false, error: keyUnreadable("Grok") };
     if (!own) {
       return { ok: false, error: "Add your Grok key in Settings. This app does not use a shared key." };
     }
@@ -724,7 +728,7 @@ export async function resolveModel(
     if (!base || !model) {
       return { ok: false, error: "Set an Ollama, LM Studio, or OpenRouter endpoint in Settings." };
     }
-    if (customKeyUnreadable(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
+    if (unreadableKey(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
     return {
       ok: true,
       provider: "custom",
@@ -738,6 +742,9 @@ export async function resolveModel(
   }
 
   const own = decryptSecret(row[PROVIDER_COLS[source]]);
+  if (unreadableKey(row[PROVIDER_COLS[source]], decryptSecret)) {
+    return { ok: false, error: keyUnreadable(providerShort(source)) };
+  }
   if (!own) {
     return {
       ok: false,
@@ -767,7 +774,7 @@ export async function resolveTabModel(userId: string): Promise<ResolvedModel> {
     const base = normalizeCustomBase(row.custom_base);
     const model = cleanCustomModel(row.custom_model);
     if (base && model) {
-      if (customKeyUnreadable(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
+      if (unreadableKey(row.custom_key, decryptSecret)) return { ok: false, error: CUSTOM_KEY_UNREADABLE };
       return {
         ok: true,
         provider: "custom",

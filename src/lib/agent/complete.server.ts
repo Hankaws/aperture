@@ -109,7 +109,9 @@ async function postChat(cfg: CompletionCfg, body: Record<string, unknown>, signa
     // A custom endpoint that turns the key away says what to do about it, in Settings.
     if (cfg.provider === "custom") {
       const { endpointKeyHint } = await import("./custom-endpoint");
-      error.message += endpointKeyHint(res.status, Boolean(cfg.apiKey));
+      const hint = endpointKeyHint(res.status, Boolean(cfg.apiKey));
+      // The endpoint's words, then ours: a full stop between them.
+      if (hint) error.message = `${/[.!?…]$/.test(error.message) ? error.message : `${error.message}.`}${hint}`;
     }
     await pinned?.close();
     throw error;

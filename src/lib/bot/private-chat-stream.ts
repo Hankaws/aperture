@@ -77,7 +77,14 @@ export async function streamPrivateChat(
     onText,
     signal,
     bearer,
-  }: { onText: (text: string) => void; signal: AbortSignal; bearer: string | null },
+    botName,
+  }: {
+    onText: (text: string) => void;
+    signal: AbortSignal;
+    bearer: string | null;
+    /** What the person named their bot, for its instructions. */
+    botName?: string;
+  },
 ): Promise<StreamedReply> {
   try {
     const res = await fetch("/api/private-chat", {
@@ -87,7 +94,7 @@ export async function streamPrivateChat(
         ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       },
       credentials: "include",
-      body: JSON.stringify({ turns }),
+      body: JSON.stringify(botName ? { turns, botName } : { turns }),
       signal,
     });
     return await readPrivateChat(res, onText);

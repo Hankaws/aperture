@@ -20,6 +20,15 @@ import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat
 import { getBearerToken } from "@/lib/auth/client";
 import { loadPrivateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
 import { replyFollowUps } from "@/lib/bot/follow-ups";
+import {
+  DEFAULT_BOT_NAME,
+  FIRST_CHAT,
+  greetingFor,
+  localChatKey,
+  titleOf,
+  type ChatMeta,
+  type MyBot,
+} from "@/lib/bot/my-bot";
 import { liveText, streamPrivateChat } from "@/lib/bot/private-chat-stream";
 import {
   ACTIONS,
@@ -31,13 +40,12 @@ import {
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 import { FollowUps } from "./follow-ups";
+import { MascotAvatar } from "./mascot";
 import { Typing } from "./typing";
 import { useTour } from "./use-tour";
 import { MemoryOffer, MemoryPanel } from "./memory-ui";
 import { useMemory } from "./use-memory";
-
-/** This browser's copy, beside the account's: what shows at once, and all a visitor has. */
-const LOCAL_KEY = "private";
+import { useLocalBot } from "./use-my-bot";
 
 const THINKING = ["Thinking it through", "Working it out", "Putting it into words"];
 
@@ -62,6 +70,11 @@ export function PrivateChat({
   onNavigate,
   onReply,
   shown = true,
+  chat = FIRST_CHAT,
+  bot: given,
+  page = false,
+  firstName = null,
+  onSaved,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
@@ -74,7 +87,21 @@ export function PrivateChat({
   onReply?: (text: string) => void;
   /** On screen: false while its bubble is minimized, the chat carrying on unseen. */
   shown?: boolean;
+  /** Which of the person's conversations (`my-bot.ts`); the first, the private chat as it was. */
+  chat?: string;
+  /** The person's own bot, named and with its face; left out, as this browser knows it; null: Aperture Bot. */
+  bot?: MyBot | null;
+  /** The chat page, as Grok's: a greeting and the box in the middle until something is asked. */
+  page?: boolean;
+  /** Whom the page greets. */
+  firstName?: string | null;
+  /** The conversation was kept: for the list of chats. */
+  onSaved?: (meta: ChatMeta) => void;
 }) {
+  const known = useLocalBot();
+  const bot = given === undefined ? known : given;
+  const LOCAL_KEY = localChatKey(chat);
+  const name = bot?.name ?? DEFAULT_BOT_NAME;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -102,13 +129,13 @@ export function PrivateChat({
     const local = loadChat(LOCAL_KEY);
     const opened = new Set(local.map((e) => e.id));
     show(local);
-    void loadPrivateChat()
+    void loadPrivateChat({ data: { chat } })
       .then((kept) => {
         if (cancel || !kept.ok) return;
         if (kept.updatedAt === null) {
           // Never kept on the account: this browser's copy goes up.
           if (latest.current.length > 0)
-            void savePrivateChat({ data: { entries: latest.current.slice(-KEEP) } }).catch(
+            void savePrivateChat({ data: { chat, entries: latest.current.slice(-KEEP) } }).catch(
               () => {},
             );
           return;
@@ -118,7 +145,7 @@ export function PrivateChat({
         show(merged);
         saveChat(LOCAL_KEY, merged);
         if (merged.length > kept.entries.length)
-          void savePrivateChat({ data: { entries: merged } }).catch(() => {});
+          void savePrivateChat({ data: { chat, entries: merged } }).catch(() => {});
       })
       .catch(() => {
         // Offline: this browser's copy stands.
@@ -126,6 +153,8 @@ export function PrivateChat({
     return () => {
       cancel = true;
     };
+    // One conversation a mount: a page that shows another remounts it (a `key`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -138,7 +167,9 @@ export function PrivateChat({
   const update = (next: Entry[]) => {
     show(next);
     saveChat(LOCAL_KEY, next);
-    void savePrivateChat({ data: { entries: next.slice(-KEEP) } }).catch(() => {});
+    void savePrivateChat({ data: { chat, entries: next.slice(-KEEP) } }).catch(() => {});
+    const title = titleOf(next);
+    if (title) onSaved?.({ id: chat, title, updatedAt: new Date().toISOString() });
   };
 
   async function send(text: string) {
@@ -187,6 +218,7 @@ export function PrivateChat({
       },
       signal: control.signal,
       bearer: getBearerToken(),
+      botName: bot?.name,
     });
     stopper.current = null;
     let reply: Entry | null;
@@ -211,17 +243,106 @@ export function PrivateChat({
     requestAnimationFrame(() => box.current?.focus());
   }
 
+  const suggestions = (
+    <div className="mt-6 flex flex-wrap justify-center gap-2">
+      {PRIVATE_SUGGESTIONS.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => {
+            // A whole question is asked as it is; the rest are a start to finish.
+            if (s.endsWith("?")) {
+              void send(s);
+              return;
+            }
+            setDraft(`${s}: `);
+            requestAnimationFrame(() => box.current?.focus());
+          }}
+          className="min-h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+  /** The chat page with nothing asked yet: a greeting, and the box in the middle, as Grok's. */
+  const empty = page && entries.length === 0 && !busy;
+  const composer = (
+    <form
+      className={cn(empty ? "w-full" : "border-t border-border px-3 py-3")}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send(draft);
+      }}
+    >
+      <div className="mx-auto w-full max-w-3xl">
+        <div
+          className={cn(
+            "flex items-end gap-2 border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40",
+            empty ? "rounded-3xl p-2.5 shadow-lg" : "rounded-2xl",
+          )}
+        >
+          <Textarea
+            ref={box}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void send(draft);
+              }
+            }}
+            rows={1}
+            maxLength={CHAT_LIMITS.turnChars}
+            placeholder={page ? `Ask ${name} anything` : `Message ${name}`}
+            aria-label={`Message to ${name}`}
+            className={cn(
+              "max-h-40 border-0 bg-transparent focus-visible:ring-0",
+              empty ? "min-h-14 text-base" : "min-h-10",
+            )}
+          />
+          {busy ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={stop}
+              aria-label="Stop the answer"
+              title="Stop"
+              className="shrink-0 rounded-full"
+            >
+              <Square className="size-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!draft.trim()}
+              aria-label="Send"
+              className="shrink-0 rounded-full"
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+          )}
+        </div>
+        <p className="mt-2 px-1 text-xs text-subtle">
+          Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
+        </p>
+      </div>
+    </form>
+  );
+
   return (
     <section
       className={cn("relative flex h-full min-h-0 flex-col", className)}
-      aria-label="Private chat with Aperture Bot"
+      aria-label={`Private chat with ${name}`}
     >
       <div className="flex min-h-14 items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           {lead}
-          <BotAvatar size="sm" working={busy} />
+          <Face bot={bot} size="sm" working={busy} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Private chat</p>
+            <p className="truncate text-sm font-medium">{page || bot ? name : "Private chat"}</p>
             <p className="flex items-center gap-1 truncate text-xs text-subtle">
               <Lock className="size-3 shrink-0" aria-hidden />
               Just you and the bot. Nothing is posted anywhere.
@@ -236,13 +357,14 @@ export function PrivateChat({
               onClick={() => setMemoryOpen((v) => !v)}
               aria-pressed={memoryOpen}
               aria-label={`Memory: ${kept} ${kept === 1 ? "thing" : "things"} remembered`}
-              title="What Aperture Bot remembers about you"
+              title={`What ${name} remembers about you`}
             >
               <Brain className="size-4" />
               {kept > 0 && <span className="text-xs tabular-nums">{kept}</span>}
             </Button>
           )}
-          {entries.length > 0 && (
+          {/* On the chat page, a chat is deleted from the list of chats instead. */}
+          {entries.length > 0 && !page && (
             <Button
               variant="ghost"
               size="sm"
@@ -262,35 +384,34 @@ export function PrivateChat({
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
-          <WelcomeTour onNavigate={onNavigate} />
-          {entries.length === 0 && !busy && (
+          {!empty && <WelcomeTour onNavigate={onNavigate} />}
+          {empty && (
+            <div className="flex min-h-[min(60dvh,32rem)] flex-col items-center justify-center py-6 text-center">
+              <Face bot={bot} size="xl" />
+              <h1 className="mt-5 text-2xl font-medium tracking-tight text-balance sm:text-3xl">
+                {greetingFor(new Date().getHours())}
+                {firstName ? `, ${firstName}` : ""}.
+              </h1>
+              <p className="mt-1.5 text-pretty text-muted">
+                I&apos;m {name}. What&apos;s on your mind?
+              </p>
+              <div className="mt-7 w-full max-w-2xl text-left">{composer}</div>
+              {suggestions}
+              {/* Someone new: getting set up, under the greeting rather than over it. */}
+              <div className="mt-10 w-full max-w-2xl text-left">
+                <WelcomeTour onNavigate={onNavigate} />
+              </div>
+            </div>
+          )}
+          {entries.length === 0 && !busy && !page && (
             <div className="flex flex-col items-center px-2 py-6 text-center">
-              <BotAvatar size="lg" />
+              <Face bot={bot} size="lg" />
               <p className="mt-4 text-lg font-medium text-balance">Ask me anything.</p>
               <p className="mt-1 max-w-md text-sm text-pretty text-muted">
                 Questions, writing, planning, code. This chat is yours alone: it belongs to no
                 repository, and nothing here reaches GitHub.
               </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
-                {PRIVATE_SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      // A whole question is asked as it is; the rest are a start to finish.
-                      if (s.endsWith("?")) {
-                        void send(s);
-                        return;
-                      }
-                      setDraft(`${s}: `);
-                      requestAnimationFrame(() => box.current?.focus());
-                    }}
-                    className="min-h-9 rounded-full border border-border px-3.5 text-sm text-muted transition-colors hover:border-fg/30 hover:text-fg"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {suggestions}
             </div>
           )}
 
@@ -303,7 +424,7 @@ export function PrivateChat({
               </div>
             ) : (
               <div key={entry.id} className="flex gap-3">
-                <BotAvatar size="sm" className="mt-0.5" />
+                <Face bot={bot} size="sm" className="mt-0.5" />
                 <div className="min-w-0 flex-1">
                   {entry.error ? (
                     <div className="space-y-2">
@@ -356,15 +477,15 @@ export function PrivateChat({
           {busy &&
             (live ? (
               <div className="flex gap-3">
-                <BotAvatar size="sm" working className="mt-0.5" />
+                <Face bot={bot} size="sm" working className="mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <Reply text={live} onNavigate={onNavigate} writing />
                 </div>
               </div>
             ) : (
               <Typing
-                name="Aperture Bot"
-                avatar={<BotAvatar size="sm" working />}
+                name={name}
+                avatar={<Face bot={bot} size="sm" working />}
                 phrases={THINKING}
               />
             ))}
@@ -372,60 +493,7 @@ export function PrivateChat({
         </div>
       </div>
 
-      <form
-        className="border-t border-border px-3 py-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send(draft);
-        }}
-      >
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
-            <Textarea
-              ref={box}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  void send(draft);
-                }
-              }}
-              rows={1}
-              maxLength={CHAT_LIMITS.turnChars}
-              placeholder="Message Aperture Bot"
-              aria-label="Message to Aperture Bot"
-              className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
-            />
-            {busy ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={stop}
-                aria-label="Stop the answer"
-                title="Stop"
-                className="shrink-0 rounded-full"
-              >
-                <Square className="size-3.5 fill-current" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!draft.trim()}
-                aria-label="Send"
-                className="shrink-0 rounded-full"
-              >
-                <ArrowUp className="size-4" />
-              </Button>
-            )}
-          </div>
-          <p className="mt-2 px-1 text-xs text-subtle">
-            Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
-          </p>
-        </div>
-      </form>
+      {!empty && composer}
     </section>
   );
 }
@@ -672,5 +740,30 @@ function ReplyTools({ text, onRegenerate }: { text: string; onRegenerate?: () =>
         </button>
       )}
     </div>
+  );
+}
+
+/** The bot's face: the one its person chose, or Aperture Bot's own. */
+function Face({
+  bot,
+  size,
+  working = false,
+  className,
+}: {
+  bot: MyBot | null;
+  size: "sm" | "lg" | "xl";
+  working?: boolean;
+  className?: string;
+}) {
+  if (!bot)
+    return <BotAvatar size={size === "sm" ? "sm" : "lg"} working={working} className={className} />;
+  return (
+    <MascotAvatar
+      mascot={bot.mascot}
+      mood={working ? "thinking" : "idle"}
+      size={size === "sm" ? 28 : size === "lg" ? 56 : 80}
+      label={bot.name}
+      className={className}
+    />
   );
 }

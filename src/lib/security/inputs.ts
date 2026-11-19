@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { BrowserRuns } from "../agent/browser-handoff.ts";
 import { MASCOT_BODIES, MASCOT_COLORS, MASCOT_FACES, type MascotColor } from "../bot/mascot.ts";
 import { BOT_ALLOW, BOT_ID, BOT_MODELS, REPO_FULL_NAME } from "../bot/team.ts";
+import { CHAT_ID } from "../bot/my-bot.ts";
 import type { WorkerSpec } from "../agent/crew.ts";
 import type { AgentInput } from "../agent/types.ts";
 import type { GithubChange } from "../github/roundtrip.ts";
@@ -140,6 +141,21 @@ export const privateChatInput = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), text: text(20_000) }))
     .min(1)
     .max(60),
+  /** What the person named their bot (`my-bot.ts`): cleaned again before the model reads it. */
+  botName: z.string().max(60).optional(),
+});
+/** One of the person's conversations with their bot (`my-bot.ts`). */
+const chatId = z.string().regex(CHAT_ID);
+export const chatInput = z.object({ chat: chatId });
+export const chatLoadInput = z.object({ chat: chatId.optional() });
+/** The person's own bot: its name, cleaned by the handler, and its face. */
+export const myBotInput = z.object({
+  name: z.string().max(60),
+  mascot: z.object({
+    color: z.enum(Object.keys(MASCOT_COLORS) as [MascotColor, ...MascotColor[]]),
+    body: z.enum(MASCOT_BODIES),
+    face: z.enum(MASCOT_FACES),
+  }),
 });
 /** A line a bot remembers (`bot/memory.ts`): its id, and the person's edit when they made one. */
 const memoryId = z.string().regex(/^[0-9a-f]{16}$/);
@@ -149,6 +165,8 @@ export const memoryKeepInput = z.object({ id: memoryId, text: text(1000).optiona
 export const memoryScopeInput = z.object({ botId: botId.optional() });
 /** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
 export const privateChatSaveInput = z.object({
+  /** Left out: the first conversation, the private chat as it always was. */
+  chat: chatId.optional(),
   entries: z.array(z.custom<Record<string, unknown>>(isRecord)).max(40),
 });
 export const botProfileInput = z.object({

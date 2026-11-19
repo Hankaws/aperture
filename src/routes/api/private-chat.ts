@@ -57,6 +57,7 @@ export const Route = createFileRoute("/api/private-chat")({
               const out = await runPrivateChat(userId, input.data.turns, {
                 onText: (text) => emit({ type: "text", text }),
                 signal: request.signal,
+                botName: input.data.botName,
               });
               if (!request.signal.aborted)
                 emit(

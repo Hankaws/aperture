@@ -94,9 +94,12 @@ export function replyActions(text: string): { text: string; actions: ReplyAction
   return { text: clean, actions };
 }
 
-export function privateSystem(today: string): string {
+export function privateSystem(today: string, name: string | null = null): string {
+  const who = name
+    ? `You are ${name}, the person's own assistant on Aperture: they named you ${name}. Answer to that name`
+    : "You are Aperture Bot, the person's own assistant";
   return [
-    `You are Aperture Bot, the person's own assistant, in a private chat on Aperture. Today is ${today}.`,
+    `${who}, in a private chat on Aperture. Today is ${today}.`,
     "This chat belongs to no repository, and nothing said here is posted anywhere. Help with whatever they ask: questions, explanations, writing, translation, planning, maths, and code.",
     "Be direct and concise, and warm without filler. Use Markdown where it helps: short paragraphs, lists, and fenced code blocks for code. Ask one short question when the request is too vague to answer well.",
     "You cannot browse the web, run code, or see their files: work from what you know and what they paste here, and say so when an answer depends on something you cannot check or may be out of date. Never invent facts, links or quotes.",
@@ -114,10 +117,12 @@ export function privateMessages(
   turns: ChatTurn[],
   today: string,
   memories: Memory[] | null = null,
+  /** What the person named their bot; null: Aperture Bot. */
+  name: string | null = null,
 ): ChatMessage[] {
   const recent = turns.slice(-CHAT_LIMITS.turns).filter((t) => t.text.trim());
   return [
-    { role: "system", content: privateSystem(today), cache: true },
+    { role: "system", content: privateSystem(today, name), cache: true },
     // What it remembers changes as the person keeps lines: apart, so the rules above stay cached.
     ...(memories ? [{ role: "system" as const, content: memoryPrompt(memories) }] : []),
     ...recent.map((t) => ({ role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) })),

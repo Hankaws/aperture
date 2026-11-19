@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   addBubble,
   greetingFor,
+  peekLine,
+  PEEK_CHARS,
   keepKnown,
   MAX_BOT_BUBBLES,
   NO_BUBBLES,
@@ -45,4 +47,16 @@ test("what storage held is read safely: anything odd is no bubbles", () => {
 test("a bubble says hello as it pops up", () => {
   assert.equal(greetingFor("Nova"), "Hi, I'm Nova! Tap me to chat, from any page.");
   assert.match(greetingFor(null), /^Hi! I'm Aperture Bot\. .*how to make your first bot\.$/);
+});
+
+test("a new answer peeks out of a minimized bubble as its first line of words", () => {
+  assert.equal(peekLine("## Plan\n\n1. **Monday**: inbox"), "Plan");
+  assert.equal(peekLine("\n- `npm test` first\n- then build"), "npm test first");
+  assert.equal(peekLine("```ts\nconst a = 1;\n```"), "const a = 1;");
+  assert.equal(peekLine("See [the docs](https://x.dev) [[go:editor]]"), "See the docs");
+  assert.equal(peekLine("[[go:model-key]]\nAdd a key"), "Add a key");
+  const long = peekLine("word ".repeat(60));
+  assert.equal(long.length, PEEK_CHARS);
+  assert.ok(long.endsWith("…"));
+  assert.equal(peekLine(""), "");
 });

@@ -57,6 +57,31 @@ export function greetingFor(name: string | null): string {
     : "Hi! I'm Aperture Bot. Ask me anything, or how to make your first bot.";
 }
 
+/** How much of an answer a bubble's peek shows. */
+export const PEEK_CHARS = 120;
+
+/**
+ * An answer as a minimized bubble peeks it, as a messenger shows a new
+ * message: its first line of words, without Markdown's marks or a reply's
+ * button markers, cut short with an ellipsis.
+ */
+export function peekLine(text: string): string {
+  const line =
+    text
+      .replace(/\[\[[a-z]+:[^\]]*\]\]/gi, "")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("```"))
+      .map((l) =>
+        l
+          .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d{1,3}[.)]\s+|>\s*)/, "")
+          .replace(/[*_`]+/g, "")
+          .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+          .trim(),
+      )
+      .find(Boolean) ?? "";
+  return line.length <= PEEK_CHARS ? line : `${line.slice(0, PEEK_CHARS - 1).trimEnd()}…`;
+}
+
 /** Tells the bubbles a bot was made: its bubble pops up, saying hello. */
 export function announceBubble(bot: BotProfile) {
   try {

@@ -47,6 +47,7 @@ import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
 import { TaskCard } from "./bot-console";
+import { Typing } from "./typing";
 import { MascotAvatar } from "./mascot";
 import { MemoryOffer } from "./memory-ui";
 import { useMemory } from "./use-memory";
@@ -102,6 +103,8 @@ export function BotChat({
   onSent,
   onChange,
   onEditRule,
+  onReply,
+  shown = true,
 }: {
   bot: BotProfile;
   setup: BotSetup;
@@ -117,6 +120,10 @@ export function BotChat({
   onChange?: (entries: Entry[]) => void;
   /** Opens the bot's profile, where its rule is. */
   onEditRule?: () => void;
+  /** The bot said something (an answer, or news of a task): a minimized bubble shows it. */
+  onReply?: (text: string) => void;
+  /** On screen: false while its bubble is minimized, the chat carrying on unseen. */
+  shown?: boolean;
 }) {
   const repo = bot.repo;
   const [owner = "", name = ""] = repo.split("/");
@@ -188,8 +195,8 @@ export function BotChat({
     };
   }, [botId, repo]);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length, busy]);
+    if (shown) end.current?.scrollIntoView({ block: "nearest" });
+  }, [entries.length, busy, shown]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -220,14 +227,17 @@ export function BotChat({
     onChange?.(next);
   };
 
-  const reportRef = useLatest({ update, open: setup.open });
+  const reportRef = useLatest({ update, open: setup.open, onReply });
   // The bot comes back: a task sent from here that has settled gets a message, once.
   useEffect(() => {
     if (!synced) return;
     const due = reportsDue(latest.current, tasks);
     if (due.length === 0) return;
     const at = new Date().toISOString();
-    reportRef.current.update([...latest.current, ...due.map((task) => reportEntry(task, id(), at, reportRef.current.open))]);
+    const reports = due.map((task) => reportEntry(task, id(), at, reportRef.current.open));
+    reportRef.current.update([...latest.current, ...reports]);
+    const said = reports.at(-1)?.text;
+    if (said) reportRef.current.onReply?.(said);
   }, [tasks, synced, reportRef]);
 
   async function send(text: string) {
@@ -272,6 +282,7 @@ export function BotChat({
     }
     // After the conversation as it is now: a card sent or dismissed meanwhile stays so.
     update([...latest.current, reply]);
+    if (reply.role === "assistant" && !reply.error) onReply?.(reply.text);
     if (reply.role === "assistant") await sendByRule(reply.id, reply.cards ?? []);
   }
 
@@ -441,7 +452,7 @@ export function BotChat({
           ),
         )}
 
-        {busy && <Thinking mascot={bot.mascot} />}
+        {busy && <Thinking bot={bot} />}
         <div ref={end} />
         </div>
       </div>
@@ -629,19 +640,13 @@ function Reply({
   );
 }
 
-function Thinking({ mascot }: { mascot: BotProfile["mascot"] }) {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setI((n) => (n + 1) % THINKING.length), 2800);
-    return () => window.clearInterval(timer);
-  }, []);
+function Thinking({ bot }: { bot: BotProfile }) {
   return (
-    <div className="flex items-center gap-3 text-sm text-muted">
-      <MascotAvatar mascot={mascot} mood="thinking" size={28} />
-      <span key={i} className="thinking-phrase">
-        {THINKING[i]}
-      </span>
-    </div>
+    <Typing
+      name={bot.name}
+      avatar={<MascotAvatar mascot={bot.mascot} mood="thinking" size={28} />}
+      phrases={THINKING}
+    />
   );
 }
 

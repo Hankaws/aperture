@@ -1,7 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { clearSavedChat } from "@/lib/bot/chat-saved";
-import { deleteMyChat, loadMyBot, saveMyBot } from "@/lib/bot/my-bot.api";
-import { CHAT_ID, localChatKey, myBotFrom, type ChatMeta, type MyBot } from "@/lib/bot/my-bot";
+import {
+  deleteMyChat,
+  loadMyBot,
+  renameMyChat,
+  saveMyBot,
+  searchMyChats,
+} from "@/lib/bot/my-bot.api";
+import {
+  CHAT_ID,
+  cleanTitle,
+  localChatKey,
+  myBotFrom,
+  snippetOf,
+  type ChatHit,
+  type ChatMeta,
+  type MyBot,
+} from "@/lib/bot/my-bot";
+import { loadChat } from "@/lib/bot/chat-saved";
 
 /** This browser's copy of the person's bot and their list of chats: what shows at once, and all a visitor has. */
 const BOT_KEY = "aperture-my-bot";
@@ -116,10 +132,14 @@ export function useMyBot() {
     [account],
   );
 
-  /** A chat was kept: it goes to the top of the list. */
+  /** A chat was kept: it goes to the top of the list, keeping the title it has (a rename stays). */
   const noteChat = useCallback((meta: ChatMeta) => {
     setChats((now) => {
-      const next = [meta, ...now.filter((c) => c.id !== meta.id)];
+      const known = now.find((c) => c.id === meta.id);
+      const next = [
+        known ? { ...meta, title: known.title } : meta,
+        ...now.filter((c) => c.id !== meta.id),
+      ];
       writeLocal(CHATS_KEY, next);
       return next;
     });
@@ -136,5 +156,44 @@ export function useMyBot() {
     await deleteMyChat({ data: { chat: id } }).catch(() => {});
   }, []);
 
-  return { bot, chats, loaded, account, save, noteChat, removeChat };
+  /** Renames a chat, here and on the account; the error when the account turned it down. */
+  const renameChat = useCallback(async (id: string, raw: string): Promise<string | null> => {
+    const title = cleanTitle(raw);
+    if (!title) return "Give it a title with something in it.";
+    const out = await renameMyChat({ data: { chat: id, title } }).catch((e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : "Could not rename it.",
+    }));
+    if (!out.ok) return out.error;
+    setChats((now) => {
+      const next = now.map((c) => (c.id === id ? { ...c, title } : c));
+      writeLocal(CHATS_KEY, next);
+      return next;
+    });
+    return null;
+  }, []);
+
+  /**
+   * Chats with these words in the title or in what was said: the account's,
+   * or, for a visitor, this browser's.
+   */
+  const search = useCallback(
+    async (text: string): Promise<ChatHit[]> => {
+      const words = text.trim();
+      if (!words) return [];
+      if (account) {
+        const out = await searchMyChats({ data: { text: words } }).catch(() => null);
+        if (out?.ok) return out.hits;
+      }
+      const lower = words.toLowerCase();
+      return chats.flatMap((c) => {
+        const snippet = snippetOf(loadChat(localChatKey(c.id)), words);
+        if (snippet !== null) return [{ ...c, snippet }];
+        return c.title.toLowerCase().includes(lower) ? [{ ...c, snippet: "" }] : [];
+      });
+    },
+    [account, chats],
+  );
+
+  return { bot, chats, loaded, account, save, noteChat, removeChat, renameChat, search };
 }

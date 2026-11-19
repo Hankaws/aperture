@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
-import { chatInput, myBotInput } from "@/lib/security/inputs";
-import type { ChatMeta, MyBot } from "./my-bot";
+import { chatInput, chatRenameInput, chatSearchInput, myBotInput } from "@/lib/security/inputs";
+import type { ChatHit, ChatMeta, MyBot } from "./my-bot";
 
 /** A sign-in-off visitor has no account to keep it on: their browser keeps it. */
 async function isVisitor(userId: string): Promise<boolean> {
@@ -66,4 +66,29 @@ export const deleteMyChat = createServerFn({ method: "POST" })
     const { deleteChat } = await import("./my-bot-store");
     await deleteChat(await query(), context.userId, data.chat);
     return { ok: true };
+  });
+
+/** Renames one of the person's conversations. */
+export const renameMyChat = createServerFn({ method: "POST" })
+  .validator(chatRenameInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (await isVisitor(context.userId)) return { ok: true };
+    const busy = overLimit("save", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { renameChat } = await import("./my-bot-store");
+    return (await renameChat(await query(), context.userId, data.chat, data.title))
+      ? { ok: true }
+      : { ok: false, error: "Give it a title with something in it." };
+  });
+
+/** The person's conversations with these words in the title or in what was said. */
+export const searchMyChats = createServerFn({ method: "POST" })
+  .validator(chatSearchInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<{ ok: true; hits: ChatHit[] } | { ok: false }> => {
+    if (await isVisitor(context.userId)) return { ok: false };
+    if (overLimit("bot", context.userId)) return { ok: false };
+    const { searchChats } = await import("./my-bot-store");
+    return { ok: true, hits: await searchChats(await query(), context.userId, data.text) };
   });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { MessageSquarePlus, PanelLeft, Pencil, Trash2, X } from "lucide-react";
+import { MessageSquarePlus, PanelLeft, Pencil, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -11,6 +11,7 @@ import {
   MY_BOT_NAME_MAX,
   newChatId,
   suggestedBot,
+  type ChatHit,
   type ChatMeta,
   type MyBot,
 } from "@/lib/bot/my-bot";
@@ -75,6 +76,8 @@ export function ChatPage({ chat }: { chat?: string }) {
         void my.removeChat(id);
         if (id === chat) newChat();
       }}
+      onRename={my.renameChat}
+      onSearch={my.search}
     />
   );
 
@@ -137,7 +140,10 @@ export function ChatPage({ chat }: { chat?: string }) {
   );
 }
 
-/** The chats down the side: a new one, then every one by day, and the bot at the foot. */
+/**
+ * The chats down the side: a new one, a search over them, then every one by
+ * day, each to open, rename or delete, and the bot at the foot.
+ */
 function Sidebar({
   bot,
   chats,
@@ -145,6 +151,8 @@ function Sidebar({
   onNew,
   onEdit,
   onDelete,
+  onRename,
+  onSearch,
 }: {
   bot: MyBot;
   chats: ChatMeta[];
@@ -152,19 +160,88 @@ function Sidebar({
   onNew: () => void;
   onEdit: () => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => Promise<string | null>;
+  onSearch: (text: string) => Promise<ChatHit[]>;
 }) {
-  const [sure, setSure] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<ChatHit[] | null>(null);
   const groups = chatGroups(chats);
+  const searching = query.trim().length > 0;
+
+  // A moment after typing stops, the search runs; the newest search's answer wins.
+  useEffect(() => {
+    const words = query.trim();
+    if (!words) {
+      setHits(null);
+      return;
+    }
+    let cancel = false;
+    const timer = window.setTimeout(() => {
+      void onSearch(words).then((found) => !cancel && setHits(found));
+    }, 250);
+    return () => {
+      cancel = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, onSearch]);
+
+  const row = (c: ChatMeta, snippet?: string) => (
+    <ChatRow
+      key={c.id}
+      chat={c}
+      snippet={snippet}
+      open={c.id === open}
+      onDelete={() => onDelete(c.id)}
+      onRename={(title) => onRename(c.id, title)}
+    />
+  );
+
   return (
     <>
-      <div className="p-3">
+      <div className="space-y-2 p-3">
         <Button variant="outline" className="w-full justify-start gap-2" onClick={onNew}>
           <MessageSquarePlus className="size-4" />
           New chat
         </Button>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => event.key === "Escape" && setQuery("")}
+            placeholder="Search chats"
+            aria-label="Search your chats"
+            maxLength={100}
+            className="h-9 pl-8"
+          />
+        </div>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="Your chats">
-        {groups.length === 0 ? (
+        {searching ? (
+          hits === null ? (
+            <p className="px-2 py-3 text-xs text-subtle" aria-live="polite">
+              Searching…
+            </p>
+          ) : hits.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-pretty text-subtle" aria-live="polite">
+              No chats with &ldquo;{query.trim()}&rdquo;.
+            </p>
+          ) : (
+            <>
+              <p
+                className="px-2 pb-1 text-[11px] font-medium tracking-[0.12em] text-subtle uppercase"
+                aria-live="polite"
+              >
+                {hits.length === 1 ? "1 chat" : `${hits.length} chats`}
+              </p>
+              <ul>{hits.map((h) => row(h, h.snippet))}</ul>
+            </>
+          )
+        ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-xs text-pretty text-subtle">
             Your chats with {bot.name} show here, newest first.
           </p>
@@ -174,60 +251,7 @@ function Sidebar({
               <p className="px-2 pb-1 text-[11px] font-medium tracking-[0.12em] text-subtle uppercase">
                 {group.label}
               </p>
-              <ul>
-                {group.chats.map((c) => (
-                  <li key={c.id} className="group relative">
-                    {sure === c.id ? (
-                      <div className="flex items-center gap-1 rounded-lg bg-elevated px-2 py-1.5 text-sm">
-                        <span className="min-w-0 flex-1 truncate">Delete this chat?</span>
-                        <button
-                          type="button"
-                          className="rounded px-1.5 text-danger hover:bg-danger/10"
-                          onClick={() => {
-                            setSure(null);
-                            onDelete(c.id);
-                          }}
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          className="grid size-6 place-items-center rounded text-subtle hover:text-fg"
-                          onClick={() => setSure(null)}
-                          aria-label="Keep it"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <Link
-                          to="/chat"
-                          search={{ c: c.id }}
-                          className={cn(
-                            "block truncate rounded-lg py-1.5 pr-8 pl-2 text-sm",
-                            c.id === open
-                              ? "bg-elevated text-fg"
-                              : "text-muted hover:bg-elevated/60 hover:text-fg",
-                          )}
-                          aria-current={c.id === open ? "page" : undefined}
-                          title={c.title}
-                        >
-                          {c.title}
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => setSure(c.id)}
-                          className="absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded text-subtle opacity-100 hover:text-danger focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                          aria-label={`Delete the chat "${c.title}"`}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <ul>{group.chats.map((c) => row(c))}</ul>
             </div>
           ))
         )}
@@ -249,6 +273,128 @@ function Sidebar({
         </Button>
       </div>
     </>
+  );
+}
+
+/** One chat in the list: its title (and, found by a search, where), to open, rename or delete. */
+function ChatRow({
+  chat,
+  snippet,
+  open,
+  onDelete,
+  onRename,
+}: {
+  chat: ChatMeta;
+  snippet?: string;
+  open: boolean;
+  onDelete: () => void;
+  onRename: (title: string) => Promise<string | null>;
+}) {
+  const [mode, setMode] = useState<"show" | "rename" | "delete">("show");
+  const [title, setTitle] = useState(chat.title);
+  const [error, setError] = useState<string | null>(null);
+
+  if (mode === "delete")
+    return (
+      <li className="flex items-center gap-1 rounded-lg bg-elevated px-2 py-1.5 text-sm">
+        <span className="min-w-0 flex-1 truncate">Delete this chat?</span>
+        <button
+          type="button"
+          className="rounded px-1.5 text-danger hover:bg-danger/10"
+          onClick={() => {
+            setMode("show");
+            onDelete();
+          }}
+        >
+          Delete
+        </button>
+        <button
+          type="button"
+          className="grid size-6 place-items-center rounded text-subtle hover:text-fg"
+          onClick={() => setMode("show")}
+          aria-label="Keep it"
+        >
+          <X className="size-3.5" />
+        </button>
+      </li>
+    );
+
+  if (mode === "rename")
+    return (
+      <li className="px-1 py-1">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onRename(title).then((e) => {
+              setError(e);
+              if (!e) setMode("show");
+            });
+          }}
+        >
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setTitle(chat.title);
+                setError(null);
+                setMode("show");
+              }
+            }}
+            onBlur={(event) => event.currentTarget.form?.requestSubmit()}
+            maxLength={80}
+            aria-label="The chat's title"
+            className="h-8 text-sm"
+            autoFocus
+          />
+          {error && <p className="mt-1 px-1 text-xs text-danger">{error}</p>}
+        </form>
+      </li>
+    );
+
+  const tool =
+    "grid size-6 place-items-center rounded text-subtle opacity-100 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100";
+  return (
+    <li className="group relative">
+      <Link
+        to="/chat"
+        search={{ c: chat.id }}
+        className={cn(
+          "block rounded-lg py-1.5 pr-14 pl-2 text-sm",
+          open ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/60 hover:text-fg",
+        )}
+        aria-current={open ? "page" : undefined}
+        title={chat.title}
+      >
+        <span className="block truncate">{chat.title}</span>
+        {snippet && (
+          <span className="mt-0.5 line-clamp-2 text-xs text-subtle [overflow-wrap:anywhere]">
+            {snippet}
+          </span>
+        )}
+      </Link>
+      <span className="absolute top-1.5 right-1 flex gap-0.5">
+        <button
+          type="button"
+          onClick={() => {
+            setTitle(chat.title);
+            setMode("rename");
+          }}
+          className={cn(tool, "hover:text-fg")}
+          aria-label={`Rename the chat "${chat.title}"`}
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("delete")}
+          className={cn(tool, "hover:text-danger")}
+          aria-label={`Delete the chat "${chat.title}"`}
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </span>
+    </li>
   );
 }
 

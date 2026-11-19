@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Find and rename your chats on the Chat page. A search box over the list finds chats by their title or anything said in them, and shows where the words are; Escape clears it. Each chat has a pencil beside its delete: give it a better title than its first question, press Enter, and it keeps that title from then on, on every device. ([#227](https://github.com/Hankaws/aperture/pull/227))
 - Talk to your bots instead of typing, as Grok lets you: a microphone beside the send button, in your own bot's chat and your team bots'. Press it and speak; your words appear in the box as they are heard, after anything you already typed, and you read them before you send. Press it again to stop, or just send. Your browser does the listening: Chrome sends your voice to Google's speech service and Safari to Apple's, and the microphone says so. It is not shown in browsers that cannot listen, and if the microphone is blocked, the box says how to allow it. ([#225](https://github.com/Hankaws/aperture/pull/225))
 
 ### Changed

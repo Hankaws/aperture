@@ -7,6 +7,9 @@ import type { Query } from "./memory-store.ts";
 import {
   CHAT_ID,
   chatGroups,
+  cleanTitle,
+  likePattern,
+  snippetOf,
   chatKey,
   chatOf,
   cleanBotName,
@@ -18,7 +21,15 @@ import {
   suggestedBot,
   titleOf,
 } from "./my-bot.ts";
-import { deleteChat, getMyBot, listChats, saveChat, saveMyBot } from "./my-bot-store.ts";
+import {
+  deleteChat,
+  getMyBot,
+  listChats,
+  renameChat,
+  saveChat,
+  saveMyBot,
+  searchChats,
+} from "./my-bot-store.ts";
 import { privateSystem } from "./private-chat.ts";
 
 test("a bot's name is cleaned, and a face that will not do falls back", () => {
@@ -150,6 +161,94 @@ test("each person's bot and chats are theirs alone, kept with their titles", asy
     assert.deepEqual(
       (await listChats(q, "ada")).map((c) => c.id),
       [FIRST_CHAT],
+    );
+  } finally {
+    await close();
+  }
+});
+
+test("a title as typed is one line, cut short, and never empty", () => {
+  assert.equal(cleanTitle("  Week\n plan  "), "Week plan");
+  assert.equal(cleanTitle("   "), null);
+  assert.equal(cleanTitle(7), null);
+  assert.equal(cleanTitle("x".repeat(90))?.length, 60);
+  // What was typed is searched for as it is: its wildcards are plain.
+  assert.equal(likePattern("50%_off\\"), "%50\\%\\_off\\\\%");
+});
+
+test("a search shows the words in a little of what was said", () => {
+  const entries: Entry[] = [
+    { id: "1", role: "user", text: "Plan my week" },
+    {
+      id: "2",
+      role: "assistant",
+      text: "Here is a plan. On **Wednesday** review progress with the whole team, then ship one thing on Friday.",
+    },
+  ];
+  assert.equal(snippetOf(entries, "plan"), "Plan my week");
+  assert.equal(
+    snippetOf(entries, "wednesday"),
+    "Here is a plan. On Wednesday review progress with the whole team, then ship…",
+  );
+  assert.equal(
+    snippetOf(
+      [
+        {
+          id: "3",
+          role: "assistant",
+          text: "Monday: clear the inbox and pick three goals. Wednesday: review it.",
+        },
+      ],
+      "wednesday",
+    ),
+    "…pick three goals. Wednesday: review it.",
+  );
+  assert.equal(snippetOf(entries, "holiday"), null);
+  assert.equal(snippetOf(entries, "  "), null);
+});
+
+test("chats are found by their words and renamed, and only their person's", async () => {
+  const { q, close } = await database();
+  try {
+    const said = (user: string, bot: string): Entry[] => [
+      { id: "u", role: "user", text: user },
+      { id: "a", role: "assistant", text: bot },
+    ];
+    await saveChat(q, "ada", "aaaaaaaaaaaa", said("Plan my week", "Monday: inbox. Friday: ship."));
+    await saveChat(
+      q,
+      "ada",
+      "bbbbbbbbbbbb",
+      said("Write an email", "Dear Grace, thanks for 50% off."),
+    );
+    await saveChat(q, "eve", "cccccccccccc", said("Eve's week", "Friday: rest."));
+
+    const found = async (text: string) => (await searchChats(q, "ada", text)).map((h) => h.id);
+    assert.deepEqual(await found("friday"), ["aaaaaaaaaaaa"]);
+    assert.deepEqual(await found("EMAIL"), ["bbbbbbbbbbbb"]);
+    // A wildcard is a character: "50%" finds the chat that says it, not every chat.
+    assert.deepEqual(await found("50%"), ["bbbbbbbbbbbb"]);
+    assert.deepEqual(await found("%"), ["bbbbbbbbbbbb"]);
+    // Words in the stored data that are not what was said (its keys) find nothing.
+    assert.deepEqual(await found("assistant"), []);
+    assert.deepEqual(await found("   "), []);
+    const [hit] = await searchChats(q, "ada", "inbox");
+    assert.equal(hit!.snippet, "Monday: inbox. Friday: ship.");
+
+    // Renamed: the new title stays, through the next save too, and is searched.
+    assert.equal(await renameChat(q, "ada", "aaaaaaaaaaaa", "  Week   ahead "), true);
+    await saveChat(q, "ada", "aaaaaaaaaaaa", said("Plan my week", "And Saturday."));
+    assert.equal(
+      (await listChats(q, "ada")).find((c) => c.id === "aaaaaaaaaaaa")?.title,
+      "Week ahead",
+    );
+    assert.deepEqual(await found("ahead"), ["aaaaaaaaaaaa"]);
+    // Not to nothing, and not someone else's.
+    assert.equal(await renameChat(q, "ada", "aaaaaaaaaaaa", "   "), false);
+    assert.equal(await renameChat(q, "eve", "aaaaaaaaaaaa", "Mine now"), false);
+    assert.equal(
+      (await listChats(q, "ada")).find((c) => c.id === "aaaaaaaaaaaa")?.title,
+      "Week ahead",
     );
   } finally {
     await close();

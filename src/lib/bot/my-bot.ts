@@ -90,6 +90,49 @@ export function titleOf(entries: Entry[]): string {
 
 export type ChatMeta = { id: string; title: string; updatedAt: string };
 
+/** A title as the person types it: one line, cut short; null when nothing is left. */
+export function cleanTitle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const line = raw.replace(/\s+/g, " ").trim();
+  if (!line) return null;
+  return line.length <= 60 ? line : `${line.slice(0, 59).trimEnd()}…`;
+}
+
+/** A search as the database takes it (`ilike`): what was typed, its wildcards made plain. */
+export function likePattern(text: string): string {
+  return `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/** A chat found by a search: where the words are, a little around them. */
+export type ChatHit = ChatMeta & { snippet: string };
+
+/** The words found in a chat, with a little around them; null when it does not have them. */
+export function snippetOf(entries: Entry[], text: string): string | null {
+  const needle = text.trim().toLowerCase();
+  if (!needle) return null;
+  for (const entry of entries) {
+    const line = entry.text
+      .replace(/[`*_#>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const at = line.toLowerCase().indexOf(needle);
+    if (at === -1) continue;
+    let start = Math.max(0, at - 20);
+    let end = Math.min(line.length, at + needle.length + 50);
+    // Whole words at the edges: from the first space after the cut, to the last before it.
+    if (start > 0) {
+      const space = line.indexOf(" ", start);
+      if (space !== -1 && space < at) start = space + 1;
+    }
+    if (end < line.length) {
+      const space = line.lastIndexOf(" ", end);
+      if (space > at + needle.length) end = space;
+    }
+    return `${start > 0 ? "…" : ""}${line.slice(start, end).trim()}${end < line.length ? "…" : ""}`;
+  }
+  return null;
+}
+
 /** The list of chats, newest first, under "Today", "Yesterday", "Previous 7 days" and "Older". */
 export function chatGroups(
   chats: ChatMeta[],

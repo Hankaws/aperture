@@ -6,7 +6,18 @@
  */
 import { fitEntries, lastLineOf, savedEntries } from "./chat-saved.ts";
 import type { Query } from "./memory-store.ts";
-import { chatKey, chatOf, myBotFrom, titleOf, type ChatMeta, type MyBot } from "./my-bot.ts";
+import {
+  chatKey,
+  chatOf,
+  cleanTitle,
+  likePattern,
+  myBotFrom,
+  snippetOf,
+  titleOf,
+  type ChatHit,
+  type ChatMeta,
+  type MyBot,
+} from "./my-bot.ts";
 
 /** Conversations listed at most: the newest. */
 export const MAX_CHATS = 100;
@@ -90,4 +101,60 @@ export async function deleteChat(q: Query, userId: string, chat: string): Promis
     chatKey(userId, chat),
     userId,
   ]);
+}
+
+/** Renames a conversation; false when the title will not do, or the chat is not theirs. */
+export async function renameChat(
+  q: Query,
+  userId: string,
+  chat: string,
+  raw: unknown,
+): Promise<boolean> {
+  const title = cleanTitle(raw);
+  if (!title) return false;
+  const rows = await q(
+    `update user_bot_chats set title = $3 where bot_id = $1 and user_id = $2 returning bot_id`,
+    [chatKey(userId, chat), userId, title],
+  );
+  return rows.length > 0;
+}
+
+/** Hits a search returns at most, newest first. */
+export const MAX_HITS = 30;
+
+/**
+ * Their conversations with these words in the title or in what was said,
+ * newest first, each with the words in a little of their context.
+ */
+export async function searchChats(q: Query, userId: string, text: string): Promise<ChatHit[]> {
+  const words = text.replace(/\s+/g, " ").trim().slice(0, 100);
+  if (!words) return [];
+  const rows = await q(
+    `select bot_id, title, entries, updated_at from user_bot_chats
+     where user_id = $1 and (bot_id = $2 or bot_id like $3)
+       and (title ilike $4 or entries ilike $4)
+     order by updated_at desc limit $5`,
+    [userId, `private:${userId}`, `private:${userId}:%`, likePattern(words), MAX_HITS * 2],
+  );
+  const hits: ChatHit[] = [];
+  for (const row of rows) {
+    const id = chatOf(userId, String(row.bot_id));
+    if (!id) continue;
+    let entries: ReturnType<typeof savedEntries> = [];
+    try {
+      entries = savedEntries(JSON.parse(String(row.entries || "[]")));
+    } catch {
+      entries = [];
+    }
+    const title = String(row.title || "") || titleOf(entries);
+    if (!title) continue;
+    // The stored text matched somewhere; only what was said, or the title, counts.
+    const snippet =
+      snippetOf(entries, words) ?? (title.toLowerCase().includes(words.toLowerCase()) ? "" : null);
+    if (snippet === null) continue;
+    const at = row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at));
+    hits.push({ id, title, updatedAt: at.toISOString(), snippet });
+    if (hits.length >= MAX_HITS) break;
+  }
+  return hits;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { botSetup, botTasks, type BotSetup } from "@/lib/github/bot";
+import { botSetup, botTasks, type BotPulls, type BotSetup } from "@/lib/github/bot";
 import { isSettled, type BotTask } from "@/lib/bot/tasks";
 
 export type Setup = { ok: true } & BotSetup;
@@ -15,6 +15,8 @@ export function useRepoBot(fullName: string) {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<BotTask[] | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  /** Whether each pull request the tasks opened merged, for the bot's Usage. */
+  const [pulls, setPulls] = useState<BotPulls>({});
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   /** Until this time, poll fast: a task was just asked and has no answer yet. */
@@ -37,6 +39,7 @@ export function useRepoBot(fullName: string) {
       const out = await botTasks({ data: { owner, repo: name } });
       if (out.ok) {
         setTasks(out.tasks);
+        setPulls(out.pulls);
         setTasksError(null);
       } else setTasksError(out.error);
     } catch (err) {
@@ -73,6 +76,7 @@ export function useRepoBot(fullName: string) {
     setupError,
     tasks,
     tasksError,
+    pulls,
     refreshing,
     now,
     active,

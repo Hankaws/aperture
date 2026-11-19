@@ -54,6 +54,9 @@ export type BotTask = {
   struck?: string[];
 };
 
+/** Tasks a repository's list reads at most: its latest. */
+export const MAX_TASKS = 30;
+
 /** How long a task waits for its first answer before it counts as never answered. */
 export const SILENT_AFTER_MS = 5 * 60_000;
 

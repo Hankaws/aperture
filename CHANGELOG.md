@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Each team bot's profile opens with its Usage, as Grok Bot 1.0 shows each bot's: tiles for its tasks (done, red, working), the pull requests it opened (merged, waiting, closed, and fixes pushed to open ones), what it answered, and its reviews and Agent Checks; when it last worked; and its last 14 days, a bar a day, where a hover or a tap names the day. Every number is counted from what the bot posted on its repository, from its latest 30 tasks, and the section says how far back that goes. ([#219](https://github.com/Hankaws/aperture/pull/219))
+
 ## 0.18.0 - 2026-11-19
 
 ### Added

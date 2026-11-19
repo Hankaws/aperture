@@ -762,6 +762,9 @@ function BotRoom({
                   bot={bot}
                   repos={repos}
                   choices={choices}
+                  tasks={r.tasks}
+                  pulls={r.pulls}
+                  now={r.now}
                   onSaved={onSaved}
                   onDeleted={onDeleted}
                 />

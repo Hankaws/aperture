@@ -23,6 +23,7 @@ import {
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
+import { openedPulls } from "@/lib/bot/usage";
 import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
 import { addLearned, EMPTY_LEARNED, learnedFrom, type Learned } from "@/lib/bot/learned";
 import {
@@ -64,6 +65,7 @@ import {
   workflowFile,
   workflowUse,
   WORKFLOW_PATH,
+  MAX_TASKS,
   APP_ID_VARIABLE,
   APP_KEY_SECRET,
   type Jobs,
@@ -255,7 +257,6 @@ export const botSetup = createServerFn({ method: "POST" })
 const MAX_RUN_LOOKUPS = 4;
 /** Threads looked up one by one, when the recent list does not have them. */
 const MAX_THREAD_LOOKUPS = 5;
-const MAX_TASKS = 30;
 
 /**
  * The repository's bot tasks, newest first, with their threads and whether a
@@ -302,8 +303,14 @@ async function loadTasks(
         0,
         MAX_THREAD_LOOKUPS,
       );
+  // And the pull requests the tasks opened, for whether each merged (a bot's Usage).
+  const pullsMissing = quick
+    ? []
+    : openedPulls(tasks)
+        .filter((n) => !threads.has(n) && !missing.includes(n))
+        .slice(0, MAX_THREAD_LOOKUPS);
   await Promise.all(
-    missing.map(async (n) => {
+    [...missing, ...pullsMissing].map(async (n) => {
       const got = await get(`${base}/issues/${n}`);
       if (got.status === 200) addThread(got.body);
     }),
@@ -328,10 +335,15 @@ async function loadTasks(
   return { ok: true, tasks, threads };
 }
 
+/** Whether each pull request the tasks opened is open, and whether it merged, by number. */
+export type BotPulls = Record<number, { open: boolean; merged: boolean }>;
+
+export type BotTasks = { ok: true; tasks: BotTask[]; pulls: BotPulls } | Failure;
+
 export const botTasks = createServerFn({ method: "POST" })
   .validator(botRepoInput)
   .middleware([authMiddleware])
-  .handler(async ({ data, context }): Promise<{ ok: true; tasks: BotTask[] } | Failure> => {
+  .handler(async ({ data, context }): Promise<BotTasks> => {
     const busy = overLimit("bot", context.userId);
     if (busy) return { ok: false, error: busy };
     const { accountToken, githubJson } = await github();
@@ -341,7 +353,13 @@ export const botTasks = createServerFn({ method: "POST" })
     if (!base) return { ok: false, error: "That repo name is not valid." };
     try {
       const out = await loadTasks(base, (url) => githubJson(url, token));
-      return out.ok ? { ok: true, tasks: out.tasks } : out;
+      if (!out.ok) return out;
+      const pulls: BotPulls = {};
+      for (const n of openedPulls(out.tasks)) {
+        const thread = out.threads.get(n);
+        if (thread) pulls[n] = { open: thread.open, merged: Boolean(thread.merged) };
+      }
+      return { ok: true, tasks: out.tasks, pulls };
     } catch (error) {
       return {
         ok: false,

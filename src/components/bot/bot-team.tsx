@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Activity,
   ArrowLeft,
+  ArrowUpRight,
   KeyRound,
   Lightbulb,
   ListTodo,
@@ -33,7 +34,6 @@ import { AutomationPanel } from "./automation-panel";
 import { AskCard, SetupCard, TaskList } from "./bot-console";
 import { BotChat } from "./bot-chat";
 import { BotAvatar } from "./bot-avatar";
-import { PrivateChat } from "./private-chat";
 import { announceBubble } from "@/lib/bot/bubbles";
 import { FocusCard, NewBot, ProfilePanel } from "./bot-profile";
 import { IdentityCard } from "./identity-card";
@@ -46,6 +46,7 @@ import { MascotAvatar } from "./mascot";
 import { NextUpPanel } from "./next-up";
 import { ModelPicker } from "./model-picker";
 import { useRepoBot } from "./use-repo-bot";
+import { useLocalBot } from "./use-my-bot";
 import { useTeamActivity } from "./use-team-activity";
 
 const SELECTED_KEY = "aperture-bot-selected";
@@ -72,8 +73,7 @@ type View =
   | { kind: "ideas" }
   | { kind: "automation" }
   | { kind: "next" }
-  | { kind: "new" }
-  | { kind: "private" };
+  | { kind: "new" };
 type Panel = "profile" | "tasks" | "setup";
 
 const PANEL_CARD = "rounded-2xl border border-border bg-surface";
@@ -101,6 +101,8 @@ export function BotTeam() {
   const [query, setQuery] = useState("");
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [choices, setChoices] = useState<ModelChoice[]>([]);
+  /** The person's own bot (`my-bot.ts`), at the top of the roster: a way to the Chat page. */
+  const myBot = useLocalBot();
   const repoKey = useMemo(
     () => [...new Set((bots ?? []).map((b) => b.repo))].slice(0, 15).join(","),
     [bots],
@@ -138,11 +140,6 @@ export function BotTeam() {
         );
         const kept = readSelected();
         const first = team.find((b) => b.id === kept) ?? team[0];
-        // The private chat was open last: it opens again.
-        if (kept === "private") {
-          setView({ kind: "private" });
-          return;
-        }
         // With a main bot, the page opens on its plan unless a bot was open last.
         setView(
           team.some((b) => b.main) && (kept === "next" || !team.some((b) => b.id === kept))
@@ -164,7 +161,6 @@ export function BotTeam() {
     if (next.kind === "bot") keepSelected(next.id);
     // Next up is remembered too, so the page opens on it again.
     if (next.kind === "next") keepSelected("next");
-    if (next.kind === "private") keepSelected("private");
     if (next.kind !== "bot") setPanel(null);
   }, []);
 
@@ -254,28 +250,29 @@ export function BotTeam() {
         <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
           {!query.trim() && (
             <li>
-              <button
-                type="button"
-                onClick={() => open({ kind: "private" })}
-                aria-current={view.kind === "private" || undefined}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-elevated",
-                  view.kind === "private" && "bg-elevated",
-                )}
+              {/* The person's own bot lives on the Chat page: its one home, with all its chats. */}
+              <Link
+                to="/chat"
+                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-elevated"
               >
                 <span className="grid size-11 shrink-0 place-items-center">
-                  <BotAvatar size="md" />
+                  {myBot ? (
+                    <MascotAvatar mascot={myBot.mascot} size={40} label="" />
+                  ) : (
+                    <BotAvatar size="md" />
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 text-sm font-medium">
-                    Private chat
+                    {myBot?.name ?? "Your own bot"}
                     <Lock className="size-3.5 shrink-0 text-subtle" aria-hidden />
                   </span>
                   <span className="block truncate text-sm text-muted">
-                    Ask anything, no repository
+                    Ask anything, on the Chat page
                   </span>
                 </span>
-              </button>
+                <ArrowUpRight className="size-4 shrink-0 text-subtle" aria-hidden />
+              </Link>
             </li>
           )}
           {shown.map((bot) => {
@@ -404,9 +401,7 @@ export function BotTeam() {
         aria-label={
           current
             ? current.name
-            : view.kind === "private"
-              ? "Private chat"
-              : view.kind === "activity"
+            : view.kind === "activity"
               ? "Activity"
               : view.kind === "ideas"
                 ? "Ideas"
@@ -417,9 +412,7 @@ export function BotTeam() {
                     : "New bot"
         }
       >
-        {view.kind === "private" ? (
-          <PrivateChat lead={back} />
-        ) : view.kind === "next" ? (
+        {view.kind === "next" ? (
           <>
             <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 lg:hidden">
               {back}

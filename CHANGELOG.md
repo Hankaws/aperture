@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.18.0 - 2026-11-19
+
 ### Added
 
 - Your team bots remember too, each its own: what you told it about its repository and how you work ("migrations live in migrations/", "Ada reviews checkout"). Its chat asks "Remember this?" with Keep, Edit and Don't, as Aperture Bot's does, in the bot's room and in its bubble. Each bot's profile has a Knowledge section, as Grok Bot's has, with what it learned: what waits for your yes, and what you kept, each to edit or forget, and Forget everything. Removing a bot removes what it remembered. ([#217](https://github.com/Hankaws/aperture/pull/217))

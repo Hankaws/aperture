@@ -98,7 +98,7 @@ export function BotBubbles() {
     setLoaded(true);
   }, [user]);
 
-  // The Bot page has the private chat in it: Aperture Bot's bubble steps aside there.
+  // The Bot page links to the Chat page at the top of the roster: Aperture Bot's bubble steps aside there.
   const onBotPage = path === "/bot";
   // The chat page is the person's own bot, whole: its bubble steps aside there too.
   const onChatPage = path === "/chat";

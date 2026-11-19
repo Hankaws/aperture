@@ -11,6 +11,10 @@ release notes are every line from there down to the previous version.
 
 - Talk to your bots instead of typing, as Grok lets you: a microphone beside the send button, in your own bot's chat and your team bots'. Press it and speak; your words appear in the box as they are heard, after anything you already typed, and you read them before you send. Press it again to stop, or just send. Your browser does the listening: Chrome sends your voice to Google's speech service and Safari to Apple's, and the microphone says so. It is not shown in browsers that cannot listen, and if the microphone is blocked, the box says how to allow it. ([#225](https://github.com/Hankaws/aperture/pull/225))
 
+### Changed
+
+- Your own bot has one home, the Chat page. On the Bot page, the private chat that sat at the top of your bots, and the one shown before GitHub is connected, are now a way to it: your bot's face and name, and Open Chat. The conversation you had there is the first in your list of chats. ([#226](https://github.com/Hankaws/aperture/pull/226))
+
 ## 0.19.0 - 2026-11-19
 
 ### Added

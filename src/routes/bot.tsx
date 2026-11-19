@@ -13,7 +13,7 @@ import { CheckGuide } from "@/components/bot/check-guide";
 import { CheckPull } from "@/components/bot/check-pull";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
-import { PrivateChat } from "@/components/bot/private-chat";
+import { MyBotCard } from "@/components/bot/my-bot-card";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -148,11 +148,7 @@ function BotPage() {
             <SignedOut />
           ) : !github?.connected ? (
             <div className="space-y-8">
-              <div className="h-[34rem] overflow-hidden rounded-2xl border border-border bg-surface">
-                <PanelBoundary name="Private chat" className="h-full rounded-2xl">
-                  <PrivateChat />
-                </PanelBoundary>
-              </div>
+              <MyBotCard />
               <div className="space-y-3">
                 <h2 className="text-base font-medium">Give it your repositories</h2>
                 <p className="text-sm text-pretty text-muted">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 import { BotChat } from "./bot-chat";
 import { MascotAvatar } from "./mascot";
-import { PrivateChat } from "./private-chat";
+import { useLocalBot } from "./use-my-bot";
 import { useRepoBot } from "./use-repo-bot";
 import { useTour } from "./use-tour";
 
@@ -61,6 +61,9 @@ export function BotBubbles() {
   /** Which chat is open, for answers that come while it is not. */
   const openNow = useRef<string | null>(null);
   const tour = useTour();
+  const navigate = useNavigate();
+  /** The person's own bot (`my-bot.ts`): its face on Aperture Bot's bubble, once it is named. */
+  const myBot = useLocalBot();
 
   useEffect(() => {
     openNow.current = open;
@@ -97,16 +100,18 @@ export function BotBubbles() {
 
   // The Bot page has the private chat in it: Aperture Bot's bubble steps aside there.
   const onBotPage = path === "/bot";
+  // The chat page is the person's own bot, whole: its bubble steps aside there too.
+  const onChatPage = path === "/chat";
 
   // Someone new: Aperture Bot says hello once, a moment after a page shows (not the Bot page).
   useEffect(() => {
-    if (!loaded || state.greeted || onBotPage) return;
+    if (!loaded || state.greeted || onBotPage || onChatPage) return;
     const timer = window.setTimeout(() => {
       setPeek(PRIVATE_BUBBLE);
       change((s) => ({ ...s, greeted: true }));
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [loaded, state.greeted, onBotPage, change]);
+  }, [loaded, state.greeted, onBotPage, onChatPage, change]);
 
   // The bots the bubbles stand for; a bot deleted since loses its bubble.
   const ids = state.ids.join(",");
@@ -159,10 +164,9 @@ export function BotBubbles() {
 
   const shown = state.ids.flatMap((id) => bots.filter((b) => b.id === id));
   const openBot = shown.find((b) => b.id === open);
-  const privateOpen = open === PRIVATE_BUBBLE && !onBotPage;
-  if (onBotPage && shown.length === 0) return null;
-  // The Bot page's chats have their composer at the bottom: the bubbles sit above it.
-  const raised = onBotPage;
+  if ((onBotPage || onChatPage) && shown.length === 0) return null;
+  // The Bot page's chats and the chat page have their box at the bottom: the bubbles sit above it.
+  const raised = onBotPage || onChatPage;
 
   const toggle = (id: string) => {
     setPeek(null);
@@ -194,14 +198,14 @@ export function BotBubbles() {
     <>
       {/* Each chat opened stays, hidden when minimized, so what it is doing carries on. */}
       {kept.map((id) => {
-        const bot = id === PRIVATE_BUBBLE ? null : shown.find((b) => b.id === id);
-        if (id !== PRIVATE_BUBBLE && !bot) return null;
-        const visible = bot ? open === bot.id : privateOpen;
+        const bot = shown.find((b) => b.id === id);
+        if (!bot) return null;
+        const visible = open === bot.id;
         return (
           <div
             key={id}
             role="dialog"
-            aria-label={bot ? `Chat with ${bot.name}` : "Chat with Aperture Bot"}
+            aria-label={`Chat with ${bot.name}`}
             hidden={!visible}
             className={cn(
               "bubble-rise fixed inset-0 z-50 flex flex-col overflow-hidden bg-surface",
@@ -210,43 +214,34 @@ export function BotBubbles() {
               !visible && "hidden",
             )}
           >
-            {bot ? (
-              <BubbleBot
-                bot={bot}
-                onReply={(text) => replied(bot.id, text)}
-                shown={visible}
-                actions={
-                  <>
-                    <Link
-                      to="/bot"
-                      className="grid size-8 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg"
-                      aria-label={`Open ${bot.name} on the Bot page`}
-                      title="Open on the Bot page"
-                      onClick={() => setOpen(null)}
-                    >
-                      <ArrowUpRight className="size-4" />
-                    </Link>
-                    {minimize}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => close(bot.id)}
-                      aria-label={`Close ${bot.name}'s bubble`}
-                      title="Close the bubble"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </>
-                }
-              />
-            ) : (
-              <PrivateChat
-                actions={minimize}
-                onNavigate={() => setOpen(null)}
-                onReply={(text) => replied(PRIVATE_BUBBLE, text)}
-                shown={visible}
-              />
-            )}
+            <BubbleBot
+              bot={bot}
+              onReply={(text) => replied(bot.id, text)}
+              shown={visible}
+              actions={
+                <>
+                  <Link
+                    to="/bot"
+                    className="grid size-8 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg"
+                    aria-label={`Open ${bot.name} on the Bot page`}
+                    title="Open on the Bot page"
+                    onClick={() => setOpen(null)}
+                  >
+                    <ArrowUpRight className="size-4" />
+                  </Link>
+                  {minimize}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => close(bot.id)}
+                    aria-label={`Close ${bot.name}'s bubble`}
+                    title="Close the bubble"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </>
+              }
+            />
           </div>
         );
       })}
@@ -256,24 +251,38 @@ export function BotBubbles() {
           "fixed right-4 z-40 flex flex-col-reverse items-end gap-3",
           raised ? "bottom-24" : "bottom-4",
           // On a phone an open chat fills the screen: the bubbles wait under it.
-          (privateOpen || openBot) && "max-sm:hidden",
+          openBot && "max-sm:hidden",
         )}
         role="region"
         aria-label="Chat bubbles"
       >
-        {!onBotPage && (
+        {!onBotPage && !onChatPage && (
+          // The person's own bot lives on the chat page: its bubble goes there.
           <Bubble
-            name="Aperture Bot"
-            open={privateOpen}
-            greeting={peekFor(PRIVATE_BUBBLE, null)}
-            onToggle={() => toggle(PRIVATE_BUBBLE)}
+            name={myBot?.name ?? "Aperture Bot"}
+            open={false}
+            greeting={
+              peek === PRIVATE_BUBBLE
+                ? myBot
+                  ? `Hi, I'm ${myBot.name}! Tap me to chat.`
+                  : greetingFor(null)
+                : null
+            }
+            onToggle={() => {
+              setPeek(null);
+              setOpen(null);
+              void navigate({ to: "/chat" });
+            }}
             onDismissGreeting={() => setPeek(null)}
-            unread={unread[PRIVATE_BUBBLE]?.count}
             badge={
               tour.show && tour.progress ? tour.progress.total - tour.progress.done : undefined
             }
           >
-            <BotAvatar size="lg" />
+            {myBot ? (
+              <MascotAvatar mascot={myBot.mascot} size={52} label="" />
+            ) : (
+              <BotAvatar size="lg" />
+            )}
           </Bubble>
         )}
         {shown.map((bot) => (

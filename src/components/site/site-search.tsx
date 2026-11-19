@@ -10,6 +10,7 @@ const PAGES: Item[] = [
   { label: "How it works", hint: "You ask. It waits.", href: "/#how" },
   { label: "Checks", hint: "Five checks, then Apply.", href: "/#checks" },
   { label: "Benchmark", hint: "What the checks caught, and what they missed.", to: "/benchmark" },
+  { label: "Chat", hint: "Your own bot: ask it anything.", to: "/chat" },
   { label: "Bot", hint: "Ask the coding bot, watch it work.", to: "/bot" },
   { label: "Agent Check", hint: "The checks on every pull request, in the Bot.", href: "/bot?tab=check" },
   { label: "Agents", hint: "Give your agent the same checks, in the Bot.", href: "/bot?tab=agents" },

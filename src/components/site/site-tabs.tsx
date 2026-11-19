@@ -14,6 +14,7 @@ const ITEMS: Item[] = [
   { label: "How", href: "/#how" },
   { label: "Checks", href: "/#checks" },
   { label: "Benchmark", to: "/benchmark" },
+  { label: "Chat", to: "/chat" },
   { label: "Bot", to: "/bot" },
   { label: "Privacy", to: "/privacy", menu: true },
   { label: "Changelog", to: "/changelog", menu: true },

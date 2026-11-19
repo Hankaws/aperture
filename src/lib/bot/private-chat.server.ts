@@ -1,6 +1,7 @@
 import { overLimit } from "@/lib/security/rate-limit";
 import type { ChatTurn } from "./chat";
 import { replyMemories, type Memory } from "./memory";
+import { cleanBotName } from "./my-bot";
 import { privateChatId, privateMessages, privateReply } from "./private-chat";
 
 export type PrivateChatReply =
@@ -28,7 +29,16 @@ export async function isVisitor(userId: string): Promise<boolean> {
 export async function runPrivateChat(
   userId: string,
   turns: ChatTurn[],
-  { onText, signal }: { onText?: (delta: string) => void; signal?: AbortSignal } = {},
+  {
+    onText,
+    signal,
+    botName,
+  }: {
+    onText?: (delta: string) => void;
+    signal?: AbortSignal;
+    /** What the person named their bot; cleaned here, as anything sent is. */
+    botName?: string;
+  } = {},
 ): Promise<PrivateChatReply> {
   const busy = overLimit("botChat", userId);
   if (busy) return { ok: false, error: busy };
@@ -53,7 +63,7 @@ export async function runPrivateChat(
     : await (await import("./memory.server")).memoryQuery().catch(() => null);
   const known = q ? await store.listMemories(q, userId, botId).catch(() => null) : null;
   const today = new Date().toISOString().slice(0, 10);
-  const messages = privateMessages(turns, today, known);
+  const messages = privateMessages(turns, today, known, cleanBotName(botName));
   try {
     const out = onText
       ? await completeStreaming(cfg, messages, false, onText, signal, [])

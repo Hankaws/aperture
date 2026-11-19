@@ -12,6 +12,7 @@ export type PageKey =
   | "app"
   | "editor"
   | "bot"
+  | "chat"
   | "botCheck"
   | "botAgents"
   | "benchmark"
@@ -37,6 +38,10 @@ export const PAGES: Record<PageKey, { title: string; description: string }> = {
   bot: {
     title: "Bot",
     description: "Ask the Aperture bot for a change on a GitHub issue. It opens a pull request only when no check is red.",
+  },
+  chat: {
+    title: "Chat",
+    description: "Your own bot, named by you: ask it anything, keep every chat, and nothing you say is posted anywhere.",
   },
   botCheck: {
     title: "Agent Check",

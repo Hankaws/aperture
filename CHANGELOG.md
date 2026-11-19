@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.19.0 - 2026-11-19
+
 ### Added
 
 - Your own bot, as Grok is yours, on a page of its own: Chat, in the top bar. The first time, you give it a name and choose its face (one is offered, so one tap will do), and from then on it answers to that name. The page greets you by your first name, with the box in the middle and a few ways to start, until you ask something. Every chat is kept, down the side by day (Today, Yesterday, Previous 7 days, Older) under its first question, and each can be opened again or deleted; New chat starts another. On a phone, the list slides in from the side. Its bubble in the corner of other pages now wears its face and opens this page. Your bot, your chats and what it remembers stay on your account, so every device shows the same, and nothing you say there is posted anywhere. ([#223](https://github.com/Hankaws/aperture/pull/223))

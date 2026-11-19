@@ -9,13 +9,21 @@ import {
   Loader2,
   Send,
   ShieldCheck,
+  Square,
   Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
-import { askBot, botChat, type BotSetup } from "@/lib/github/bot";
+import {
+  askBot,
+  botChat,
+  type BotChatEvent,
+  type BotChatReply,
+  type BotSetup,
+} from "@/lib/github/bot";
+import { liveText } from "@/lib/bot/private-chat-stream";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import {
   cardAsk,
@@ -130,6 +138,12 @@ export function BotChat({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The answer as it is being written; null when none is. */
+  const [live, setLive] = useState<string | null>(null);
+  /** What the bot is looking up for this answer, as it goes ("Reading #12"). */
+  const [looking, setLooking] = useState<string[]>([]);
+  /** Stops the answer being written. */
+  const stopper = useRef<AbortController | null>(null);
   /** The account's copy has been read (or could not be): only then does the bot report back. */
   const [synced, setSynced] = useState(false);
   const end = useRef<HTMLDivElement>(null);
@@ -196,7 +210,10 @@ export function BotChat({
   }, [botId, repo]);
   useEffect(() => {
     if (shown) end.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length, busy, shown]);
+  }, [entries.length, busy, shown, live, looking.length]);
+
+  // Leaving (the bubble closed, another bot chosen): an answer still being written stops.
+  useEffect(() => () => stopper.current?.abort(), []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -252,34 +269,79 @@ export function BotChat({
       .filter((e) => !(e.role === "assistant" && e.error))
       .slice(-CHAT_LIMITS.turns)
       .map((e) => ({ role: e.role, text: turnText(e).slice(0, CHAT_LIMITS.turnChars) }));
-    let reply: Entry;
+    setLive("");
+    setLooking([]);
+    const control = new AbortController();
+    stopper.current = control;
+    let raw = "";
+    let out: BotChatReply | null = null;
+    let stopped = false;
+    // Stop ends the read at once; letting go of the stream ends the request, and the model with it.
+    const stoppedNow = new Promise<never>((_, reject) =>
+      control.signal.addEventListener("abort", () => reject(new Error("Stopped.")), {
+        once: true,
+      }),
+    );
+    stoppedNow.catch(() => {});
+    let iterator: AsyncIterator<BotChatEvent> | null = null;
     try {
-      const out = await botChat({ data: { owner, repo: name, botId: bot.id, turns } });
-      const at = new Date().toISOString();
-      reply = out.ok
-        ? {
-            id: id(),
-            role: "assistant",
-            text: out.reply,
-            looked: out.looked,
-            cards: out.proposals.map((p) => ({ ...p, at })),
-          }
-        : { id: id(), role: "assistant", text: out.error, error: true };
-      if (out.ok && out.memories.length > 0) {
-        memory.add(out.memories);
-        const replyId = reply.id;
-        setOffers((now) => ({ ...now, [replyId]: out.memories.map((m) => m.id) }));
+      const events = await Promise.race([
+        botChat({ data: { owner, repo: name, botId: bot.id, turns } }),
+        stoppedNow,
+      ]);
+      iterator = events[Symbol.asyncIterator]();
+      while (true) {
+        const next = await Promise.race([iterator.next(), stoppedNow]);
+        if (next.done) break;
+        const event = next.value;
+        if (event.type === "text") {
+          raw += event.text;
+          setLive(liveText(raw));
+        } else if (event.type === "look") {
+          // Text before a lookup was the model thinking aloud, not its answer.
+          raw = "";
+          setLive("");
+          setLooking((now) => [...now, event.line]);
+        } else out = event.reply;
       }
     } catch (err) {
+      if (control.signal.aborted) {
+        stopped = true;
+        void iterator?.return?.(undefined)?.catch(() => {});
+      }
+      else
+        out = {
+          ok: false,
+          error: err instanceof Error ? err.message : "The bot could not answer.",
+        };
+    }
+    stopper.current = null;
+    let reply: Entry | null;
+    const at = new Date().toISOString();
+    if (out?.ok) {
       reply = {
         id: id(),
         role: "assistant",
-        text: err instanceof Error ? err.message : "The bot could not answer.",
-        error: true,
+        text: out.reply,
+        looked: out.looked,
+        cards: out.proposals.map((p) => ({ ...p, at })),
       };
-    } finally {
-      setBusy(false);
-    }
+      if (out.memories.length > 0) {
+        memory.add(out.memories);
+        const replyId = reply.id;
+        const offered = out.memories;
+        setOffers((now) => ({ ...now, [replyId]: offered.map((m) => m.id) }));
+      }
+    } else if (out) reply = { id: id(), role: "assistant", text: out.error, error: true };
+    else if (stopped || control.signal.aborted) {
+      // Stopped: what was written so far stays, as it was on screen.
+      const sofar = liveText(raw);
+      reply = sofar ? { id: id(), role: "assistant", text: sofar } : null;
+    } else reply = { id: id(), role: "assistant", text: "The answer was cut off. Try again.", error: true };
+    setLive(null);
+    setLooking([]);
+    setBusy(false);
+    if (!reply) return;
     // After the conversation as it is now: a card sent or dismissed meanwhile stays so.
     update([...latest.current, reply]);
     if (reply.role === "assistant" && !reply.error) onReply?.(reply.text);
@@ -452,7 +514,20 @@ export function BotChat({
           ),
         )}
 
-        {busy && <Thinking bot={bot} />}
+        {busy &&
+          (live ? (
+            <div className="flex gap-3">
+              <MascotAvatar mascot={bot.mascot} mood="thinking" size={28} className="mt-0.5" />
+              <div className="min-w-0 flex-1 space-y-2">
+                {looking.length > 0 && (
+                  <p className="text-xs text-subtle">{looking.join(" · ")}</p>
+                )}
+                <Reply text={live} open={setup.open} repo={repo} branch={setup.defaultBranch} writing />
+              </div>
+            </div>
+          ) : (
+            <Thinking bot={bot} looking={looking.at(-1)} />
+          ))}
         <div ref={end} />
         </div>
       </div>
@@ -482,15 +557,29 @@ export function BotChat({
             aria-label={`Message to ${bot.name}`}
             className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
           />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={busy || !draft.trim()}
-            aria-label="Send"
-            className="shrink-0 rounded-full"
-          >
-            <ArrowUp className="size-4" />
-          </Button>
+          {busy ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => stopper.current?.abort()}
+              aria-label="Stop the answer"
+              title="Stop"
+              className="shrink-0 rounded-full"
+            >
+              <Square className="size-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!draft.trim()}
+              aria-label="Send"
+              className="shrink-0 rounded-full"
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+          )}
         </div>
         <p className="mt-2 px-1 text-xs text-subtle">
           Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
@@ -606,14 +695,22 @@ function Reply({
   open,
   repo,
   branch,
+  writing = false,
 }: {
   text: string;
   open: Thread[];
   repo: string;
   branch: string;
+  /** Still being written: a caret at its end. */
+  writing?: boolean;
 }) {
   return (
-    <div className="space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
+    <div
+      className={cn(
+        "space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]",
+        writing && "reply-writing",
+      )}
+    >
       {parseMarkdown(text).map((block, i) =>
         block.type === "ul" ? (
           <ul key={i} className="list-disc space-y-1 pl-5">
@@ -640,12 +737,12 @@ function Reply({
   );
 }
 
-function Thinking({ bot }: { bot: BotProfile }) {
+function Thinking({ bot, looking }: { bot: BotProfile; looking?: string }) {
   return (
     <Typing
       name={bot.name}
       avatar={<MascotAvatar mascot={bot.mascot} mood="thinking" size={28} />}
-      phrases={THINKING}
+      phrases={looking ? [`${looking}…`] : THINKING}
     />
   );
 }

@@ -23,6 +23,7 @@ import {
   type BotChatReply,
   type BotSetup,
 } from "@/lib/github/bot";
+import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { liveText } from "@/lib/bot/private-chat-stream";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import {
@@ -55,6 +56,7 @@ import type { BotTask } from "@/lib/bot/tasks";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
 import { TaskCard } from "./bot-console";
+import { FollowUps } from "./follow-ups";
 import { Typing } from "./typing";
 import { MascotAvatar } from "./mascot";
 import { MemoryOffer } from "./memory-ui";
@@ -83,13 +85,16 @@ function askedBefore(entries: Entry[], at: number): string | null {
 
 /** What the model reads back of an answer: its text, and what became of each task it proposed. */
 function turnText(entry: Entry): string {
-  if (entry.role === "user" || !entry.cards?.length) return entry.text;
+  if (entry.role === "user") return entry.text;
+  // Its suggestions of what to ask next were for the person, not the model.
+  const text = replyFollowUps(entry.text).text;
+  if (!entry.cards?.length) return text;
   const cards = entry.cards.map((c) => {
     const where = c.number ? `#${c.number}` : `a new issue "${c.title ?? c.task.split("\n")[0]}"`;
     const fate = c.sent ? `sent as #${c.sent.number}` : c.dismissed ? "dismissed" : "not sent yet";
     return `- Proposed on ${where}: ${c.task} (${fate})`;
   });
-  return `${entry.text}\n\n${cards.join("\n")}`;
+  return `${text}\n\n${cards.join("\n")}`;
 }
 
 const id = () => Math.random().toString(36).slice(2, 10);
@@ -509,6 +514,9 @@ export function BotChat({
                     />
                   ),
                 )}
+                {at === entries.length - 1 && !busy && !entry.error && (
+                  <FollowUps asks={replyFollowUps(entry.text).asks} onAsk={(ask) => void send(ask)} />
+                )}
               </div>
             </div>
           ),
@@ -711,7 +719,7 @@ function Reply({
         writing && "reply-writing",
       )}
     >
-      {parseMarkdown(text).map((block, i) =>
+      {parseMarkdown(replyFollowUps(text).text).map((block, i) =>
         block.type === "ul" ? (
           <ul key={i} className="list-disc space-y-1 pl-5">
             {block.items.map((item, j) => (

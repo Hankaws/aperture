@@ -19,6 +19,7 @@ import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat-saved";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadPrivateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
+import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { liveText, streamPrivateChat } from "@/lib/bot/private-chat-stream";
 import {
   ACTIONS,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/bot/private-chat";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
+import { FollowUps } from "./follow-ups";
 import { Typing } from "./typing";
 import { useTour } from "./use-tour";
 import { MemoryOffer, MemoryPanel } from "./memory-ui";
@@ -169,7 +171,14 @@ export function PrivateChat({
     const turns: ChatTurn[] = conversation
       .filter((e) => !(e.role === "assistant" && e.error))
       .slice(-CHAT_LIMITS.turns)
-      .map((e) => ({ role: e.role, text: e.text.slice(0, CHAT_LIMITS.turnChars) }));
+      // Its suggestions of what to ask next were for the person, not the model.
+      .map((e) => ({
+        role: e.role,
+        text: (e.role === "assistant" ? replyFollowUps(e.text).text : e.text).slice(
+          0,
+          CHAT_LIMITS.turnChars,
+        ),
+      }));
     let raw = "";
     const out = await streamPrivateChat(turns, {
       onText: (piece) => {
@@ -331,6 +340,12 @@ export function PrivateChat({
                           at === entries.length - 1 && !busy ? () => void regenerate() : undefined
                         }
                       />
+                      {at === entries.length - 1 && !busy && (
+                        <FollowUps
+                          asks={replyFollowUps(entry.text).asks}
+                          onAsk={(ask) => void send(ask)}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -502,7 +517,7 @@ function Reply({
   /** Still being written: a caret at its end, and its buttons once it is done. */
   writing?: boolean;
 }) {
-  const { text: shown, actions } = replyActions(text);
+  const { text: shown, actions } = replyActions(replyFollowUps(text).text);
   return (
     <div
       className={cn(
@@ -635,7 +650,7 @@ function ReplyTools({ text, onRegenerate }: { text: string; onRegenerate?: () =>
         className={tool}
         onClick={() => {
           void navigator.clipboard
-            ?.writeText(replyActions(text).text)
+            ?.writeText(replyActions(replyFollowUps(text).text).text)
             .then(() => setCopied(true))
             .catch(() => {});
         }}

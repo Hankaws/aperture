@@ -84,7 +84,7 @@ test("a reply keeps its numbered lists as lists, and code as it is", () => {
 
 test("it shows someone new around Aperture, in the words of the site's own pages and buttons", () => {
   const system = privateSystem("2026-11-18");
-  assert.ok(system.endsWith(APERTURE_GUIDE));
+  assert.ok(system.includes(APERTURE_GUIDE));
   for (const words of [
     "Settings, on the Models tab",
     "connect GitHub first",

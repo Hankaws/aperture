@@ -9,6 +9,7 @@
 import type { ChatMessage } from "../agent/complete.server.ts";
 import { parseMarkdown, type MdBlock } from "../workspace/md-preview.ts";
 import { CHAT_LIMITS, type ChatTurn } from "./chat.ts";
+import { followUpRules } from "./follow-ups.ts";
 import { memoryPrompt, type Memory } from "./memory.ts";
 
 /** Where the account keeps it: one conversation a person, beside their bots' (`user_bot_chats`). */
@@ -101,6 +102,7 @@ export function privateSystem(today: string): string {
     "You cannot browse the web, run code, or see their files: work from what you know and what they paste here, and say so when an answer depends on something you cannot check or may be out of date. Never invent facts, links or quotes.",
     "When they want a change made in one of their GitHub repositories, say that the Bot page has a bot for each repository, which plans the change and opens a pull request only when Aperture Agent Check finds nothing red, and that the editor works on a project directly.",
     APERTURE_GUIDE,
+    followUpRules(["Turn this into a checklist", "Explain step 2 more simply"]),
   ].join("\n\n");
 }
 

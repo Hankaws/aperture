@@ -1,13 +1,25 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ArrowUp, Brain, Check, Lock, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUp,
+  Brain,
+  Check,
+  Copy,
+  Lock,
+  RefreshCw,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Textarea } from "@/components/ui/textarea";
 import { Inline } from "@/components/ide/md-preview";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat-saved";
-import { loadPrivateChat, privateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
+import { getBearerToken } from "@/lib/auth/client";
+import { loadPrivateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
+import { liveText, streamPrivateChat } from "@/lib/bot/private-chat-stream";
 import {
   ACTIONS,
   PRIVATE_SUGGESTIONS,
@@ -17,6 +29,7 @@ import {
 } from "@/lib/bot/private-chat";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
+import { Typing } from "./typing";
 import { useTour } from "./use-tour";
 import { MemoryOffer, MemoryPanel } from "./memory-ui";
 import { useMemory } from "./use-memory";
@@ -45,6 +58,8 @@ export function PrivateChat({
   lead,
   actions,
   onNavigate,
+  onReply,
+  shown = true,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
@@ -53,10 +68,18 @@ export function PrivateChat({
   actions?: ReactNode;
   /** A reply's button was followed: a bubble puts its window away, to show the page. */
   onNavigate?: () => void;
+  /** An answer came: a minimized bubble shows it, as a messenger does. */
+  onReply?: (text: string) => void;
+  /** On screen: false while its bubble is minimized, the chat carrying on unseen. */
+  shown?: boolean;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The answer as it is being written; null when none is. */
+  const [live, setLive] = useState<string | null>(null);
+  /** Stops the answer being written. */
+  const stopper = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   /** The conversation as it is now, for code that runs after an await. */
@@ -104,8 +127,11 @@ export function PrivateChat({
   }, []);
 
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length, busy]);
+    if (shown) end.current?.scrollIntoView({ block: "nearest" });
+  }, [entries.length, busy, live, shown]);
+
+  // Leaving (a bubble closed for good, another page): an answer still being written stops.
+  useEffect(() => () => stopper.current?.abort(), []);
 
   const update = (next: Entry[]) => {
     show(next);
@@ -119,34 +145,60 @@ export function PrivateChat({
     const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
     update(asked);
     setDraft("");
+    await ask(asked);
+  }
+
+  /** The last answer, written again: the same question asked once more. */
+  async function regenerate() {
+    const last = latest.current.at(-1);
+    if (busy || last?.role !== "assistant") return;
+    const rest = latest.current.slice(0, -1);
+    update(rest);
+    await ask(rest);
+  }
+
+  const stop = useCallback(() => stopper.current?.abort(), []);
+
+  /** Asks for the answer to the conversation as it stands, and shows it as it is written. */
+  async function ask(conversation: Entry[]) {
     setBusy(true);
+    setLive("");
+    const control = new AbortController();
+    stopper.current = control;
     // The server reads the newest turns, each clipped: send no more than it takes.
-    const turns: ChatTurn[] = asked
+    const turns: ChatTurn[] = conversation
       .filter((e) => !(e.role === "assistant" && e.error))
       .slice(-CHAT_LIMITS.turns)
       .map((e) => ({ role: e.role, text: e.text.slice(0, CHAT_LIMITS.turnChars) }));
-    let reply: Entry;
-    try {
-      const out = await privateChat({ data: { turns } });
-      reply = out.ok
-        ? { id: id(), role: "assistant", text: out.reply }
-        : { id: id(), role: "assistant", text: out.error, error: true };
-      if (out.ok && out.memories.length > 0) {
+    let raw = "";
+    const out = await streamPrivateChat(turns, {
+      onText: (piece) => {
+        raw += piece;
+        setLive(liveText(raw));
+      },
+      signal: control.signal,
+      bearer: getBearerToken(),
+    });
+    stopper.current = null;
+    let reply: Entry | null;
+    if (out.ok) {
+      reply = { id: id(), role: "assistant", text: out.reply };
+      if (out.memories.length > 0) {
         memory.add(out.memories);
         const replyId = reply.id;
         setOffers((now) => ({ ...now, [replyId]: out.memories.map((m) => m.id) }));
       }
-    } catch (err) {
-      reply = {
-        id: id(),
-        role: "assistant",
-        text: err instanceof Error ? err.message : "The bot could not answer.",
-        error: true,
-      };
-    } finally {
-      setBusy(false);
+    } else if (out.stopped) {
+      // Stopped: what was written so far stays, as it was on screen.
+      const sofar = liveText(raw);
+      reply = sofar ? { id: id(), role: "assistant", text: sofar } : null;
+    } else reply = { id: id(), role: "assistant", text: out.error, error: true };
+    setLive(null);
+    setBusy(false);
+    if (reply) {
+      update([...latest.current, reply]);
+      if (!reply.error) onReply?.(reply.text);
     }
-    update([...latest.current, reply]);
     requestAnimationFrame(() => box.current?.focus());
   }
 
@@ -273,6 +325,12 @@ export function PrivateChat({
                       {offers[entry.id]?.map((offerId) => (
                         <MemoryOffer key={offerId} id={offerId} store={memory} />
                       ))}
+                      <ReplyTools
+                        text={entry.text}
+                        onRegenerate={
+                          at === entries.length - 1 && !busy ? () => void regenerate() : undefined
+                        }
+                      />
                     </div>
                   )}
                 </div>
@@ -280,7 +338,21 @@ export function PrivateChat({
             ),
           )}
 
-          {busy && <Thinking />}
+          {busy &&
+            (live ? (
+              <div className="flex gap-3">
+                <BotAvatar size="sm" working className="mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <Reply text={live} onNavigate={onNavigate} writing />
+                </div>
+              </div>
+            ) : (
+              <Typing
+                name="Aperture Bot"
+                avatar={<BotAvatar size="sm" working />}
+                phrases={THINKING}
+              />
+            ))}
           <div ref={end} />
         </div>
       </div>
@@ -310,15 +382,29 @@ export function PrivateChat({
               aria-label="Message to Aperture Bot"
               className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={busy || !draft.trim()}
-              aria-label="Send"
-              className="shrink-0 rounded-full"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
+            {busy ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={stop}
+                aria-label="Stop the answer"
+                title="Stop"
+                className="shrink-0 rounded-full"
+              >
+                <Square className="size-3.5 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!draft.trim()}
+                aria-label="Send"
+                className="shrink-0 rounded-full"
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+            )}
           </div>
           <p className="mt-2 px-1 text-xs text-subtle">
             Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
@@ -406,10 +492,24 @@ function WelcomeTour({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Reply({ text, onNavigate }: { text: string; onNavigate?: () => void }) {
+function Reply({
+  text,
+  onNavigate,
+  writing = false,
+}: {
+  text: string;
+  onNavigate?: () => void;
+  /** Still being written: a caret at its end, and its buttons once it is done. */
+  writing?: boolean;
+}) {
   const { text: shown, actions } = replyActions(text);
   return (
-    <div className="space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
+    <div
+      className={cn(
+        "space-y-2 text-sm leading-relaxed [overflow-wrap:anywhere]",
+        writing && "reply-writing",
+      )}
+    >
       {replyBlocks(shown).map((block, i) =>
         block.type === "ul" || block.type === "ol" ? (
           (() => {
@@ -445,7 +545,7 @@ function Reply({ text, onNavigate }: { text: string; onNavigate?: () => void }) 
           </p>
         ),
       )}
-      {actions.length > 0 && (
+      {!writing && actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
           {actions.map((action) => (
             <ActionLink key={action.id} action={action} onNavigate={onNavigate} />
@@ -518,18 +618,44 @@ function ActionLink({
   }
 }
 
-function Thinking() {
-  const [i, setI] = useState(0);
+/** Under an answer: copy it, and for the last one, have it written again. */
+function ReplyTools({ text, onRegenerate }: { text: string; onRegenerate?: () => void }) {
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
-    const timer = window.setInterval(() => setI((n) => (n + 1) % THINKING.length), 2800);
-    return () => window.clearInterval(timer);
-  }, []);
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const tool =
+    "inline-flex min-h-7 items-center gap-1 rounded-md px-1.5 text-xs text-subtle hover:bg-elevated hover:text-fg";
   return (
-    <div className="flex items-center gap-3 text-sm text-muted">
-      <BotAvatar size="sm" working />
-      <span key={i} className="thinking-phrase">
-        {THINKING[i]}
-      </span>
+    <div className="-ml-1.5 flex items-center gap-0.5">
+      <button
+        type="button"
+        className={tool}
+        onClick={() => {
+          void navigator.clipboard
+            ?.writeText(replyActions(text).text)
+            .then(() => setCopied(true))
+            .catch(() => {});
+        }}
+        aria-label={copied ? "Copied" : "Copy the answer"}
+        title="Copy"
+      >
+        {copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />}
+        {copied && <span>Copied</span>}
+      </button>
+      {onRegenerate && (
+        <button
+          type="button"
+          className={tool}
+          onClick={onRegenerate}
+          aria-label="Write the answer again"
+          title="Regenerate"
+        >
+          <RefreshCw className="size-3.5" />
+        </button>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
+import { Route as ApiPrivateChatRouteImport } from './routes/api/private-chat'
 import { Route as ApiSandboxCheckRouteImport } from './routes/api/sandbox-check'
 import { Route as ApiTabRouteImport } from './routes/api/tab'
 import { Route as BillingPayRouteImport } from './routes/billing/pay'
@@ -111,6 +112,11 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
   path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPrivateChatRoute = ApiPrivateChatRouteImport.update({
+  id: '/api/private-chat',
+  path: '/api/private-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSandboxCheckRoute = ApiSandboxCheckRouteImport.update({
   id: '/api/sandbox-check',
   path: '/api/sandbox-check',
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/private-chat': typeof ApiPrivateChatRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/billing/pay': typeof BillingPayRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/private-chat': typeof ApiPrivateChatRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/billing/pay': typeof BillingPayRoute
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/private-chat': typeof ApiPrivateChatRoute
   '/api/sandbox-check': typeof ApiSandboxCheckRoute
   '/api/tab': typeof ApiTabRoute
   '/billing/pay': typeof BillingPayRoute
@@ -226,6 +235,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/agent'
     | '/api/mcp'
+    | '/api/private-chat'
     | '/api/sandbox-check'
     | '/api/tab'
     | '/billing/pay'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/agent'
     | '/api/mcp'
+    | '/api/private-chat'
     | '/api/sandbox-check'
     | '/api/tab'
     | '/billing/pay'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/agent'
     | '/api/mcp'
+    | '/api/private-chat'
     | '/api/sandbox-check'
     | '/api/tab'
     | '/billing/pay'
@@ -296,6 +308,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   ApiAgentRoute: typeof ApiAgentRoute
   ApiMcpRoute: typeof ApiMcpRoute
+  ApiPrivateChatRoute: typeof ApiPrivateChatRoute
   ApiSandboxCheckRoute: typeof ApiSandboxCheckRoute
   ApiTabRoute: typeof ApiTabRoute
   BillingPayRoute: typeof BillingPayRoute
@@ -417,6 +430,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/private-chat': {
+      id: '/api/private-chat'
+      path: '/api/private-chat'
+      fullPath: '/api/private-chat'
+      preLoaderRoute: typeof ApiPrivateChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sandbox-check': {
       id: '/api/sandbox-check'
       path: '/api/sandbox-check'
@@ -472,6 +492,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   ApiAgentRoute: ApiAgentRoute,
   ApiMcpRoute: ApiMcpRoute,
+  ApiPrivateChatRoute: ApiPrivateChatRoute,
   ApiSandboxCheckRoute: ApiSandboxCheckRoute,
   ApiTabRoute: ApiTabRoute,
   BillingPayRoute: BillingPayRoute,

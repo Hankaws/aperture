@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   greetingFor,
   keepKnown,
   NO_BUBBLES,
+  peekLine,
   PRIVATE_BUBBLE,
   readBubbles,
   removeBubble,
@@ -41,7 +42,9 @@ function stored(): Bubbles {
  * Aperture Bot's own is always there: the private chat, and a guide for
  * someone new. A bot gets one when it is made, popping up with a hello, so
  * it can be talked to from any page. A bubble opens a chat window beside the
- * stack; on a phone, the whole screen.
+ * stack; on a phone, the whole screen. Minimized, a chat carries on: an
+ * answer that comes meanwhile peeks out beside its bubble, which counts
+ * what is unread until it is opened.
  */
 export function BotBubbles() {
   const { user } = useCurrentUserState();
@@ -51,7 +54,27 @@ export function BotBubbles() {
   const [bots, setBots] = useState<BotProfile[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [peek, setPeek] = useState<string | null>(null);
+  /** Chats opened on this page: kept running while minimized, so an answer is never lost. */
+  const [kept, setKept] = useState<string[]>([]);
+  /** Answers each minimized chat got: how many, and the newest. */
+  const [unread, setUnread] = useState<Record<string, { count: number; text: string }>>({});
+  /** Which chat is open, for answers that come while it is not. */
+  const openNow = useRef<string | null>(null);
   const tour = useTour();
+
+  useEffect(() => {
+    openNow.current = open;
+    if (!open) return;
+    setKept((ids) => (ids.includes(open) ? ids : [...ids, open]));
+    setUnread(({ [open]: _read, ...rest }) => rest);
+  }, [open]);
+
+  /** A chat said something: seen if it is open, else it peeks out of its bubble. */
+  const replied = useCallback((id: string, text: string) => {
+    if (openNow.current === id) return;
+    setUnread((now) => ({ ...now, [id]: { count: (now[id]?.count ?? 0) + 1, text } }));
+    setPeek(id);
+  }, []);
 
   /** The bubbles changed: kept in this browser, for every page. */
   const change = useCallback((next: (prev: Bubbles) => Bubbles) => {
@@ -148,8 +171,13 @@ export function BotBubbles() {
   const close = (id: string) => {
     if (open === id) setOpen(null);
     if (peek === id) setPeek(null);
+    setKept((ids) => ids.filter((x) => x !== id));
+    setUnread(({ [id]: _gone, ...rest }) => rest);
     change((s) => removeBubble(s, id));
   };
+  /** What a bubble says beside it: a new answer, else its hello. */
+  const peekFor = (id: string, name: string | null) =>
+    peek === id ? (unread[id] ? peekLine(unread[id].text) : greetingFor(name)) : null;
   const minimize = (
     <Button
       variant="ghost"
@@ -164,48 +192,64 @@ export function BotBubbles() {
 
   return (
     <>
-      {(privateOpen || openBot) && (
-        <div
-          role="dialog"
-          aria-label={openBot ? `Chat with ${openBot.name}` : "Chat with Aperture Bot"}
-          className={cn(
-            "bubble-rise fixed inset-0 z-50 flex flex-col overflow-hidden bg-surface",
-            "sm:inset-auto sm:right-24 sm:h-[min(36rem,calc(100dvh-8rem))] sm:w-[24rem] sm:rounded-2xl sm:border sm:border-border sm:shadow-2xl",
-            raised ? "sm:bottom-24" : "sm:bottom-4",
-          )}
-        >
-          {openBot ? (
-            <BubbleBot
-              bot={openBot}
-              actions={
-                <>
-                  <Link
-                    to="/bot"
-                    className="grid size-8 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg"
-                    aria-label={`Open ${openBot.name} on the Bot page`}
-                    title="Open on the Bot page"
-                    onClick={() => setOpen(null)}
-                  >
-                    <ArrowUpRight className="size-4" />
-                  </Link>
-                  {minimize}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => close(openBot.id)}
-                    aria-label={`Close ${openBot.name}'s bubble`}
-                    title="Close the bubble"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </>
-              }
-            />
-          ) : (
-            <PrivateChat actions={minimize} onNavigate={() => setOpen(null)} />
-          )}
-        </div>
-      )}
+      {/* Each chat opened stays, hidden when minimized, so what it is doing carries on. */}
+      {kept.map((id) => {
+        const bot = id === PRIVATE_BUBBLE ? null : shown.find((b) => b.id === id);
+        if (id !== PRIVATE_BUBBLE && !bot) return null;
+        const visible = bot ? open === bot.id : privateOpen;
+        return (
+          <div
+            key={id}
+            role="dialog"
+            aria-label={bot ? `Chat with ${bot.name}` : "Chat with Aperture Bot"}
+            hidden={!visible}
+            className={cn(
+              "bubble-rise fixed inset-0 z-50 flex flex-col overflow-hidden bg-surface",
+              "sm:inset-auto sm:right-24 sm:h-[min(36rem,calc(100dvh-8rem))] sm:w-[24rem] sm:rounded-2xl sm:border sm:border-border sm:shadow-2xl",
+              raised ? "sm:bottom-24" : "sm:bottom-4",
+              !visible && "hidden",
+            )}
+          >
+            {bot ? (
+              <BubbleBot
+                bot={bot}
+                onReply={(text) => replied(bot.id, text)}
+                shown={visible}
+                actions={
+                  <>
+                    <Link
+                      to="/bot"
+                      className="grid size-8 place-items-center rounded-md text-muted hover:bg-elevated hover:text-fg"
+                      aria-label={`Open ${bot.name} on the Bot page`}
+                      title="Open on the Bot page"
+                      onClick={() => setOpen(null)}
+                    >
+                      <ArrowUpRight className="size-4" />
+                    </Link>
+                    {minimize}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => close(bot.id)}
+                      aria-label={`Close ${bot.name}'s bubble`}
+                      title="Close the bubble"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </>
+                }
+              />
+            ) : (
+              <PrivateChat
+                actions={minimize}
+                onNavigate={() => setOpen(null)}
+                onReply={(text) => replied(PRIVATE_BUBBLE, text)}
+                shown={visible}
+              />
+            )}
+          </div>
+        );
+      })}
 
       <div
         className={cn(
@@ -221,9 +265,10 @@ export function BotBubbles() {
           <Bubble
             name="Aperture Bot"
             open={privateOpen}
-            greeting={peek === PRIVATE_BUBBLE ? greetingFor(null) : null}
+            greeting={peekFor(PRIVATE_BUBBLE, null)}
             onToggle={() => toggle(PRIVATE_BUBBLE)}
             onDismissGreeting={() => setPeek(null)}
+            unread={unread[PRIVATE_BUBBLE]?.count}
             badge={
               tour.show && tour.progress ? tour.progress.total - tour.progress.done : undefined
             }
@@ -236,10 +281,11 @@ export function BotBubbles() {
             key={bot.id}
             name={bot.name}
             open={open === bot.id}
-            greeting={peek === bot.id ? greetingFor(bot.name) : null}
+            greeting={peekFor(bot.id, bot.name)}
             onToggle={() => toggle(bot.id)}
             onDismissGreeting={() => setPeek(null)}
             onClose={() => close(bot.id)}
+            unread={unread[bot.id]?.count}
           >
             <MascotAvatar mascot={bot.mascot} size={52} label="" />
           </Bubble>
@@ -258,6 +304,7 @@ function Bubble({
   onDismissGreeting,
   onClose,
   badge,
+  unread,
   children,
 }: {
   name: string;
@@ -268,6 +315,8 @@ function Bubble({
   onClose?: () => void;
   /** Steps of the welcome tour left: a count on the bubble until they are done. */
   badge?: number;
+  /** Answers that came while it was minimized: a count, before the tour's. */
+  unread?: number;
   children: ReactNode;
 }) {
   return (
@@ -295,7 +344,8 @@ function Bubble({
         onClick={onToggle}
         aria-label={
           (open ? `Minimize the chat with ${name}` : `Chat with ${name}`) +
-          (badge ? `, ${badge} setup ${badge === 1 ? "step" : "steps"} left` : "")
+          (unread ? `, ${unread} new ${unread === 1 ? "message" : "messages"}` : "") +
+          (badge && !unread ? `, ${badge} setup ${badge === 1 ? "step" : "steps"} left` : "")
         }
         aria-expanded={open}
         title={name}
@@ -305,7 +355,14 @@ function Bubble({
         )}
       >
         {children}
-        {badge ? (
+        {unread ? (
+          <span
+            aria-hidden
+            className="bubble-pop absolute -top-0.5 -left-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-semibold text-white ring-2 ring-bg"
+          >
+            {unread > 9 ? "9+" : unread}
+          </span>
+        ) : badge ? (
           <span
             aria-hidden
             className="absolute -top-0.5 -left-0.5 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-semibold text-bg ring-2 ring-bg"
@@ -329,7 +386,17 @@ function Bubble({
 }
 
 /** A team bot's chat in its bubble: the same conversation as on the Bot page. */
-function BubbleBot({ bot, actions }: { bot: BotProfile; actions: ReactNode }) {
+function BubbleBot({
+  bot,
+  actions,
+  onReply,
+  shown,
+}: {
+  bot: BotProfile;
+  actions: ReactNode;
+  onReply: (text: string) => void;
+  shown: boolean;
+}) {
   const r = useRepoBot(bot.repo);
   const lead = (
     <>
@@ -366,6 +433,8 @@ function BubbleBot({ bot, actions }: { bot: BotProfile; actions: ReactNode }) {
       lead={lead}
       actions={actions}
       onSent={r.asked}
+      onReply={onReply}
+      shown={shown}
     />
   );
 }

@@ -3,76 +3,28 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
 import { privateChatInput, privateChatSaveInput } from "@/lib/security/inputs";
 import type { Entry } from "./chat-saved";
-import { replyMemories, type Memory } from "./memory";
-import { privateChatId, privateMessages, privateReply } from "./private-chat";
+import { privateChatId } from "./private-chat";
+import type { PrivateChatReply } from "./private-chat.server";
 
-export type PrivateChatReply =
-  | {
-      ok: true;
-      reply: string;
-      /** Lines the reply offers to remember, waiting for the person's yes. */
-      memories: Memory[];
-    }
-  | { ok: false; error: string };
+export type { PrivateChatReply };
 
 /** A sign-in-off visitor has no account to keep it on: their browser keeps it. */
 async function isVisitor(userId: string): Promise<boolean> {
-  const { isVisitorUserId } = await import("@/lib/auth/visitor");
-  return isVisitorUserId(userId);
+  const { isVisitor } = await import("./private-chat.server");
+  return isVisitor(userId);
 }
 
 /**
- * One turn of the private chat: the person's model answers, with no tools
- * and no repository. Spends their key, or the hosted plan, as the bots do.
+ * One turn of the private chat, all at once. The chat streams its answers
+ * through `/api/private-chat`; this is the same turn for a caller that
+ * cannot read a stream.
  */
 export const privateChat = createServerFn({ method: "POST" })
   .validator(privateChatInput)
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<PrivateChatReply> => {
-    const busy = overLimit("botChat", context.userId);
-    if (busy) return { ok: false, error: busy };
-    const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
-    const resolved = await resolveModel(context.userId, null, { replay: false });
-    if (!resolved.ok) return { ok: false, error: resolved.error };
-    if (resolved.provider === "replay")
-      return { ok: false, error: "Add your own model key in Settings to talk to the bot." };
-    const { complete } = await import("@/lib/agent/complete.server");
-    const cfg = {
-      provider: resolved.provider,
-      apiKey: resolved.apiKey,
-      base: resolved.base,
-      model: resolved.model,
-    };
-    // What it remembers about them: none for a visitor, who has no account to keep it on.
-    const visitor = await isVisitor(context.userId);
-    const store = await import("./memory-store");
-    const botId = privateChatId(context.userId);
-    const q = visitor
-      ? null
-      : await (await import("./memory.server")).memoryQuery().catch(() => null);
-    const known = q ? await store.listMemories(q, context.userId, botId).catch(() => null) : null;
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const out = await complete(
-        cfg,
-        privateMessages(data.turns, today, known),
-        false,
-        undefined,
-        [],
-      );
-      await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
-      const { text, proposed } = replyMemories(privateReply(out.content));
-      const memories =
-        q && known && proposed.length
-          ? await store.proposeMemories(q, context.userId, botId, proposed).catch(() => [])
-          : [];
-      return { ok: true, reply: privateReply(text), memories };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "The model could not answer.",
-      };
-    }
+    const { runPrivateChat } = await import("./private-chat.server");
+    return runPrivateChat(context.userId, data.turns);
   });
 
 /** The private chat as the account keeps it; not ok when there is no account to read. */

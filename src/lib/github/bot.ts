@@ -39,6 +39,7 @@ import { skillSuggestions, type SkillSuggestion } from "@/lib/bot/skill-suggest"
 import { isSkillPath, projectSkills, SKILLS_DIR, type Skill } from "@/lib/workspace/skills";
 import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
+import { replyMemories, type Memory } from "@/lib/bot/memory";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
 import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
 import {
@@ -1293,7 +1294,15 @@ export const setBotApp = createServerFn({ method: "POST" })
   });
 
 export type BotChatReply =
-  { ok: true; reply: string; proposals: Proposal[]; looked: string[] } | Failure;
+  | {
+      ok: true;
+      reply: string;
+      proposals: Proposal[];
+      looked: string[];
+      /** Lines the reply offers to remember, waiting for the person's yes (`memory.ts`). */
+      memories: Memory[];
+    }
+  | Failure;
 
 /**
  * One turn of the chat with Aperture Bot about a repository. The model is
@@ -1398,6 +1407,13 @@ export const botChat = createServerFn({ method: "POST" })
       },
     };
     try {
+      // A team bot of the person's own remembers what they kept: none for an unsaved one.
+      const store = bot ? await import("@/lib/bot/memory-store") : null;
+      const q = bot
+        ? await (await import("@/lib/bot/memory.server")).memoryQuery().catch(() => null)
+        : null;
+      const known =
+        bot && store && q ? await store.listMemories(q, context.userId, bot.id).catch(() => null) : null;
       const out = await runBotChat(
         repo,
         data.turns,
@@ -1405,9 +1421,21 @@ export const botChat = createServerFn({ method: "POST" })
         lookups,
         undefined,
         bot ? { name: bot.name, instructions: bot.personality } : null,
+        known,
       );
       await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
-      return { ok: true, reply: out.reply, proposals: out.proposals, looked: out.looked };
+      const { text, proposed } = replyMemories(out.reply);
+      const memories =
+        bot && store && q && known && proposed.length
+          ? await store.proposeMemories(q, context.userId, bot.id, proposed).catch(() => [])
+          : [];
+      return {
+        ok: true,
+        reply: text || "Noted.",
+        proposals: out.proposals,
+        looked: out.looked,
+        memories,
+      };
     } catch (error) {
       return {
         ok: false,

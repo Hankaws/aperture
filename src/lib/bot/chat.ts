@@ -9,6 +9,7 @@
  */
 import type { ChatMessage, Completion } from "../agent/complete.server.ts";
 import type { AgentToolDef } from "../agent/tools.ts";
+import { memoryPrompt, type Memory } from "./memory.ts";
 
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 
@@ -156,10 +157,13 @@ export function chatMessages(
   today: string,
   turns: ChatTurn[],
   persona: ChatPersona | null = null,
+  memories: Memory[] | null = null,
 ): ChatMessage[] {
   const recent = turns.slice(-CHAT_LIMITS.turns).filter((t) => t.text.trim());
   return [
     { role: "system", content: botChatSystem(repo, today, persona), cache: true },
+    // What this bot remembers changes as the person keeps lines: apart, so the rules stay cached.
+    ...(memories ? [{ role: "system" as const, content: memoryPrompt(memories) }] : []),
     ...recent.map((t) => ({ role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) })),
   ];
 }
@@ -172,8 +176,9 @@ export async function runBotChat(
   github: BotChatGithub,
   today = new Date().toISOString().slice(0, 10),
   persona: ChatPersona | null = null,
+  memories: Memory[] | null = null,
 ): Promise<BotChatResult> {
-  const messages = chatMessages(repo, today, turns, persona);
+  const messages = chatMessages(repo, today, turns, persona, memories);
   const proposals: Proposal[] = [];
   const looked: string[] = [];
   for (let step = 1; ; step += 1) {

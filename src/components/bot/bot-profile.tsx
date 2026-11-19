@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { downloadMascot } from "@/lib/bot/mascot-png";
 import { MascotAvatar } from "./mascot";
 import { ModelPicker } from "./model-picker";
+import { MemoryList } from "./memory-ui";
+import { useMemory } from "./use-memory";
 import { RulePicker } from "./rule-picker";
 
 type Draft = { name: string; repo: string; mascot: Mascot; personality: string };
@@ -350,6 +352,7 @@ export function ProfilePanel({
         <p className={label}>Rule</p>
         <RulePicker bot={bot} onSaved={onSaved} />
       </div>
+      <Knowledge bot={bot} />
       <Fields draft={draft} setDraft={setDraft} repos={repos} />
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +380,7 @@ export function ProfilePanel({
       <div className="border-t border-border pt-4">
         {confirm ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm">Remove {bot.name} and its conversation?</span>
+            <span className="text-sm">Remove {bot.name}, its conversation and what it remembers?</span>
             <Button size="sm" variant="outline" onClick={() => void remove()} disabled={busy}>
               Remove
             </Button>
@@ -394,6 +397,24 @@ export function ProfilePanel({
         <p className="mt-2 text-xs text-subtle">Removing a bot here changes nothing on GitHub.</p>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the bot has learned, as Grok Bot's Knowledge setting: the lines it
+ * offered in its chat, to keep, edit or forget. It uses only what is kept.
+ */
+function Knowledge({ bot }: { bot: BotProfile }) {
+  const memory = useMemory(bot.id);
+  if (!memory.available) return null;
+  return (
+    <section aria-label="Knowledge" className="border-t border-border pt-4">
+      <p className={label}>Knowledge</p>
+      <p className="mt-1 mb-3 text-xs text-pretty text-subtle">
+        What {bot.name} has learned in its chat. It uses only what you keep.
+      </p>
+      <MemoryList store={memory} who={bot.name} />
+    </section>
   );
 }
 

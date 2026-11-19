@@ -285,3 +285,27 @@ test("files and releases read as short text", () => {
   );
   assert.equal(releasesText([], []), "No releases.");
 });
+
+test("a team bot's memory rides in its own instructions, after the cached rules", () => {
+  const turns = [{ role: "user" as const, text: "We use Postgres here." }];
+  // No bot of the person's own (or a visitor): no memory at all.
+  assert.deepEqual(
+    chatMessages("acme/shop", "2026-11-19", turns).map((m) => m.role),
+    ["system", "user"],
+  );
+  const messages = chatMessages("acme/shop", "2026-11-19", turns, null, [
+    { id: "1", text: "The shop's database is Postgres.", status: "kept", at: "" },
+    { id: "2", text: "Not agreed yet.", status: "pending", at: "" },
+  ]);
+  assert.deepEqual(
+    messages.map((m) => [m.role, Boolean(m.cache)]),
+    [
+      ["system", true],
+      ["system", false],
+      ["user", false],
+    ],
+  );
+  assert.match(String(messages[1]!.content), /\[\[remember: /);
+  assert.match(String(messages[1]!.content), /- The shop's database is Postgres\.$/);
+  assert.doesNotMatch(String(messages[1]!.content), /Not agreed yet/);
+});

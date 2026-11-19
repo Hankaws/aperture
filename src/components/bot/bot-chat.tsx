@@ -25,6 +25,7 @@ import {
 } from "@/lib/github/bot";
 import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { liveText } from "@/lib/bot/private-chat-stream";
+import { joinDraft } from "@/lib/bot/voice";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import {
   cardAsk,
@@ -58,6 +59,8 @@ import { cn } from "@/lib/utils";
 import { TaskCard } from "./bot-console";
 import { FollowUps } from "./follow-ups";
 import { Typing } from "./typing";
+import { useVoice } from "./use-voice";
+import { VoiceButton } from "./voice-button";
 import { MascotAvatar } from "./mascot";
 import { MemoryOffer } from "./memory-ui";
 import { useMemory } from "./use-memory";
@@ -153,6 +156,9 @@ export function BotChat({
   const [synced, setSynced] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLDivElement>(null);
+  /** What was typed before the microphone was pressed: what is said goes after it. */
+  const typedBefore = useRef("");
+  const voice = useVoice((spoken) => setDraft(joinDraft(typedBefore.current, spoken)));
   const box = useRef<HTMLTextAreaElement>(null);
   const draftNow = useRef("");
   /** The conversation as it is now, for code that runs after an await. */
@@ -265,6 +271,7 @@ export function BotChat({
   async function send(text: string) {
     const said = text.trim();
     if (!said || busy) return;
+    voice.cancel();
     const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
     update(asked);
     setDraft("");
@@ -561,9 +568,16 @@ export function BotChat({
             }}
             rows={1}
             maxLength={6000}
-            placeholder={`Message ${bot.name}`}
+            placeholder={voice.listening ? "Listening…" : `Message ${bot.name}`}
             aria-label={`Message to ${bot.name}`}
             className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
+          />
+          <VoiceButton
+            voice={voice}
+            disabled={busy}
+            onStart={() => {
+              typedBefore.current = draft;
+            }}
           />
           {busy ? (
             <Button
@@ -589,10 +603,16 @@ export function BotChat({
             </Button>
           )}
         </div>
-        <p className="mt-2 px-1 text-xs text-subtle">
-          Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
-          ⌘/Ctrl+L quotes selected text.
-        </p>
+        {voice.error ? (
+          <p className="mt-2 px-1 text-xs text-danger" role="alert">
+            {voice.error}
+          </p>
+        ) : (
+          <p className="mt-2 px-1 text-xs text-subtle">
+            Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
+            ⌘/Ctrl+L quotes selected text.
+          </p>
+        )}
         </div>
       </form>
     </section>

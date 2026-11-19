@@ -133,3 +133,25 @@ test("the model is told every button, by the marker the chat reads, and no other
   assert.equal(system.match(/\[\[go:/g)?.length, Object.keys(ACTIONS).length);
   assert.match(system, /never make up another/);
 });
+
+test("what it remembers rides in its own instructions, after the cached rules", () => {
+  const turns = [{ role: "user" as const, text: "Hi" }];
+  // A visitor, with nowhere to keep anything: no memory at all.
+  assert.deepEqual(
+    privateMessages(turns, "2026-11-18").map((m) => m.role),
+    ["system", "user"],
+  );
+  const withMemory = privateMessages(turns, "2026-11-18", [
+    { id: "1", text: "Prefers TypeScript.", status: "kept", at: "" },
+  ]);
+  assert.deepEqual(
+    withMemory.map((m) => [m.role, Boolean(m.cache)]),
+    [
+      ["system", true],
+      ["system", false],
+      ["user", false],
+    ],
+  );
+  assert.match(String(withMemory[1]!.content), /\[\[remember: /);
+  assert.match(String(withMemory[1]!.content), /- Prefers TypeScript\.$/);
+});

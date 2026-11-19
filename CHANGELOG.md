@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- Aperture Bot remembers, as Grok Bot does, and you decide what. When you tell it something worth keeping (how you like to work, a fact about your project, a decision), its reply asks "Remember this?" with Keep, Edit and Don't. Only what you keep reaches its later conversations. The Memory button in its chat lists everything it knows: what waits for your yes, and what you kept, each to edit or forget, and Forget everything. It never offers to keep anything that looks like a password or key, keeps at most 60 lines, and the lines go with your account if you delete it. ([#216](https://github.com/Hankaws/aperture/pull/216))
 - A Test button for each model key in Settings, on the Models tab, and for the custom endpoint. It sends one tiny request with the saved key, resolved as a chat would resolve it, and says right there "Works: it answered in 1.2 s.", or what is wrong and what to do ("It needs an API key…", "can't be read anymore…", or no answer in 30 s). It spends a few tokens of your own key. ([#215](https://github.com/Hankaws/aperture/pull/215))
 - A welcome tour in Aperture Bot's chat for someone new: "Get set up", three steps with a button each (add a model key, connect GitHub, make your first bot), ticking themselves off from your account as you do them, wherever you do them. Aperture Bot's bubble shows how many are left. It goes once all three are done, or when you press Hide. ([#214](https://github.com/Hankaws/aperture/pull/214))
 

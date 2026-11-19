@@ -9,6 +9,7 @@
 import type { ChatMessage } from "../agent/complete.server.ts";
 import { parseMarkdown, type MdBlock } from "../workspace/md-preview.ts";
 import { CHAT_LIMITS, type ChatTurn } from "./chat.ts";
+import { memoryPrompt, type Memory } from "./memory.ts";
 
 /** Where the account keeps it: one conversation a person, beside their bots' (`user_bot_chats`). */
 export const privateChatId = (userId: string) => `private:${userId}`;
@@ -107,10 +108,16 @@ const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max)}\n… (cut)`;
 
 /** The conversation as the model reads it: the latest turns, each clipped. */
-export function privateMessages(turns: ChatTurn[], today: string): ChatMessage[] {
+export function privateMessages(
+  turns: ChatTurn[],
+  today: string,
+  memories: Memory[] | null = null,
+): ChatMessage[] {
   const recent = turns.slice(-CHAT_LIMITS.turns).filter((t) => t.text.trim());
   return [
     { role: "system", content: privateSystem(today), cache: true },
+    // What it remembers changes as the person keeps lines: apart, so the rules above stay cached.
+    ...(memories ? [{ role: "system" as const, content: memoryPrompt(memories) }] : []),
     ...recent.map((t) => ({ role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) })),
   ];
 }

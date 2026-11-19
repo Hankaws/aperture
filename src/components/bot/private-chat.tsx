@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ArrowUp, Check, Lock, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowUp, Brain, Check, Lock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 import { useTour } from "./use-tour";
+import { MemoryOffer, MemoryPanel } from "./memory-ui";
+import { useMemory } from "./use-memory";
 
 /** This browser's copy, beside the account's: what shows at once, and all a visitor has. */
 const LOCAL_KEY = "private";
@@ -59,6 +61,11 @@ export function PrivateChat({
   const box = useRef<HTMLTextAreaElement>(null);
   /** The conversation as it is now, for code that runs after an await. */
   const latest = useRef<Entry[]>([]);
+  const memory = useMemory();
+  /** Lines each reply offered to remember, by the reply's id: this visit only. */
+  const [offers, setOffers] = useState<Record<string, string[]>>({});
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const kept = memory.memories.filter((m) => m.status === "kept").length;
 
   const show = (next: Entry[]) => {
     latest.current = next;
@@ -124,6 +131,11 @@ export function PrivateChat({
       reply = out.ok
         ? { id: id(), role: "assistant", text: out.reply }
         : { id: id(), role: "assistant", text: out.error, error: true };
+      if (out.ok && out.memories.length > 0) {
+        memory.add(out.memories);
+        const replyId = reply.id;
+        setOffers((now) => ({ ...now, [replyId]: out.memories.map((m) => m.id) }));
+      }
     } catch (err) {
       reply = {
         id: id(),
@@ -140,7 +152,7 @@ export function PrivateChat({
 
   return (
     <section
-      className={cn("flex h-full min-h-0 flex-col", className)}
+      className={cn("relative flex h-full min-h-0 flex-col", className)}
       aria-label="Private chat with Aperture Bot"
     >
       <div className="flex min-h-14 items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
@@ -156,6 +168,19 @@ export function PrivateChat({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {memory.available && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMemoryOpen((v) => !v)}
+              aria-pressed={memoryOpen}
+              aria-label={`Memory: ${kept} ${kept === 1 ? "thing" : "things"} remembered`}
+              title="What Aperture Bot remembers about you"
+            >
+              <Brain className="size-4" />
+              {kept > 0 && <span className="text-xs tabular-nums">{kept}</span>}
+            </Button>
+          )}
           {entries.length > 0 && (
             <Button
               variant="ghost"
@@ -171,6 +196,8 @@ export function PrivateChat({
           {actions}
         </div>
       </div>
+
+      {memoryOpen && <MemoryPanel store={memory} onClose={() => setMemoryOpen(false)} />}
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
@@ -241,7 +268,12 @@ export function PrivateChat({
                       )}
                     </div>
                   ) : (
-                    <Reply text={entry.text} onNavigate={onNavigate} />
+                    <div className="space-y-2.5">
+                      <Reply text={entry.text} onNavigate={onNavigate} />
+                      {offers[entry.id]?.map((offerId) => (
+                        <MemoryOffer key={offerId} id={offerId} store={memory} />
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

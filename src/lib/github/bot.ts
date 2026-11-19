@@ -23,6 +23,7 @@ import {
 import { activityFrom, feedOf, type Activity } from "@/lib/bot/activity";
 import { ideasFrom, inboxOf, type Idea } from "@/lib/bot/ideas";
 import { addWeeks, EMPTY_WEEK, weekFrom, type Week } from "@/lib/bot/week";
+import { channel } from "@/lib/bot/channel";
 import { openedPulls } from "@/lib/bot/usage";
 import { waitingPulls, type WaitingPull } from "@/lib/bot/next-up";
 import { addLearned, EMPTY_LEARNED, learnedFrom, type Learned } from "@/lib/bot/learned";
@@ -42,7 +43,7 @@ import { strikeIdea, unstrikeIdea } from "@/lib/bot/struck";
 import { readSummary } from "@/lib/bot/summary";
 import { replyMemories, type Memory } from "@/lib/bot/memory";
 import { briefState, otherJob, withTeamBrief, type BriefState } from "@/lib/bot/team-jobs";
-import { runBotChat, type BotChatGithub, type Proposal } from "@/lib/bot/chat";
+import { runBotChat, type BotChatGithub, type ChatTurn, type Proposal } from "@/lib/bot/chat";
 import {
   ciText,
   filesText,
@@ -1322,142 +1323,198 @@ export type BotChatReply =
     }
   | Failure;
 
+/** What a chat turn reports as it goes, for `botChat`'s stream. */
+type Live = {
+  onText: (text: string) => void;
+  onLook: (line: string) => void;
+  signal?: AbortSignal;
+};
+
 /**
- * One turn of the chat with Aperture Bot about a repository. The model is
- * the person's own (their key or endpoint, never a recording: a replay cannot
+ * One turn of the chat with a bot about a repository. The model is the
+ * person's own (their key or endpoint, never a recording: a replay cannot
  * answer about a real repository), it reads GitHub with their token, and it
- * can only propose tasks; sending one is `askBot`.
+ * can only propose tasks; sending one is `askBot`. With `live`, its text and
+ * lookups are passed on as they happen.
+ */
+async function chatTurn(
+  userId: string,
+  data: { owner: string; repo: string; botId?: string; turns: ChatTurn[] },
+  live?: Live,
+): Promise<BotChatReply> {
+  const busy = overLimit("botChat", userId);
+  if (busy) return { ok: false, error: busy };
+  const { accountToken, githubJson } = await github();
+  const token = await accountToken(userId);
+  if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
+  const base = repoBase(data.owner, data.repo);
+  if (!base) return { ok: false, error: "That repo name is not valid." };
+  const repo = `${data.owner}/${data.repo}`;
+  // A bot of the person's own team brings its name, how they asked it to work, and its model.
+  const bot = data.botId
+    ? await (await import("@/lib/bot/team.server")).botFor(userId, data.botId, repo)
+    : null;
+  const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
+  const resolved = await resolveModel(userId, bot?.model || null, { replay: false });
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  if (resolved.provider === "replay")
+    return { ok: false, error: "Add your own model key in Settings to talk to the bot." };
+  const { complete, completeStreaming } = await import("@/lib/agent/complete.server");
+  const cfg = {
+    provider: resolved.provider,
+    apiKey: resolved.apiKey,
+    base: resolved.base,
+    model: resolved.model,
+  };
+  const get: Get = (url) => githubJson(url, token);
+  const must = async (url: string) => {
+    const got = await get(url);
+    if (got.status !== 200) throw new Error(`GitHub returned ${got.status}`);
+    return got.body;
+  };
+  const lookups: BotChatGithub = {
+    listOpen: async () => {
+      const items = await must(
+        `${base}/issues?state=open&sort=updated&direction=desc&per_page=40`,
+      );
+      return openText(Array.isArray(items) ? items : []);
+    },
+    readThread: async (n) => {
+      const issue = await get(`${base}/issues/${n}`);
+      if (issue.status === 404) return `There is no issue or pull request #${n}.`;
+      if (issue.status !== 200) throw new Error(`GitHub returned ${issue.status}`);
+      // GitHub lists comments oldest first: the newest are on the last page.
+      const total = Number((issue.body as { comments?: unknown }).comments) || 0;
+      const last = Math.max(1, Math.ceil(total / 100));
+      const pages = await Promise.all(
+        (last > 1 ? [last - 1, last] : [1]).map((page) =>
+          get(`${base}/issues/${n}/comments?per_page=100&page=${page}`),
+        ),
+      );
+      const comments = pages.flatMap((p) => (Array.isArray(p.body) ? p.body : []));
+      return threadText(issue.body, comments);
+    },
+    ciStatus: async () => {
+      const repo = (await must(base)) as { default_branch?: string };
+      const branch = repo.default_branch ?? "main";
+      const head = (await must(`${base}/branches/${encodeURIComponent(branch)}`)) as {
+        commit?: { sha?: string };
+      };
+      const sha = head.commit?.sha ?? "";
+      if (!sha) return `Could not read the head of ${branch}.`;
+      const [runs, statuses] = await Promise.all([
+        get(`${base}/commits/${sha}/check-runs?per_page=50`),
+        get(`${base}/commits/${sha}/status`),
+      ]);
+      const { checks } = checksFromGithub(
+        runs.status === 200 ? runs.body : null,
+        statuses.status === 200 ? statuses.body : null,
+      );
+      return ciText(branch, sha, checks);
+    },
+    botTasks: async () => {
+      const out = await loadTasks(base, get);
+      if (!out.ok) throw new Error(out.error);
+      return tasksText(out.tasks);
+    },
+    pullFiles: async (n) => {
+      const files = await get(`${base}/pulls/${n}/files?per_page=100`);
+      if (files.status === 404) return `There is no pull request #${n}.`;
+      if (files.status !== 200) throw new Error(`GitHub returned ${files.status}`);
+      return filesText(n, Array.isArray(files.body) ? files.body : []);
+    },
+    releases: async () => {
+      const [releases, tags] = await Promise.all([
+        get(`${base}/releases?per_page=10`),
+        get(`${base}/tags?per_page=20`),
+      ]);
+      return releasesText(
+        releases.status === 200 && Array.isArray(releases.body) ? releases.body : [],
+        tags.status === 200 && Array.isArray(tags.body) ? tags.body : [],
+      );
+    },
+  };
+  try {
+    // A team bot of the person's own remembers what they kept: none for an unsaved one.
+    const store = bot ? await import("@/lib/bot/memory-store") : null;
+    const q = bot
+      ? await (await import("@/lib/bot/memory.server")).memoryQuery().catch(() => null)
+      : null;
+    const known =
+      bot && store && q ? await store.listMemories(q, userId, bot.id).catch(() => null) : null;
+    const out = await runBotChat(
+      repo,
+      data.turns,
+      (messages, useTools, tools) =>
+        live
+          ? completeStreaming(cfg, messages, useTools, live.onText, live.signal, tools)
+          : complete(cfg, messages, useTools, undefined, tools),
+      lookups,
+      undefined,
+      bot ? { name: bot.name, instructions: bot.personality } : null,
+      known,
+      live?.onLook,
+    );
+    await recordAgentRun(userId, resolved.hosted, resolved.cents);
+    const { text, proposed } = replyMemories(out.reply);
+    const memories =
+      bot && store && q && known && proposed.length
+        ? await store.proposeMemories(q, userId, bot.id, proposed).catch(() => [])
+        : [];
+    return {
+      ok: true,
+      reply: text || "Noted.",
+      proposals: out.proposals,
+      looked: out.looked,
+      memories,
+    };
+  } catch (error) {
+    // Stopped partway: the model worked until then, so it counts as a run.
+    if (live?.signal?.aborted)
+      await recordAgentRun(userId, resolved.hosted, resolved.cents).catch(() => {});
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "The model could not answer.",
+    };
+  }
+}
+
+/**
+ * What `botChat` streams: the answer's text as the model writes it, each
+ * lookup as it starts (the text before it was not the answer, and is
+ * dropped), and last the whole reply, as one turn always ends.
+ */
+export type BotChatEvent =
+  | { type: "text"; text: string }
+  | { type: "look"; line: string }
+  | { type: "done"; reply: BotChatReply };
+
+/**
+ * One turn of the chat with a bot, streamed (`BotChatEvent`). Stopped by
+ * the person (the request aborted), the model call stops too.
  */
 export const botChat = createServerFn({ method: "POST" })
   .validator(botChatInput)
   .middleware([authMiddleware])
-  .handler(async ({ data, context }): Promise<BotChatReply> => {
-    const busy = overLimit("botChat", context.userId);
-    if (busy) return { ok: false, error: busy };
-    const { accountToken, githubJson } = await github();
-    const token = await accountToken(context.userId);
-    if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
-    const base = repoBase(data.owner, data.repo);
-    if (!base) return { ok: false, error: "That repo name is not valid." };
-    const repo = `${data.owner}/${data.repo}`;
-    // A bot of the person's own team brings its name, how they asked it to work, and its model.
-    const bot = data.botId
-      ? await (await import("@/lib/bot/team.server")).botFor(context.userId, data.botId, repo)
-      : null;
-    const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
-    const resolved = await resolveModel(context.userId, bot?.model || null, { replay: false });
-    if (!resolved.ok) return { ok: false, error: resolved.error };
-    if (resolved.provider === "replay")
-      return { ok: false, error: "Add your own model key in Settings to talk to the bot." };
-    const { complete } = await import("@/lib/agent/complete.server");
-    const cfg = {
-      provider: resolved.provider,
-      apiKey: resolved.apiKey,
-      base: resolved.base,
-      model: resolved.model,
-    };
-    const get: Get = (url) => githubJson(url, token);
-    const must = async (url: string) => {
-      const got = await get(url);
-      if (got.status !== 200) throw new Error(`GitHub returned ${got.status}`);
-      return got.body;
-    };
-    const lookups: BotChatGithub = {
-      listOpen: async () => {
-        const items = await must(
-          `${base}/issues?state=open&sort=updated&direction=desc&per_page=40`,
-        );
-        return openText(Array.isArray(items) ? items : []);
-      },
-      readThread: async (n) => {
-        const issue = await get(`${base}/issues/${n}`);
-        if (issue.status === 404) return `There is no issue or pull request #${n}.`;
-        if (issue.status !== 200) throw new Error(`GitHub returned ${issue.status}`);
-        // GitHub lists comments oldest first: the newest are on the last page.
-        const total = Number((issue.body as { comments?: unknown }).comments) || 0;
-        const last = Math.max(1, Math.ceil(total / 100));
-        const pages = await Promise.all(
-          (last > 1 ? [last - 1, last] : [1]).map((page) =>
-            get(`${base}/issues/${n}/comments?per_page=100&page=${page}`),
-          ),
-        );
-        const comments = pages.flatMap((p) => (Array.isArray(p.body) ? p.body : []));
-        return threadText(issue.body, comments);
-      },
-      ciStatus: async () => {
-        const repo = (await must(base)) as { default_branch?: string };
-        const branch = repo.default_branch ?? "main";
-        const head = (await must(`${base}/branches/${encodeURIComponent(branch)}`)) as {
-          commit?: { sha?: string };
-        };
-        const sha = head.commit?.sha ?? "";
-        if (!sha) return `Could not read the head of ${branch}.`;
-        const [runs, statuses] = await Promise.all([
-          get(`${base}/commits/${sha}/check-runs?per_page=50`),
-          get(`${base}/commits/${sha}/status`),
-        ]);
-        const { checks } = checksFromGithub(
-          runs.status === 200 ? runs.body : null,
-          statuses.status === 200 ? statuses.body : null,
-        );
-        return ciText(branch, sha, checks);
-      },
-      botTasks: async () => {
-        const out = await loadTasks(base, get);
-        if (!out.ok) throw new Error(out.error);
-        return tasksText(out.tasks);
-      },
-      pullFiles: async (n) => {
-        const files = await get(`${base}/pulls/${n}/files?per_page=100`);
-        if (files.status === 404) return `There is no pull request #${n}.`;
-        if (files.status !== 200) throw new Error(`GitHub returned ${files.status}`);
-        return filesText(n, Array.isArray(files.body) ? files.body : []);
-      },
-      releases: async () => {
-        const [releases, tags] = await Promise.all([
-          get(`${base}/releases?per_page=10`),
-          get(`${base}/tags?per_page=20`),
-        ]);
-        return releasesText(
-          releases.status === 200 && Array.isArray(releases.body) ? releases.body : [],
-          tags.status === 200 && Array.isArray(tags.body) ? tags.body : [],
-        );
-      },
-    };
-    try {
-      // A team bot of the person's own remembers what they kept: none for an unsaved one.
-      const store = bot ? await import("@/lib/bot/memory-store") : null;
-      const q = bot
-        ? await (await import("@/lib/bot/memory.server")).memoryQuery().catch(() => null)
-        : null;
-      const known =
-        bot && store && q ? await store.listMemories(q, context.userId, bot.id).catch(() => null) : null;
-      const out = await runBotChat(
-        repo,
-        data.turns,
-        (messages, useTools, tools) => complete(cfg, messages, useTools, undefined, tools),
-        lookups,
-        undefined,
-        bot ? { name: bot.name, instructions: bot.personality } : null,
-        known,
-      );
-      await recordAgentRun(context.userId, resolved.hosted, resolved.cents);
-      const { text, proposed } = replyMemories(out.reply);
-      const memories =
-        bot && store && q && known && proposed.length
-          ? await store.proposeMemories(q, context.userId, bot.id, proposed).catch(() => [])
-          : [];
-      return {
-        ok: true,
-        reply: text || "Noted.",
-        proposals: out.proposals,
-        looked: out.looked,
-        memories,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "The model could not answer.",
-      };
-    }
+  .handler(async function* ({ data, context }): AsyncGenerator<BotChatEvent> {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const signal = getRequest()?.signal;
+    const events = channel<BotChatEvent>();
+    const turn = chatTurn(context.userId, data, {
+      onText: (text) => events.push({ type: "text", text }),
+      onLook: (line) => events.push({ type: "look", line }),
+      signal,
+    })
+      .catch(
+        (error: unknown): BotChatReply => ({
+          ok: false,
+          error: error instanceof Error ? error.message : "The model could not answer.",
+        }),
+      )
+      .then((reply) => {
+        events.push({ type: "done", reply });
+        events.close();
+      });
+    yield* events;
+    await turn;
   });

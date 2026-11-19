@@ -5,6 +5,7 @@ import {
   BOT_CHAT_TOOLS,
   CHAT_LIMITS,
   chatMessages,
+  lookingLine,
   runBotChat,
   type BotChatGithub,
 } from "./chat.ts";
@@ -308,4 +309,37 @@ test("a team bot's memory rides in its own instructions, after the cached rules"
   assert.match(String(messages[1]!.content), /\[\[remember: /);
   assert.match(String(messages[1]!.content), /- The shop's database is Postgres\.$/);
   assert.doesNotMatch(String(messages[1]!.content), /Not agreed yet/);
+});
+
+test("each lookup is told as it starts, in the chat's words", async () => {
+  const { model } = scripted([
+    { content: "Let me check.", tool_calls: [call("list_open", {}), call("ci_status", {})] },
+    {
+      content: "",
+      tool_calls: [call("read_thread", { number: 7 }), call("pull_files", { number: 9 })],
+    },
+    { content: "Done." },
+  ]);
+  const lines: string[] = [];
+  await runBotChat(
+    "acme/shop",
+    [{ role: "user", text: "Status?" }],
+    model,
+    github,
+    "2026-10-08",
+    null,
+    null,
+    (line) => lines.push(line),
+  );
+  assert.deepEqual(lines, [
+    "Looking at open issues and pull requests",
+    "Checking CI",
+    "Reading #7",
+    "Reading the files of #9",
+  ]);
+  assert.equal(lookingLine("bot_tasks", {}), "Reading its recent tasks");
+  assert.equal(lookingLine("releases", {}), "Looking at releases");
+  assert.equal(lookingLine("propose_task", {}), "Writing a task card");
+  assert.equal(lookingLine("read_thread", { number: "x" }), "Reading a thread");
+  assert.equal(lookingLine("something_new", {}), "Looking something up");
 });

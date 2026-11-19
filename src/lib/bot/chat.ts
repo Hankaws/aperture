@@ -177,6 +177,8 @@ export async function runBotChat(
   today = new Date().toISOString().slice(0, 10),
   persona: ChatPersona | null = null,
   memories: Memory[] | null = null,
+  /** Each lookup as it starts, as the chat says it ("Reading #12"): a step's text so far was not its answer. */
+  onLook?: (line: string) => void,
 ): Promise<BotChatResult> {
   const messages = chatMessages(repo, today, turns, persona, memories);
   const proposals: Proposal[] = [];
@@ -194,6 +196,7 @@ export async function runBotChat(
     messages.push({ role: "assistant", content: out.content || null, tool_calls: calls });
     for (const call of calls) {
       const a = args(call.function.arguments);
+      onLook?.(lookingLine(call.function.name, a));
       let result: string;
       try {
         result = await runTool(call.function.name, a, github, proposals);
@@ -238,6 +241,20 @@ async function runTool(
     return "Shown to the maintainer as a card. Nothing is sent until they choose to.";
   }
   return `There is no tool called ${name}.`;
+}
+
+/** A lookup as the chat shows it while it runs. */
+export function lookingLine(name: string, a: Record<string, unknown>): string {
+  const n = Number(a.number);
+  const ref = Number.isSafeInteger(n) && n > 0 ? `#${n}` : "a thread";
+  if (name === "read_thread") return `Reading ${ref}`;
+  if (name === "pull_files") return `Reading the files of ${ref}`;
+  if (name === "list_open") return "Looking at open issues and pull requests";
+  if (name === "ci_status") return "Checking CI";
+  if (name === "bot_tasks") return "Reading its recent tasks";
+  if (name === "releases") return "Looking at releases";
+  if (name === "propose_task") return "Writing a task card";
+  return "Looking something up";
 }
 
 function lookedLabel(name: string, a: Record<string, unknown>): string {

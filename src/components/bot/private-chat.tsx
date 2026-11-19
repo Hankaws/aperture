@@ -20,6 +20,7 @@ import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat
 import { getBearerToken } from "@/lib/auth/client";
 import { loadPrivateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
 import { replyFollowUps } from "@/lib/bot/follow-ups";
+import { joinDraft } from "@/lib/bot/voice";
 import {
   DEFAULT_BOT_NAME,
   FIRST_CHAT,
@@ -46,6 +47,8 @@ import { useTour } from "./use-tour";
 import { MemoryOffer, MemoryPanel } from "./memory-ui";
 import { useMemory } from "./use-memory";
 import { useLocalBot } from "./use-my-bot";
+import { useVoice } from "./use-voice";
+import { VoiceButton } from "./voice-button";
 
 const THINKING = ["Thinking it through", "Working it out", "Putting it into words"];
 
@@ -111,6 +114,9 @@ export function PrivateChat({
   const stopper = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  /** What was typed before the microphone was pressed: what is said goes after it. */
+  const typedBefore = useRef("");
+  const voice = useVoice((spoken) => setDraft(joinDraft(typedBefore.current, spoken)));
   /** The conversation as it is now, for code that runs after an await. */
   const latest = useRef<Entry[]>([]);
   const memory = useMemory();
@@ -175,6 +181,7 @@ export function PrivateChat({
   async function send(text: string) {
     const said = text.trim();
     if (!said || busy) return;
+    voice.cancel();
     const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
     update(asked);
     setDraft("");
@@ -294,12 +301,21 @@ export function PrivateChat({
             }}
             rows={1}
             maxLength={CHAT_LIMITS.turnChars}
-            placeholder={page ? `Ask ${name} anything` : `Message ${name}`}
+            placeholder={
+              voice.listening ? "Listening…" : page ? `Ask ${name} anything` : `Message ${name}`
+            }
             aria-label={`Message to ${name}`}
             className={cn(
               "max-h-40 border-0 bg-transparent focus-visible:ring-0",
               empty ? "min-h-14 text-base" : "min-h-10",
             )}
+          />
+          <VoiceButton
+            voice={voice}
+            disabled={busy}
+            onStart={() => {
+              typedBefore.current = draft;
+            }}
           />
           {busy ? (
             <Button
@@ -325,9 +341,15 @@ export function PrivateChat({
             </Button>
           )}
         </div>
-        <p className="mt-2 px-1 text-xs text-subtle">
-          Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
-        </p>
+        {voice.error ? (
+          <p className="mt-2 px-1 text-xs text-danger" role="alert">
+            {voice.error}
+          </p>
+        ) : (
+          <p className="mt-2 px-1 text-xs text-subtle">
+            Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
+          </p>
+        )}
       </div>
     </form>
   );

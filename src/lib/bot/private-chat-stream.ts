@@ -100,17 +100,18 @@ export async function streamPrivateChat(
   }
 }
 
-/** A marker the reply ends with: `[[remember: …]]` (`memory.ts`) or `[[go:…]]` (`private-chat.ts`). */
-const REMEMBER = /\[\[remember:[^\]]*\]\]/gi;
+/** Markers the reply ends with that are not shown in it: `[[remember: …]]` (`memory.ts`) and `[[ask: …]]` (`follow-ups.ts`). */
+const HIDDEN = /\[\[(?:remember|ask):[^\]]*\]\]/gi;
 
 /**
  * What the chat shows of an answer still being written: without the lines
- * it offers to remember (they come as offers once it is done), and without
+ * it offers to remember (they come as offers once it is done) or the
+ * questions it suggests next (chips, once it is done), and without
  * a marker only half written, so `[[go:` never flickers on screen. Button
  * markers that are whole stay, for the reply's own buttons.
  */
 export function liveText(raw: string): string {
-  let text = raw.replace(REMEMBER, "");
+  let text = raw.replace(HIDDEN, "");
   const open = text.lastIndexOf("[[");
   if (open !== -1 && !text.slice(open).includes("]]")) text = text.slice(0, open);
   // A lone "[" at the very end may be the start of one.

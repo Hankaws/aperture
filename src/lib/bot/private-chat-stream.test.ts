@@ -66,6 +66,7 @@ test("an error in the stream, a refusal, or a cut-off stream is never an answer"
 
 test("an answer being written hides its memory lines and any half-written marker", () => {
   assert.equal(liveText("Noted. [[remember: Likes tea]]"), "Noted.");
+  assert.equal(liveText("Done.\n[[ask: What next?]]\n[[ask: Wh"), "Done.");
   assert.equal(liveText("Noted.\n[[remember: Likes"), "Noted.");
   assert.equal(liveText("Go here:\n[[go:mod"), "Go here:");
   assert.equal(liveText("Go here:\n["), "Go here:");

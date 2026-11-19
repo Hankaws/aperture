@@ -5,6 +5,7 @@
  * so every number is something the bot posted. Pure, for tests.
  */
 import { isCheck, isLook, type BotTask, type Thread } from "./tasks.ts";
+import { pullNumber } from "./usage.ts";
 
 export type Week = {
   pulls: { opened: number; merged: number; waiting: number; closed: number };
@@ -33,11 +34,6 @@ export const EMPTY_WEEK: Week = {
   briefs: 0,
   ticked: 0,
 };
-
-function pullNumber(url: string | undefined): number | null {
-  const match = /\/pull\/(\d+)(?:$|[/#?])/.exec(url ?? "");
-  return match ? Number(match[1]) : null;
-}
 
 /** "3 likely bugs" or "1 likely bug", as a review's summary says it; 0 for anything else. */
 function bugsIn(note: string | undefined): number {

@@ -22,6 +22,9 @@ import { ModelPicker } from "./model-picker";
 import { MemoryList } from "./memory-ui";
 import { useMemory } from "./use-memory";
 import { RulePicker } from "./rule-picker";
+import { BotUsage } from "./bot-usage";
+import type { BotTask } from "@/lib/bot/tasks";
+import type { BotPulls } from "@/lib/github/bot";
 
 type Draft = { name: string; repo: string; mascot: Mascot; personality: string };
 
@@ -257,12 +260,19 @@ export function ProfilePanel({
   bot,
   repos,
   choices,
+  tasks,
+  pulls,
+  now,
   onSaved,
   onDeleted,
 }: {
   bot: BotProfile;
   repos: GithubRepoSummary[];
   choices: ModelChoice[];
+  /** The tasks on its repository, as its room reads them, for Usage; null while loading. */
+  tasks: BotTask[] | null;
+  pulls: BotPulls;
+  now: number;
   onSaved: (bots: BotProfile[]) => void;
   onDeleted: (bots: BotProfile[]) => void;
 }) {
@@ -318,7 +328,8 @@ export function ProfilePanel({
 
   return (
     <div className="space-y-5">
-      <div>
+      <BotUsage name={bot.name} repo={bot.repo} tasks={tasks} pulls={pulls} now={now} />
+      <div className="border-t border-border pt-4">
         <p className={label}>Main bot</p>
         {bot.main ? (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">

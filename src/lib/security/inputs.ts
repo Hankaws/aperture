@@ -145,6 +145,8 @@ export const privateChatInput = z.object({
 const memoryId = z.string().regex(/^[0-9a-f]{16}$/);
 export const memoryIdInput = z.object({ id: memoryId });
 export const memoryKeepInput = z.object({ id: memoryId, text: text(1000).optional() });
+/** Whose memory: a team bot's, or Aperture Bot's own (the private chat) without one. */
+export const memoryScopeInput = z.object({ botId: botId.optional() });
 /** The handler keeps only well-formed entries (`savedEntries`), the newest that fit. */
 export const privateChatSaveInput = z.object({
   entries: z.array(z.custom<Record<string, unknown>>(isRecord)).max(40),

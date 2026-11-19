@@ -99,14 +99,10 @@ export function MemoryOffer({ id, store }: { id: string; store: MemoryStore }) {
 }
 
 /**
- * Everything Aperture Bot remembers, as Grok Bot's knowledge is kept: what
- * waits for the person's yes, and what they kept, each to edit or forget;
- * and a way to forget it all.
+ * Everything Aperture Bot remembers, as a panel over its chat: Memory, closed
+ * with the X. The list is `MemoryList`, as in a team bot's Knowledge.
  */
 export function MemoryPanel({ store, onClose }: { store: MemoryStore; onClose: () => void }) {
-  const waiting = store.memories.filter((m) => m.status === "pending");
-  const kept = store.memories.filter((m) => m.status === "kept");
-  const [sure, setSure] = useState(false);
   return (
     <section
       aria-label="Memory"
@@ -126,45 +122,61 @@ export function MemoryPanel({ store, onClose }: { store: MemoryStore; onClose: (
           <X className="size-4" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        {store.error && <p className="text-sm text-danger">{store.error}</p>}
-        {waiting.length > 0 && (
-          <div>
-            <h3 className="text-xs font-medium tracking-[0.14em] text-subtle uppercase">
-              Waiting for you
-            </h3>
-            <ul className="mt-2 space-y-2">
-              {waiting.map((m) => (
-                <li key={m.id}>
-                  <MemoryOffer id={m.id} store={store} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <MemoryList store={store} who="Aperture Bot" />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * What a bot knows, as Grok Bot's knowledge is kept: what waits for the
+ * person's yes, and what they kept, each to edit or forget; and a way to
+ * forget it all. `who` names the bot in what it says.
+ */
+export function MemoryList({ store, who }: { store: MemoryStore; who: string }) {
+  const waiting = store.memories.filter((m) => m.status === "pending");
+  const kept = store.memories.filter((m) => m.status === "kept");
+  const [sure, setSure] = useState(false);
+  return (
+    <div className="space-y-5">
+      {store.error && <p className="text-sm text-danger">{store.error}</p>}
+      {waiting.length > 0 && (
         <div>
           <h3 className="text-xs font-medium tracking-[0.14em] text-subtle uppercase">
-            Remembered · {kept.length}
+            Waiting for you
           </h3>
-          {kept.length === 0 ? (
-            <p className="mt-2 text-sm text-pretty text-muted">
-              Nothing yet. Tell Aperture Bot something worth remembering, such as how you like to
-              work, and it will ask to keep it.
-            </p>
-          ) : (
-            <ul className="mt-2 space-y-1.5">
-              {kept.map((m) => (
-                <KeptLine key={m.id} memory={m} store={store} />
-              ))}
-            </ul>
-          )}
+          <ul className="mt-2 space-y-2">
+            {waiting.map((m) => (
+              <li key={m.id}>
+                <MemoryOffer id={m.id} store={store} />
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
+      <div>
+        <h3 className="text-xs font-medium tracking-[0.14em] text-subtle uppercase">
+          Remembered · {kept.length}
+        </h3>
+        {kept.length === 0 ? (
+          <p className="mt-2 text-sm text-pretty text-muted">
+            Nothing yet. Tell {who} something worth remembering, such as how you like to work, and
+            it will ask to keep it.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {kept.map((m) => (
+              <KeptLine key={m.id} memory={m} store={store} />
+            ))}
+          </ul>
+        )}
       </div>
       {store.memories.length > 0 && (
-        <div className="border-t border-border px-4 py-3">
+        <div className="border-t border-border pt-3">
           {sure ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm">Forget everything Aperture Bot knows about you?</span>
+              <span className="text-sm">Forget everything {who} knows about you?</span>
               <Button
                 size="sm"
                 variant="danger"
@@ -186,7 +198,7 @@ export function MemoryPanel({ store, onClose }: { store: MemoryStore; onClose: (
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

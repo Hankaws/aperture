@@ -91,6 +91,8 @@ export async function setMainFor(userId: string, id: string): Promise<BotProfile
 export async function deleteBotFor(userId: string, id: string): Promise<BotProfile[]> {
   const db = await sql();
   await db`delete from user_bot_chats where bot_id = ${id} and user_id = ${userId}`;
+  // What it remembered goes with it.
+  await db`delete from user_bot_memory where bot_id = ${id} and user_id = ${userId}`;
   await db`delete from user_bots where id = ${id} and user_id = ${userId}`;
   return listBotsFor(userId);
 }

@@ -48,6 +48,8 @@ import { parseMarkdown } from "@/lib/workspace/md-preview";
 import { cn } from "@/lib/utils";
 import { TaskCard } from "./bot-console";
 import { MascotAvatar } from "./mascot";
+import { MemoryOffer } from "./memory-ui";
+import { useMemory } from "./use-memory";
 
 const SUGGESTIONS = [
   "What's broken right now?",
@@ -131,6 +133,10 @@ export function BotChat({
   const latest = useRef<Entry[]>([]);
   const botId = bot.id;
   draftNow.current = draft;
+  /** What this bot remembers: lines a reply offers wait here for a yes (`memory.ts`). */
+  const memory = useMemory(bot.id);
+  /** Lines each reply offered to remember, by the reply's id: this visit only. */
+  const [offers, setOffers] = useState<Record<string, string[]>>({});
 
   const show = (next: Entry[]) => {
     latest.current = next;
@@ -249,6 +255,11 @@ export function BotChat({
             cards: out.proposals.map((p) => ({ ...p, at })),
           }
         : { id: id(), role: "assistant", text: out.error, error: true };
+      if (out.ok && out.memories.length > 0) {
+        memory.add(out.memories);
+        const replyId = reply.id;
+        setOffers((now) => ({ ...now, [replyId]: out.memories.map((m) => m.id) }));
+      }
     } catch (err) {
       reply = {
         id: id(),
@@ -395,6 +406,9 @@ export function BotChat({
                     branch={setup.defaultBranch}
                   />
                 )}
+                {offers[entry.id]?.map((offerId) => (
+                  <MemoryOffer key={offerId} id={offerId} store={memory} />
+                ))}
                 {entry.looked && entry.looked.length > 0 && (
                   <p className="text-xs text-subtle">
                     Looked at {[...new Set(entry.looked)].join(" · ")}

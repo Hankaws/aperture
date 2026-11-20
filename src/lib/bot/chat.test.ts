@@ -343,3 +343,30 @@ test("each lookup is told as it starts, in the chat's words", async () => {
   assert.equal(lookingLine("read_thread", { number: "x" }), "Reading a thread");
   assert.equal(lookingLine("something_new", {}), "Looking something up");
 });
+
+test("a team bot's newest message carries its pictures and files; earlier ones a note", () => {
+  const image = { name: "bug.png", mediaType: "image/png" as const, data: "AAAA" };
+  const messages = chatMessages(
+    "acme/shop",
+    "2026-11-20",
+    [
+      { role: "user", text: "Earlier\n[They attached old.png]" },
+      { role: "assistant", text: "Seen." },
+      { role: "user", text: "Why is this broken?\n[They attached 2 files: bug.png, error.log]" },
+    ],
+    null,
+    null,
+    { images: [image], files: [{ name: "error.log", text: "TypeError: x is undefined" }] },
+  );
+  const turns = messages.filter((m) => m.role !== "system");
+  assert.equal(turns[0]!.images, undefined);
+  assert.deepEqual(turns[2]!.images, [image]);
+  assert.match(
+    String(turns[2]!.content),
+    /Attached file "error\.log":\n```\nTypeError: x is undefined\n```$/,
+  );
+  // Nothing attached: as before.
+  const plain = chatMessages("acme/shop", "2026-11-20", [{ role: "user", text: "Hi" }]);
+  assert.equal(plain.at(-1)!.images, undefined);
+  assert.equal(plain.at(-1)!.content, "Hi");
+});

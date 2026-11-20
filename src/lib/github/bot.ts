@@ -1339,11 +1339,25 @@ type Live = {
  */
 async function chatTurn(
   userId: string,
-  data: { owner: string; repo: string; botId?: string; turns: ChatTurn[] },
+  data: {
+    owner: string;
+    repo: string;
+    botId?: string;
+    turns: ChatTurn[];
+    /** Pictures and text files attached to the newest message, as sent: checked here. */
+    images?: unknown;
+    files?: unknown;
+  },
   live?: Live,
 ): Promise<BotChatReply> {
   const busy = overLimit("botChat", userId);
   if (busy) return { ok: false, error: busy };
+  const { validImages } = await import("@/lib/agent/images");
+  const { validFiles } = await import("@/lib/bot/attachments");
+  const images = validImages(data.images);
+  if ("error" in images) return { ok: false, error: images.error };
+  const files = validFiles(data.files);
+  if ("error" in files) return { ok: false, error: files.error };
   const { accountToken, githubJson } = await github();
   const token = await accountToken(userId);
   if (!token) return { ok: false, error: "Connect GitHub first, in Settings." };
@@ -1454,6 +1468,7 @@ async function chatTurn(
       bot ? { name: bot.name, instructions: bot.personality } : null,
       known,
       live?.onLook,
+      { images: images.images, files: files.files },
     );
     await recordAgentRun(userId, resolved.hosted, resolved.cents);
     const { text, proposed } = replyMemories(out.reply);

@@ -134,6 +134,13 @@ export const botChatInput = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), text: text(20_000) }))
     .min(1)
     .max(60),
+  /** Pictures attached to the newest message: checked again by the handler (`agent/images.ts`). */
+  images: z.array(z.custom<Record<string, unknown>>(isRecord)).max(3).optional(),
+  /** Text files attached to the newest message: checked again by the handler (`bot/attachments.ts`). */
+  files: z
+    .array(z.object({ name: z.string().max(200), text: z.string().max(20_000) }))
+    .max(3)
+    .optional(),
 });
 /** A private chat's turns: no repository, no bot (`bot/private-chat.ts`). */
 export const privateChatInput = z.object({

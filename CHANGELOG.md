@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.20.0 - 2026-11-20
+
 ### Added
 
 - Find and rename your chats on the Chat page. A search box over the list finds chats by their title or anything said in them, and shows where the words are; Escape clears it. Each chat has a pencil beside its delete: give it a better title than its first question, press Enter, and it keeps that title from then on, on every device. ([#227](https://github.com/Hankaws/aperture/pull/227))

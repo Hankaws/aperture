@@ -1,6 +1,33 @@
+import type { ReactNode } from "react";
 import { parseMarkdown } from "@/lib/workspace/md-preview";
+import { refLabel, splitRefs, type CodeRef } from "@/lib/bot/code-refs";
 
-export function Inline({ text }: { text: string }) {
+/** Opens a place in the code an answer names; null when the project has no such file. */
+export type OpenRef = (ref: CodeRef) => (() => void) | null;
+
+const REF_LINK = "rounded-sm text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent";
+
+/** Plain text, with the places in the code it names as links, where `openRef` can open them. */
+function withRefs(text: string, key: number, openRef?: OpenRef): ReactNode {
+  if (!openRef) return <span key={key}>{text}</span>;
+  return (
+    <span key={key}>
+      {splitRefs(text).map((part, j) => {
+        if (typeof part === "string") return part;
+        const open = openRef(part);
+        return open ? (
+          <button key={j} type="button" onClick={open} aria-label={refLabel(part)} title={refLabel(part)} className={REF_LINK}>
+            {part.raw}
+          </button>
+        ) : (
+          part.raw
+        );
+      })}
+    </span>
+  );
+}
+
+export function Inline({ text, openRef }: { text: string; openRef?: OpenRef }) {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
   return (
     <>
@@ -12,6 +39,16 @@ export function Inline({ text }: { text: string }) {
           return <em key={i}>{part.slice(1, -1)}</em>;
         }
         if (part.startsWith("`") && part.endsWith("`")) {
+          // `src/store.ts:32` on its own: the code is the link.
+          const only = openRef ? splitRefs(part.slice(1, -1)) : [];
+          const ref = only.length === 1 && typeof only[0] !== "string" ? only[0]! : null;
+          const open = ref ? openRef!(ref) : null;
+          if (ref && open)
+            return (
+              <button key={i} type="button" onClick={open} aria-label={refLabel(ref)} title={refLabel(ref)} className="rounded-sm bg-elevated px-1 font-mono text-[12px] text-accent hover:underline">
+                {part.slice(1, -1)}
+              </button>
+            );
           return (
             <code key={i} className="rounded-sm bg-elevated px-1 font-mono text-[12px]">
               {part.slice(1, -1)}
@@ -26,7 +63,7 @@ export function Inline({ text }: { text: string }) {
             </a>
           );
         }
-        return <span key={i}>{part}</span>;
+        return withRefs(part, i, openRef);
       })}
     </>
   );

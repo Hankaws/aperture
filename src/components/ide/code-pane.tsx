@@ -617,14 +617,16 @@ export function CodePane() {
     const line = view.state.doc.line(Math.min(Math.max(1, reveal.line), view.state.doc.lines));
     // A search hit selects its match; a line alone puts the cursor at its start.
     const from = Math.min(line.from + (reveal.col ?? 0), line.to);
-    const to = Math.min(from + (reveal.length ?? 0), line.to);
+    const to = reveal.endLine
+      ? view.state.doc.line(Math.min(Math.max(reveal.line, reveal.endLine), view.state.doc.lines)).to
+      : Math.min(from + (reveal.length ?? 0), line.to);
     view.dispatch({
       selection: { anchor: from, head: to },
       effects: EditorView.scrollIntoView(from, { y: "center" }),
       annotations: syncAnn.of(true),
     });
     // A search hit hands over to the code, so typing edits the match.
-    if (reveal.length) view.focus();
+    if (reveal.length || reveal.endLine) view.focus();
     useIdeUi.getState().setReveal(null);
   }, [reveal, activePath]);
 

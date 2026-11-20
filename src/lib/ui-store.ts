@@ -70,7 +70,8 @@ function persistCrew(ids: string[]) {
   }
 }
 
-export type Reveal = { path: string; line: number; col?: number; length?: number };
+/** `endLine`: select whole lines, from `line`'s start to this one's end. */
+export type Reveal = { path: string; line: number; col?: number; length?: number; endLine?: number };
 export type MobilePane = "files" | "editor" | "agent";
 
 type IdeUiState = {

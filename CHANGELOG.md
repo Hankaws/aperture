@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.21.0 - 2026-11-20
+
 ### Added
 
 - Your bot on any page, like JARVIS: press Ctrl/⌘+J anywhere on the site, the editor included, and your own bot slides in over the page, then press it again or Escape to put it away. The conversation carries on from page to page, and the Chat page lists it with your others. In the editor it sees what you see: the open file, your selection and the file's problems go with each message (never a secret file's text, and a click under the box stops it), so you can ask what code does or why an error happens. When you want a change, its answer ends with "Have Composer do it": Composer takes the instruction, makes the change and checks it, and nothing lands until you press Apply. The editor's top bar has a button for it too. The agent board moves to Ctrl/⌘+Shift+B to make room. ([#231](https://github.com/Hankaws/aperture/pull/231))

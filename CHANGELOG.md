@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.24.0 - 2026-11-20
+
 ### Added
 
 - Pin the chats you come back to. On the Chat page, the pin beside a chat keeps it in a Pinned group at the top of the list, however long ago you last used it; press it again to unpin. From any page, the bot's panel has a new Your chats button: it lists your pinned chats, then your newest, so you can carry one on without leaving the page, and pins or unpins the chat you are in. You can pin up to 10 chats, and they stay pinned on every device. ([#238](https://github.com/Hankaws/aperture/pull/238))

@@ -127,6 +127,8 @@ type IdeUiState = {
   reveal: Reveal | null;
   findTick: number;
   steerQueue: string[];
+  /** An instruction from the summoned bot ("Have Composer do it"), for Composer to send. */
+  composerHandoff: string | null;
   crewIds: string[];
   toggleSidebar: () => void;
   toggleChat: () => void;
@@ -173,6 +175,8 @@ type IdeUiState = {
   shiftSteer: () => string | undefined;
   dropSteer: (index: number) => void;
   clearSteer: () => void;
+  /** Opens Composer and has it send this, as if typed: Composer makes the change and checks it. */
+  handToComposer: (text: string | null) => void;
   toggleCrew: (id: string) => void;
   setCrew: (ids: string[]) => void;
 };
@@ -216,6 +220,7 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   reveal: null,
   findTick: 0,
   steerQueue: [],
+  composerHandoff: null,
   crewIds: ["hosted"],
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
@@ -353,6 +358,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
   },
   dropSteer: (index) => set((s) => ({ steerQueue: s.steerQueue.filter((_, i) => i !== index) })),
   clearSteer: () => set({ steerQueue: [] }),
+  handToComposer: (text) =>
+    set(text?.trim() ? { composerHandoff: text.trim(), chatOpen: true, mobilePane: "agent" } : { composerHandoff: null }),
   toggleCrew: (id) =>
     set((s) => {
       const on = s.crewIds.includes(id);

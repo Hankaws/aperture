@@ -60,6 +60,7 @@ export const Route = createFileRoute("/api/private-chat")({
                 botName: input.data.botName,
                 images: input.data.images,
                 files: input.data.files,
+                editor: input.data.editor,
               });
               if (!request.signal.aborted)
                 emit(

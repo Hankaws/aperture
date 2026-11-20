@@ -94,10 +94,17 @@ try {
     check(/Left: nothing on the plan\./.test(recap), "the recap does not list finished steps as left");
     check(!/Elsewhere: [^\n]*\.md/.test(recap), "the recap does not count docs as code that still references the change");
     // The agent board shows the run, staged for review.
-    await page.keyboard.press("Control+j");
+    await page.keyboard.press("Control+Shift+B");
     const review = await page.locator('[role="dialog"] section[aria-label="Review"] li').allInnerTexts();
     check(review.length === 1 && /Fix the off-by-one in listTasks/.test(review[0] ?? ""), "the agent board shows the run in Review");
     await page.keyboard.press("Escape");
+    // Your bot over the editor (Ctrl+J): it sees the open file, and Escape puts it away.
+    await page.keyboard.press("Control+j");
+    const summoned = page.getByRole("dialog", { name: /over this page/ });
+    await summoned.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    check(/Sees \S+\.ts/.test(await summoned.innerText().catch(() => "")), "Ctrl+J brings your bot over the editor, seeing the open file");
+    await page.keyboard.press("Escape");
+    check(!(await summoned.isVisible()), "Escape puts your bot away");
     check(
       await waitForText(page, /Already failing before this change/, 30_000),
       "Tests runs in the browser and marks the other known bugs as already failing",
@@ -185,7 +192,7 @@ try {
         () => false,
       );
     check(ready && /Checks clear/.test(await tray.innerText()), "the run is checked in the background and waits for review");
-    await page.keyboard.press("Control+j");
+    await page.keyboard.press("Control+Shift+B");
     check(
       (await page.locator('section[aria-label="Review"] [data-background-run]').count()) === 1,
       "the agent board shows the background run in Review",

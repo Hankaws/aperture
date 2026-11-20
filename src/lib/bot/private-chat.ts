@@ -13,6 +13,7 @@ import { followUpRules } from "./follow-ups.ts";
 import { memoryPrompt, type Memory } from "./memory.ts";
 import type { AgentImage } from "../agent/images.ts";
 import { withFiles, type ChatFile } from "./attachments.ts";
+import { editorRules, withEditor, type EditorContext } from "./editor-context.ts";
 
 /** Where the account keeps it: one conversation a person, beside their bots' (`user_bot_chats`). */
 export const privateChatId = (userId: string) => `private:${userId}`;
@@ -123,25 +124,30 @@ export function privateMessages(
   name: string | null = null,
   /** Pictures and text files attached to the newest message (`attachments.ts`). */
   attached: { images: AgentImage[]; files: ChatFile[] } = { images: [], files: [] },
+  /** Summoned in the editor: what it shows, with the newest message (`editor-context.ts`). */
+  editor: EditorContext | null = null,
 ): ChatMessage[] {
   const recent = turns.slice(-CHAT_LIMITS.turns).filter((t) => t.text.trim());
   const last = recent.length - 1;
+  const newest = recent[last]?.role === "user";
   const withAttachments =
-    recent[last]?.role === "user" && (attached.images.length > 0 || attached.files.length > 0);
+    newest && (attached.images.length > 0 || attached.files.length > 0 || editor !== null);
   return [
     { role: "system", content: privateSystem(today, name), cache: true },
     // What it remembers changes as the person keeps lines: apart, so the rules above stay cached.
     ...(memories ? [{ role: "system" as const, content: memoryPrompt(memories) }] : []),
-    ...recent.map((t, i) =>
-      withAttachments && i === last
-        ? {
-            role: t.role,
-            // The files go whole with their message: the person's words are clipped as ever.
-            content: withFiles(clip(t.text, CHAT_LIMITS.turnChars), attached.files),
-            ...(attached.images.length > 0 ? { images: attached.images } : {}),
-          }
-        : { role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) },
-    ),
+    ...(editor ? [{ role: "system" as const, content: editorRules() }] : []),
+    ...recent.map((t, i) => {
+      if (!withAttachments || i !== last)
+        return { role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) };
+      // The files go whole with their message: the person's words are clipped as ever.
+      const said = withFiles(clip(t.text, CHAT_LIMITS.turnChars), attached.files);
+      return {
+        role: t.role,
+        content: editor ? withEditor(said, editor) : said,
+        ...(attached.images.length > 0 ? { images: attached.images } : {}),
+      };
+    }),
   ];
 }
 

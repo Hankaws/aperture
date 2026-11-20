@@ -11,6 +11,7 @@ import {
   chatOf,
   cleanTitle,
   likePattern,
+  MAX_PINNED,
   myBotFrom,
   snippetOf,
   titleOf,
@@ -47,14 +48,14 @@ export async function saveMyBot(q: Query, userId: string, raw: unknown): Promise
   return bot;
 }
 
-/** Their conversations, newest first, each with its title. */
+/** Their conversations, the pinned first and then the newest, each with its title. */
 export async function listChats(q: Query, userId: string): Promise<ChatMeta[]> {
   const rows = await q(
-    `select bot_id, title, updated_at,
+    `select bot_id, title, updated_at, pinned_at,
        case when title = '' then entries else '' end as entries
      from user_bot_chats
      where user_id = $1 and (bot_id = $2 or bot_id like $3)
-     order by updated_at desc limit $4`,
+     order by (pinned_at is not null) desc, updated_at desc limit $4`,
     [userId, `private:${userId}`, `private:${userId}:%`, MAX_CHATS],
   );
   const out: ChatMeta[] = [];
@@ -72,7 +73,12 @@ export async function listChats(q: Query, userId: string): Promise<ChatMeta[]> {
     // A conversation with nothing asked yet is not one to list.
     if (!title) continue;
     const at = row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at));
-    out.push({ id, title, updatedAt: at.toISOString() });
+    out.push({
+      id,
+      title,
+      updatedAt: at.toISOString(),
+      ...(row.pinned_at ? { pinned: true } : {}),
+    });
   }
   return out;
 }
@@ -115,6 +121,34 @@ export async function renameChat(
   const rows = await q(
     `update user_bot_chats set title = $3 where bot_id = $1 and user_id = $2 returning bot_id`,
     [chatKey(userId, chat), userId, title],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Pins a conversation to the top of their list, or unpins it. "full" when
+ * they already have `MAX_PINNED`; false when the chat is not theirs.
+ */
+export async function pinChat(
+  q: Query,
+  userId: string,
+  chat: string,
+  pinned: boolean,
+): Promise<boolean | "full"> {
+  if (pinned) {
+    const [row] = await q(
+      `select count(*)::int as n from user_bot_chats
+       where user_id = $1 and (bot_id = $2 or bot_id like $3) and pinned_at is not null
+         and bot_id <> $4`,
+      [userId, `private:${userId}`, `private:${userId}:%`, chatKey(userId, chat)],
+    );
+    if (Number(row?.n ?? 0) >= MAX_PINNED) return "full";
+  }
+  const rows = await q(
+    `update user_bot_chats
+     set pinned_at = case when $3 then coalesce(pinned_at, now()) else null end
+     where bot_id = $1 and user_id = $2 returning bot_id`,
+    [chatKey(userId, chat), userId, pinned],
   );
   return rows.length > 0;
 }

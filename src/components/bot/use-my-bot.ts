@@ -3,6 +3,7 @@ import { clearSavedChat } from "@/lib/bot/chat-saved";
 import {
   deleteMyChat,
   loadMyBot,
+  pinMyChat,
   renameMyChat,
   saveMyBot,
   searchMyChats,
@@ -11,6 +12,7 @@ import {
   CHAT_ID,
   cleanTitle,
   localChatKey,
+  MAX_PINNED,
   myBotFrom,
   snippetOf,
   type ChatHit,
@@ -67,12 +69,33 @@ function readLocalChats(): ChatMeta[] {
       CHAT_ID.test(c.id) &&
       typeof c.title === "string" &&
       typeof c.updatedAt === "string"
-        ? [{ id: c.id, title: c.title.slice(0, 80), updatedAt: c.updatedAt }]
+        ? [
+            {
+              id: c.id,
+              title: c.title.slice(0, 80),
+              updatedAt: c.updatedAt,
+              ...(c.pinned === true ? { pinned: true } : {}),
+            },
+          ]
         : [],
     );
   } catch {
     return [];
   }
+}
+
+/**
+ * A chat kept from elsewhere (the bot over a page): this browser's list gets
+ * it, at the top, keeping a title and pin it already has. The account lists
+ * it anyway; a visitor's list is this one.
+ */
+export function noteLocalChat(meta: ChatMeta) {
+  const now = readLocalChats();
+  const known = now.find((c) => c.id === meta.id);
+  writeLocal(CHATS_KEY, [
+    known ? { ...meta, title: known.title, pinned: known.pinned } : meta,
+    ...now.filter((c) => c.id !== meta.id),
+  ]);
 }
 
 /**
@@ -137,7 +160,7 @@ export function useMyBot() {
     setChats((now) => {
       const known = now.find((c) => c.id === meta.id);
       const next = [
-        known ? { ...meta, title: known.title } : meta,
+        known ? { ...meta, title: known.title, pinned: known.pinned } : meta,
         ...now.filter((c) => c.id !== meta.id),
       ];
       writeLocal(CHATS_KEY, next);
@@ -155,6 +178,29 @@ export function useMyBot() {
     clearSavedChat(localChatKey(id));
     await deleteMyChat({ data: { chat: id } }).catch(() => {});
   }, []);
+
+  /** Pins a chat to the top of the list, or unpins it, here and on the account; the error when turned down. */
+  const pinChat = useCallback(
+    async (id: string, pinned: boolean): Promise<string | null> => {
+      if (pinned && chats.filter((c) => c.pinned && c.id !== id).length >= MAX_PINNED)
+        return `You can pin ${MAX_PINNED} chats. Unpin one first.`;
+      const set = (to: boolean) =>
+        setChats((now) => {
+          const next = now.map((c) => (c.id === id ? { ...c, pinned: to || undefined } : c));
+          writeLocal(CHATS_KEY, next);
+          return next;
+        });
+      set(pinned);
+      const out = await pinMyChat({ data: { chat: id, pinned } }).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : "Could not pin it.",
+      }));
+      if (out.ok) return null;
+      set(!pinned);
+      return out.error;
+    },
+    [chats],
+  );
 
   /** Renames a chat, here and on the account; the error when the account turned it down. */
   const renameChat = useCallback(async (id: string, raw: string): Promise<string | null> => {
@@ -195,5 +241,5 @@ export function useMyBot() {
     [account, chats],
   );
 
-  return { bot, chats, loaded, account, save, noteChat, removeChat, renameChat, search };
+  return { bot, chats, loaded, account, save, noteChat, removeChat, renameChat, pinChat, search };
 }

@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { MascotPicker } from "./bot-profile";
 import { MascotAvatar } from "./mascot";
 import { PrivateChat } from "./private-chat";
+import { AppShell } from "@/components/app/app-shell";
+import { useOpenSidebar } from "@/components/app/sidebar-context";
 import { useMyBot } from "./use-my-bot";
 
 /**
@@ -34,36 +36,37 @@ export function ChatPage({ chat }: { chat?: string }) {
   const navigate = useNavigate();
   const my = useMyBot();
   const [fresh, setFresh] = useState(() => newChatId());
-  const [drawer, setDrawer] = useState(false);
   const [editing, setEditing] = useState(false);
   const open = chat ?? fresh;
   const firstName =
     user && !user.isDevFallback ? (user.displayName?.split(/\s+/)[0] ?? null) : null;
 
-  // Another chat chosen: the drawer gets out of the way.
-  useEffect(() => setDrawer(false), [chat]);
-
   const newChat = () => {
     setFresh(newChatId());
-    setDrawer(false);
     void navigate({ to: "/chat", search: {} });
   };
 
   if (!my.loaded && !my.bot)
-    return <div className="m-4 flex-1 animate-pulse rounded-2xl bg-elevated" aria-hidden />;
+    return (
+      <AppShell onNewChat={newChat} scroll={false}>
+        <div className="m-4 flex-1 animate-pulse rounded-2xl bg-elevated" aria-hidden />
+      </AppShell>
+    );
 
   if (!my.bot || editing)
     return (
-      <MeetYourBot
-        seed={user?.id ?? "you"}
-        current={my.bot}
-        onSave={async (bot) => {
-          const error = await my.save(bot);
-          if (!error) setEditing(false);
-          return error;
-        }}
-        onCancel={my.bot ? () => setEditing(false) : undefined}
-      />
+      <AppShell onNewChat={newChat}>
+        <MeetYourBot
+          seed={user?.id ?? "you"}
+          current={my.bot}
+          onSave={async (bot) => {
+            const error = await my.save(bot);
+            if (!error) setEditing(false);
+            return error;
+          }}
+          onCancel={my.bot ? () => setEditing(false) : undefined}
+        />
+      </AppShell>
     );
 
   const sidebar = (
@@ -71,7 +74,6 @@ export function ChatPage({ chat }: { chat?: string }) {
       bot={my.bot}
       chats={my.chats}
       open={chat ?? null}
-      onNew={newChat}
       onEdit={() => setEditing(true)}
       onDelete={(id) => {
         void my.removeChat(id);
@@ -87,23 +89,7 @@ export function ChatPage({ chat }: { chat?: string }) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
-        {sidebar}
-      </aside>
-      {drawer && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-label="Your chats">
-          <button
-            type="button"
-            className="absolute inset-0 bg-bg/70"
-            onClick={() => setDrawer(false)}
-            aria-label="Close your chats"
-          />
-          <aside className="bubble-rise relative flex h-full w-[min(18rem,85vw)] flex-col border-r border-border bg-surface shadow-2xl">
-            {sidebar}
-          </aside>
-        </div>
-      )}
+    <AppShell section={sidebar} onNewChat={newChat} bar={false} scroll={false}>
       <div className="flex min-w-0 flex-1 flex-col">
         <PrivateChat
           key={open}
@@ -117,17 +103,7 @@ export function ChatPage({ chat }: { chat?: string }) {
             if (!chat && meta.id === fresh)
               void navigate({ to: "/chat", search: { c: fresh }, replace: true });
           }}
-          lead={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="md:hidden"
-              onClick={() => setDrawer(true)}
-              aria-label="Your chats"
-            >
-              <PanelLeft className="size-4" />
-            </Button>
-          }
+          lead={<MenuButton />}
           actions={
             <Button
               variant="ghost"
@@ -141,19 +117,36 @@ export function ChatPage({ chat }: { chat?: string }) {
           }
         />
       </div>
-    </div>
+    </AppShell>
+  );
+}
+
+/** On a phone, the sidebar (and your chats in it), from the chat's own header. */
+function MenuButton() {
+  const open = useOpenSidebar();
+  if (!open) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="md:hidden"
+      onClick={open}
+      aria-label="Open the menu"
+    >
+      <PanelLeft className="size-4" />
+    </Button>
   );
 }
 
 /**
- * The chats down the side: a new one, a search over them, then every one by
- * day, each to open, rename or delete, and the bot at the foot.
+ * Your chats, in the middle of the app's sidebar on the chat page: a search
+ * over them, then every one by day (the pinned first), each to open, pin,
+ * rename or delete, and the bot at the foot.
  */
 function Sidebar({
   bot,
   chats,
   open,
-  onNew,
   onEdit,
   onDelete,
   onRename,
@@ -163,7 +156,6 @@ function Sidebar({
   bot: MyBot;
   chats: ChatMeta[];
   open: string | null;
-  onNew: () => void;
   onEdit: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => Promise<string | null>;
@@ -206,11 +198,8 @@ function Sidebar({
 
   return (
     <>
-      <div className="space-y-2 p-3">
-        <Button variant="outline" className="w-full justify-start gap-2" onClick={onNew}>
-          <MessageSquarePlus className="size-4" />
-          New chat
-        </Button>
+      {/* New chat is the frame's, at the top of the sidebar (`app-shell.tsx`). */}
+      <div className="p-2 pb-1">
         <div className="relative">
           <Search
             className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"

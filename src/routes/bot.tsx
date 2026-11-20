@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { pageHead } from "@/lib/page-head";
 import { ArrowRight, Bot, PlugZap, ShieldCheck, type LucideIcon } from "lucide-react";
-import { SiteNav } from "@/components/site/site-nav";
-import { SiteFooter } from "@/components/site/site-footer";
+import { PageFrame } from "@/components/app/app-shell";
 import { GithubAccountCard } from "@/components/site/github-account";
 import { CopyBlock } from "@/components/site/copy-block";
 import { AgentTokens } from "@/components/site/agent-tokens";
@@ -74,8 +73,7 @@ function BotPage() {
   const working = tab === "team" && Boolean(user && github?.connected);
   if (tab !== "team")
     return (
-      <div className="min-h-dvh bg-bg text-fg">
-        <SiteNav />
+      <PageFrame>
         <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
           <BotHeader tab={tab} />
           <div className="mt-8">
@@ -111,13 +109,11 @@ function BotPage() {
             )}
           </div>
         </main>
-        <SiteFooter />
-      </div>
+      </PageFrame>
     );
 
   return (
-    <div className="min-h-dvh bg-bg text-fg">
-      <SiteNav />
+    <PageFrame>
       <main className={cn("mx-auto px-4 sm:px-6", working ? "max-w-7xl py-6" : "max-w-3xl py-14")}>
         {working ? (
           <div>
@@ -185,8 +181,7 @@ function BotPage() {
           <HowItWorks />
         </div>
       </main>
-      <SiteFooter />
-    </div>
+    </PageFrame>
   );
 }
 

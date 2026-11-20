@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- Aperture now looks and works like an app once you are signed in, in the style of Grok. Chat, Bots and Settings share one sidebar down the left: New chat at the top, then Chat, Bots and Editor, your chats (pinned first, then the newest; on the Chat page, with search, pin, rename and delete), and Settings, your account and the dark-mode switch at the foot. Fold it to a rail of icons when you want the room, and it stays folded; on a phone it slides in from the menu button. Signed in to an account, Aperture opens on your chat instead of the front page, which is still one click away under About Aperture. Signed out, the site is as it was. ([#240](https://github.com/Hankaws/aperture/pull/240))
+
 ## 0.24.0 - 2026-11-20
 
 ### Added

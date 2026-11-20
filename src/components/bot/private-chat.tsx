@@ -27,9 +27,11 @@ import { joinDraft } from "@/lib/bot/voice";
 import type { AgentImage } from "@/lib/agent/images";
 import { turnWithNote } from "@/lib/bot/attachments";
 import {
+  EDITOR_LIMITS,
   EDITOR_SUGGESTIONS,
   peekLine,
   replyComposer,
+  replyReads,
   type EditorPeek,
 } from "@/lib/bot/editor-context";
 import type { EditorBridge } from "@/lib/bot/summon-store";
@@ -154,6 +156,8 @@ export function PrivateChat({
   const [memoryOpen, setMemoryOpen] = useState(false);
   /** In the editor: whether what it shows goes with the next message. */
   const [seeing, setSeeing] = useState(true);
+  /** The files it is reading before it answers; null when it is not. */
+  const [reading, setReading] = useState<string[] | null>(null);
   const kept = memory.memories.filter((m) => m.status === "kept").length;
 
   const show = (next: Entry[]) => {
@@ -262,23 +266,48 @@ export function PrivateChat({
       }));
     let raw = "";
     // In the editor: what it shows now, with this message only.
-    const context = editor && seeing ? await editor.context().catch(() => null) : null;
-    const out = await streamPrivateChat(turns, {
-      onText: (piece) => {
-        raw += piece;
-        setLive(liveText(raw));
-      },
-      signal: control.signal,
-      bearer: getBearerToken(),
-      botName: bot?.name,
-      images: attached.images,
-      files: attached.files,
-      ...(context ? { editor: context } : {}),
-    });
+    let context = editor && seeing ? await editor.context().catch(() => null) : null;
+    /** The files it asked to read for this answer, as the project names them. */
+    const asked: string[] = [];
+    let out: Awaited<ReturnType<typeof streamPrivateChat>>;
+    for (let round = 0; ; round++) {
+      raw = "";
+      out = await streamPrivateChat(turns, {
+        onText: (piece) => {
+          raw += piece;
+          setLive(liveText(raw));
+        },
+        signal: control.signal,
+        bearer: getBearerToken(),
+        botName: bot?.name,
+        images: attached.images,
+        files: attached.files,
+        ...(context ? { editor: context } : {}),
+      });
+      // It asked to read files: the editor sends them, and the same question goes again.
+      const wants = out.ok && context && editor ? replyReads(out.reply).paths : [];
+      const fresh = wants.filter((p) => !asked.includes(p));
+      if (fresh.length === 0 || round >= EDITOR_LIMITS.readRounds || control.signal.aborted) break;
+      asked.push(...fresh);
+      setReading(fresh);
+      setLive("");
+      const next = await editor!.context(asked).catch(() => null);
+      if (!next) break;
+      context = next;
+    }
+    setReading(null);
     stopper.current = null;
+    const looked = context?.extra.filter((f) => f.why === "asked").map((f) => f.path) ?? [];
     let reply: Entry | null;
     if (out.ok) {
-      reply = { id: id(), role: "assistant", text: out.reply };
+      // Asked to read once too often: what it said, without the asking.
+      const said = replyReads(out.reply).text || "I could not settle that from the files I read.";
+      reply = {
+        id: id(),
+        role: "assistant",
+        text: said,
+        ...(looked.length > 0 ? { looked } : {}),
+      };
       if (out.memories.length > 0) {
         memory.add(out.memories);
         const replyId = reply.id;
@@ -575,6 +604,11 @@ export function PrivateChat({
                     </div>
                   ) : (
                     <div className="space-y-2.5">
+                      {entry.looked && entry.looked.length > 0 && (
+                        <p className="truncate text-xs text-subtle" title={entry.looked.join("\n")}>
+                          Read {entry.looked.join(" · ")}
+                        </p>
+                      )}
                       <Reply
                         text={entry.text}
                         onNavigate={onNavigate}
@@ -603,7 +637,7 @@ export function PrivateChat({
           )}
 
           {busy &&
-            (live ? (
+            (live && !reading ? (
               <div className="flex gap-3">
                 <Face bot={bot} size="sm" working className="mt-0.5" />
                 <div className="min-w-0 flex-1">
@@ -614,7 +648,11 @@ export function PrivateChat({
               <Typing
                 name={name}
                 avatar={<Face bot={bot} size="sm" working />}
-                phrases={THINKING}
+                phrases={
+                  reading
+                    ? [`Reading ${reading.map((p) => p.split("/").pop()).join(", ")}`]
+                    : THINKING
+                }
               />
             ))}
           <div ref={end} />
@@ -716,7 +754,7 @@ function Reply({
   /** Still being written: a caret at its end, and its buttons once it is done. */
   writing?: boolean;
 }) {
-  const { text: said, instruction } = replyComposer(replyFollowUps(text).text);
+  const { text: said, instruction } = replyComposer(replyReads(replyFollowUps(text).text).text);
   const { text: shown, actions } = replyActions(said);
   return (
     <div

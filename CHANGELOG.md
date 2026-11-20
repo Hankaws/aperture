@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Your bot sees the whole project in the editor, not only the open file. With each message it gets the paths of every file, and the small files the open one imports go along too (the line under the box says how many). When it needs another file to answer, a type, a function it calls or a test, it reads it rather than guess: "Reading types.ts" shows while it does, then it answers, and the answer says which files it read. It reads at most three files at a time and asks at most twice for one question; each look is another answer from your model, so it counts as one. A secret file's text is never sent. ([#233](https://github.com/Hankaws/aperture/pull/233))
+
 ## 0.21.0 - 2026-11-20
 
 ### Added

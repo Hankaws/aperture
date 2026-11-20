@@ -4,8 +4,10 @@ import {
   EDITOR_LIMITS,
   editorRules,
   fileWindow,
+  findPath,
   peekLine,
   replyComposer,
+  replyReads,
   validEditorContext,
   withEditor,
   type EditorContext,
@@ -21,6 +23,9 @@ const CONTEXT: EditorContext = {
   lines: 2,
   selection: { fromLine: 2, toLine: 2, text: "  items.reduce((a, b) => a + b, 0);" },
   problems: [{ line: 1, message: "Unused export", severity: "warning" }],
+  tree: [],
+  extra: [],
+  missing: [],
 };
 
 test("what the editor shows goes under the person's words, fenced, with its place", () => {
@@ -154,4 +159,85 @@ test("the line under the box says what it sees", () => {
     "Sees cart.ts, lines 3–9",
   );
   assert.equal(peekLine({ ...peek, path: null }), "Sees shop: no file open");
+});
+
+test("the rest of the project goes too: other files, what is missing, every path", () => {
+  const said = withEditor("Where is Item defined?", {
+    ...CONTEXT,
+    files: 3,
+    tree: ["src/cart.ts", "src/types.ts", "tests/cart.test.ts"],
+    extra: [
+      { path: "src/types.ts", text: "export type Item = { price: number };", why: "import" },
+      { path: "tests/cart.test.ts", text: "test()", why: "asked" },
+    ],
+    missing: ["src/nope.ts"],
+  });
+  assert.match(
+    said,
+    /Also open, imported by src\/cart\.ts: src\/types\.ts\n```ts\nexport type Item/,
+  );
+  assert.match(said, /Also open, as you asked: tests\/cart\.test\.ts\n```ts\ntest\(\)/);
+  assert.match(said, /Not in the project, so not sent: src\/nope\.ts/);
+  assert.match(said, /Project files \(3\):\nsrc\/cart\.ts\nsrc\/types\.ts\ntests\/cart\.test\.ts$/);
+  // A big project lists its first paths, and how many more.
+  assert.match(
+    withEditor("x", { ...CONTEXT, files: 900, tree: ["a.ts", "b.ts"] }),
+    /Project files \(900\):\na\.ts\nb\.ts\n… and 898 more$/,
+  );
+  assert.match(editorRules(), /\[\[read: path\]\]/);
+});
+
+test("other files are held to the limits as well", () => {
+  const out = validEditorContext({
+    ...CONTEXT,
+    tree: Array.from({ length: 900 }, (_, i) => `f${i}.ts`),
+    extra: Array.from({ length: 9 }, (_, i) => ({
+      path: `x${i}.ts`,
+      text: "y".repeat(EDITOR_LIMITS.extraFile + 5),
+      why: i === 0 ? "asked" : "whatever",
+    })),
+    missing: ["a", "b"],
+  });
+  assert.ok(out);
+  assert.equal(out.tree.length, EDITOR_LIMITS.tree);
+  assert.equal(out.extra.length, EDITOR_LIMITS.extra);
+  assert.equal(out.extra[0]!.text.length, EDITOR_LIMITS.extraFile);
+  assert.equal(out.extra[0]!.why, "asked");
+  assert.equal(out.extra[1]!.why, "import");
+  assert.ok(out.extra.reduce((n, f) => n + f.text.length, 0) <= EDITOR_LIMITS.extraTotal);
+  assert.deepEqual(out.missing, ["a", "b"]);
+  // Left out by an older page: none.
+  const { tree: _t, extra: _e, missing: _m, ...older } = CONTEXT;
+  assert.deepEqual(validEditorContext(older), CONTEXT);
+  assert.equal(validEditorContext({ ...CONTEXT, tree: [1] }), null);
+  assert.equal(validEditorContext({ ...CONTEXT, extra: [{ path: "a" }] }), null);
+});
+
+test("a reply that asks to read files says which, each once, at most three", () => {
+  const out = replyReads(
+    "Let me check the type first.\n[[read: src/types.ts]]\n[[read: ./src/util.ts, `lib/a.ts`]]\n[[read: src/types.ts]]\n[[read: d.ts]]",
+  );
+  assert.deepEqual(out.paths, ["src/types.ts", "src/util.ts", "lib/a.ts"]);
+  assert.equal(out.text, "Let me check the type first.");
+  assert.deepEqual(replyReads("No files here."), { text: "No files here.", paths: [] });
+});
+
+test("a path it asks for is found as written, or by its end when only one file has it", () => {
+  const paths = ["src/types.ts", "src/cart.ts", "lib/types.ts", "README.md"];
+  assert.equal(findPath("src/cart.ts", paths), "src/cart.ts");
+  assert.equal(findPath("cart.ts", paths), "src/cart.ts");
+  assert.equal(findPath("/README.md", paths), "README.md");
+  // Two files end so: neither is guessed.
+  assert.equal(findPath("types.ts", paths), null);
+  assert.equal(findPath("art.ts", paths), null);
+  assert.equal(findPath("nope.ts", paths), null);
+});
+
+test("the line under the box counts the imports that go along", () => {
+  const peek = { project: "shop", path: "src/cart.ts", selection: null, imports: 2 };
+  assert.equal(peekLine(peek), "Sees cart.ts and 2 imports");
+  assert.equal(
+    peekLine({ ...peek, imports: 1, selection: { fromLine: 4, toLine: 6 } }),
+    "Sees cart.ts, lines 4–6, and 1 import",
+  );
 });

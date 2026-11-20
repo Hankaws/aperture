@@ -11,8 +11,11 @@ const CHAT_KEY = "aperture-summon-chat";
  * loads the editor's code.
  */
 export type EditorBridge = {
-  /** What the editor shows now, read when a message is sent; null when it cannot say. */
-  context: () => Promise<EditorContext | null>;
+  /**
+   * What the editor shows now, read when a message is sent, with the files
+   * the bot asked to read (`[[read: …]]`); null when it cannot say.
+   */
+  context: (asked?: string[]) => Promise<EditorContext | null>;
   /** Hands an instruction to Composer, which makes the change and checks it before Apply. */
   toComposer: (instruction: string) => void;
 };

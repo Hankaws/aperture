@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.22.0 - 2026-11-20
+
 ### Added
 
 - Jump to the code your bot names. When you summon it in the editor and its answer cites a place, such as `src/store.ts:32` or `src/types.ts:3-6`, that place is a link: click it and the editor opens the file with those lines picked out. On a phone the bot steps aside to show the code; Ctrl/⌘+J brings it back. Only files in your project become links, so a name like Node.js stays text. ([#234](https://github.com/Hankaws/aperture/pull/234))

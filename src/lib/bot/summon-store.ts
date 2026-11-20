@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { CodeRef } from "./code-refs";
+import { IDLE_COMPOSER, type ComposerStatus } from "./composer-status";
 import type { EditorContext, EditorPeek } from "./editor-context";
 import { CHAT_ID, newChatId } from "./my-bot";
 
@@ -24,6 +25,12 @@ export type EditorBridge = {
    * in the editor at that line; null when the project has no such file.
    */
   open: (ref: CodeRef) => (() => void) | null;
+  /** Applies Composer's checked change, as its own Apply does: only when every check passed. True when it did. */
+  apply: () => boolean;
+  /** Puts Composer's change away, as its own Discard does. */
+  discard: () => void;
+  /** Shows Composer, where the change and its checks are in full. */
+  showComposer: () => void;
 };
 
 type SummonState = {
@@ -33,12 +40,18 @@ type SummonState = {
   editor: EditorBridge | null;
   /** Which file and lines the editor shows, as they change. */
   peek: EditorPeek | null;
+  /** What Composer is doing, for the change the bot handed it. */
+  composer: ComposerStatus;
+  /** Grown to fill the window, over the page it is on. */
+  expanded: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   /** A fresh conversation, kept with the others. */
   newChat: () => void;
   setEditor: (editor: EditorBridge | null) => void;
   setPeek: (peek: EditorPeek | null) => void;
+  setComposer: (composer: ComposerStatus) => void;
+  toggleExpanded: () => void;
 };
 
 function readChat(): string | null {
@@ -70,6 +83,8 @@ export const useSummon = create<SummonState>((set) => ({
   chat: null,
   editor: null,
   peek: null,
+  composer: IDLE_COMPOSER,
+  expanded: false,
   setOpen: (open) => set((s) => (open ? { open, chat: chatFor(s.chat) } : { open })),
   toggle: () => set((s) => (s.open ? { open: false } : { open: true, chat: chatFor(s.chat) })),
   newChat: () => {
@@ -77,6 +92,9 @@ export const useSummon = create<SummonState>((set) => ({
     keepChat(chat);
     set({ chat });
   },
-  setEditor: (editor) => set(editor ? { editor } : { editor: null, peek: null }),
+  setEditor: (editor) =>
+    set(editor ? { editor } : { editor: null, peek: null, composer: IDLE_COMPOSER }),
   setPeek: (peek) => set({ peek }),
+  setComposer: (composer) => set({ composer }),
+  toggleExpanded: () => set((s) => ({ expanded: !s.expanded })),
 }));

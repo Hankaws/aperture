@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -24,6 +24,7 @@ import { BotChat } from "./bot-chat";
 import { MascotAvatar } from "./mascot";
 import { useLocalBot } from "./use-my-bot";
 import { useRepoBot } from "./use-repo-bot";
+import { useSummon } from "@/lib/bot/summon-store";
 import { useTour } from "./use-tour";
 
 /** Pages with a chat of their own: the editor has its agent, sign-in has nothing to chat about yet. */
@@ -61,7 +62,6 @@ export function BotBubbles() {
   /** Which chat is open, for answers that come while it is not. */
   const openNow = useRef<string | null>(null);
   const tour = useTour();
-  const navigate = useNavigate();
   /** The person's own bot (`my-bot.ts`): its face on Aperture Bot's bubble, once it is named. */
   const myBot = useLocalBot();
 
@@ -257,7 +257,7 @@ export function BotBubbles() {
         aria-label="Chat bubbles"
       >
         {!onBotPage && !onChatPage && (
-          // The person's own bot lives on the chat page: its bubble goes there.
+          // The person's own bot: its bubble opens it over the page (`summon.tsx`).
           <Bubble
             name={myBot?.name ?? "Aperture Bot"}
             open={false}
@@ -271,7 +271,8 @@ export function BotBubbles() {
             onToggle={() => {
               setPeek(null);
               setOpen(null);
-              void navigate({ to: "/chat" });
+              // Your own bot opens over the page you are on, and stays with you as you go.
+              useSummon.getState().toggle();
             }}
             onDismissGreeting={() => setPeek(null)}
             badge={

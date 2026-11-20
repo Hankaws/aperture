@@ -5,9 +5,12 @@ import {
   ArrowUp,
   Brain,
   Check,
+  Circle,
+  CircleX,
   Copy,
   Eye,
   EyeOff,
+  LoaderCircle,
   Lock,
   RefreshCw,
   Square,
@@ -35,6 +38,12 @@ import {
   type EditorPeek,
 } from "@/lib/bot/editor-context";
 import type { EditorBridge } from "@/lib/bot/summon-store";
+import {
+  IDLE_COMPOSER,
+  handoffView,
+  type ComposerStatus,
+  type HandoffView,
+} from "@/lib/bot/composer-status";
 import { AttachButton, AttachTray, SentAttachments } from "./attach-ui";
 import { attachedNames, NOTHING_ATTACHED, useAttachments, type Attached } from "./use-attachments";
 import {
@@ -97,6 +106,7 @@ export function PrivateChat({
   editor = null,
   peek = null,
   summoned = false,
+  composer: following = IDLE_COMPOSER,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
@@ -125,6 +135,8 @@ export function PrivateChat({
   peek?: EditorPeek | null;
   /** Over a page (Ctrl/⌘+J): named, and a new chat in place of clearing this one. */
   summoned?: boolean;
+  /** In the editor: what Composer is doing, to follow a change the bot handed it. */
+  composer?: ComposerStatus;
 }) {
   const known = useLocalBot();
   const bot = given === undefined ? known : given;
@@ -158,6 +170,10 @@ export function PrivateChat({
   const [seeing, setSeeing] = useState(true);
   /** The files it is reading before it answers; null when it is not. */
   const [reading, setReading] = useState<string[] | null>(null);
+  /** Changes this visit handed to Composer, by the reply that did: followed until Apply. */
+  const [handoffs, setHandoffs] = useState<Record<string, Handoff>>({});
+  const composerNow = useRef(following);
+  composerNow.current = following;
   const kept = memory.memories.filter((m) => m.status === "kept").length;
 
   const show = (next: Entry[]) => {
@@ -245,6 +261,17 @@ export function PrivateChat({
 
   const stop = useCallback(() => stopper.current?.abort(), []);
 
+  /** Hands a change to Composer, and follows it from the replies Composer has now. */
+  function handOff(replyId: string, instruction: string) {
+    if (!editor) return;
+    const since = composerNow.current.replies;
+    editor.toComposer(instruction);
+    setHandoffs((now) => ({ ...now, [replyId]: { since, ended: null, at: Date.now() } }));
+  }
+
+  /** The newest hand-off is the one Composer is on; an older one only says it went. */
+  const liveHandoff = Object.entries(handoffs).sort((a, b) => b[1].at - a[1].at)[0]?.[0] ?? null;
+
   /** Asks for the answer to the conversation as it stands, and shows it as it is written. */
   async function ask(conversation: Entry[], attached: Attached = NOTHING_ATTACHED) {
     setBusy(true);
@@ -323,6 +350,10 @@ export function PrivateChat({
     if (reply) {
       update([...latest.current, reply]);
       if (!reply.error) onReply?.(reply.text);
+      // Told to change the code: the job goes to Composer at once, and this panel follows it.
+      const instruction =
+        editor && !reply.error ? replyComposer(replyFollowUps(reply.text).text).instruction : null;
+      if (editor && instruction) handOff(reply.id, instruction);
     }
     requestAnimationFrame(() => box.current?.focus());
   }
@@ -334,8 +365,8 @@ export function PrivateChat({
           key={s}
           type="button"
           onClick={() => {
-            // A whole question is asked as it is; the rest are a start to finish.
-            if (s.endsWith("?")) {
+            // A whole question is asked as it is, as is anything for the editor; the rest are a start to finish.
+            if (s.endsWith("?") || editor) {
               void send(s);
               return;
             }
@@ -353,7 +384,9 @@ export function PrivateChat({
   const empty = page && entries.length === 0 && !busy;
   const composer = (
     <form
-      className={cn(empty ? "w-full" : "border-t border-border px-3 py-3")}
+      className={cn(
+        empty ? "w-full" : summoned ? "px-3 pt-2 pb-3" : "border-t border-border px-3 py-3",
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         void send(draft);
@@ -371,7 +404,11 @@ export function PrivateChat({
         <div
           className={cn(
             "border border-border bg-elevated focus-within:ring-2 focus-within:ring-accent/40",
-            empty ? "rounded-3xl p-1 shadow-lg" : "rounded-2xl",
+            empty
+              ? "rounded-3xl p-1 shadow-lg"
+              : summoned
+                ? "rounded-3xl shadow-sm"
+                : "rounded-2xl",
           )}
         >
           <AttachTray att={att} />
@@ -489,9 +526,11 @@ export function PrivateChat({
             </p>
             <p className="flex items-center gap-1 truncate text-xs text-subtle">
               <Lock className="size-3 shrink-0" aria-hidden />
-              {summoned
-                ? "Private. Nothing is posted anywhere."
-                : "Just you and the bot. Nothing is posted anywhere."}
+              {editor && peek
+                ? `In the editor, on ${peek.project}`
+                : summoned
+                  ? "Private. Nothing is posted anywhere."
+                  : "Just you and the bot. Nothing is posted anywhere."}
             </p>
           </div>
         </div>
@@ -531,7 +570,9 @@ export function PrivateChat({
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
           {/* In the editor, the code comes first: the editor says what is missing itself. */}
-          {!empty && !editor && <WelcomeTour onNavigate={onNavigate} />}
+          {!empty && !editor && !(summoned && entries.length === 0 && !busy) && (
+            <WelcomeTour onNavigate={onNavigate} />
+          )}
           {empty && (
             <div className="flex min-h-[min(60dvh,32rem)] flex-col items-center justify-center py-6 text-center">
               <Face bot={bot} size="xl" />
@@ -554,14 +595,24 @@ export function PrivateChat({
             <div className="flex flex-col items-center px-2 py-6 text-center">
               <Face bot={bot} size="lg" />
               <p className="mt-4 text-lg font-medium text-balance">
-                {editor ? "Ask me about your code." : "Ask me anything."}
+                {editor
+                  ? `What should we do in ${peek?.project ?? "your project"}?`
+                  : summoned
+                    ? `${greetingFor(new Date().getHours())}. How can I help?`
+                    : "Ask me anything."}
               </p>
               <p className="mt-1 max-w-md text-sm text-pretty text-muted">
                 {editor
-                  ? "I see the file you have open, what you selected and its problems. When you want a change, I hand it to Composer, which checks it before you Apply."
+                  ? "I see your open file and the whole project. Ask about the code, or tell me what to change: I have Composer do it and check it, and you press Apply."
                   : "Questions, writing, planning, code. This chat is yours alone: it belongs to no repository, and nothing here reaches GitHub."}
               </p>
               {suggestions}
+              {/* Over a page, someone new gets set up under the greeting, as on the chat page. */}
+              {summoned && !editor && (
+                <div className="mt-8 w-full max-w-2xl text-left">
+                  <WelcomeTour onNavigate={onNavigate} />
+                </div>
+              )}
             </div>
           )}
 
@@ -612,8 +663,38 @@ export function PrivateChat({
                       <Reply
                         text={entry.text}
                         onNavigate={onNavigate}
-                        onComposer={editor?.toComposer}
+                        onComposer={
+                          editor ? (instruction) => handOff(entry.id, instruction) : undefined
+                        }
                         openRef={editor?.open}
+                        handoff={
+                          editor && handoffs[entry.id]
+                            ? {
+                                live: entry.id === liveHandoff,
+                                view: handoffView(
+                                  following,
+                                  handoffs[entry.id]!.since,
+                                  handoffs[entry.id]!.ended,
+                                ),
+                                onApply: () => {
+                                  if (editor.apply())
+                                    setHandoffs((now) => ({
+                                      ...now,
+                                      [entry.id]: { ...now[entry.id]!, ended: "applied" },
+                                    }));
+                                  else editor.showComposer();
+                                },
+                                onDiscard: () => {
+                                  editor.discard();
+                                  setHandoffs((now) => ({
+                                    ...now,
+                                    [entry.id]: { ...now[entry.id]!, ended: "discarded" },
+                                  }));
+                                },
+                                onShow: editor.showComposer,
+                              }
+                            : undefined
+                        }
                       />
                       {offers[entry.id]?.map((offerId) => (
                         <MemoryOffer key={offerId} id={offerId} store={memory} />
@@ -747,6 +828,7 @@ function Reply({
   onNavigate,
   onComposer,
   openRef,
+  handoff,
   writing = false,
 }: {
   text: string;
@@ -755,6 +837,8 @@ function Reply({
   onComposer?: (instruction: string) => void;
   /** In the editor: the places in the code it names open there. */
   openRef?: OpenRef;
+  /** The change it handed Composer this visit, followed to Apply. */
+  handoff?: HandoffControls;
   /** Still being written: a caret at its end, and its buttons once it is done. */
   writing?: boolean;
 }) {
@@ -803,7 +887,7 @@ function Reply({
         ),
       )}
       {!writing && instruction && onComposer && (
-        <ComposerHandoff instruction={instruction} onComposer={onComposer} />
+        <ComposerHandoff instruction={instruction} onComposer={onComposer} handoff={handoff} />
       )}
       {!writing && actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
@@ -816,42 +900,158 @@ function Reply({
   );
 }
 
+/** A change handed to Composer this visit: when, and from which of Composer's replies on. */
+type Handoff = { since: number; ended: "applied" | "discarded" | null; at: number };
+
+type HandoffControls = {
+  /** The newest hand-off, which Composer is on now. */
+  live: boolean;
+  view: HandoffView;
+  onApply: () => void;
+  onDiscard: () => void;
+  onShow: () => void;
+};
+
+const STEP_ICON = {
+  done: <Check className="size-3.5 text-ok" aria-hidden />,
+  active: <LoaderCircle className="size-3.5 animate-spin text-accent" aria-hidden />,
+  todo: <Circle className="size-3 text-subtle" aria-hidden />,
+  failed: <CircleX className="size-3.5 text-danger" aria-hidden />,
+} as const;
+
 /**
- * A change the reply proposes, for Composer: what it will be asked, and the
- * button that asks it. Composer makes it and checks it; Apply is still theirs.
+ * A change the bot handed Composer: what Composer was asked, and the change
+ * followed step by step until the person applies or discards it, here,
+ * without leaving the bot. A reply from an earlier visit offers to hand it
+ * over again.
  */
 function ComposerHandoff({
   instruction,
   onComposer,
+  handoff,
 }: {
   instruction: string;
   onComposer: (instruction: string) => void;
+  handoff?: HandoffControls;
 }) {
-  const [sent, setSent] = useState(false);
-  return (
-    <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
-      <p className="text-xs text-muted">
-        <span className="font-medium text-fg">For Composer:</span> {instruction}
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+  if (!handoff || !handoff.live) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-elevated/40 px-3 py-2.5">
+        <Wand2 className="size-3.5 shrink-0 text-accent" aria-hidden />
+        <p className="min-w-0 flex-1 text-xs text-muted">
+          <span className="font-medium text-fg">
+            {handoff ? "Handed to Composer:" : "For Composer:"}
+          </span>{" "}
+          {instruction}
+        </p>
         <Button
           size="sm"
-          className="gap-1.5"
-          onClick={() => {
-            onComposer(instruction);
-            setSent(true);
-          }}
+          variant="outline"
+          className="h-7 gap-1.5"
+          onClick={() => onComposer(instruction)}
         >
-          <Wand2 className="size-3.5" aria-hidden />
-          {sent ? "Ask Composer again" : "Have Composer do it"}
+          {handoff ? "Do it again" : "Have Composer do it"}
         </Button>
-        <span className="text-xs text-subtle">
-          {sent
-            ? "Sent. Check it in Composer, then Apply."
-            : "It checks the change before you Apply."}
-        </span>
       </div>
-    </div>
+    );
+  }
+  const { view } = handoff;
+  const ghost = "h-8 text-xs";
+  return (
+    <section
+      aria-label="The change, in Composer"
+      className={cn(
+        "rounded-2xl border p-3.5",
+        view.stage === "failed" || view.stage === "blocked"
+          ? "border-danger/30 bg-danger/5"
+          : view.stage === "ready"
+            ? "border-ok/30 bg-ok/5"
+            : "border-border bg-elevated/40",
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent/10 text-accent">
+          <Wand2 className="size-3.5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-pretty" aria-live="polite">
+            {view.title}
+          </p>
+          <p className="mt-0.5 text-xs text-pretty text-muted">{instruction}</p>
+        </div>
+      </div>
+      <ol className="mt-3 space-y-1.5 pl-1">
+        {view.steps.map((step) => (
+          <li key={step.label} className="flex items-center gap-2 text-xs">
+            <span className="grid size-4 shrink-0 place-items-center">
+              {/* The last step waits on the person, not on Composer: a dot, not a spinner. */}
+              {step.state === "active" && step.label === "Your Apply" ? (
+                <span className="size-2 animate-pulse rounded-full bg-accent" aria-hidden />
+              ) : (
+                STEP_ICON[step.state]
+              )}
+            </span>
+            <span
+              className={cn(
+                step.state === "todo"
+                  ? "text-subtle"
+                  : step.state === "failed"
+                    ? "text-danger"
+                    : "text-fg",
+              )}
+            >
+              {step.label}
+            </span>
+            <span className="sr-only">
+              {step.state === "done"
+                ? "(done)"
+                : step.state === "active"
+                  ? "(now)"
+                  : step.state === "failed"
+                    ? "(failed)"
+                    : ""}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {view.stage !== "applied" && view.stage !== "discarded" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {view.stage === "ready" && (
+            <Button size="sm" className="h-8 gap-1.5" onClick={handoff.onApply}>
+              <Check className="size-3.5" aria-hidden />
+              Apply
+            </Button>
+          )}
+          {view.stage === "failed" && (
+            <Button size="sm" className="h-8" onClick={() => onComposer(instruction)}>
+              Try again
+            </Button>
+          )}
+          {view.stage === "blocked" && /key|Settings/i.test(view.title) && (
+            <Link
+              to="/settings"
+              search={{ tab: "models" }}
+              className={cn(buttonVariants({ size: "sm" }), "h-8")}
+            >
+              Open Settings
+            </Link>
+          )}
+          <Button
+            size="sm"
+            variant={view.stage === "notes" ? "default" : "ghost"}
+            className={ghost}
+            onClick={handoff.onShow}
+          >
+            {view.stage === "notes" ? "Read the notes in Composer" : "Show in Composer"}
+          </Button>
+          {(view.stage === "ready" || view.stage === "failed" || view.stage === "notes") && (
+            <Button size="sm" variant="ghost" className={ghost} onClick={handoff.onDiscard}>
+              Discard
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

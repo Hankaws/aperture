@@ -6,10 +6,13 @@ import {
   Brain,
   Check,
   Copy,
+  FileText,
   Lock,
+  Paperclip,
   RefreshCw,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -21,6 +24,18 @@ import { getBearerToken } from "@/lib/auth/client";
 import { loadPrivateChat, savePrivateChat } from "@/lib/bot/private-chat.api";
 import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { joinDraft } from "@/lib/bot/voice";
+import type { AgentImage } from "@/lib/agent/images";
+import {
+  ACCEPT,
+  FILE_LIMITS,
+  fileName,
+  isPicture,
+  isTextFile,
+  turnWithNote,
+  type ChatFile,
+} from "@/lib/bot/attachments";
+import { ImageTray, MessageImages } from "@/components/ide/image-tray";
+import { useAttachedImages } from "@/components/ide/use-attached-images";
 import {
   DEFAULT_BOT_NAME,
   FIRST_CHAT,
@@ -116,6 +131,19 @@ export function PrivateChat({
   const box = useRef<HTMLTextAreaElement>(null);
   /** What was typed before the microphone was pressed: what is said goes after it. */
   const typedBefore = useRef("");
+  /** Pictures for the next message, resized in the browser (`agent/images.ts`). */
+  const pictures = useAttachedImages();
+  /** Text files for the next message (`attachments.ts`). */
+  const [files, setFiles] = useState<ChatFile[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  /** The pictures each message of this visit was sent with, to show them in it. */
+  const [sentPictures, setSentPictures] = useState<Record<string, AgentImage[]>>({});
+  /** What the newest message was sent with: Regenerate sends it again. */
+  const lastAttached = useRef<{ images: AgentImage[]; files: ChatFile[] }>({
+    images: [],
+    files: [],
+  });
   const voice = useVoice((spoken) => setDraft(joinDraft(typedBefore.current, spoken)));
   /** The conversation as it is now, for code that runs after an await. */
   const latest = useRef<Entry[]>([]);
@@ -178,14 +206,56 @@ export function PrivateChat({
     if (title) onSaved?.({ id: chat, title, updatedAt: new Date().toISOString() });
   };
 
+  /** Pictures and text files picked, pasted or dropped: each goes where it belongs, or says why not. */
+  async function attach(list: File[]) {
+    setAttachError(null);
+    const pics = list.filter((f) => isPicture(f.type));
+    if (pics.length > 0) await pictures.add(pics);
+    const next = [...files];
+    for (const file of list) {
+      if (isPicture(file.type)) continue;
+      if (!isTextFile(file.name, file.type)) {
+        setAttachError(`${fileName(file.name)} isn't a picture or a text file.`);
+        continue;
+      }
+      if (next.length >= FILE_LIMITS.files) {
+        setAttachError(`Attach at most ${FILE_LIMITS.files} files to a message.`);
+        break;
+      }
+      const text = await file.text().catch(() => null);
+      if (text === null) {
+        setAttachError(`${fileName(file.name)} could not be read.`);
+        continue;
+      }
+      if (text.length > FILE_LIMITS.chars) {
+        setAttachError(`${fileName(file.name)} is too long. Attach a shorter file.`);
+        continue;
+      }
+      next.push({ name: fileName(file.name), text });
+    }
+    if (next.reduce((n, f) => n + f.text.length, 0) > FILE_LIMITS.total)
+      setAttachError("Those files are too long together. Attach fewer.");
+    else setFiles(next);
+  }
+
   async function send(text: string) {
     const said = text.trim();
-    if (!said || busy) return;
+    const attached = { images: pictures.images, files };
+    const any = attached.images.length > 0 || attached.files.length > 0;
+    if ((!said && !any) || busy || pictures.busy) return;
     voice.cancel();
-    const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
+    const names = [...attached.images.map((i) => i.name), ...attached.files.map((f) => f.name)];
+    const entry: Entry = { id: id(), role: "user", text: said, ...(any ? { files: names } : {}) };
+    if (attached.images.length > 0)
+      setSentPictures((now) => ({ ...now, [entry.id]: attached.images }));
+    lastAttached.current = attached;
+    pictures.clear();
+    setFiles([]);
+    setAttachError(null);
+    const asked: Entry[] = [...latest.current, entry];
     update(asked);
     setDraft("");
-    await ask(asked);
+    await ask(asked, attached);
   }
 
   /** The last answer, written again: the same question asked once more. */
@@ -194,13 +264,16 @@ export function PrivateChat({
     if (busy || last?.role !== "assistant") return;
     const rest = latest.current.slice(0, -1);
     update(rest);
-    await ask(rest);
+    await ask(rest, lastAttached.current);
   }
 
   const stop = useCallback(() => stopper.current?.abort(), []);
 
   /** Asks for the answer to the conversation as it stands, and shows it as it is written. */
-  async function ask(conversation: Entry[]) {
+  async function ask(
+    conversation: Entry[],
+    attached: { images: AgentImage[]; files: ChatFile[] } = { images: [], files: [] },
+  ) {
     setBusy(true);
     setLive("");
     const control = new AbortController();
@@ -212,10 +285,11 @@ export function PrivateChat({
       // Its suggestions of what to ask next were for the person, not the model.
       .map((e) => ({
         role: e.role,
-        text: (e.role === "assistant" ? replyFollowUps(e.text).text : e.text).slice(
-          0,
-          CHAT_LIMITS.turnChars,
-        ),
+        // What came with a message is said in a note: only the newest message carries it whole.
+        text: (e.role === "assistant"
+          ? replyFollowUps(e.text).text
+          : turnWithNote(e.text, e.files)
+        ).slice(0, CHAT_LIMITS.turnChars),
       }));
     let raw = "";
     const out = await streamPrivateChat(turns, {
@@ -226,6 +300,8 @@ export function PrivateChat({
       signal: control.signal,
       bearer: getBearerToken(),
       botName: bot?.name,
+      images: attached.images,
+      files: attached.files,
     });
     stopper.current = null;
     let reply: Entry | null;
@@ -281,69 +357,132 @@ export function PrivateChat({
         event.preventDefault();
         void send(draft);
       }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        void attach([...event.dataTransfer.files]);
+      }}
     >
       <div className="mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "flex items-end gap-2 border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40",
-            empty ? "rounded-3xl p-2.5 shadow-lg" : "rounded-2xl",
+            "border border-border bg-elevated focus-within:ring-2 focus-within:ring-accent/40",
+            empty ? "rounded-3xl p-1 shadow-lg" : "rounded-2xl",
           )}
         >
-          <Textarea
-            ref={box}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                void send(draft);
-              }
-            }}
-            rows={1}
-            maxLength={CHAT_LIMITS.turnChars}
-            placeholder={
-              voice.listening ? "Listening…" : page ? `Ask ${name} anything` : `Message ${name}`
-            }
-            aria-label={`Message to ${name}`}
-            className={cn(
-              "max-h-40 border-0 bg-transparent focus-visible:ring-0",
-              empty ? "min-h-14 text-base" : "min-h-10",
-            )}
-          />
-          <VoiceButton
-            voice={voice}
-            disabled={busy}
-            onStart={() => {
-              typedBefore.current = draft;
-            }}
-          />
-          {busy ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              onClick={stop}
-              aria-label="Stop the answer"
-              title="Stop"
-              className="shrink-0 rounded-full"
-            >
-              <Square className="size-3.5 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!draft.trim()}
-              aria-label="Send"
-              className="shrink-0 rounded-full"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
+          <ImageTray images={pictures.images} busy={pictures.busy} onRemove={pictures.remove} />
+          {files.length > 0 && (
+            <ul className="flex flex-wrap gap-2 px-2.5 pt-2" aria-label="Files to send">
+              {files.map((file, i) => (
+                <li
+                  key={`${file.name}-${i}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface py-1 pr-1 pl-2 text-xs"
+                >
+                  <FileText className="size-3.5 shrink-0 text-subtle" aria-hidden />
+                  <span className="truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((now) => now.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${file.name}`}
+                    className="grid size-5 place-items-center rounded text-subtle hover:text-fg"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
+          <div className={cn("flex items-end gap-2", empty ? "p-1.5" : "p-1.5")}>
+            <input
+              ref={picker}
+              type="file"
+              accept={ACCEPT}
+              multiple
+              hidden
+              onChange={(event) => {
+                const list = [...(event.target.files ?? [])];
+                event.target.value = "";
+                void attach(list);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => picker.current?.click()}
+              disabled={busy}
+              aria-label="Attach a picture or file"
+              title="Attach a picture or a text file. You can also paste or drop one here."
+              className="grid size-9 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-elevated hover:text-fg disabled:opacity-40"
+            >
+              <Paperclip className="size-4" />
+            </button>
+            <Textarea
+              ref={box}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void send(draft);
+                }
+              }}
+              onPaste={(event) => {
+                const pasted = [...event.clipboardData.files];
+                if (pasted.length === 0) return;
+                event.preventDefault();
+                void attach(pasted);
+              }}
+              rows={1}
+              maxLength={CHAT_LIMITS.turnChars}
+              placeholder={
+                voice.listening ? "Listening…" : page ? `Ask ${name} anything` : `Message ${name}`
+              }
+              aria-label={`Message to ${name}`}
+              className={cn(
+                "max-h-40 border-0 bg-transparent focus-visible:ring-0",
+                empty ? "min-h-14 text-base" : "min-h-10",
+              )}
+            />
+            <VoiceButton
+              voice={voice}
+              disabled={busy}
+              onStart={() => {
+                typedBefore.current = draft;
+              }}
+            />
+            {busy ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={stop}
+                aria-label="Stop the answer"
+                title="Stop"
+                className="shrink-0 rounded-full"
+              >
+                <Square className="size-3.5 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={
+                  pictures.busy ||
+                  (!draft.trim() && pictures.images.length === 0 && files.length === 0)
+                }
+                aria-label="Send"
+                className="shrink-0 rounded-full"
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
-        {voice.error ? (
+        {attachError || voice.error ? (
           <p className="mt-2 px-1 text-xs text-danger" role="alert">
-            {voice.error}
+            {attachError ?? voice.error}
           </p>
         ) : (
           <p className="mt-2 px-1 text-xs text-subtle">
@@ -439,10 +578,35 @@ export function PrivateChat({
 
           {entries.map((entry, at) =>
             entry.role === "user" ? (
-              <div key={entry.id} className="flex justify-end">
-                <p className="max-w-[85%] rounded-2xl rounded-br-md bg-accent/15 px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
-                  {entry.text}
-                </p>
+              <div key={entry.id} className="flex flex-col items-end gap-1.5">
+                {sentPictures[entry.id] && (
+                  <div className="max-w-[85%]">
+                    <MessageImages images={sentPictures[entry.id]} />
+                  </div>
+                )}
+                {entry.files && entry.files.length > 0 && (
+                  <ul
+                    className="flex max-w-[85%] flex-wrap justify-end gap-1.5"
+                    aria-label="Attached"
+                  >
+                    {entry.files
+                      .filter((f) => !sentPictures[entry.id]?.some((i) => i.name === f))
+                      .map((f, i) => (
+                        <li
+                          key={`${f}-${i}`}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs text-muted"
+                        >
+                          <Paperclip className="size-3.5 shrink-0" aria-hidden />
+                          <span className="truncate">{f}</span>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+                {entry.text && (
+                  <p className="max-w-[85%] rounded-2xl rounded-br-md bg-accent/15 px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+                    {entry.text}
+                  </p>
+                )}
               </div>
             ) : (
               <div key={entry.id} className="flex gap-3">

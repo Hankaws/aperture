@@ -24,7 +24,11 @@ export const privateChat = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<PrivateChatReply> => {
     const { runPrivateChat } = await import("./private-chat.server");
-    return runPrivateChat(context.userId, data.turns, { botName: data.botName });
+    return runPrivateChat(context.userId, data.turns, {
+      botName: data.botName,
+      images: data.images,
+      files: data.files,
+    });
   });
 
 /** One of the person's conversations as the account keeps it; not ok when there is no account to read. */

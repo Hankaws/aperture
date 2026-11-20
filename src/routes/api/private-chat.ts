@@ -58,6 +58,8 @@ export const Route = createFileRoute("/api/private-chat")({
                 onText: (text) => emit({ type: "text", text }),
                 signal: request.signal,
                 botName: input.data.botName,
+                images: input.data.images,
+                files: input.data.files,
               });
               if (!request.signal.aborted)
                 emit(

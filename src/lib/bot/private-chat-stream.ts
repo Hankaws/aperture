@@ -78,12 +78,17 @@ export async function streamPrivateChat(
     signal,
     bearer,
     botName,
+    images,
+    files,
   }: {
     onText: (text: string) => void;
     signal: AbortSignal;
     bearer: string | null;
     /** What the person named their bot, for its instructions. */
     botName?: string;
+    /** Pictures and text files attached to the newest message. */
+    images?: unknown[];
+    files?: Array<{ name: string; text: string }>;
   },
 ): Promise<StreamedReply> {
   try {
@@ -94,7 +99,12 @@ export async function streamPrivateChat(
         ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       },
       credentials: "include",
-      body: JSON.stringify(botName ? { turns, botName } : { turns }),
+      body: JSON.stringify({
+        turns,
+        ...(botName ? { botName } : {}),
+        ...(images?.length ? { images } : {}),
+        ...(files?.length ? { files } : {}),
+      }),
       signal,
     });
     return await readPrivateChat(res, onText);

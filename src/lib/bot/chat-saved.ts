@@ -10,7 +10,13 @@ export type Sent = { number: number; url: string; at: string };
 /** `at`: when the bot suggested it. `auto`: sent by the bot's rule, not a click. */
 export type Card = Proposal & { sent?: Sent; dismissed?: boolean; at?: string; auto?: boolean };
 export type Entry =
-  | { id: string; role: "user"; text: string }
+  | {
+      id: string;
+      role: "user";
+      text: string;
+      /** The names of the pictures and files it came with (`attachments.ts`); their contents are not kept. */
+      files?: string[];
+    }
   | {
       id: string;
       role: "assistant";
@@ -51,7 +57,15 @@ export function savedEntries(parsed: unknown): Entry[] {
   for (const v of parsed) {
     if (!isObject(v) || !isString(v.id) || !isString(v.text)) continue;
     if (v.role === "user") {
-      out.push({ id: v.id, role: "user", text: v.text });
+      const entry: Entry = { id: v.id, role: "user", text: v.text };
+      if (Array.isArray(v.files)) {
+        const files = v.files
+          .filter(isString)
+          .slice(0, 6)
+          .map((f) => f.slice(0, 120));
+        if (files.length > 0) entry.files = files;
+      }
+      out.push(entry);
     } else if (v.role === "assistant") {
       const entry: Entry = { id: v.id, role: "assistant", text: v.text };
       if (Array.isArray(v.looked)) entry.looked = v.looked.filter(isString);

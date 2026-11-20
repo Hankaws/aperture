@@ -8,6 +8,7 @@ import {
   type EditorPeek,
   type EditorProblem,
 } from "@/lib/bot/editor-context";
+import type { CodeRef } from "@/lib/bot/code-refs";
 import { useSummon } from "@/lib/bot/summon-store";
 import { isSecretPath } from "@/lib/security/redact";
 import { useIdeUi } from "@/lib/ui-store";
@@ -139,6 +140,30 @@ async function editorContext(asked: string[] = []): Promise<EditorContext> {
   };
 }
 
+/** Opens a place an answer names: the file, at its line, the lines picked out. */
+function openRef(ref: CodeRef): (() => void) | null {
+  const ws = useWorkspace.getState();
+  const path = findPath(ref.path, Object.keys(ws.files));
+  if (!path) return null;
+  return () => {
+    const now = useWorkspace.getState();
+    const text = now.files[path];
+    if (text === undefined) return;
+    const lines = text.split("\n").length;
+    const line = Math.min(Math.max(ref.line ?? 1, 1), lines);
+    now.openFile(path);
+    // The lines named are picked out; a file alone opens at its top.
+    useIdeUi.getState().setReveal({
+      path,
+      line,
+      ...(ref.line ? { endLine: Math.min(Math.max(ref.endLine ?? line, line), lines) } : {}),
+    });
+    useIdeUi.getState().setMobilePane("editor");
+    // On a phone the bot covers the editor: it steps aside to show the code.
+    if (window.matchMedia("(max-width: 639px)").matches) useSummon.getState().setOpen(false);
+  };
+}
+
 /**
  * Lends the summoned bot (Ctrl/⌘+J) the editor while it is open: what it
  * shows, and Composer, which takes the changes the bot proposes.
@@ -152,6 +177,7 @@ export function useSummonBridge() {
         useIdeUi.getState().handToComposer(instruction);
         useSummon.getState().setOpen(false);
       },
+      open: openRef,
     });
     let last = "";
     let seen: unknown[] = [];

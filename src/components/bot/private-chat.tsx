@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Textarea } from "@/components/ui/textarea";
-import { Inline } from "@/components/ide/md-preview";
+import { Inline, type OpenRef } from "@/components/ide/md-preview";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import { KEEP, loadChat, mergeChats, saveChat, type Entry } from "@/lib/bot/chat-saved";
 import { getBearerToken } from "@/lib/auth/client";
@@ -613,6 +613,7 @@ export function PrivateChat({
                         text={entry.text}
                         onNavigate={onNavigate}
                         onComposer={editor?.toComposer}
+                        openRef={editor?.open}
                       />
                       {offers[entry.id]?.map((offerId) => (
                         <MemoryOffer key={offerId} id={offerId} store={memory} />
@@ -745,12 +746,15 @@ function Reply({
   text,
   onNavigate,
   onComposer,
+  openRef,
   writing = false,
 }: {
   text: string;
   onNavigate?: () => void;
   /** In the editor: a change the reply proposes goes to Composer. */
   onComposer?: (instruction: string) => void;
+  /** In the editor: the places in the code it names open there. */
+  openRef?: OpenRef;
   /** Still being written: a caret at its end, and its buttons once it is done. */
   writing?: boolean;
 }) {
@@ -775,7 +779,7 @@ function Reply({
               >
                 {block.items.map((item, j) => (
                   <li key={j}>
-                    <Inline text={item} />
+                    <Inline text={item} openRef={openRef} />
                   </li>
                 ))}
               </List>
@@ -790,11 +794,11 @@ function Reply({
           </pre>
         ) : block.type === "quote" ? (
           <blockquote key={i} className="border-l-2 border-border pl-3 text-muted">
-            <Inline text={block.text} />
+            <Inline text={block.text} openRef={openRef} />
           </blockquote>
         ) : (
           <p key={i} className={block.type === "h" ? "font-medium" : undefined}>
-            <Inline text={block.text} />
+            <Inline text={block.text} openRef={openRef} />
           </p>
         ),
       )}

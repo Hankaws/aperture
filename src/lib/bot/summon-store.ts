@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { CodeRef } from "./code-refs";
 import type { EditorContext, EditorPeek } from "./editor-context";
 import { CHAT_ID, newChatId } from "./my-bot";
 
@@ -18,6 +19,11 @@ export type EditorBridge = {
   context: (asked?: string[]) => Promise<EditorContext | null>;
   /** Hands an instruction to Composer, which makes the change and checks it before Apply. */
   toComposer: (instruction: string) => void;
+  /**
+   * A place in the code an answer names (`code-refs.ts`), as a way to open it
+   * in the editor at that line; null when the project has no such file.
+   */
+  open: (ref: CodeRef) => (() => void) | null;
 };
 
 type SummonState = {

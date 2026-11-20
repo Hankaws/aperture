@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Your bot takes over changes in the editor. Tell it to fix, add or change something and it does: it hands the job to Composer at once, with no button to press, and follows it in its own panel step by step (handed over, making the change, checking it, your Apply). When the checks say it is safe, Apply and Discard are right there in the bot's panel, so you never have to leave it; nothing lands in your files before you press Apply. If Composer cannot run yet, the panel says why and how to fix it. The empty panel in the editor offers to explain the file, fix its problems, find bugs or write tests. ([#236](https://github.com/Hankaws/aperture/pull/236))
+
+### Changed
+
+- Your bot stays with you on every page, like a personal assistant. Its bubble now opens it over the page you are on instead of taking you to the Chat page, and it stays open as you move from page to page. The full-screen button makes the panel bigger over the page, in the style of Grok, instead of leaving for the Chat page; press it again, or click beside it, to make it small. Your conversations are still on the Chat page. ([#236](https://github.com/Hankaws/aperture/pull/236))
+
 ## 0.22.0 - 2026-11-20
 
 ### Added

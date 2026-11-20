@@ -9,9 +9,11 @@ import {
   type EditorProblem,
 } from "@/lib/bot/editor-context";
 import type { CodeRef } from "@/lib/bot/code-refs";
+import type { ComposerStatus } from "@/lib/bot/composer-status";
 import { useSummon } from "@/lib/bot/summon-store";
 import { isSecretPath } from "@/lib/security/redact";
 import { useIdeUi } from "@/lib/ui-store";
+import { editsUnderCheck } from "@/lib/workspace/edits";
 import { collectImports, resolveSpecifier } from "@/lib/workspace/module-graph";
 import { useWorkspace } from "@/lib/workspace/store";
 
@@ -168,16 +170,53 @@ function openRef(ref: CodeRef): (() => void) | null {
  * Lends the summoned bot (Ctrl/⌘+J) the editor while it is open: what it
  * shows, and Composer, which takes the changes the bot proposes.
  */
+/** What Composer is doing now, for the change the bot handed it. */
+function composerOf(ws: Workspace, ui: ReturnType<typeof useIdeUi.getState>): ComposerStatus {
+  const staged = editsUnderCheck(ws.messages, ws.activeCopyId);
+  const reply = [...ws.messages].reverse().find((m) => m.role === "assistant" && m.content.trim());
+  const first =
+    reply?.content
+      .trim()
+      .split("\n")[0]
+      ?.replace(/^#+\s*/, "") ?? null;
+  return {
+    running: ws.agentRunning,
+    replies: ws.messages.filter((m) => m.role === "assistant").length,
+    staged: staged.map((edit) => edit.path),
+    notes: staged.filter((edit) => (edit.notes?.length ?? 0) > 0).length,
+    checks: ui.checkHint?.state ?? null,
+    detail: ui.checkHint?.state === "failed" ? (ui.checkHint.detail ?? null) : null,
+    latest: first ? (first.length > 160 ? `${first.slice(0, 159)}…` : first) : null,
+    blocked: ui.handoffBlocked,
+  };
+}
+
+/** Composer, in front: on a phone the bot steps aside for it. */
+function showComposer() {
+  useIdeUi.setState({ chatOpen: true, mobilePane: "agent" });
+  if (window.matchMedia("(max-width: 639px)").matches) useSummon.getState().setOpen(false);
+}
+
+/**
+ * Lends the summoned bot (Ctrl/⌘+J) the editor while it is open: what it
+ * shows, and Composer, which takes the changes the bot hands it. The bot
+ * stays open and follows the change to the person's Apply.
+ */
 export function useSummonBridge() {
   useEffect(() => {
     const summon = useSummon.getState();
     summon.setEditor({
       context: editorContext,
-      toComposer: (instruction) => {
-        useIdeUi.getState().handToComposer(instruction);
-        useSummon.getState().setOpen(false);
-      },
+      toComposer: (instruction) => useIdeUi.getState().handToComposer(instruction),
       open: openRef,
+      apply: () => {
+        useWorkspace.getState().applyAllPending();
+        // Apply refuses quietly when the checks no longer match the change: say so by what is left.
+        const ws = useWorkspace.getState();
+        return editsUnderCheck(ws.messages, ws.activeCopyId).length === 0;
+      },
+      discard: () => useWorkspace.getState().rejectAllPending(),
+      showComposer,
     });
     let last = "";
     let seen: unknown[] = [];
@@ -192,10 +231,30 @@ export function useSummonBridge() {
       last = key;
       useSummon.getState().setPeek(peek);
     };
+    let lastComposer = "";
+    let followed: unknown[] = [];
+    const follow = () => {
+      const ws = useWorkspace.getState();
+      const ui = useIdeUi.getState();
+      // Only what the status reads: the rest of both stores changes far more often.
+      const now = [ws.messages, ws.activeCopyId, ws.agentRunning, ui.checkHint, ui.handoffBlocked];
+      if (now.every((v, i) => v === followed[i])) return;
+      followed = now;
+      const status = composerOf(ws, ui);
+      const key = JSON.stringify(status);
+      if (key === lastComposer) return;
+      lastComposer = key;
+      useSummon.getState().setComposer(status);
+    };
     note(useWorkspace.getState());
-    const stop = useWorkspace.subscribe(note);
+    follow();
+    const stops = [
+      useWorkspace.subscribe(note),
+      useWorkspace.subscribe(follow),
+      useIdeUi.subscribe(follow),
+    ];
     return () => {
-      stop();
+      for (const stop of stops) stop();
       useSummon.getState().setEditor(null);
     };
   }, []);

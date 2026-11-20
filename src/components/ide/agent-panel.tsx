@@ -572,17 +572,23 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     }
     useIdeUi.getState().handToComposer(null);
     if (!canSend || blocked || acpBlocked) {
-      // It cannot run yet (signed out, or the plan says no): it waits in the box, where the reason shows.
+      // It cannot run yet (signed out, or the plan says no): it waits in the box, where the reason shows,
+      // and the bot says why in its own panel.
       setDraft(handoff);
-      requestAnimationFrame(() => composerRef.current?.focus());
+      useIdeUi.setState({
+        handoffBlocked: !canSend
+          ? "Sign in to run Composer. The change waits in its box."
+          : `${quote.blockReason ?? "Composer cannot run on this plan right now."} The change waits in its box.`,
+      });
       return;
     }
-    // What the person had typed stays in the box.
+    // What the person had typed stays in the box. The bot already worked out what to do,
+    // so Composer edits straight away instead of planning again; Apply is still the person's.
     const typed = draftRef.current;
-    void sendRef.current(handoff).then(() => {
+    void sendRef.current(handoff, false, "skip").then(() => {
       if (typed.trim()) setDraft((now) => now || typed);
     });
-  }, [handoff, mode, canSend, blocked, acpBlocked, sendRef, draftRef, composerRef]);
+  }, [handoff, mode, canSend, blocked, acpBlocked, quote.blockReason, sendRef, draftRef]);
 
   return (
     // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.

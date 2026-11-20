@@ -147,6 +147,10 @@ export const privateChatInput = z.object({
 /** One of the person's conversations with their bot (`my-bot.ts`). */
 const chatId = z.string().regex(CHAT_ID);
 export const chatInput = z.object({ chat: chatId });
+/** A new title for one of them, cleaned by the handler. */
+export const chatRenameInput = z.object({ chat: chatId, title: z.string().max(200) });
+/** Words to find in the person's chats with their bot. */
+export const chatSearchInput = z.object({ text: z.string().max(200) });
 export const chatLoadInput = z.object({ chat: chatId.optional() });
 /** The person's own bot: its name, cleaned by the handler, and its face. */
 export const myBotInput = z.object({

@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Show your bot a picture or give it a file, as Grok lets you: on the Chat page, the paperclip beside the box attaches pictures (PNG, JPEG, WebP or GIF, made smaller in your browser before they are sent) and text files (notes, code, CSV, JSON, Markdown), up to three of each, and you can paste or drop them in too. They show in your message, and your bot reads them with your model: a picture as a picture, a file as text. Each is read with the message it came with; later messages say it was attached rather than send it again. A model that can't see pictures says so instead of answering blind, and anything that is neither a picture nor a text file is turned away with why. ([#229](https://github.com/Hankaws/aperture/pull/229))
+
 ## 0.20.0 - 2026-11-20
 
 ### Added

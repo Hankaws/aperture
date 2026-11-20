@@ -143,6 +143,13 @@ export const privateChatInput = z.object({
     .max(60),
   /** What the person named their bot (`my-bot.ts`): cleaned again before the model reads it. */
   botName: z.string().max(60).optional(),
+  /** Pictures attached to the newest message: checked again by the handler (`agent/images.ts`). */
+  images: z.array(z.custom<Record<string, unknown>>(isRecord)).max(3).optional(),
+  /** Text files attached to the newest message: checked again by the handler (`bot/attachments.ts`). */
+  files: z
+    .array(z.object({ name: z.string().max(200), text: z.string().max(20_000) }))
+    .max(3)
+    .optional(),
 });
 /** One of the person's conversations with their bot (`my-bot.ts`). */
 const chatId = z.string().regex(CHAT_ID);

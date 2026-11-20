@@ -80,7 +80,10 @@ export const localChatKey = (chat: string) => (chat === FIRST_CHAT ? "private" :
 
 /** A conversation's title: its first question, on one line, cut short. */
 export function titleOf(entries: Entry[]): string {
-  const first = entries.find((e) => e.role === "user")?.text ?? "";
+  const asked = entries.find((e) => e.role === "user" && (e.text.trim() || e.files?.length));
+  // A chat begun with only a picture or a file is named after it.
+  const first =
+    asked?.text.trim() || (asked?.role === "user" ? (asked.files ?? []).join(", ") : "");
   const line = first
     .replace(/[`*_#>]/g, "")
     .replace(/\s+/g, " ")

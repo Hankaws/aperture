@@ -33,15 +33,26 @@ export async function runPrivateChat(
     onText,
     signal,
     botName,
+    images: rawImages,
+    files: rawFiles,
   }: {
     onText?: (delta: string) => void;
     signal?: AbortSignal;
     /** What the person named their bot; cleaned here, as anything sent is. */
     botName?: string;
+    /** Pictures and text files attached to the newest message, as sent: checked here. */
+    images?: unknown;
+    files?: unknown;
   } = {},
 ): Promise<PrivateChatReply> {
   const busy = overLimit("botChat", userId);
   if (busy) return { ok: false, error: busy };
+  const { validImages } = await import("@/lib/agent/images");
+  const { validFiles } = await import("./attachments");
+  const images = validImages(rawImages);
+  if ("error" in images) return { ok: false, error: images.error };
+  const files = validFiles(rawFiles);
+  if ("error" in files) return { ok: false, error: files.error };
   const { resolveModel, recordAgentRun } = await import("@/lib/billing/api");
   const resolved = await resolveModel(userId, null, { replay: false });
   if (!resolved.ok) return { ok: false, error: resolved.error };
@@ -63,7 +74,10 @@ export async function runPrivateChat(
     : await (await import("./memory.server")).memoryQuery().catch(() => null);
   const known = q ? await store.listMemories(q, userId, botId).catch(() => null) : null;
   const today = new Date().toISOString().slice(0, 10);
-  const messages = privateMessages(turns, today, known, cleanBotName(botName));
+  const messages = privateMessages(turns, today, known, cleanBotName(botName), {
+    images: images.images,
+    files: files.files,
+  });
   try {
     const out = onText
       ? await completeStreaming(cfg, messages, false, onText, signal, [])

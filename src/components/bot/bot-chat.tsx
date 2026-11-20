@@ -26,6 +26,8 @@ import {
 import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { liveText } from "@/lib/bot/private-chat-stream";
 import { joinDraft } from "@/lib/bot/voice";
+import { turnWithNote } from "@/lib/bot/attachments";
+import type { AgentImage } from "@/lib/agent/images";
 import { CHAT_LIMITS, type ChatTurn } from "@/lib/bot/chat";
 import {
   cardAsk,
@@ -60,6 +62,8 @@ import { TaskCard } from "./bot-console";
 import { FollowUps } from "./follow-ups";
 import { Typing } from "./typing";
 import { useVoice } from "./use-voice";
+import { AttachButton, AttachTray, SentAttachments } from "./attach-ui";
+import { attachedNames, useAttachments } from "./use-attachments";
 import { VoiceButton } from "./voice-button";
 import { MascotAvatar } from "./mascot";
 import { MemoryOffer } from "./memory-ui";
@@ -88,7 +92,8 @@ function askedBefore(entries: Entry[], at: number): string | null {
 
 /** What the model reads back of an answer: its text, and what became of each task it proposed. */
 function turnText(entry: Entry): string {
-  if (entry.role === "user") return entry.text;
+  // What came with a message is said in a note: only the newest carries it whole.
+  if (entry.role === "user") return turnWithNote(entry.text, entry.files);
   // Its suggestions of what to ask next were for the person, not the model.
   const text = replyFollowUps(entry.text).text;
   if (!entry.cards?.length) return text;
@@ -159,6 +164,10 @@ export function BotChat({
   /** What was typed before the microphone was pressed: what is said goes after it. */
   const typedBefore = useRef("");
   const voice = useVoice((spoken) => setDraft(joinDraft(typedBefore.current, spoken)));
+  /** Pictures and text files for the next message (`attachments.ts`). */
+  const att = useAttachments();
+  /** The pictures each message of this visit was sent with, to show them in it. */
+  const [sentPictures, setSentPictures] = useState<Record<string, AgentImage[]>>({});
   const box = useRef<HTMLTextAreaElement>(null);
   const draftNow = useRef("");
   /** The conversation as it is now, for code that runs after an await. */
@@ -270,9 +279,19 @@ export function BotChat({
 
   async function send(text: string) {
     const said = text.trim();
-    if (!said || busy) return;
+    if ((!said && !att.any) || busy || att.busy) return;
     voice.cancel();
-    const asked: Entry[] = [...latest.current, { id: id(), role: "user", text: said }];
+    const attached = att.take();
+    const names = attachedNames(attached);
+    const entry: Entry = {
+      id: id(),
+      role: "user",
+      text: said,
+      ...(names.length > 0 ? { files: names } : {}),
+    };
+    if (attached.images.length > 0)
+      setSentPictures((now) => ({ ...now, [entry.id]: attached.images }));
+    const asked: Entry[] = [...latest.current, entry];
     update(asked);
     setDraft("");
     setBusy(true);
@@ -298,7 +317,16 @@ export function BotChat({
     let iterator: AsyncIterator<BotChatEvent> | null = null;
     try {
       const events = await Promise.race([
-        botChat({ data: { owner, repo: name, botId: bot.id, turns } }),
+        botChat({
+          data: {
+            owner,
+            repo: name,
+            botId: bot.id,
+            turns,
+            ...(attached.images.length > 0 ? { images: attached.images } : {}),
+            ...(attached.files.length > 0 ? { files: attached.files } : {}),
+          },
+        }),
         stoppedNow,
       ]);
       iterator = events[Symbol.asyncIterator]();
@@ -446,15 +474,18 @@ export function BotChat({
 
         {entries.map((entry, at) =>
           entry.role === "user" ? (
-            <div key={entry.id} className="flex justify-end">
-              <p
-                className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
-                style={{
-                  background: `color-mix(in srgb, ${MASCOT_COLORS[bot.mascot.color]} 36%, var(--color-elevated))`,
-                }}
-              >
-                {entry.text}
-              </p>
+            <div key={entry.id} className="flex flex-col items-end gap-1.5">
+              <SentAttachments pictures={sentPictures[entry.id]} names={entry.files} />
+              {entry.text && (
+                <p
+                  className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+                  style={{
+                    background: `color-mix(in srgb, ${MASCOT_COLORS[bot.mascot.color]} 36%, var(--color-elevated))`,
+                  }}
+                >
+                  {entry.text}
+                </p>
+              )}
             </div>
           ) : (
             <div key={entry.id} className="flex gap-3">
@@ -553,9 +584,20 @@ export function BotChat({
           event.preventDefault();
           void send(draft);
         }}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (event.dataTransfer.files.length === 0) return;
+          event.preventDefault();
+          void att.attach([...event.dataTransfer.files]);
+        }}
       >
         <div className="mx-auto w-full max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-elevated p-1.5 focus-within:ring-2 focus-within:ring-accent/40">
+        <div className="rounded-2xl border border-border bg-elevated focus-within:ring-2 focus-within:ring-accent/40">
+        <AttachTray att={att} />
+        <div className="flex items-end gap-2 p-1.5">
+          <AttachButton att={att} disabled={busy} />
           <Textarea
             ref={box}
             value={draft}
@@ -565,6 +607,12 @@ export function BotChat({
                 event.preventDefault();
                 void send(draft);
               }
+            }}
+            onPaste={(event) => {
+              const pasted = [...event.clipboardData.files];
+              if (pasted.length === 0) return;
+              event.preventDefault();
+              void att.attach(pasted);
             }}
             rows={1}
             maxLength={6000}
@@ -595,7 +643,7 @@ export function BotChat({
             <Button
               type="submit"
               size="icon"
-              disabled={!draft.trim()}
+              disabled={att.busy || (!draft.trim() && !att.any)}
               aria-label="Send"
               className="shrink-0 rounded-full"
             >
@@ -603,9 +651,10 @@ export function BotChat({
             </Button>
           )}
         </div>
-        {voice.error ? (
+        </div>
+        {att.error || voice.error ? (
           <p className="mt-2 px-1 text-xs text-danger" role="alert">
-            {voice.error}
+            {att.error ?? voice.error}
           </p>
         ) : (
           <p className="mt-2 px-1 text-xs text-subtle">

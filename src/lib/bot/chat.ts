@@ -10,6 +10,8 @@
 import type { ChatMessage, Completion } from "../agent/complete.server.ts";
 import type { AgentToolDef } from "../agent/tools.ts";
 import { followUpRules } from "./follow-ups.ts";
+import type { AgentImage } from "../agent/images.ts";
+import { withFiles, type ChatFile } from "./attachments.ts";
 import { memoryPrompt, type Memory } from "./memory.ts";
 
 export type ChatTurn = { role: "user" | "assistant"; text: string };
@@ -160,13 +162,27 @@ export function chatMessages(
   turns: ChatTurn[],
   persona: ChatPersona | null = null,
   memories: Memory[] | null = null,
+  /** Pictures and text files attached to the newest message (`attachments.ts`). */
+  attached: { images: AgentImage[]; files: ChatFile[] } = { images: [], files: [] },
 ): ChatMessage[] {
   const recent = turns.slice(-CHAT_LIMITS.turns).filter((t) => t.text.trim());
+  const last = recent.length - 1;
+  const withAttachments =
+    recent[last]?.role === "user" && (attached.images.length > 0 || attached.files.length > 0);
   return [
     { role: "system", content: botChatSystem(repo, today, persona), cache: true },
     // What this bot remembers changes as the person keeps lines: apart, so the rules stay cached.
     ...(memories ? [{ role: "system" as const, content: memoryPrompt(memories) }] : []),
-    ...recent.map((t) => ({ role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) })),
+    ...recent.map((t, i) =>
+      withAttachments && i === last
+        ? {
+            role: t.role,
+            // The files go whole with their message: the person's words are clipped as ever.
+            content: withFiles(clip(t.text, CHAT_LIMITS.turnChars), attached.files),
+            ...(attached.images.length > 0 ? { images: attached.images } : {}),
+          }
+        : { role: t.role, content: clip(t.text, CHAT_LIMITS.turnChars) },
+    ),
   ];
 }
 
@@ -181,8 +197,10 @@ export async function runBotChat(
   memories: Memory[] | null = null,
   /** Each lookup as it starts, as the chat says it ("Reading #12"): a step's text so far was not its answer. */
   onLook?: (line: string) => void,
+  /** Pictures and text files attached to the newest message. */
+  attached?: { images: AgentImage[]; files: ChatFile[] },
 ): Promise<BotChatResult> {
-  const messages = chatMessages(repo, today, turns, persona, memories);
+  const messages = chatMessages(repo, today, turns, persona, memories, attached);
   const proposals: Proposal[] = [];
   const looked: string[] = [];
   for (let step = 1; ; step += 1) {

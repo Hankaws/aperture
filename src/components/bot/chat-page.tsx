@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { MessageSquarePlus, PanelLeft, Pencil, Search, Trash2, X } from "lucide-react";
+import { MessageSquarePlus, PanelLeft, Pencil, Pin, Search, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -77,6 +78,10 @@ export function ChatPage({ chat }: { chat?: string }) {
         if (id === chat) newChat();
       }}
       onRename={my.renameChat}
+      onPin={async (id, pinned) => {
+        const error = await my.pinChat(id, pinned);
+        if (error) toast.error(error);
+      }}
       onSearch={my.search}
     />
   );
@@ -152,6 +157,7 @@ function Sidebar({
   onEdit,
   onDelete,
   onRename,
+  onPin,
   onSearch,
 }: {
   bot: MyBot;
@@ -161,6 +167,7 @@ function Sidebar({
   onEdit: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => Promise<string | null>;
+  onPin: (id: string, pinned: boolean) => void;
   onSearch: (text: string) => Promise<ChatHit[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -193,6 +200,7 @@ function Sidebar({
       open={c.id === open}
       onDelete={() => onDelete(c.id)}
       onRename={(title) => onRename(c.id, title)}
+      onPin={() => onPin(c.id, !c.pinned)}
     />
   );
 
@@ -276,19 +284,21 @@ function Sidebar({
   );
 }
 
-/** One chat in the list: its title (and, found by a search, where), to open, rename or delete. */
+/** One chat in the list: its title (and, found by a search, where), to open, pin, rename or delete. */
 function ChatRow({
   chat,
   snippet,
   open,
   onDelete,
   onRename,
+  onPin,
 }: {
   chat: ChatMeta;
   snippet?: string;
   open: boolean;
   onDelete: () => void;
   onRename: (title: string) => Promise<string | null>;
+  onPin: () => void;
 }) {
   const [mode, setMode] = useState<"show" | "rename" | "delete">("show");
   const [title, setTitle] = useState(chat.title);
@@ -360,7 +370,7 @@ function ChatRow({
         to="/chat"
         search={{ c: chat.id }}
         className={cn(
-          "block rounded-lg py-1.5 pr-14 pl-2 text-sm",
+          "block rounded-lg py-1.5 pr-20 pl-2 text-sm",
           open ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/60 hover:text-fg",
         )}
         aria-current={open ? "page" : undefined}
@@ -374,6 +384,19 @@ function ChatRow({
         )}
       </Link>
       <span className="absolute top-1.5 right-1 flex gap-0.5">
+        <button
+          type="button"
+          onClick={onPin}
+          aria-pressed={Boolean(chat.pinned)}
+          className={cn(tool, "hover:text-fg", chat.pinned && "text-accent md:opacity-100")}
+          aria-label={
+            chat.pinned ? `Unpin the chat "${chat.title}"` : `Pin the chat "${chat.title}"`
+          }
+          title={chat.pinned ? "Unpin" : "Pin to the top"}
+        >
+          {/* Pinned: the pin shows, filled, whether or not the row is hovered. */}
+          <Pin className={cn("size-3.5", chat.pinned && "fill-current")} />
+        </button>
         <button
           type="button"
           onClick={() => {

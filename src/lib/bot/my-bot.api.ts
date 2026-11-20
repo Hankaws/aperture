@@ -1,8 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { overLimit } from "@/lib/security/rate-limit";
-import { chatInput, chatRenameInput, chatSearchInput, myBotInput } from "@/lib/security/inputs";
-import type { ChatHit, ChatMeta, MyBot } from "./my-bot";
+import {
+  chatInput,
+  chatPinInput,
+  chatRenameInput,
+  chatSearchInput,
+  myBotInput,
+} from "@/lib/security/inputs";
+import { MAX_PINNED, type ChatHit, type ChatMeta, type MyBot } from "./my-bot";
 
 /** A sign-in-off visitor has no account to keep it on: their browser keeps it. */
 async function isVisitor(userId: string): Promise<boolean> {
@@ -80,6 +86,24 @@ export const renameMyChat = createServerFn({ method: "POST" })
     return (await renameChat(await query(), context.userId, data.chat, data.title))
       ? { ok: true }
       : { ok: false, error: "Give it a title with something in it." };
+  });
+
+/** Pins one of the person's conversations to the top of their list, or unpins it. */
+export const pinMyChat = createServerFn({ method: "POST" })
+  .validator(chatPinInput)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+    // A visitor's list is this browser's, pinned there.
+    if (await isVisitor(context.userId)) return { ok: true };
+    const busy = overLimit("save", context.userId);
+    if (busy) return { ok: false, error: busy };
+    const { pinChat } = await import("./my-bot-store");
+    const out = await pinChat(await query(), context.userId, data.chat, data.pinned);
+    if (out === "full")
+      return { ok: false, error: `You can pin ${MAX_PINNED} chats. Unpin one first.` };
+    return out
+      ? { ok: true }
+      : { ok: false, error: "That chat is not saved yet. Say something in it first." };
   });
 
 /** The person's conversations with these words in the title or in what was said. */

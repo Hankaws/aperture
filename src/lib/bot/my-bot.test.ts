@@ -16,6 +16,7 @@ import {
   FIRST_CHAT,
   greetingFor,
   localChatKey,
+  MAX_PINNED,
   myBotFrom,
   newChatId,
   suggestedBot,
@@ -25,6 +26,7 @@ import {
   deleteChat,
   getMyBot,
   listChats,
+  pinChat,
   renameChat,
   saveChat,
   saveMyBot,
@@ -250,6 +252,69 @@ test("chats are found by their words and renamed, and only their person's", asyn
       (await listChats(q, "ada")).find((c) => c.id === "aaaaaaaaaaaa")?.title,
       "Week ahead",
     );
+  } finally {
+    await close();
+  }
+});
+
+test("pinned chats come first, whenever they were last used", () => {
+  const now = new Date("2026-11-19T15:00:00").getTime();
+  const at = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
+  const groups = chatGroups(
+    [
+      { id: "a", title: "Old, pinned", updatedAt: at(24 * 30), pinned: true },
+      { id: "b", title: "Now", updatedAt: at(1) },
+      { id: "c", title: "Yesterday, pinned", updatedAt: at(20), pinned: true },
+    ],
+    now,
+  );
+  assert.deepEqual(
+    groups.map((g) => [g.label, g.chats.map((c) => c.id)]),
+    [
+      ["Pinned", ["c", "a"]],
+      ["Today", ["b"]],
+    ],
+  );
+});
+
+test("a person pins their own chats, a few at most, and the list keeps them on top", async () => {
+  const { q, close } = await database();
+  try {
+    const ask = (text: string): Entry[] => [{ id: text, role: "user", text }];
+    const ids = Array.from({ length: MAX_PINNED + 1 }, (_, i) => i.toString(16).padStart(12, "0"));
+    for (const id of ids) await saveChat(q, "ada", id, ask(`Chat ${id}`));
+    await saveChat(q, "eve", "eeeeeeeeeeee", ask("Eve's"));
+
+    // The oldest, pinned: first in the list, though newer chats came after it.
+    assert.equal(await pinChat(q, "ada", ids[0]!, true), true);
+    let listed = await listChats(q, "ada");
+    assert.deepEqual(listed[0], {
+      id: ids[0],
+      title: `Chat ${ids[0]}`,
+      updatedAt: listed[0]!.updatedAt,
+      pinned: true,
+    });
+    assert.equal(listed.filter((c) => c.pinned).length, 1);
+    // Pinned again: still one, and saving it keeps it pinned.
+    assert.equal(await pinChat(q, "ada", ids[0]!, true), true);
+    await saveChat(q, "ada", ids[0]!, ask("Chat again"));
+    assert.equal((await listChats(q, "ada")).filter((c) => c.pinned).length, 1);
+
+    // Not someone else's, and not one never saved.
+    assert.equal(await pinChat(q, "eve", ids[1]!, true), false);
+    assert.equal(await pinChat(q, "ada", "eeeeeeeeeeee", true), false);
+    assert.equal(await pinChat(q, "ada", "ffffffffffff", true), false);
+    assert.equal((await listChats(q, "eve"))[0]!.pinned, undefined);
+
+    // A few at most: the one past the limit waits for one to be unpinned.
+    for (const id of ids.slice(1, MAX_PINNED))
+      assert.equal(await pinChat(q, "ada", id, true), true);
+    assert.equal(await pinChat(q, "ada", ids[MAX_PINNED]!, true), "full");
+    assert.equal(await pinChat(q, "ada", ids[0]!, false), true);
+    assert.equal(await pinChat(q, "ada", ids[MAX_PINNED]!, true), true);
+    listed = await listChats(q, "ada");
+    assert.equal(listed.filter((c) => c.pinned).length, MAX_PINNED);
+    assert.equal(listed.find((c) => c.id === ids[0])?.pinned, undefined);
   } finally {
     await close();
   }

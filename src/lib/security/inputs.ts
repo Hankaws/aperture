@@ -165,6 +165,8 @@ const chatId = z.string().regex(CHAT_ID);
 export const chatInput = z.object({ chat: chatId });
 /** A new title for one of them, cleaned by the handler. */
 export const chatRenameInput = z.object({ chat: chatId, title: z.string().max(200) });
+/** One of them pinned to the top of their list, or unpinned. */
+export const chatPinInput = z.object({ chat: chatId, pinned: z.boolean() });
 /** Words to find in the person's chats with their bot. */
 export const chatSearchInput = z.object({ text: z.string().max(200) });
 export const chatLoadInput = z.object({ chat: chatId.optional() });

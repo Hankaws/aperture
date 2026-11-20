@@ -91,7 +91,16 @@ export function titleOf(entries: Entry[]): string {
   return line.length <= 60 ? line : `${line.slice(0, 59).trimEnd()}…`;
 }
 
-export type ChatMeta = { id: string; title: string; updatedAt: string };
+export type ChatMeta = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** Pinned: it stays at the top of the list, whatever was said since. */
+  pinned?: boolean;
+};
+
+/** Chats a person can pin at once: pinned is for the few they come back to. */
+export const MAX_PINNED = 10;
 
 /** A title as the person types it: one line, cut short; null when nothing is left. */
 export function cleanTitle(raw: unknown): string | null {
@@ -144,12 +153,20 @@ export function chatGroups(
   const day = new Date(now);
   day.setHours(0, 0, 0, 0);
   const today = day.getTime();
-  const labels = ["Today", "Yesterday", "Previous 7 days", "Older"] as const;
+  const labels = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Older"] as const;
   const groups = labels.map((label) => ({ label, chats: [] as ChatMeta[] }));
   const sorted = [...chats].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   for (const chat of sorted) {
     const at = Date.parse(chat.updatedAt) || 0;
-    const i = at >= today ? 0 : at >= today - 86_400_000 ? 1 : at >= today - 7 * 86_400_000 ? 2 : 3;
+    const i = chat.pinned
+      ? 0
+      : at >= today
+        ? 1
+        : at >= today - 86_400_000
+          ? 2
+          : at >= today - 7 * 86_400_000
+            ? 3
+            : 4;
     groups[i]!.chats.push(chat);
   }
   return groups.filter((g) => g.chats.length > 0);

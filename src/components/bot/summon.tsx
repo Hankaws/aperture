@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Maximize2, Minimize2, SquarePen, X } from "lucide-react";
+import { History, Maximize2, Minimize2, Pin, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { DEFAULT_BOT_NAME } from "@/lib/bot/my-bot";
+import { DEFAULT_BOT_NAME, type ChatMeta } from "@/lib/bot/my-bot";
 import { useSummon } from "@/lib/bot/summon-store";
 import { cn, isModEvent, modSymbol } from "@/lib/utils";
 import { BotAvatar } from "./bot-avatar";
 import { MascotAvatar } from "./mascot";
 import { PrivateChat } from "./private-chat";
-import { useLocalBot } from "./use-my-bot";
+import { noteLocalChat, useLocalBot, useMyBot } from "./use-my-bot";
 
 /** Pages it does not open over: the chat page is the bot already, and signing in comes first. */
 const NOT_HERE = new Set(["/chat", "/login"]);
@@ -117,9 +117,11 @@ export function SummonBot() {
             peek={peek}
             composer={composer}
             onNavigate={close}
+            onSaved={noteLocalChat}
             summoned
             actions={
               <>
+                <ChatSwitcher current={chat} />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -172,6 +174,130 @@ export function SummonBot() {
         )}
       </div>
     </>
+  );
+}
+
+/** Recent chats the switcher lists, after the pinned ones. */
+const RECENT = 6;
+
+/**
+ * Your other chats, from the panel: the pinned ones first, then the newest,
+ * to carry one on without leaving the page. Loaded when opened.
+ */
+function ChatSwitcher({ current }: { current: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: PointerEvent) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", away);
+    return () => window.removeEventListener("pointerdown", away);
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="Your chats"
+        title="Your chats"
+      >
+        <History className="size-4" />
+      </Button>
+      {open && <ChatMenu current={current} onPick={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function ChatMenu({ current, onPick }: { current: string; onPick: () => void }) {
+  const my = useMyBot();
+  const pinned = my.chats.filter((c) => c.pinned);
+  const recent = my.chats.filter((c) => !c.pinned).slice(0, RECENT);
+  const here = my.chats.find((c) => c.id === current);
+  const [error, setError] = useState<string | null>(null);
+  const item = (c: ChatMeta) => (
+    <li key={c.id}>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          useSummon.getState().setChat(c.id);
+          onPick();
+        }}
+        aria-current={c.id === current ? "true" : undefined}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm",
+          c.id === current
+            ? "bg-elevated text-fg"
+            : "text-muted hover:bg-elevated/60 hover:text-fg",
+        )}
+      >
+        {c.pinned && <Pin className="size-3.5 shrink-0 fill-current text-accent" aria-hidden />}
+        <span className="truncate">{c.title}</span>
+      </button>
+    </li>
+  );
+  const label = "px-2.5 pt-2 pb-1 text-[11px] font-medium tracking-[0.12em] text-subtle uppercase";
+  return (
+    <div
+      role="menu"
+      aria-label="Your chats"
+      className="absolute top-full right-0 z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-1.5 shadow-xl"
+    >
+      {/* This chat, pinned or unpinned from here: once something was said in it, it is in the list. */}
+      {here && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => void my.pinChat(here.id, !here.pinned).then(setError)}
+          className="mb-1 flex w-full items-center gap-2 rounded-lg border-b border-border px-2.5 py-2 text-left text-sm text-fg hover:bg-elevated/60"
+        >
+          <Pin
+            className={cn("size-3.5 shrink-0", here.pinned && "fill-current text-accent")}
+            aria-hidden
+          />
+          {here.pinned ? "Unpin this chat" : "Pin this chat"}
+        </button>
+      )}
+      {error && (
+        <p className="px-2.5 pb-1 text-xs text-danger" role="alert">
+          {error}
+        </p>
+      )}
+      {!my.loaded && my.chats.length === 0 ? (
+        <p className="px-2.5 py-3 text-xs text-subtle">Loading your chats…</p>
+      ) : my.chats.length === 0 ? (
+        <p className="px-2.5 py-3 text-xs text-pretty text-subtle">
+          Your chats show here once you have said something.
+        </p>
+      ) : (
+        <>
+          {pinned.length > 0 && (
+            <>
+              <p className={label}>Pinned</p>
+              <ul>{pinned.map(item)}</ul>
+            </>
+          )}
+          {recent.length > 0 && (
+            <>
+              <p className={label}>Recent</p>
+              <ul>{recent.map(item)}</ul>
+            </>
+          )}
+        </>
+      )}
+      <p className="mt-1 border-t border-border px-2.5 pt-2 pb-1 text-xs text-subtle">
+        Every chat is on the{" "}
+        <Link to="/chat" onClick={onPick} className="text-accent hover:underline">
+          Chat page
+        </Link>
+        .
+      </p>
+    </div>
   );
 }
 

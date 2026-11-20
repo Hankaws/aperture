@@ -48,6 +48,8 @@ type SummonState = {
   toggle: () => void;
   /** A fresh conversation, kept with the others. */
   newChat: () => void;
+  /** Carries on one of the person's other conversations, a pinned one say. */
+  setChat: (chat: string) => void;
   setEditor: (editor: EditorBridge | null) => void;
   setPeek: (peek: EditorPeek | null) => void;
   setComposer: (composer: ComposerStatus) => void;
@@ -89,6 +91,11 @@ export const useSummon = create<SummonState>((set) => ({
   toggle: () => set((s) => (s.open ? { open: false } : { open: true, chat: chatFor(s.chat) })),
   newChat: () => {
     const chat = newChatId();
+    keepChat(chat);
+    set({ chat });
+  },
+  setChat: (chat) => {
+    if (!CHAT_ID.test(chat)) return;
     keepChat(chat);
     set({ chat });
   },

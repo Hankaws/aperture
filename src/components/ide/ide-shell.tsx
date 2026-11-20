@@ -15,6 +15,8 @@ import { HistoryDialog } from "./history-dialog";
 import { AgentBoard } from "./agent-board";
 import { runSaveHooks } from "./save-hooks";
 import { OpenProjectHost } from "./open-project";
+import { useSummonBridge } from "./summon-bridge";
+import { SummonButton } from "@/components/bot/summon";
 import { PreviewToggle } from "./tab-bar";
 import { LayoutMenu, PanelToggles } from "./layout-controls";
 import { AuthSlot } from "@/components/site/auth-slot";
@@ -201,6 +203,7 @@ function TitleBar() {
         <kbd className="shrink-0 font-mono text-[10px] text-subtle">{modKey}P</kbd>
       </button>
       <div className="flex items-center justify-end gap-1">
+        <SummonButton />
         <div className="hidden items-center gap-1 md:flex">
           <PanelToggles mod={modKey} />
           <LayoutMenu />
@@ -238,6 +241,7 @@ const WORKSPACE_SIZES = { files: 18, editor: 54, agent: 28 } as const;
 const WORKSPACE_ORDER = ["files", "editor", "agent"] as const;
 
 export function IdeShell() {
+  useSummonBridge();
   const workspaceName = useWorkspace((s) => s.name);
   const sidebarOpen = useIdeUi((s) => s.sidebarOpen);
   const chatOpen = useIdeUi((s) => s.chatOpen);
@@ -369,16 +373,17 @@ export function IdeShell() {
         e.preventDefault();
         useIdeUi.setState({ chatOpen: true, mobilePane: "agent" });
         requestAnimationFrame(() => composerRef.current?.focus());
+      } else if (key === "b" && e.shiftKey) {
+        // Ctrl/⌘+J is your bot's, on every page (`summon.tsx`).
+        e.preventDefault();
+        const ui = useIdeUi.getState();
+        ui.setBoardOpen(!ui.boardOpen);
       } else if (key === "b") {
         e.preventDefault();
         toggleSidebar();
       } else if (key === "l") {
         e.preventDefault();
         toggleChat();
-      } else if (key === "j") {
-        e.preventDefault();
-        const ui = useIdeUi.getState();
-        ui.setBoardOpen(!ui.boardOpen);
       } else if (key === "/") {
         e.preventDefault();
         setHelpOpen(true);

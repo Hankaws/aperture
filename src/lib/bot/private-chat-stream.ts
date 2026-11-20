@@ -80,6 +80,7 @@ export async function streamPrivateChat(
     botName,
     images,
     files,
+    editor,
   }: {
     onText: (text: string) => void;
     signal: AbortSignal;
@@ -89,6 +90,8 @@ export async function streamPrivateChat(
     /** Pictures and text files attached to the newest message. */
     images?: unknown[];
     files?: Array<{ name: string; text: string }>;
+    /** Summoned in the editor: what it shows (`editor-context.ts`). */
+    editor?: unknown;
   },
 ): Promise<StreamedReply> {
   try {
@@ -104,6 +107,7 @@ export async function streamPrivateChat(
         ...(botName ? { botName } : {}),
         ...(images?.length ? { images } : {}),
         ...(files?.length ? { files } : {}),
+        ...(editor ? { editor } : {}),
       }),
       signal,
     });

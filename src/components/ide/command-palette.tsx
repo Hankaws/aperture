@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowLeftRight, Braces, Bug, Clock, Download, FileCheck, ListChecks, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeftRight, Braces, Bug, Clock, Download, FileCheck, ListChecks, Eye, FileArchive, FileCode, FolderOpen, Github, History, LayoutGrid, LayoutPanelLeft, Maximize2, MessageCircle, Palette, PanelBottom, PanelRight, RotateCcw, Search, Sparkles, Undo2 } from "lucide-react";
 import { useIdeUi } from "@/lib/ui-store";
+import { useSummon } from "@/lib/bot/summon-store";
 import { useWorkspace } from "@/lib/workspace/store";
 import { pickFolder, pickZip } from "@/lib/workspace/import-bridge";
 import { downloadCurrentWorkspace } from "@/lib/workspace/download";
@@ -237,6 +238,16 @@ export function CommandPalette() {
             >
               <LayoutGrid className="size-3.5 text-subtle" />
               Agent board
+            </Command.Item>
+            <Command.Item
+              onSelect={() => {
+                close();
+                useSummon.getState().setOpen(true);
+              }}
+              className="cmdk-item flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg"
+            >
+              <MessageCircle className="size-3.5 text-subtle" />
+              Ask your bot about the open file
             </Command.Item>
             <Command.Item
               onSelect={() => {

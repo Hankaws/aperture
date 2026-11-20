@@ -60,7 +60,7 @@ export function validFiles(raw: unknown): { files: ChatFile[] } | { error: strin
 }
 
 /** A fence longer than any run of backticks in the text, so the file cannot close it early. */
-function fenceFor(text: string): string {
+export function fenceFor(text: string): string {
   const longest = Math.max(2, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   return "`".repeat(longest + 1);
 }

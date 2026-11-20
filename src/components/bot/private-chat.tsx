@@ -6,10 +6,13 @@ import {
   Brain,
   Check,
   Copy,
+  Eye,
+  EyeOff,
   Lock,
   RefreshCw,
   Square,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -23,6 +26,13 @@ import { replyFollowUps } from "@/lib/bot/follow-ups";
 import { joinDraft } from "@/lib/bot/voice";
 import type { AgentImage } from "@/lib/agent/images";
 import { turnWithNote } from "@/lib/bot/attachments";
+import {
+  EDITOR_SUGGESTIONS,
+  peekLine,
+  replyComposer,
+  type EditorPeek,
+} from "@/lib/bot/editor-context";
+import type { EditorBridge } from "@/lib/bot/summon-store";
 import { AttachButton, AttachTray, SentAttachments } from "./attach-ui";
 import { attachedNames, NOTHING_ATTACHED, useAttachments, type Attached } from "./use-attachments";
 import {
@@ -82,6 +92,9 @@ export function PrivateChat({
   page = false,
   firstName = null,
   onSaved,
+  editor = null,
+  peek = null,
+  summoned = false,
 }: {
   className?: string;
   /** Before the header's name: the team view's back button, on a phone. */
@@ -104,6 +117,12 @@ export function PrivateChat({
   firstName?: string | null;
   /** The conversation was kept: for the list of chats. */
   onSaved?: (meta: ChatMeta) => void;
+  /** Summoned in the editor: what it shows goes with each message, and Composer takes changes. */
+  editor?: EditorBridge | null;
+  /** Which file and lines the editor shows, for the line under the box. */
+  peek?: EditorPeek | null;
+  /** Over a page (Ctrl/⌘+J): named, and a new chat in place of clearing this one. */
+  summoned?: boolean;
 }) {
   const known = useLocalBot();
   const bot = given === undefined ? known : given;
@@ -133,6 +152,8 @@ export function PrivateChat({
   /** Lines each reply offered to remember, by the reply's id: this visit only. */
   const [offers, setOffers] = useState<Record<string, string[]>>({});
   const [memoryOpen, setMemoryOpen] = useState(false);
+  /** In the editor: whether what it shows goes with the next message. */
+  const [seeing, setSeeing] = useState(true);
   const kept = memory.memories.filter((m) => m.status === "kept").length;
 
   const show = (next: Entry[]) => {
@@ -240,6 +261,8 @@ export function PrivateChat({
         ).slice(0, CHAT_LIMITS.turnChars),
       }));
     let raw = "";
+    // In the editor: what it shows now, with this message only.
+    const context = editor && seeing ? await editor.context().catch(() => null) : null;
     const out = await streamPrivateChat(turns, {
       onText: (piece) => {
         raw += piece;
@@ -250,6 +273,7 @@ export function PrivateChat({
       botName: bot?.name,
       images: attached.images,
       files: attached.files,
+      ...(context ? { editor: context } : {}),
     });
     stopper.current = null;
     let reply: Entry | null;
@@ -276,7 +300,7 @@ export function PrivateChat({
 
   const suggestions = (
     <div className="mt-6 flex flex-wrap justify-center gap-2">
-      {PRIVATE_SUGGESTIONS.map((s) => (
+      {(editor ? EDITOR_SUGGESTIONS : PRIVATE_SUGGESTIONS).map((s) => (
         <button
           key={s}
           type="button"
@@ -387,6 +411,31 @@ export function PrivateChat({
           <p className="mt-2 px-1 text-xs text-danger" role="alert">
             {att.error ?? voice.error}
           </p>
+        ) : editor ? (
+          <button
+            type="button"
+            onClick={() => setSeeing((v) => !v)}
+            aria-pressed={seeing}
+            title={
+              seeing
+                ? "The open file, your selection and its problems go with each message. Click to stop sending them."
+                : "Click to send the open file, your selection and its problems with each message."
+            }
+            className="mt-1.5 inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-md px-1 text-xs text-subtle hover:text-fg"
+          >
+            {seeing ? (
+              <Eye className="size-3.5 shrink-0 text-accent" aria-hidden />
+            ) : (
+              <EyeOff className="size-3.5 shrink-0" aria-hidden />
+            )}
+            <span className="truncate">
+              {seeing
+                ? peek
+                  ? peekLine(peek)
+                  : "Sees what the editor has open"
+                : "Not looking at the editor"}
+            </span>
+          </button>
         ) : (
           <p className="mt-2 px-1 text-xs text-subtle">
             Uses your model key from Settings. Enter sends, Shift+Enter adds a line.
@@ -406,10 +455,14 @@ export function PrivateChat({
           {lead}
           <Face bot={bot} size="sm" working={busy} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{page || bot ? name : "Private chat"}</p>
+            <p className="truncate text-sm font-medium">
+              {page || bot || summoned ? name : "Private chat"}
+            </p>
             <p className="flex items-center gap-1 truncate text-xs text-subtle">
               <Lock className="size-3 shrink-0" aria-hidden />
-              Just you and the bot. Nothing is posted anywhere.
+              {summoned
+                ? "Private. Nothing is posted anywhere."
+                : "Just you and the bot. Nothing is posted anywhere."}
             </p>
           </div>
         </div>
@@ -428,7 +481,7 @@ export function PrivateChat({
             </Button>
           )}
           {/* On the chat page, a chat is deleted from the list of chats instead. */}
-          {entries.length > 0 && !page && (
+          {entries.length > 0 && !page && !summoned && (
             <Button
               variant="ghost"
               size="sm"
@@ -448,7 +501,8 @@ export function PrivateChat({
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5">
-          {!empty && <WelcomeTour onNavigate={onNavigate} />}
+          {/* In the editor, the code comes first: the editor says what is missing itself. */}
+          {!empty && !editor && <WelcomeTour onNavigate={onNavigate} />}
           {empty && (
             <div className="flex min-h-[min(60dvh,32rem)] flex-col items-center justify-center py-6 text-center">
               <Face bot={bot} size="xl" />
@@ -470,10 +524,13 @@ export function PrivateChat({
           {entries.length === 0 && !busy && !page && (
             <div className="flex flex-col items-center px-2 py-6 text-center">
               <Face bot={bot} size="lg" />
-              <p className="mt-4 text-lg font-medium text-balance">Ask me anything.</p>
+              <p className="mt-4 text-lg font-medium text-balance">
+                {editor ? "Ask me about your code." : "Ask me anything."}
+              </p>
               <p className="mt-1 max-w-md text-sm text-pretty text-muted">
-                Questions, writing, planning, code. This chat is yours alone: it belongs to no
-                repository, and nothing here reaches GitHub.
+                {editor
+                  ? "I see the file you have open, what you selected and its problems. When you want a change, I hand it to Composer, which checks it before you Apply."
+                  : "Questions, writing, planning, code. This chat is yours alone: it belongs to no repository, and nothing here reaches GitHub."}
               </p>
               {suggestions}
             </div>
@@ -518,7 +575,11 @@ export function PrivateChat({
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      <Reply text={entry.text} onNavigate={onNavigate} />
+                      <Reply
+                        text={entry.text}
+                        onNavigate={onNavigate}
+                        onComposer={editor?.toComposer}
+                      />
                       {offers[entry.id]?.map((offerId) => (
                         <MemoryOffer key={offerId} id={offerId} store={memory} />
                       ))}
@@ -645,14 +706,18 @@ function WelcomeTour({ onNavigate }: { onNavigate?: () => void }) {
 function Reply({
   text,
   onNavigate,
+  onComposer,
   writing = false,
 }: {
   text: string;
   onNavigate?: () => void;
+  /** In the editor: a change the reply proposes goes to Composer. */
+  onComposer?: (instruction: string) => void;
   /** Still being written: a caret at its end, and its buttons once it is done. */
   writing?: boolean;
 }) {
-  const { text: shown, actions } = replyActions(replyFollowUps(text).text);
+  const { text: said, instruction } = replyComposer(replyFollowUps(text).text);
+  const { text: shown, actions } = replyActions(said);
   return (
     <div
       className={cn(
@@ -695,6 +760,9 @@ function Reply({
           </p>
         ),
       )}
+      {!writing && instruction && onComposer && (
+        <ComposerHandoff instruction={instruction} onComposer={onComposer} />
+      )}
       {!writing && actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
           {actions.map((action) => (
@@ -702,6 +770,45 @@ function Reply({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A change the reply proposes, for Composer: what it will be asked, and the
+ * button that asks it. Composer makes it and checks it; Apply is still theirs.
+ */
+function ComposerHandoff({
+  instruction,
+  onComposer,
+}: {
+  instruction: string;
+  onComposer: (instruction: string) => void;
+}) {
+  const [sent, setSent] = useState(false);
+  return (
+    <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
+      <p className="text-xs text-muted">
+        <span className="font-medium text-fg">For Composer:</span> {instruction}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            onComposer(instruction);
+            setSent(true);
+          }}
+        >
+          <Wand2 className="size-3.5" aria-hidden />
+          {sent ? "Ask Composer again" : "Have Composer do it"}
+        </Button>
+        <span className="text-xs text-subtle">
+          {sent
+            ? "Sent. Check it in Composer, then Apply."
+            : "It checks the change before you Apply."}
+        </span>
+      </div>
     </div>
   );
 }
@@ -785,7 +892,7 @@ function ReplyTools({ text, onRegenerate }: { text: string; onRegenerate?: () =>
         className={tool}
         onClick={() => {
           void navigator.clipboard
-            ?.writeText(replyActions(replyFollowUps(text).text).text)
+            ?.writeText(replyActions(replyComposer(replyFollowUps(text).text).text).text)
             .then(() => setCopied(true))
             .catch(() => {});
         }}

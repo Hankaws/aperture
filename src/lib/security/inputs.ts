@@ -157,6 +157,8 @@ export const privateChatInput = z.object({
     .array(z.object({ name: z.string().max(200), text: z.string().max(20_000) }))
     .max(3)
     .optional(),
+  /** Summoned in the editor: what it shows, checked again by the handler (`bot/editor-context.ts`). */
+  editor: z.custom<Record<string, unknown>>(isRecord).optional(),
 });
 /** One of the person's conversations with their bot (`my-bot.ts`). */
 const chatId = z.string().regex(CHAT_ID);

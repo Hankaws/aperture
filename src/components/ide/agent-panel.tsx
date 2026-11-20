@@ -311,7 +311,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     if (target.kind === "model") {
       const why = startBackgroundRun(text, source);
       if (why) toast.error(why);
-      else toast.success("Running in the background", { description: "It shows on the agent board (Ctrl/Cmd+J) when it is ready." });
+      else toast.success("Running in the background", { description: "It shows on the agent board (Ctrl/Cmd+Shift+B) when it is ready." });
       return;
     }
     if (account.backgroundJobs <= 0) {
@@ -559,6 +559,30 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     useIdeUi.getState().shiftSteer();
     void sendRef.current(next);
   }, [agentRunning, canSend, nextSteer, sendRef]);
+
+  // "Have Composer do it", from the summoned bot: sent as if typed here, so Composer
+  // plans or edits as it would, checks the change, and nothing lands before Apply.
+  const handoff = useIdeUi((s) => s.composerHandoff);
+  const draftRef = useLatest(draft);
+  useEffect(() => {
+    if (!handoff) return;
+    if (mode !== "composer") {
+      setMode("composer");
+      return;
+    }
+    useIdeUi.getState().handToComposer(null);
+    if (!canSend || blocked || acpBlocked) {
+      // It cannot run yet (signed out, or the plan says no): it waits in the box, where the reason shows.
+      setDraft(handoff);
+      requestAnimationFrame(() => composerRef.current?.focus());
+      return;
+    }
+    // What the person had typed stays in the box.
+    const typed = draftRef.current;
+    void sendRef.current(handoff).then(() => {
+      if (typed.trim()) setDraft((now) => now || typed);
+    });
+  }, [handoff, mode, canSend, blocked, acpBlocked, sendRef, draftRef, composerRef]);
 
   return (
     // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.

@@ -45,7 +45,7 @@ local in-process database (PGlite), so nothing else needs setting up.
 - **An agent board.** Every run (its plan, Build it, the test runs and
   automatic fix that answer it) is one card: working, needs you, review or
   done, with background jobs alongside. Two runs with staged changes can be
-  compared side by side, file by file (Ctrl/Cmd+J).
+  compared side by side, file by file (Ctrl/Cmd+Shift+B).
 - **Background runs.** Send a task with the clock button (or
   Ctrl/Cmd+Shift+Enter) and keep working; up to three run at once, beside
   whatever Composer is doing on screen. Each works on a copy of your files

@@ -355,6 +355,71 @@ export function renderProbeDocument(
   return injectFirst(assembleHtmlPreview(files, entry, options), ownScript(RENDER_PROBE_SCRIPT));
 }
 
+/**
+ * Takes a picture of the page as it rendered, for visual proof: the live DOM,
+ * scripts and frames left out, drawn through an SVG foreignObject onto a
+ * canvas, at the frame's width and up to SNAPSHOT_MAX_HEIGHT tall. Inside the
+ * SVG the page's <html> is no longer the root, so `:root` rules are rewritten
+ * to `html` and the computed custom properties are carried over: the page's
+ * design tokens still apply. Also reports how far the page scrolls sideways,
+ * which on a phone is a layout break. Reports once, with a null picture when
+ * the browser will not draw one.
+ */
+export const SNAPSHOT_MAX_HEIGHT = 2400;
+export const SNAPSHOT_SCRIPT = `(() => {
+  function post(r) { try { parent.postMessage(Object.assign({ type: "aperture-snapshot" }, r), "*"); } catch (e) {} }
+  function shoot() {
+    var de = document.documentElement;
+    var w = Math.max(1, window.innerWidth);
+    var full = Math.max(de.scrollHeight, document.body ? document.body.scrollHeight : 0, window.innerHeight);
+    var h = Math.max(1, Math.min(full, ${SNAPSHOT_MAX_HEIGHT}));
+    var overflow = Math.max(0, de.scrollWidth - w);
+    try {
+      var clone = de.cloneNode(true);
+      Array.prototype.forEach.call(clone.querySelectorAll("script,iframe,video,audio,object,embed,noscript"), function (n) { n.remove(); });
+      Array.prototype.forEach.call(clone.querySelectorAll("style"), function (n) { n.textContent = (n.textContent || "").replace(/:root\\b/g, "html"); });
+      var live = getComputedStyle(de);
+      var vars = "";
+      for (var i = 0; i < live.length; i++) { var k = live[i]; if (k.indexOf("--") === 0) vars += k + ":" + live.getPropertyValue(k) + ";"; }
+      clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      clone.setAttribute("style", (clone.getAttribute("style") || "") + ";" + vars + "width:" + w + "px;");
+      var bg = getComputedStyle(document.body || de).backgroundColor;
+      var rootBg = live.backgroundColor;
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '"><foreignObject x="0" y="0" width="100%" height="100%">' + new XMLSerializer().serializeToString(clone) + "</foreignObject></svg>";
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        var ctx = c.getContext("2d");
+        if (!ctx) { post({ url: null, width: w, height: h, overflow: overflow }); return; }
+        var clear = function (x) { return !x || x === "transparent" || /rgba\\(.*,\\s*0\\)$/.test(x); };
+        ctx.fillStyle = !clear(rootBg) ? rootBg : !clear(bg) ? bg : "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0);
+        var url = null;
+        try { url = c.toDataURL("image/jpeg", 0.82); } catch (e) { url = null; }
+        post({ url: url, width: w, height: h, overflow: overflow });
+      };
+      img.onerror = function () { post({ url: null, width: w, height: h, overflow: overflow }); };
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    } catch (e) {
+      post({ url: null, width: w, height: h, overflow: overflow });
+    }
+  }
+  function later() { setTimeout(shoot, 400); }
+  if (document.readyState === "complete") later(); else window.addEventListener("load", later);
+})();`;
+
+/** The page as the preview would show it, with the script that takes its picture. */
+export function snapshotDocument(
+  files: Record<string, string>,
+  entry: string,
+  options: { runScripts?: boolean } = {},
+): string {
+  return injectFirst(assembleHtmlPreview(files, entry, options), ownScript(SNAPSHOT_SCRIPT));
+}
+
 export function previewMarkupKey(html: string): string {
   return html.replace(/<style data-from="[^"]*">[\s\S]*?<\/style>/gi, "<style/>");
 }

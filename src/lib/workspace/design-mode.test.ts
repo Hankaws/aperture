@@ -12,6 +12,8 @@ import {
   PICKER_SCRIPT,
   previewMarkupKey,
   renderProbeDocument,
+  SNAPSHOT_SCRIPT,
+  snapshotDocument,
   sanitizePreviewHtml,
   type DesignCapture,
 } from "./design-mode.ts";
@@ -231,6 +233,7 @@ test("with scripts off, a policy first in the document admits only the preview's
   for (const [name, out] of [
     ["preview", assembleHtmlPreview({ "index.html": page }, "index.html")],
     ["render check", renderProbeDocument({ "index.html": page }, "index.html")],
+    ["visual proof", snapshotDocument({ "index.html": page }, "index.html")],
   ] as const) {
     const policy = /^<!doctype html><meta http-equiv="Content-Security-Policy" content="script-src 'nonce-([0-9a-f]{32})'; object-src 'none'; base-uri 'none'">/.exec(out);
     assert.ok(policy, `${name}: the policy is not first: ${out.slice(0, 120)}`);
@@ -271,4 +274,17 @@ test("the live preview's error reporter runs before the page's own scripts", () 
   assert.ok(reporter < html.indexOf("boom()"), "reporter must come first");
   assert.ok(html.indexOf("<title>") > reporter, "first thing in <head>");
   assert.equal(html.split("aperture-preview-error").length - 1, 1, "exactly one reporter");
+});
+
+test("visual proof's picture script is valid script, keeps design tokens and stays inside the page", () => {
+  assert.doesNotThrow(() => new Function(SNAPSHOT_SCRIPT));
+  // :root no longer matches inside the SVG: its rules move to html, and the computed tokens go with the copy.
+  assert.match(SNAPSHOT_SCRIPT, /replace\(\/:root\\b\/g, "html"\)/);
+  assert.match(SNAPSHOT_SCRIPT, /indexOf\("--"\) === 0/);
+  // Nothing the page runs is drawn, and the picture only goes to the editor that framed it.
+  assert.match(SNAPSHOT_SCRIPT, /querySelectorAll\("script,iframe,video,audio,object,embed,noscript"\)/);
+  assert.match(SNAPSHOT_SCRIPT, /parent\.postMessage/);
+  assert.doesNotMatch(SNAPSHOT_SCRIPT, /fetch\(|XMLHttpRequest|sendBeacon/);
+  const doc = snapshotDocument({ "index.html": "<html><body><p>hi</p></body></html>" }, "index.html");
+  assert.ok(doc.indexOf("aperture-snapshot") < doc.indexOf("<p>hi</p>"));
 });

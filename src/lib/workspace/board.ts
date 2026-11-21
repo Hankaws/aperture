@@ -235,7 +235,10 @@ export function comparable(runs: BoardRun[]): BoardRun[] {
 export type CompareRow = { path: string; left: RunFile | null; right: RunFile | null };
 
 /** Every file either run changed, with each side's version, sorted by path. */
-export function compareFiles(left: BoardRun, right: BoardRun): CompareRow[] {
+export function compareFiles(
+  left: Pick<BoardRun, "files">,
+  right: Pick<BoardRun, "files">,
+): CompareRow[] {
   const paths = [...new Set([...left.files, ...right.files].map((file) => file.path))].sort();
   return paths.map((path) => ({
     path,

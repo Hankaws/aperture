@@ -23,12 +23,13 @@ import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, retrySend, submitAgent, wirePayload } from "@/lib/agent/run";
 import { RESEND_FILES } from "@/lib/agent/wire";
 import { takeAttempt } from "@/lib/workspace/attempt";
-import { startBackgroundRun } from "@/lib/agent/background-runner";
+import { startBackgroundRun, startBestOf } from "@/lib/agent/background-runner";
+import { BEST_OF } from "@/lib/agent/best-of";
 import { BackgroundTray } from "./background-runs";
 import { clearStanding, readStanding, saveStanding, subscribeStanding } from "@/lib/workspace/lessons";
 import { listAgents, type AgentConnection } from "@/lib/acp/api";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { quoteRun, quoteRuns, replayQuote } from "@/lib/billing/cost";
+import { formatUsd, quoteRun, quoteRuns, replayQuote } from "@/lib/billing/cost";
 import type { AccountSnapshot } from "@/lib/billing/api";
 import { billedWorkers } from "@/lib/agent/fanout";
 import { availableSeats, modelSeats, proposeReviewer, proposeWorkers, selectedSeats, type WorkerSpec } from "@/lib/agent/crew";
@@ -146,6 +147,8 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
   const [mounted, setMounted] = useState(false);
   const [agents, setAgents] = useState<AgentConnection[]>([]);
   const [target, setTarget] = useState<RunTarget>({ kind: "model", source: "hosted" });
+  /** A Best of 3 waiting for Start: the task, and what three runs cost. */
+  const [bestOf, setBestOf] = useState<{ text: string; price: string } | null>(null);
   const [dropOn, setDropOn] = useState(false);
   const attachRef = useRef<HTMLInputElement>(null);
   /** Screenshots for the next message: pasted, dropped or picked (`use-attached-images.ts`). */
@@ -345,6 +348,45 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not queue");
     }
+  }
+
+  /** Best of 3 shows its price first: three runs cost three times one. */
+  function askBestOf() {
+    const text = draft.trim();
+    if (!text) {
+      toast.error("Type the task first, then pick Best of 3.");
+      return;
+    }
+    const three = replay
+      ? replayQuote(quoteRuns(account, source, BEST_OF))
+      : quoteRuns(account, source, BEST_OF);
+    if (three.blocked) {
+      toast.error(three.blockReason ?? "Best of 3 cannot run on this model now.");
+      return;
+    }
+    const one = replay ? replayQuote(quoteRun(account, source)) : quoteRun(account, source);
+    setBestOf({
+      text,
+      price:
+        three.cents > 0
+          ? `${three.label}: ${BEST_OF} × ~${formatUsd(one.cents)}`
+          : `${one.label} · ${one.sub}, ${BEST_OF} times`,
+    });
+  }
+
+  function startBest() {
+    if (!bestOf) return;
+    const why = startBestOf(bestOf.text, source);
+    setBestOf(null);
+    if (why) {
+      toast.error(why);
+      return;
+    }
+    setDraft("");
+    setDismissMention(false);
+    toast.success("Best of 3 started", {
+      description: "Three attempts in the background. The agent board (Ctrl/Cmd+Shift+B) ranks them when all are in.",
+    });
   }
 
   async function send(text: string, background = false, phase?: AgentPhase) {
@@ -760,6 +802,28 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
               ))}
             </ul>
           )}
+          {bestOf && (
+            <div
+              role="group"
+              aria-label="Start Best of 3"
+              className="mb-2 rounded-xl border border-accent/40 bg-accent/5 px-3 py-2 text-xs"
+              data-best-of-confirm
+            >
+              <p className="text-fg">
+                Best of {BEST_OF}: {BEST_OF} attempts at this in the background, each checked. The board ranks
+                them by what the checks found.
+              </p>
+              <p className="mt-0.5 text-muted">{bestOf.price}</p>
+              <div className="mt-2 flex gap-1.5">
+                <Button size="sm" className="h-7 px-2.5 text-xs" onClick={startBest}>
+                  Start
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={() => setBestOf(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
           <div
             data-drop="composer"
             className={cn("composer-rim relative rounded-2xl p-px", agentRunning && "is-live", dropOn && "is-live")}
@@ -837,6 +901,9 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                     : undefined
                 }
                 backgroundTitle={`${modSymbol()}+Shift+Enter: it works on its own copy while you keep going`}
+                onBestOf={
+                  !signedOut && account && target.kind === "model" && !sendBlocked ? askBestOf : undefined
+                }
               >
                 <CrewBar account={account} />
                 <AssistChips />

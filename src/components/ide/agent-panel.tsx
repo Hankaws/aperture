@@ -58,6 +58,7 @@ import type { AgentPhase } from "@/lib/agent/phase";
 import { nextComposerPhase, isBuildIntent } from "@/lib/agent/phase";
 import { activeSlash, expandSlash, filterSlash, parseSkillSlash, parseSlash, skillInstruction } from "@/lib/agent/slash";
 import { autoContextPaths } from "@/lib/agent/auto-context";
+import { LearnMore } from "@/components/ui/learn-more";
 
 const DEMO_SUGGESTIONS = [
   "Fix the off-by-one in listTasks",
@@ -940,7 +941,7 @@ function EmptyComposer({
           {planFirst ? "Composer plans first. You click Build it." : "Composer edits straight away. You Apply."}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-subtle">
-          @ a file for context, or open Preview, click a UI element, and send the notes here.
+          Type @ to add a file, or click part of the Preview.
         </p>
       </div>
       <ul className="space-y-1">
@@ -1002,10 +1003,13 @@ function DemoNext() {
         <X className="size-3.5" />
       </button>
       <p className="pr-6 text-xs font-medium text-fg">That ran on harbor-api, a sample project, with recorded answers.</p>
-      <p className="mt-0.5 text-xs text-muted">
-        On your own code, in your repo&apos;s GitHub Actions: Aperture Bot takes a task from an issue and opens a pull request, on
-        your own model key. Agent Check runs these same checks on every pull request, with no key at all.
-      </p>
+      <p className="mt-0.5 text-xs text-muted">On your own repo, Aperture Bot turns an issue into a pull request.</p>
+      <LearnMore>
+        <p>
+          It runs in your repo&apos;s GitHub Actions, on your own model key. Agent Check runs these same checks on every pull
+          request, with no key at all.
+        </p>
+      </LearnMore>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Link to="/bot" hash="by-hand" className={cn(buttonVariants({ size: "sm" }))}>
           Set up Aperture Bot

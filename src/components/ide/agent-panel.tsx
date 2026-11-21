@@ -7,7 +7,7 @@ import { QuestionCard } from "./question-card";
 import { isSkillPath, projectSkills, skillName } from "@/lib/workspace/skills";
 import { isLastReplyOfRun, repeatOf, requestOf, skillFromRun } from "@/lib/workspace/skill-draft";
 import { useAttachedImages } from "./use-attached-images";
-import { ArrowUp, AtSign, Clock, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Paperclip, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { ArrowUp, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { ApertureMark } from "./logo";
@@ -15,10 +15,10 @@ import { PlanCard } from "./plan-card";
 import { SlashPopover } from "./slash-popover";
 import { AssistChips } from "./selection-actions";
 import { MentionPopover } from "./mention-popover";
-import { CostMeter } from "./cost-meter";
 import { JobsTray } from "./jobs-tray";
 import { ModelPicker, type RunTarget } from "./model-picker";
 import { CrewBar, WorkerConfirm } from "./crew-bar";
+import { ModeMenu, PlusMenu } from "./composer-menu";
 import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, retrySend, submitAgent, wirePayload } from "@/lib/agent/run";
 import { RESEND_FILES } from "@/lib/agent/wire";
@@ -594,57 +594,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
     // Four rows: tabs, plan chrome, the thread (the only part that scrolls), composer.
     <div className="ide-stack bg-surface [grid-template-rows:auto_auto_minmax(0,1fr)_auto]">
       <div className="flex h-8 items-center gap-1.5 border-b border-border px-2">
-        <div className="flex rounded-md border border-border p-px">
-          {(
-            [
-              ["composer", "Composer", Sparkles],
-              ["chat", "Ask", MessageSquare],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setMode(id)}
-              className={cn(
-                "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px]",
-                mode === id ? "bg-elevated text-fg" : "text-subtle hover:text-fg",
-              )}
-            >
-              <Icon className="size-3" />
-              {label}
-            </button>
-          ))}
-        </div>
-        {mode === "composer" && (
-          <button
-            type="button"
-            aria-pressed={planFirst}
-            disabled={agentRunning}
-            onClick={togglePlanFirst}
-            title={
-              planFirst
-                ? "Plan first: Composer posts a plan and waits for Build it. Click to edit straight away."
-                : "Edits straight away. Click to have Composer plan first. Nothing is applied until you Apply either way."
-            }
-            className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-subtle hover:text-fg disabled:opacity-50"
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "relative inline-block h-3 w-5 rounded-full transition-colors",
-                planFirst ? "bg-accent" : "bg-elevated ring-1 ring-border",
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-0.5 size-2 rounded-full bg-bg transition-[left]",
-                  planFirst ? "left-2.5" : "left-0.5",
-                )}
-              />
-            </span>
-            Plan first
-          </button>
-        )}
+        {/* Ask, Plan or Edit is chosen in the box, as Grok's (`composer-menu.tsx`). */}
+        <p className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted">
+          <Sparkles className="size-3" aria-hidden />
+          Composer
+        </p>
         <div className="ml-auto flex items-center">
           <Button
             variant="ghost"
@@ -745,10 +699,6 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
         </div>
       )}
 
-      <div className="border-t border-border px-2.5 py-1.5">
-        <AssistChips />
-      </div>
-
       <BackgroundTray />
 
       {account && jobsOn && (
@@ -811,7 +761,7 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
           )}
           <div
             data-drop="composer"
-            className={cn("composer-rim relative rounded-xl p-px", agentRunning && "is-live", dropOn && "is-live")}
+            className={cn("composer-rim relative rounded-2xl p-px", agentRunning && "is-live", dropOn && "is-live")}
             onDragEnter={(e) => {
               if (!e.dataTransfer.types.includes("Files")) return;
               e.preventDefault();
@@ -837,11 +787,11 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
             }}
           >
             {dropOn && (
-              <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[11px] bg-list-drop/80">
+              <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[15px] bg-list-drop/80">
                 <p className="text-sm font-medium text-fg">Drop files or screenshots for Composer</p>
               </div>
             )}
-            <div className="rounded-[11px] bg-bg">
+            <div className="rounded-[15px] bg-bg">
             <ImageTray images={shots.images} busy={shots.busy} onRemove={shots.remove} />
             <textarea
               ref={composerRef}
@@ -874,116 +824,86 @@ export function AgentPanel({ composerRef }: { composerRef: RefObject<HTMLTextAre
                         : "Describe the change. Use @ for context — Composer plans first."
               }
               rows={2}
-              className="min-h-14 w-full resize-none rounded-[11px] border-0 bg-bg px-2.5 py-2 text-sm leading-snug text-fg placeholder:text-subtle focus-visible:outline-none"
+              className="min-h-12 w-full resize-none rounded-[15px] border-0 bg-bg px-3 pt-2.5 pb-1 text-sm leading-snug text-fg placeholder:text-subtle focus-visible:outline-none"
             />
+            <div className="flex items-center gap-1.5 px-1.5 pb-1.5">
+              <PlusMenu
+                onContext={openContextPicker}
+                onAttach={() => attachRef.current?.click()}
+                onBackground={
+                  !signedOut && account && (target.kind === "model" || account.backgroundJobs > 0) && !sendBlocked
+                    ? () => void send(draft, true)
+                    : undefined
+                }
+                backgroundTitle={`${modSymbol()}+Shift+Enter: it works on its own copy while you keep going`}
+              >
+                <CrewBar account={account} />
+                <AssistChips />
+              </PlusMenu>
+              <ModeMenu
+                mode={mode === "chat" ? "ask" : planFirst ? "plan" : "edit"}
+                disabled={agentRunning}
+                onPick={(next) => {
+                  setMode(next === "ask" ? "chat" : "composer");
+                  if (next !== "ask" && planFirst !== (next === "plan")) togglePlanFirst();
+                }}
+              />
+              {!signedOut && account && (
+                <ModelPicker
+                  account={account}
+                  target={target}
+                  onTarget={setTarget}
+                  onAccount={setAccount}
+                  agents={agents}
+                />
+              )}
+              <div className="ml-auto flex items-center gap-1">
+                {signedOut && !replay ? (
+                  <Link
+                    to="/login"
+                    search={{ next: "/app" }}
+                    className={cn(buttonVariants({ size: "sm" }), "h-8 rounded-full")}
+                  >
+                    Sign in to send
+                  </Link>
+                ) : agentRunning ? (
+                  <Button type="button" size="sm" className="h-8 rounded-full" aria-label="Stop" onClick={() => abortAgent()}>
+                    <Square className="size-3.5 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button type="submit" size="sm" className="h-8 rounded-full" disabled={sendBlocked} aria-label={sendLabel}>
+                    {sendPhase === "build" ? <Play className="size-3.5" /> : <ArrowUp className="size-3.5" />}
+                    {sendLabel}
+                  </Button>
+                )}
+              </div>
+            </div>
             </div>
           </div>
-          {autoPaths.length > 0 && (
-            <p className="mt-1.5 truncate text-[11px] text-subtle" title={autoPaths.join(" · ")}>
-              Auto {autoPaths.map((p) => basename(p)).join(" · ")}
+          {/* One quiet line under the box: what goes along, and what a send costs; why it cannot, only when it cannot. */}
+          <div className="mt-1.5 flex min-w-0 items-center gap-3 px-1 text-[11px] text-subtle">
+            {autoPaths.length > 0 && (
+              <p className="max-w-[45%] min-w-0 shrink-0 truncate" title={autoPaths.join(" · ")}>
+                With {autoPaths.map((p) => basename(p)).join(" · ")}
+              </p>
+            )}
+            {/* What it costs, and how: "Replay model · recorded runs · no API call · no cost". */}
+            <p className="ml-auto min-w-0 truncate text-right" title={`${quote.label} · ${quote.sub}`}>
+              {target.kind === "acp" && target.remote
+                ? `ACP session on ${target.name}`
+                : `${quote.label}${target.kind === "acp" ? ` · ACP ${target.name}` : ""} · ${quote.sub}`}
+            </p>
+          </div>
+          {quote.blocked && quote.blockReason && !(target.kind === "acp" && target.remote) && (
+            <p className="mt-1 px-1 text-[11px] leading-snug text-warn">
+              {quote.blockReason}{" "}
+              {/* A cap is raised in Limits; a missing key or endpoint is added in Models. */}
+              <Link to="/settings" search={{ tab: quote.capped ? "limits" : "models" }} className="text-accent hover:underline">
+                {quote.capped ? "Limits" : "Models"}
+              </Link>
             </p>
           )}
-          <div className="mt-2 space-y-2">
-            <CostMeter
-              quote={quote}
-              acpLabel={target.kind === "acp" ? target.name : null}
-              acpRemote={target.kind === "acp" && target.remote}
-            />
-            <CrewBar account={account} />
-            {signedOut && !replay ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Add context"
-                  title="Add context with @"
-                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
-                  onClick={openContextPicker}
-                >
-                  <AtSign className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Add files or screenshots"
-                  title="Add files or screenshots to Composer"
-                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
-                  onClick={() => attachRef.current?.click()}
-                >
-                  <Paperclip className="size-3.5" />
-                </button>
-                <Link
-                  to="/login"
-                  search={{ next: "/app" }}
-                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-                >
-                  Sign in to send
-                </Link>
-                <Link
-                  to="/login"
-                  search={{ next: "/app" }}
-                  className={cn(buttonVariants({ size: "sm" }), "ml-auto")}
-                >
-                  <ArrowUp className="size-3.5" />
-                  Plan
-                </Link>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Add context"
-                  title="Add context with @"
-                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
-                  onClick={openContextPicker}
-                >
-                  <AtSign className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Add files or screenshots"
-                  title="Add files or screenshots to Composer"
-                  className="grid size-7 shrink-0 place-items-center rounded-md text-subtle hover:bg-elevated hover:text-fg"
-                  onClick={() => attachRef.current?.click()}
-                >
-                  <Paperclip className="size-3.5" />
-                </button>
-                {account && (
-                  <ModelPicker
-                    account={account}
-                    target={target}
-                    onTarget={setTarget}
-                    onAccount={setAccount}
-                    agents={agents}
-                  />
-                )}
-                <div className="ml-auto flex items-center gap-1">
-                  {account && (target.kind === "model" || account.backgroundJobs > 0) && (
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label="Run in the background"
-                      title={`Run in the background (${modSymbol()}+Shift+Enter): it works on its own copy while you keep going`}
-                      disabled={sendBlocked}
-                      onClick={() => void send(draft, true)}
-                    >
-                      <Clock className="size-3.5" />
-                    </Button>
-                  )}
-                  {agentRunning ? (
-                    <Button type="button" size="sm" aria-label="Stop" onClick={() => abortAgent()}>
-                      <Square className="size-3.5 fill-current" />
-                      Stop
-                    </Button>
-                  ) : (
-                    <Button type="submit" size="sm" disabled={sendBlocked} aria-label={sendLabel}>
-                      {sendPhase === "build" ? <Play className="size-3.5" /> : <ArrowUp className="size-3.5" />}
-                      {sendLabel}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
         </form>
         <input
           ref={attachRef}

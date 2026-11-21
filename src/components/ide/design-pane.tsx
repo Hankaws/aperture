@@ -376,7 +376,7 @@ export function DesignPane() {
             <MousePointer2 className="mx-auto size-6 text-accent" />
             <p className="mt-3 text-sm font-medium text-fg">Design Mode</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              This project has no HTML page to preview. Add one, then click an element to restyle it or pin a note for Composer.
+              Add an HTML page to preview it here.
             </p>
           </div>
         </div>

@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- Settings and the editor say less: the GitHub card, the Plan and Models tabs, and the editor's empty states now take one line each, with **Learn more** for the rest ([#244](https://github.com/Hankaws/aperture/pull/244)).
+
 ## 0.25.0 - 2026-11-21
 
 ### Changed

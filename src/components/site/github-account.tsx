@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LearnMore } from "@/components/ui/learn-more";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,8 +80,7 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
         <div>
           <p className="text-sm font-medium">GitHub</p>
           <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-            Connect the account you sign in with. Private repos, push, pull requests, and merge then use this token.
-            It needs repo access. It is encrypted and never sent back here.
+            Your bots and the editor work on GitHub as you, with this token. It is encrypted and never shown again.
           </p>
         </div>
         {!account ? (
@@ -134,25 +134,34 @@ export function GithubAccountCard({ onAccount }: { onAccount?: (account: GithubA
         </form>
       )}
       {account && !account.connected && (
-        <p className="mt-2 text-xs text-subtle">
-          No token yet?{" "}
-          <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
-            Make one on GitHub
-          </a>
-          , with the repo and workflow scopes already ticked, then paste it here. That token reaches every
-          repository you have. To limit it to some,{" "}
-          <a
-            href={NEW_FINE_GRAINED_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent underline underline-offset-2"
-          >
-            make a fine-grained one
-          </a>{" "}
-          for those repositories: Contents, Pull requests, Issues and Workflows on Read and write; Actions, Checks
-          and Commit statuses on Read. The Bot's setup checks also read Secrets, Variables and Administration, and
-          say so when they cannot.
-        </p>
+        <div className="mt-2">
+          <p className="text-xs text-subtle">
+            No token yet?{" "}
+            <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+              Make one on GitHub
+            </a>{" "}
+            with the scopes ticked, then paste it here.
+          </p>
+          <LearnMore label="Only some repositories?">
+            <p>
+              That token reaches every repository you have. To limit it to some,{" "}
+              <a
+                href={NEW_FINE_GRAINED_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent underline underline-offset-2"
+              >
+                make a fine-grained one
+              </a>{" "}
+              for those repositories: Contents, Pull requests, Issues and Workflows on Read and write; Actions, Checks
+              and Commit statuses on Read.
+            </p>
+            <p>
+              The Bot&apos;s setup checks also read Secrets, Variables and Administration, and say so when they
+              cannot. Private repos, push, pull requests and merge all use this token, so it needs repo access.
+            </p>
+          </LearnMore>
+        </div>
       )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>

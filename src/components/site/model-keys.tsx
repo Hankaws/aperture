@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LearnMore } from "@/components/ui/learn-more";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,14 +46,19 @@ export function ModelKeys({
         <div>
           <h2 className="text-xl font-medium tracking-tight">API keys</h2>
           <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
-            Attach the keys you already pay for. {plan.name} allows {plan.byokSlots}{" "}
-            {plan.byokSlots === 1 ? "provider" : "providers"}. A custom endpoint does not use a slot. Keys
-            are encrypted at rest and never sent back to the browser — only the last four characters.{" "}
-            <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
-              What that key’s provider can see.
-            </Link>
+            Attach the keys you already pay for: {plan.name} allows {plan.byokSlots}{" "}
+            {plan.byokSlots === 1 ? "provider" : "providers"}. They are encrypted and never shown again.
           </p>
-          <p className="mt-2 max-w-xl text-xs text-pretty text-subtle">{SECRETS_NOTE[account.secrets]}</p>
+          <LearnMore className="max-w-xl">
+            <p>
+              A custom endpoint does not use a slot. Keys are encrypted at rest, and only their last four characters
+              are ever sent back to the browser.{" "}
+              <Link to="/privacy" className="text-fg underline-offset-2 hover:underline">
+                What that key’s provider can see.
+              </Link>
+            </p>
+            <p>{SECRETS_NOTE[account.secrets]}</p>
+          </LearnMore>
         </div>
         <p className="text-sm tabular-nums text-subtle">
           {account.keyCount} / {account.byokSlots} keys

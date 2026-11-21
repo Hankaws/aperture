@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { pageHead } from "@/lib/page-head";
 import { AppShell } from "@/components/app/app-shell";
+import { LearnMore } from "@/components/ui/learn-more";
 import { ModelKeys } from "@/components/site/model-keys";
 import { GithubAccountCard } from "@/components/site/github-account";
 import { PricingTable } from "@/components/site/pricing-table";
@@ -69,9 +70,13 @@ function SettingsPage() {
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <p className="text-xs font-medium tracking-[0.16em] text-subtle uppercase">Account</p>
         <h1 className="mt-2 text-3xl font-medium tracking-tight">Settings</h1>
-        <p className="mt-2 text-sm text-muted">
-          Every send uses your own key or endpoint. You pick the model — there is no Auto. Session cap is on by default.
-        </p>
+        <p className="mt-2 text-sm text-muted">Your plan, your model keys, your limits and your agents.</p>
+        <LearnMore>
+          <p>
+            Every send uses your own key or endpoint, and you pick the model: there is no Auto. The session cap is on
+            by default, in Limits.
+          </p>
+        </LearnMore>
 
         <div className="mt-8 flex rounded-lg border border-border p-1">
           {TABS.map((item) => (
@@ -107,10 +112,14 @@ function SettingsPage() {
               </div>
               <div className="mt-6">
                 <p className="text-xs text-subtle">
-                  One send is one call on the key you picked, including the whole tool loop.{" "}
                   {account.keyCount} of {account.byokSlots} key slots used.
-                  {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is not on this plan."}
                 </p>
+                <LearnMore>
+                  <p>
+                    One send is one call on the key you picked, including the whole tool loop.
+                    {account.tab ? " Tab ghost-text uses your key." : " Tab ghost-text is not on this plan."}
+                  </p>
+                </LearnMore>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link to="/settings" search={{ tab: "models" }} className={cn(buttonVariants({ size: "sm" }))}>

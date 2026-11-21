@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { UserButton } from "@/lib/auth/gates";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export function AuthSlot({ compact = false, plain = false }: { compact?: boolean; plain?: boolean }) {
-  const { user, isPending } = useHydratedUserState();
+  const { user, isPending } = useCurrentUserState();
   if (isPending) {
     // The bar's "Open →" is a short text link. A wide pill here jumps the nav when the session settles.
     if (plain) return <div className="h-4 w-14 animate-pulse rounded-full bg-elevated" aria-hidden />;

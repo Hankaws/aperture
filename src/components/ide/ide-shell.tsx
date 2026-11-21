@@ -25,7 +25,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { PanelBoundary } from "@/components/ui/panel-boundary";
 import { getAiStatus } from "@/lib/agent/api";
 import { authEnabled, signOut } from "@/lib/auth/client";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useAccount, modelCaption } from "@/lib/billing/use-account";
 import { listPendingEdits } from "@/lib/workspace/edits";
 import { pendingForRun } from "@/lib/workspace/copies";
@@ -70,7 +70,7 @@ function useIsDesktop() {
 function MobileAccount() {
   // Server-rendered: the hydrated state, or the server's "Sign in" and the browser's
   // signed-in menu differ on first render (a hydration mismatch). As AuthSlot does.
-  const { user, isPending } = useHydratedUserState();
+  const { user, isPending } = useCurrentUserState();
   const setHelpOpen = useIdeUi((s) => s.setHelpOpen);
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { pageHead } from "@/lib/page-head";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { ApertureMark } from "@/components/ide/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const { next, error: providerError } = Route.useSearch();
-  const { user, isPending } = useHydratedUserState();
+  const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

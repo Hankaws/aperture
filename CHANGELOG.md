@@ -11,6 +11,10 @@ release notes are every line from there down to the previous version.
 
 - Settings and the editor say less: the GitHub card, the Plan and Models tabs, and the editor's empty states now take one line each, with **Learn more** for the rest ([#244](https://github.com/Hankaws/aperture/pull/244)).
 
+### Fixed
+
+- A visitor who keeps browsing no longer gets signed out for ten seconds at a time: checking who is signed in is not rate-limited any more, since the limiter only reset after a full quiet pause, so a steady trickle of page loads reached its cap. Signed-in pages also stop throwing away their first render: anything that asks who is signed in waits for the page to hydrate, so the server's HTML and the browser's agree. The plan buttons on Pricing wait for the session instead of ignoring an early click ([#245](https://github.com/Hankaws/aperture/pull/245)).
+
 ## 0.25.0 - 2026-11-21
 
 ### Changed

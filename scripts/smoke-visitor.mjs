@@ -257,6 +257,9 @@ try {
     // React drops clicks on a disabled button whatever the DOM says, so call its handler directly:
     // the request then really reaches the server, and only the server's answer passes.
     await page.goto(`${base}/pricing`, { waitUntil: "networkidle" });
+    // The handler ignores clicks until the session loads, and "Current plan" on Hobby shows once
+    // the session and the account both have: forcing it any sooner tests the race, not the server.
+    await page.getByRole("button", { name: "Current plan" }).first().waitFor({ timeout: 15_000 });
     const pro = page.getByRole("button", { name: "Coming soon" }).first();
     check(await pro.isDisabled(), "Pro cannot be picked on the pricing page");
     await pro.evaluate((el) => {
@@ -420,6 +423,19 @@ try {
     );
     clean(errors, "other host");
     await context.close();
+  }
+
+  // 5. Reading who is signed in is never rate-limited: a 429 there loads every page signed out.
+  {
+    const codes = await Promise.all(
+      Array.from({ length: 120 }, () =>
+        fetch(`${base}/api/auth/get-session`).then((r) => r.status),
+      ),
+    );
+    check(
+      !codes.includes(429),
+      `120 session reads in a row are all answered${codes.includes(429) ? `, but ${codes.filter((c) => c === 429).length} got 429` : ""}`,
+    );
   }
 } catch (error) {
   check(false, error instanceof Error ? error.message : String(error));

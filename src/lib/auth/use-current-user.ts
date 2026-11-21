@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useHydrated } from "@tanstack/react-router";
 import { authClient, authEnabled } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -51,6 +52,13 @@ export type CurrentUserState = {
  *   const { user, isPending } = useCurrentUserState();
  *   if (isPending) return null;              // still resolving — don't redirect yet
  *   if (!user) return <RedirectToSignIn />;  // definitely signed out
+ *
+ * Until the page has hydrated it reports pending, whatever the session store
+ * says. The server always renders a pending session, and the browser's store
+ * can settle first (a lazy route's code still loading), so branching on the
+ * raw state drew different markup on each side: a React hydration mismatch
+ * (#418) that threw away the server's HTML. A component mounted after
+ * hydration sees the real state on its first render.
  */
 export const useCurrentUserState: () => CurrentUserState = authEnabled ? useSessionUser : useDevUser;
 
@@ -58,7 +66,10 @@ function useDevUser(): CurrentUserState {
   return { user: DEV_USER, isPending: false };
 }
 
+const PENDING: CurrentUserState = { user: null, isPending: true };
+
 function useSessionUser(): CurrentUserState {
+  const hydrated = useHydrated();
   const { data, isPending } = authClient.useSession();
   const raw = data?.user;
   // The fields, not the object: the session hands back a new object on every read.
@@ -77,7 +88,7 @@ function useSessionUser(): CurrentUserState {
       isDevFallback: false,
     };
   }, [signedIn, id, name, email, image]);
-  return { user, isPending };
+  return hydrated ? { user, isPending } : PENDING;
 }
 
 /**

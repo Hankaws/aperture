@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.27.0 - 2026-11-21
+
 ### Added
 
 - **Best of 3, judged by the checks.** Type a task in Composer and pick Best of 3 from the + menu: it shows what three runs cost on your key, then runs the task three times in the background on the same files, each checked like any other run. When all three are in, the agent board ranks them by what the checks found (fewer red checks, clear on the first try, fewer amber, more checks passed, then the smaller change), says in a line why the best one won, and lets you compare any two side by side or open the best for review. The Composer panel shows it as one line until you pick ([#249](https://github.com/Hankaws/aperture/pull/249)).

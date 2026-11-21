@@ -124,6 +124,15 @@ function BotPage() {
               nothing red.
             </p>
           </div>
+        ) : user && !isPending ? (
+          <div>
+            <BotHeader tab={tab} />
+            <h2 className="mt-6 text-2xl font-medium tracking-tight">Your bot team</h2>
+            <p className="mt-1.5 text-sm text-pretty text-muted">
+              A bot for each repository: tell it what you want, and it opens a pull request only
+              when Aperture Agent Check finds nothing red.
+            </p>
+          </div>
         ) : (
           <>
             <BotHeader tab={tab} />
@@ -143,17 +152,11 @@ function BotPage() {
           ) : !user ? (
             <SignedOut />
           ) : !github?.connected ? (
-            <div className="space-y-8">
-              <MyBotCard />
-              <div className="space-y-3">
-                <h2 className="text-base font-medium">Give it your repositories</h2>
-                <p className="text-sm text-pretty text-muted">
-                  To work on your code, the bot reads and writes GitHub as you. Connect your GitHub
-                  account: a token with repo access, and the workflow scope if you want Aperture to
-                  add the bot to a repo for you.
-                </p>
+            <div className="space-y-6">
+              <SetUpSteps>
                 <GithubAccountCard onAccount={setGithub} />
-              </div>
+              </SetUpSteps>
+              <MyBotCard />
             </div>
           ) : (
             <PanelBoundary
@@ -182,6 +185,47 @@ function BotPage() {
         </div>
       </main>
     </PageFrame>
+  );
+}
+
+/**
+ * Setting up the team, until it is done: two steps, the first open. Once
+ * GitHub is connected the team's dashboard takes its place, with + for the
+ * first bot.
+ */
+function SetUpSteps({ children }: { children: React.ReactNode }) {
+  const step = "grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium";
+  return (
+    <section aria-label="Set up your bots" className="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+      <p className="text-sm font-medium">
+        Set up your bots <span className="font-normal text-subtle">· 2 steps</span>
+      </p>
+      <ol className="mt-4 space-y-4">
+        <li className="flex gap-3">
+          <span className={cn(step, "bg-accent text-bg")} aria-hidden>
+            1
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Connect GitHub</p>
+            <p className="mt-0.5 text-xs text-pretty text-muted">
+              Your bots read and write GitHub as you, with a token that has repo access.
+            </p>
+            <div className="mt-3">{children}</div>
+          </div>
+        </li>
+        <li className="flex gap-3 opacity-60">
+          <span className={cn(step, "bg-elevated text-muted ring-1 ring-border")} aria-hidden>
+            2
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Make your first bot</p>
+            <p className="mt-0.5 text-xs text-pretty text-muted">
+              Give it a name and a repository. It opens with the next step done.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
   );
 }
 

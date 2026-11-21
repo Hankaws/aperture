@@ -194,6 +194,14 @@ export const auth = betterAuth({
   // flicker-prevention guidance (gate on `isPending`; SSR the session).
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
+  // Reading the session is not rate-limited. Better Auth's limiter only resets
+  // its count after a full quiet window, so a steady trickle of page loads from
+  // one IP (one person browsing, or an office behind one address) reaches the
+  // cap and every page then loads signed out until it pauses. `/get-session`
+  // is a read, served from the cookie cache above, and no password is guessed
+  // through it; sign-in and sign-up keep their stricter limits.
+  rateLimit: { customRules: { "/get-session": false } },
+
   // Local email/password — toggled only via `./email-password` (not a plugin).
   ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
 

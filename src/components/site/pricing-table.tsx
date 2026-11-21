@@ -214,7 +214,8 @@ export function PricingTable({
                 <Button
                   className="mt-6 h-11 w-full"
                   variant={plan.featured ? "default" : "outline"}
-                  disabled={active || comingSoon || busy === plan.id}
+                  // Until the session loads a click would do nothing, so it cannot be made yet.
+                  disabled={active || comingSoon || busy === plan.id || isPending}
                   onClick={() => void activate(plan.id)}
                 >
                   {active

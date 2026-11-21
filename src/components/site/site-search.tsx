@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { showPricing } from "@/lib/billing/pricing-visible";
-import { useHydratedUserState } from "@/lib/use-hydrated-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 type Item = { label: string; hint: string; href?: string; to?: string };
 
@@ -21,7 +21,7 @@ const PAGES: Item[] = [
 ];
 
 export function SiteSearch() {
-  const { user } = useHydratedUserState();
+  const { user } = useCurrentUserState();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);

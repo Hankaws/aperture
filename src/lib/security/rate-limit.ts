@@ -80,10 +80,19 @@ export function rateLimit(
   return true;
 }
 
+const OVER = "Too many ";
+
 /** The message to answer with when `userId` is over the limit for `name`, else null (and the call is counted). */
 export function overLimit(name: LimitName, userId: string, now = Date.now()): string | null {
   if (rateLimit(`${name}:${userId}`, LIMITS[name], WINDOW_MS, now)) return null;
-  return `Too many ${WHAT[name]} in a minute. Wait a few seconds and try again.`;
+  return `${OVER}${WHAT[name]} in a minute. Wait a few seconds and try again.`;
+}
+
+/** Whether a server function's error is `overLimit`'s: a refresh in the background can keep what it had and try again later. */
+export function isOverLimit(error: string): boolean {
+  return (
+    error.startsWith(OVER) && error.endsWith(" in a minute. Wait a few seconds and try again.")
+  );
 }
 
 /** For tests: how many keys are held. */

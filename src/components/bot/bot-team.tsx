@@ -795,7 +795,7 @@ function BotRoom({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => void r.loadTasks()}
+                    onClick={() => void r.loadTasks(true)}
                     disabled={r.refreshing}
                     aria-label="Refresh tasks"
                   >

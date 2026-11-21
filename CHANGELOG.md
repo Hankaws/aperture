@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- A bot at work no longer trips its own limit. While a task runs, the Bot page and a bot's bubble each checked its tasks every 10 seconds, and with a few bubbles open that came close to the 30 Bot refreshes a minute you get; past it, the task list showed an error. Now the page and the bubbles share one check per repository, a minimized bubble checks once a minute, and a check that does meet the limit keeps the tasks shown and tries again. The limits themselves were already counted over the last minute, so a steady pace under them is never refused; a test now holds them to that ([#247](https://github.com/Hankaws/aperture/pull/247)).
+
 ## 0.26.0 - 2026-11-21
 
 ### Changed

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { heldKeys, LIMITS, overLimit, rateLimit } from "./rate-limit.ts";
+import { heldKeys, isOverLimit, LIMITS, overLimit, rateLimit } from "./rate-limit.ts";
 
 test("a user gets the limit's worth of calls a minute, then a message, then calls again a minute later", () => {
   const t0 = 1_000_000;
@@ -70,4 +70,21 @@ test("every server function that costs server time checks its limit first", asyn
       `${fn} in ${file} should call overLimit("${limit}", …)`,
     );
   }
+});
+
+test("a steady pace under the limit is never refused, however long it goes on", () => {
+  // The window slides: a limiter that only resets after a quiet minute would refuse this by call 31.
+  const t0 = 50_000_000;
+  for (let i = 0; i < 900; i++) {
+    assert.ok(rateLimit("steady", 30, 60_000, t0 + i * 2_100), `call ${i + 1}`);
+  }
+});
+
+test("isOverLimit knows overLimit's message and nothing else", () => {
+  const t0 = 90_000_000;
+  for (let i = 0; i < LIMITS.bot; i++) overLimit("bot", "u-over", t0 + i);
+  const message = overLimit("bot", "u-over", t0 + 100);
+  assert.ok(message && isOverLimit(message));
+  assert.equal(isOverLimit("Connect GitHub first, in Settings."), false);
+  assert.equal(isOverLimit("Too many open pull requests on this repo."), false);
 });

@@ -407,7 +407,8 @@ function BubbleBot({
   onReply: (text: string) => void;
   shown: boolean;
 }) {
-  const r = useRepoBot(bot.repo);
+  // Minimized, it checks in once a minute: the Bot page and an open bubble keep the fast pace.
+  const r = useRepoBot(bot.repo, { quiet: !shown });
   const lead = (
     <>
       <MascotAvatar mascot={bot.mascot} size={30} label="" />

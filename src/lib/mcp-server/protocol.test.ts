@@ -181,7 +181,7 @@ test("a red change says not to apply it and names the file and line", async () =
   assert.match(result?.content[0].text, /src\/index\.ts: TS2322 at line 2/);
   assert.deepEqual(
     result?.structuredContent.checks.map((row: { id: string }) => row.id),
-    ["parse", "imports", "types", "tests"],
+    ["parse", "imports", "types", "tests", "safety"],
   );
   assert.deepEqual(result?.structuredContent.notRun, [
     "tests: run the project's tests yourself",

@@ -69,11 +69,12 @@ const CHECKS = [
   ["The types", "No new errors"],
   ["The page", "It is blank"],
   ["The tests", "They pass"],
+  ["The secrets", "None in the code"],
 ] as const;
 
 export function ChecksStory() {
   const reduced = usePrefersReducedMotion();
-  const phase = useClock(6, 800, reduced);
+  const phase = useClock(7, 800, reduced);
   return (
     <section id="checks" className="border-t border-border">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-5 sm:py-28 lg:grid-cols-2">
@@ -110,7 +111,7 @@ export function ChecksStory() {
 
 const VISION = [
   ["Propose", "The model stages a change. The file stays."],
-  ["Check", "Five checks run on that change."],
+  ["Check", "Six checks run on that change."],
   ["Decide", "You press Apply. A red check does not."],
   ["Remember", "A miss is listed, and can become a lesson."],
 ] as const;

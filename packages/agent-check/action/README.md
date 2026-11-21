@@ -8,6 +8,7 @@ Copilot, Codex, Claude Code, Grok Bot and other agents now open pull requests on
 - **Imports resolve**: `import`, `export … from` and `require()` point at files that exist and packages in `package.json`, including in files that imported something the change deleted.
 - **Types**: the real TypeScript compiler with your installed packages' types, before and after, so only errors this change brings in are red, in the changed files and in the files that use them.
 - **Tests**: the project's own test script on this runner. If it fails, the base runs too, and a failure that was already there is reported as one, not blamed on the change. A change that skips, deletes, narrows or cuts short the tests is red even when what is left passes.
+- **Safety**: red for a key or token written into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values written into a `.env` file, and for a check switched off: `// @ts-nocheck`, `strict` loosened in tsconfig, a lint or typecheck script emptied. Amber, to look at and not held, for a new dependency, one installed from a URL, an install script, an edited CI workflow, a lockfile that moved with no dependency change, and a new `@ts-ignore` or `eslint-disable`. A key is never repeated, only its kind and line.
 
 A red check puts an annotation on the line in the pull request's **Files changed** tab and fails the step; the run's summary lists everything.
 

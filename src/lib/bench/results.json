@@ -85,7 +85,8 @@
         "imports": "skip",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -108,7 +109,8 @@
         "imports": "skip",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -129,7 +131,8 @@
         "imports": "skip",
         "types": "skip",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -153,7 +156,8 @@
         "imports": "fail",
         "types": "fail",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -175,7 +179,8 @@
         "imports": "fail",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -197,7 +202,8 @@
         "imports": "fail",
         "types": "fail",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -216,7 +222,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -235,7 +242,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -254,7 +262,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -273,7 +282,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -292,7 +302,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -315,7 +326,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -334,7 +346,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -355,7 +368,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -376,7 +390,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -397,7 +412,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -418,7 +434,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -439,7 +456,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -456,7 +474,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -473,7 +492,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -490,7 +510,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -507,7 +528,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -524,7 +546,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -541,7 +564,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -558,7 +582,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -575,7 +600,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -592,7 +618,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "skip"
+        "tests": "skip",
+        "safety": "pass"
       }
     },
     {
@@ -609,7 +636,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "warn"
+        "tests": "warn",
+        "safety": "pass"
       }
     },
     {
@@ -626,7 +654,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -643,7 +672,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -662,7 +692,8 @@
         "imports": "pass",
         "types": "fail",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -684,7 +715,8 @@
         "imports": "fail",
         "types": "fail",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -705,7 +737,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -726,7 +759,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -747,7 +781,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -764,7 +799,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -781,7 +817,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -798,7 +835,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -815,7 +853,8 @@
         "imports": "pass",
         "types": "pass",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -838,7 +877,8 @@
         "imports": "skip",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -861,7 +901,8 @@
         "imports": "fail",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -882,7 +923,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -903,7 +945,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     },
     {
@@ -920,7 +963,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -937,7 +981,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -954,7 +999,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -971,7 +1017,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "pass"
+        "tests": "pass",
+        "safety": "pass"
       }
     },
     {
@@ -992,7 +1039,8 @@
         "imports": "pass",
         "types": "skip",
         "preview": "skip",
-        "tests": "fail"
+        "tests": "fail",
+        "safety": "pass"
       }
     }
   ]

@@ -40,5 +40,6 @@ export const EXAMPLE = {
     "      5 | }",
     "      6 | ",
     "– Tests: Not run: this server does not run code. Run the project's tests before you apply the change.",
+    "✓ Safety: No keys, no checks switched off, no new packages, no CI changes.",
   ].join("\n"),
 };

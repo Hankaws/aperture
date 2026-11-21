@@ -8,7 +8,7 @@ type Item = { label: string; hint: string; href?: string; to?: string };
 
 const PAGES: Item[] = [
   { label: "How it works", hint: "You ask. It waits.", href: "/#how" },
-  { label: "Checks", hint: "Five checks, then Apply.", href: "/#checks" },
+  { label: "Checks", hint: "Six checks, then Apply.", href: "/#checks" },
   { label: "Benchmark", hint: "What the checks caught, and what they missed.", to: "/benchmark" },
   { label: "Chat", hint: "Your own bot: ask it anything.", to: "/chat" },
   { label: "Bot", hint: "Ask the coding bot, watch it work.", to: "/bot" },

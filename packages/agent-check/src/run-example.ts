@@ -51,6 +51,11 @@ export const RUN_EXAMPLE = {
       detail:
         "npm run test fails on this runner: not ok 2 - the label says how many items and what they cost",
     },
+    {
+      status: "pass",
+      label: "Safety",
+      detail: "No keys, no checks switched off, no new packages, no CI changes.",
+    },
   ] as Array<{ status: "pass" | "fail" | "warn" | "skip"; label: string; detail: string }>,
   annotations: [
     "::error file=src/cart.ts,line=11,title=Aperture Agent Check%3A Types::TS2554 at line 11: Expected 2 arguments, but got 1.",

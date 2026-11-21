@@ -257,7 +257,7 @@ function CheckRowItem({
         type="button"
         disabled={!onClick}
         title={problem ? undefined : row.detail}
-        aria-label={`${row.label}: ${SPOKEN[row.status]}. ${row.detail}`}
+        aria-label={`${row.label}: ${row.id === "safety" && row.status === "warn" ? "worth a look" : SPOKEN[row.status]}. ${row.detail}`}
         aria-expanded={expanded}
         data-check={row.id}
         data-status={row.status}
@@ -332,7 +332,7 @@ function ChecksExplainer() {
     <div role="note" className="mt-1.5 flex items-start gap-2 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-2 text-[12px] leading-snug text-muted">
       <p className="min-w-0 flex-1">
         <span className="text-fg">These checks ran on the staged change, before anything touched your files.</span>{" "}
-        Green passed. Red holds Apply and goes back to Composer once. Amber was already failing before this change.
+        Green passed. Red holds Apply and goes back to Composer once. Amber was already failing before this change, or is worth a look; it holds nothing.
         A dash could not run here, and says why.
       </p>
       <button type="button" onClick={dismiss} className="shrink-0 rounded px-1.5 py-0.5 text-fg hover:bg-elevated">

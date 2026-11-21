@@ -56,8 +56,9 @@ export const CHECK_TOOL = {
   title: "Check a change before applying it",
   description:
     "Checks a change to a JavaScript or TypeScript project the way the Aperture editor checks every staged " +
-    "change: Parses, Imports resolve, Types (the real TypeScript compiler, new errors only) and whether the " +
-    "change tampers with the tests. Nothing is executed and nothing is kept. Answers with each check's " +
+    "change: Parses, Imports resolve, Types (the real TypeScript compiler, new errors only), whether the " +
+    "change tampers with the tests, and Safety (keys or tokens written into the code, checks switched off; " +
+    "new packages and CI edits are flagged to look at). Nothing is executed and nothing is kept. Answers with each check's " +
     "result; a red check names the file, line and error. Tests and the page preview are not run.",
   inputSchema: {
     type: "object",

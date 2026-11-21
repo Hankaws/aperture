@@ -61,7 +61,7 @@ local in-process database (PGlite), so nothing else needs setting up.
     **Run again**, which starts the task over on your current files.
   - A run that was working when the tab closed says so after the reload; it
     does not resume. External agents (ACP) still run as server jobs on Pro.
-- **Check results on every change.** Five checks, each computed from the
+- **Check results on every change.** Six checks, each computed from the
   staged change itself:
   - **Parses**: the changed code, markup and JSON files parse.
   - **Imports resolve**: every import in the changed scripts resolves.
@@ -88,6 +88,7 @@ local in-process database (PGlite), so nothing else needs setting up.
     Check still reads it. `/benchmark` has the count.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
+  - **Safety**: red for a key or token written into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values written into a `.env` file, and for a check switched off: `// @ts-nocheck`, `strict` loosened in tsconfig, a lint or typecheck script emptied. Amber, to look at and not held, for a new dependency, one installed from a URL, an install script, an edited CI workflow, a lockfile that moved with no dependency change, and a new `@ts-ignore` or `eslint-disable`. A key is never repeated, only its kind and line.
 
   A check that could not run says why. It never shows as a pass.
 
@@ -194,14 +195,14 @@ local in-process database (PGlite), so nothing else needs setting up.
   under Settings → Agents → **Connect an agent** and point Grok Bot, Claude
   Code, Cursor or any MCP client at `/api/mcp`. Its one tool, `check_change`,
   takes the project and a change and answers with Parses, Imports resolve,
-  Types (the real compiler, new errors only) and whether the change tampers
-  with the tests, the same verdicts the editor gives. Nothing is run or kept,
+  Types (the real compiler, new errors only), whether the change tampers
+  with the tests, and Safety, the same verdicts the editor gives. Nothing is run or kept,
   so the agent runs its own tests. Free on every plan. `/agents` has the
   setup for each agent and a real answer.
 - **Aperture Agent Check, for every pull request.** The same checks as a
   GitHub Action (`packages/agent-check`): add one step, and every pull
   request, an agent's or yours, gets Parses, Imports resolve, Types with
-  your installed packages' real types, and your own tests, with red lines
+  your installed packages' real types, your own tests, and Safety, with red lines
   on the files it changed. It runs on your runner; nothing leaves it.
 
 ## Using a real model

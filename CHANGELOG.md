@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- A sixth check, **Safety**, on every staged change, in Agent Check on every pull request, and in `check_change` for any agent. It is red when a change writes a key or token into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values into a `.env` file, and when it switches a check off to get past it (`// @ts-nocheck`, `strict` loosened, a lint or typecheck script emptied): Apply waits, and the agent is told to read the key from the environment or fix what the check found. A new dependency, one from a URL, an install script, an edited CI workflow, a lockfile that moved on its own, and a new `@ts-ignore` or `eslint-disable` are amber, to look at, and hold nothing. A key is never repeated, only its kind and its line ([#248](https://github.com/Hankaws/aperture/pull/248)).
+
 ### Fixed
 
 - A bot at work no longer trips its own limit. While a task runs, the Bot page and a bot's bubble each checked its tasks every 10 seconds, and with a few bubbles open that came close to the 30 Bot refreshes a minute you get; past it, the task list showed an error. Now the page and the bubbles share one check per repository, a minimized bubble checks once a minute, and a check that does meet the limit keeps the tasks shown and tries again. The limits themselves were already counted over the last minute, so a steady pace under them is never refused; a test now holds them to that ([#247](https://github.com/Hankaws/aperture/pull/247)).

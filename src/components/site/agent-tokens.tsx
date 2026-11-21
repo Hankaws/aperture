@@ -75,7 +75,8 @@ export function AgentTokens({ guide = true }: { guide?: boolean }) {
         <p className="mt-1 max-w-xl text-sm text-pretty text-muted">
           Let Grok Bot, Claude Code, Cursor or any MCP client check its own changes with Aperture
           before it applies them: Parses, Imports resolve and Types, the same checks as the editor,
-          plus tests skipped or cut short. Nothing the agent sends is run or kept. Free on every
+          plus tests skipped or cut short, and Safety: keys written into the code, checks switched
+          off. Nothing the agent sends is run or kept. Free on every
           plan.{" "}
           {guide && (
             <Link

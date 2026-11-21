@@ -43,11 +43,11 @@ test("a failed parse counts while tests are still running", () => {
   assert.equal(canApply(null), false);
 });
 
-test("five rows, always in the same order", () => {
+test("six rows, always in the same order", () => {
   const rows = changeChecks({ files: FILES, edits: [edit("src/a.ts", FILES["src/a.ts"])], render: null });
   assert.deepEqual(
     rows.map((r) => r.id),
-    ["parse", "imports", "types", "preview", "tests"],
+    ["parse", "imports", "types", "preview", "tests", "safety"],
   );
 });
 
@@ -166,7 +166,36 @@ test("an import of a file staged in the same change resolves", () => {
 
 test("a change with nothing checkable skips rather than passes", () => {
   const rows = changeChecks({ files: FILES, edits: [edit("README.md", "# hi")], render: null });
-  for (const r of rows) assert.equal(r.status, "skip", r.id);
+  // Safety reads every file for keys, a README too, so its pass is earned.
+  for (const r of rows) assert.equal(r.status, r.id === "safety" ? "pass" : "skip", r.id);
+});
+
+test("a key in the change turns Safety red, holds Apply, and is never repeated", () => {
+  const key = ["gh", "p_", "Zq9Xw8Vu7Ts6Rq5Po4Nm3Lk2Ji1Hg0Fe9Dc8B"].join("");
+  const rows = changeChecks({
+    files: FILES,
+    edits: [edit("src/a.ts", `export const token = "${key}";\n`)],
+    render: null,
+  });
+  const safety = row(rows, "safety");
+  assert.equal(safety.status, "fail");
+  assert.equal(safety.detail, "src/a.ts: adds a GitHub token at line 1");
+  assert.equal(checkStripState(rows), "failed");
+  assert.ok(!JSON.stringify(rows).includes(key));
+  assert.match(safety.evidence ?? "", /read them from the environment/);
+});
+
+test("a new package is amber on Safety and holds nothing", () => {
+  const files = { ...FILES, "package.json": JSON.stringify({ dependencies: {} }) };
+  const rows = changeChecks({
+    files,
+    edits: [edit("package.json", JSON.stringify({ dependencies: { "left-pad": "^1.3.0" } }))],
+    render: null,
+  });
+  const safety = row(rows, "safety");
+  assert.equal(safety.status, "warn");
+  assert.match(safety.detail, /^Worth a look: package\.json adds a dependency: left-pad/);
+  assert.notEqual(checkStripState(rows), "failed");
 });
 
 test("the preview row reads the staged render, never assumes it", () => {

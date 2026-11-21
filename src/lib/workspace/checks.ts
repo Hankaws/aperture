@@ -16,13 +16,14 @@ import type { TscOutcome } from "./tsc";
 import type { HookRun } from "./hooks.ts";
 import { excerpt } from "../runner/stack.ts";
 import { testTampering } from "../runner/tampering.ts";
+import { safetyFindings, type SafetyFinding } from "./safety.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
 
 /** `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). `skill:<script>`: a loaded skill's check (`agent/skill-checks.ts`). */
-export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | `hook:${string}` | `skill:${string}`;
-/** `warn`: failing, but failing the same way before this change. */
+export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | "safety" | `hook:${string}` | `skill:${string}`;
+/** `warn`: failing, but failing the same way before this change. On the Safety row: worth a look, not wrong by itself. */
 export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
 export type CheckRow = {
@@ -339,7 +340,46 @@ export function changeChecks(input: {
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
   const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testTampering(files, edits));
-  return [parsesRow, imports, types, preview, tests, ...(input.hooks ?? []).map(hookRow), ...skillRows(verify ?? null)];
+  const safety = safetyRow(safetyFindings(files, edits));
+  return [parsesRow, imports, types, preview, tests, safety, ...(input.hooks ?? []).map(hookRow), ...skillRows(verify ?? null)];
+}
+
+/**
+ * What the change does that the other rows cannot see (`safety.ts`). Red holds
+ * Apply and goes back to the agent with what to do instead; a look is amber and
+ * holds nothing. A key is never repeated here, only its kind and its line.
+ */
+export function safetyRow(findings: SafetyFinding[]): CheckRow {
+  const line = (f: SafetyFinding) => `${f.path}: ${f.what}`;
+  const red = findings.filter((f) => f.level === "red");
+  const look = findings.filter((f) => f.level === "look");
+  const more = (n: number) => (n > 0 ? ` (+${n} more)` : "");
+  if (red.length > 0)
+    return {
+      id: "safety",
+      label: "Safety",
+      status: "fail",
+      detail: `${line(red[0]!)}${more(findings.length - 1)}`,
+      path: red[0]!.path,
+      evidence: [
+        ...findings.map(line),
+        "Do not write keys, tokens or passwords into the code or a .env file: read them from the environment (process.env) and say which variable to set. Do not switch a check off to get past it; fix what it finds.",
+      ].join("\n"),
+    };
+  if (look.length > 0)
+    return {
+      id: "safety",
+      label: "Safety",
+      status: "warn",
+      detail: `Worth a look: ${look.map((f) => `${f.path} ${f.what}`).join("; ")}`,
+      path: look[0]!.path,
+    };
+  return {
+    id: "safety",
+    label: "Safety",
+    status: "pass",
+    detail: "No keys, no checks switched off, no new packages, no CI changes.",
+  };
 }
 
 /**

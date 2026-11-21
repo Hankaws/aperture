@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- **Best of 3, judged by the checks.** Type a task in Composer and pick Best of 3 from the + menu: it shows what three runs cost on your key, then runs the task three times in the background on the same files, each checked like any other run. When all three are in, the agent board ranks them by what the checks found (fewer red checks, clear on the first try, fewer amber, more checks passed, then the smaller change), says in a line why the best one won, and lets you compare any two side by side or open the best for review. The Composer panel shows it as one line until you pick ([#249](https://github.com/Hankaws/aperture/pull/249)).
 - A sixth check, **Safety**, on every staged change, in Agent Check on every pull request, and in `check_change` for any agent. It is red when a change writes a key or token into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values into a `.env` file, and when it switches a check off to get past it (`// @ts-nocheck`, `strict` loosened, a lint or typecheck script emptied): Apply waits, and the agent is told to read the key from the environment or fix what the check found. A new dependency, one from a URL, an install script, an edited CI workflow, a lockfile that moved on its own, and a new `@ts-ignore` or `eslint-disable` are amber, to look at, and hold nothing. A key is never repeated, only its kind and its line ([#248](https://github.com/Hankaws/aperture/pull/248)).
 
 ### Fixed

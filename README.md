@@ -61,6 +61,13 @@ local in-process database (PGlite), so nothing else needs setting up.
     **Run again**, which starts the task over on your current files.
   - A run that was working when the tab closed says so after the reload; it
     does not resume. External agents (ACP) still run as server jobs on Pro.
+- **Best of 3, judged by the checks.** Type a task and pick **Best of 3**
+  from the + menu: it shows what three runs cost on your key, then runs the
+  task three times in the background, each checked like any other run. The
+  agent board ranks the attempts by what the checks found (fewer red, clear
+  on the first try, fewer amber, more checks passed, then the smaller
+  change) and says why the best one won. Compare any two side by side, or
+  open the best for review and Apply.
 - **Check results on every change.** Six checks, each computed from the
   staged change itself:
   - **Parses**: the changed code, markup and JSON files parse.

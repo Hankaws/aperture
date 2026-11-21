@@ -17,8 +17,11 @@ import {
 } from "@/lib/workspace/board";
 import { activeCopyOf, openCopyIds } from "@/lib/workspace/copies";
 import { useWorkspace } from "@/lib/workspace/store";
-import { boardStage } from "@/lib/agent/background";
-import { BackgroundCard } from "./background-runs";
+import { boardStage, type BackgroundRun } from "@/lib/agent/background";
+import { attemptFiles, groupsOf, groupStage, rankAttempts } from "@/lib/agent/best-of";
+import { BackgroundCard, CheckDots } from "./background-runs";
+import { openRun as openAttempt } from "./open-background-run";
+import { BestOfCard } from "./best-of-card";
 import { useVisibleBackgroundRuns } from "@/lib/agent/use-background-runs";
 
 function ago(ts: number): string {
@@ -291,6 +294,83 @@ function Compare({
   );
 }
 
+/** Two attempts of one Best of 3, file by file, each with its place in the ranking. */
+function AttemptCompare({
+  group,
+  pair,
+  onPair,
+}: {
+  group: BackgroundRun[];
+  pair: [string, string];
+  onPair: (pair: [string, string]) => void;
+}) {
+  const ranked = rankAttempts(group).ranked.filter((a) => a.files > 0);
+  const find = (id: string, fallback: number) =>
+    ranked.find((a) => a.run.id === id) ?? ranked[fallback] ?? ranked[0]!;
+  const left = find(pair[0], 0);
+  const right = find(pair[1], 1);
+  const rows = compareFiles({ files: attemptFiles(left.run) }, { files: attemptFiles(right.run) });
+  const sides = [
+    { a: left, pick: (id: string) => onPair([id, right.run.id]), label: "Left attempt" },
+    { a: right, pick: (id: string) => onPair([left.run.id, id]), label: "Right attempt" },
+  ];
+  const name = (index: number | undefined) => `Attempt ${(index ?? 0) + 1}`;
+  return (
+    <div className="aperture-scroll min-h-0 flex-1 overflow-y-auto">
+      <p className="mb-3 text-xs text-muted">
+        {group[0]!.instruction} · ranked by the checks. Open one to review and apply it; the others
+        stay on the board until you discard them.
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {sides.map(({ a, pick, label }) => (
+          <div key={label} className="min-w-0 rounded-xl border border-border bg-bg p-3">
+            <select
+              aria-label={label}
+              value={a.run.id}
+              onChange={(e) => pick(e.target.value)}
+              className="h-8 w-full min-w-0 rounded-md border border-border bg-bg px-2 text-sm text-fg"
+            >
+              {ranked.map((option) => (
+                <option key={option.run.id} value={option.run.id}>
+                  {option.rank}. {name(option.run.group?.index)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-muted">{a.reason}</p>
+            {a.run.checks && (
+              <div className="mt-1.5">
+                <CheckDots rows={a.run.checks.filter((row) => row.status !== "skip")} />
+              </div>
+            )}
+            <Button size="sm" className="mt-2" onClick={() => openAttempt(a.run)}>
+              {a.rank === 1 ? "Open the best" : "Open this one"}
+            </Button>
+          </div>
+        ))}
+      </div>
+      <ul className="mt-3 space-y-3">
+        {rows.map((row) => (
+          <li key={row.path} className="overflow-hidden rounded-xl border border-border">
+            <p className="truncate border-b border-border bg-elevated px-3 py-1.5 font-mono text-xs text-fg">
+              {row.path}
+            </p>
+            <div className="grid divide-border md:grid-cols-2 md:divide-x max-md:divide-y">
+              <div className="min-w-0">
+                <p className="px-3 pt-1.5 text-[11px] text-subtle md:hidden">{name(left.run.group?.index)}</p>
+                <DiffBlock file={row.left} />
+              </div>
+              <div className="min-w-0">
+                <p className="px-3 pt-1.5 text-[11px] text-subtle md:hidden">{name(right.run.group?.index)}</p>
+                <DiffBlock file={row.right} />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Every Composer run in this workspace, and background jobs, by where each
  * stands: working, waiting on you, staged for review, or done. Two staged
@@ -305,6 +385,7 @@ export function AgentBoard() {
   const running = useWorkspace((s) => s.agentRunning);
   const activeCopyId = useWorkspace((s) => s.activeCopyId);
   const [pair, setPair] = useState<[string, string] | null>(null);
+  const [attemptPair, setAttemptPair] = useState<[string, string] | null>(null);
   const background = useVisibleBackgroundRuns();
 
   const runs = useMemo(() => {
@@ -325,8 +406,18 @@ export function AgentBoard() {
   const checksFor = (run: BoardRun): CheckState =>
     staged.length === 1 || (run.copyId ?? null) === shownCopy ? checkState : null;
   const shownJobs = jobs.filter((job) => !(job.status === "done" && jobOpened(job, messages)));
-  const comparing = pair !== null && staged.length >= 2;
-  const total = runs.length + shownJobs.length + background.length;
+  // A Best of 3 is one card; its attempts are not shown again on their own.
+  const plain = background.filter((run) => !run.group);
+  const groups = groupsOf(background);
+  const attemptGroup = attemptPair
+    ? groups.find((group) => group.some((run) => run.id === attemptPair[0]))
+    : undefined;
+  const comparingAttempts =
+    attemptPair !== null &&
+    attemptGroup !== undefined &&
+    rankAttempts(attemptGroup).ranked.filter((a) => a.files > 0).length >= 2;
+  const comparing = (pair !== null && staged.length >= 2) || comparingAttempts;
+  const total = runs.length + shownJobs.length + plain.length + groups.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
@@ -348,7 +439,10 @@ export function AgentBoard() {
               variant="ghost"
               size="icon-sm"
               aria-label="Back to the board"
-              onClick={() => setPair(null)}
+              onClick={() => {
+                setPair(null);
+                setAttemptPair(null);
+              }}
             >
               <ArrowLeft className="size-4" />
             </Button>
@@ -356,7 +450,7 @@ export function AgentBoard() {
             <LayoutGrid className="size-4 text-subtle" aria-hidden />
           )}
           <h2 id="agent-board-title" className="min-w-0 flex-1 truncate text-base font-medium">
-            {comparing ? "Compare runs" : "Agent board"}
+            {comparingAttempts ? "Compare attempts" : comparing ? "Compare runs" : "Agent board"}
             {!comparing && (
               <span className="ml-2 text-sm font-normal text-subtle">
                 {total} {total === 1 ? "run" : "runs"}
@@ -384,8 +478,10 @@ export function AgentBoard() {
             <X className="size-4" />
           </Button>
         </div>
-        {comparing ? (
-          <Compare runs={staged} pair={pair} onPair={setPair} checksFor={checksFor} />
+        {comparingAttempts ? (
+          <AttemptCompare group={attemptGroup!} pair={attemptPair!} onPair={setAttemptPair} />
+        ) : comparing ? (
+          <Compare runs={staged} pair={pair!} onPair={setPair} checksFor={checksFor} />
         ) : total === 0 ? (
           <p className="rounded-xl border border-border bg-bg px-3 py-4 text-sm text-muted">
             No runs yet. Ask Composer for a change: each request shows up here, from its plan to the
@@ -396,13 +492,14 @@ export function AgentBoard() {
             {STAGES.map((stage) => {
               const here = runs.filter((run) => run.stage === stage.id);
               const herejobs = shownJobs.filter((job) => jobStage(job) === stage.id);
-              const herebg = background.filter((run) => boardStage(run) === stage.id);
-              const count = here.length + herejobs.length + herebg.length;
+              const herebg = plain.filter((run) => boardStage(run) === stage.id);
+              const heregroups = groups.filter((group) => groupStage(group) === stage.id);
+              const count = here.length + herejobs.length + herebg.length + heregroups.length;
               return (
                 <section
                   key={stage.id}
                   aria-label={stage.label}
-                  className="flex min-h-0 flex-col rounded-xl bg-elevated/60 p-2"
+                  className="flex flex-col rounded-xl bg-elevated/60 p-2 md:min-h-0"
                 >
                   <h3 className="mb-2 flex items-center justify-between px-1 text-[0.65rem] tracking-[0.14em] text-subtle uppercase">
                     {stage.label}
@@ -411,9 +508,12 @@ export function AgentBoard() {
                   {count === 0 ? (
                     <p className="px-1 pb-1 text-xs text-subtle">Nothing here.</p>
                   ) : (
-                    <ul className="aperture-scroll min-h-0 space-y-2 md:overflow-y-auto">
+                    <ul className="aperture-scroll space-y-2 md:min-h-0 md:overflow-y-auto">
                       {here.map((run) => (
                         <RunCard key={run.id} run={run} checks={checksFor(run)} />
+                      ))}
+                      {heregroups.map((group) => (
+                        <BestOfCard key={group[0]!.group!.id} group={group} onCompare={setAttemptPair} />
                       ))}
                       {herebg.map((run) => (
                         <BackgroundCard key={run.id} run={run} />

@@ -6,27 +6,13 @@ import { useIdeUi } from "@/lib/ui-store";
 import { boardStage, isLive, pendingEdits, type BackgroundRun } from "@/lib/agent/background";
 import {
   discardBackgroundRun,
-  openBackgroundRun,
   rerunBackgroundRun,
   stopBackgroundRun,
 } from "@/lib/agent/background-runner";
 import { useVisibleBackgroundRuns } from "@/lib/agent/use-background-runs";
 import type { CheckRow } from "@/lib/workspace/checks";
-
-function open(run: BackgroundRun) {
-  const outcome = openBackgroundRun(run.id);
-  if (!outcome.ok) {
-    toast.error(outcome.error);
-    return;
-  }
-  useIdeUi.getState().setBoardOpen(false);
-  useIdeUi.setState({ chatOpen: true, mobilePane: "editor" });
-  toast.success(
-    outcome.merged.length > 0
-      ? `Opened, carried onto your newer ${outcome.merged.join(", ")}`
-      : "Opened for review",
-  );
-}
+import { openRun } from "./open-background-run";
+import { bestLine, groupsOf, groupStage, rankAttempts } from "@/lib/agent/best-of";
 
 function rerun(run: BackgroundRun) {
   const why = rerunBackgroundRun(run.id);
@@ -41,7 +27,7 @@ const ICON = {
   running: LoaderCircle,
 } as const;
 
-function CheckDots({ rows }: { rows: CheckRow[] }) {
+export function CheckDots({ rows }: { rows: CheckRow[] }) {
   return (
     <ul className="flex flex-wrap gap-1" aria-label="Checks on this run's change">
       {rows.map((row) => {
@@ -84,7 +70,7 @@ function Actions({ run, compact }: { run: BackgroundRun; compact?: boolean }) {
         </Button>
       )}
       {stage === "review" && (
-        <Button size="sm" className={size} onClick={() => open(run)}>
+        <Button size="sm" className={size} onClick={() => openRun(run)}>
           Open
         </Button>
       )}
@@ -162,8 +148,12 @@ export function BackgroundCard({ run }: { run: BackgroundRun }) {
 /** The Composer panel's line for background runs: what is working, and what is ready. */
 export function BackgroundTray() {
   const runs = useVisibleBackgroundRuns();
-  const shown = runs.filter((run) => isLive(run) || boardStage(run) !== "done").slice(0, 4);
-  if (shown.length === 0) return null;
+  const shown = runs
+    .filter((run) => !run.group && (isLive(run) || boardStage(run) !== "done"))
+    .slice(0, 4);
+  // A Best of 3 is one line: its attempts are chosen between on the board, not opened from here.
+  const groups = groupsOf(runs).filter((group) => groupStage(group) !== "done");
+  if (shown.length === 0 && groups.length === 0) return null;
   const live = runs.filter(isLive).length;
   const ready = runs.filter((run) => boardStage(run) === "review").length;
   return (
@@ -182,6 +172,36 @@ export function BackgroundTray() {
         </button>
       </div>
       <ul className="space-y-1 px-3 pb-2">
+        {groups.map((group) => {
+          const live = group.some(isLive);
+          return (
+            <li
+              key={group[0]!.group!.id}
+              className="flex items-center gap-2 rounded-md bg-bg px-2 py-1"
+              data-best-of-tray
+            >
+              <span
+                className={cn("size-1.5 shrink-0 rounded-full", live ? "animate-pulse bg-accent" : "bg-ok")}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[11px] text-fg">
+                  Best of {group.length} · {group[0]!.instruction}
+                </span>
+                <span className="block truncate text-[11px] text-subtle">
+                  {bestLine(rankAttempts(group))}
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant={live ? "ghost" : "default"}
+                className="h-6 px-2 text-[11px]"
+                onClick={() => useIdeUi.getState().setBoardOpen(true)}
+              >
+                {live ? "Board" : "Pick"}
+              </Button>
+            </li>
+          );
+        })}
         {shown.map((run) => (
           <li key={run.id} className="flex items-center gap-2 rounded-md bg-bg px-2 py-1">
             <span

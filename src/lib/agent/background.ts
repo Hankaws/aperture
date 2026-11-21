@@ -62,6 +62,8 @@ export type BackgroundRun = {
   rules?: string[];
   /** Files you changed since the run started, in the same lines: it cannot be opened as it is. */
   conflicts?: string[];
+  /** One attempt of a Best of 3 (best-of.ts): the group, and which attempt (0-based) of how many. */
+  group?: { id: string; index: number; of: number };
 };
 
 export type BoardStage = "working" | "needs-you" | "review" | "done";

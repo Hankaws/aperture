@@ -29,9 +29,12 @@ import {
 } from "@/lib/workspace/checks";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
 import { agentPayload, openAgentStream } from "./run";
+import { BEST_OF, bestOfBlocked } from "./best-of";
 import {
+  MAX_BACKGROUND_RUNS,
   fixInstruction,
   isLive,
+  liveCount,
   pendingEdits,
   readyLine,
   rebaseEdits,
@@ -313,10 +316,41 @@ export function startBackgroundRun(instruction: string, source: ModelSource): st
   const ws = useWorkspace.getState();
   const blocked = startBlocked(runsFor(useBackgroundRuns.getState().runs, ws.name));
   if (blocked) return blocked;
-  const run: BackgroundRun = {
+  launch([newRun(text, ws.name, source)], ws.files);
+  return null;
+}
+
+/**
+ * Best of 3: the same task as three background runs on the same files, each
+ * checked like any other. The board ranks them by what the checks earned
+ * (best-of.ts). Needs three free slots, so all three start together.
+ */
+export function startBestOf(instruction: string, source: ModelSource): string | null {
+  const text = instruction.trim();
+  if (!text) return "Say what the runs should do.";
+  hydrateBackgroundRuns();
+  const ws = useWorkspace.getState();
+  const blocked = bestOfBlocked(
+    liveCount(runsFor(useBackgroundRuns.getState().runs, ws.name)),
+    MAX_BACKGROUND_RUNS,
+  );
+  if (blocked) return blocked;
+  const group = `best_${crypto.randomUUID()}`;
+  launch(
+    Array.from({ length: BEST_OF }, (_, index) => ({
+      ...newRun(text, ws.name, source),
+      group: { id: group, index, of: BEST_OF },
+    })),
+    ws.files,
+  );
+  return null;
+}
+
+function newRun(instruction: string, workspace: string, source: ModelSource): BackgroundRun {
+  return {
     id: `bg_${crypto.randomUUID()}`,
-    instruction: text,
-    workspace: ws.name,
+    instruction,
+    workspace,
     source,
     createdAt: Date.now(),
     state: "working",
@@ -327,13 +361,41 @@ export function startBackgroundRun(instruction: string, source: ModelSource): st
     fixed: false,
     steps: 0,
   };
-  useBackgroundRuns.setState((state) => ({ runs: [run, ...state.runs] }));
+}
+
+/** Every run starts from the same snapshot of the files: the ones as they are now. */
+function launch(runs: BackgroundRun[], files: Record<string, string>) {
+  useBackgroundRuns.setState((state) => ({ runs: [...runs, ...state.runs] }));
   save();
   void import("@/lib/workspace/tsc")
-    .then((tsc) => tsc.warmTypecheck(ws.files))
+    .then((tsc) => tsc.warmTypecheck(files))
     .catch(() => undefined);
-  void drive(run.id, ws.files, text, source);
-  return null;
+  for (const run of runs) void drive(run.id, files, run.instruction, run.source);
+}
+
+/** A Best of 3, every attempt: stopped and taken off the board. */
+export function discardGroup(groupId: string) {
+  const ids = useBackgroundRuns
+    .getState()
+    .runs.filter((run) => run.group?.id === groupId)
+    .map((run) => run.id);
+  for (const id of ids) discardBackgroundRun(id);
+}
+
+/** The same Best of 3 again, on the files as they are now. */
+export function rerunGroup(groupId: string): string | null {
+  const first = useBackgroundRuns.getState().runs.find((run) => run.group?.id === groupId);
+  if (!first) return null;
+  for (const run of useBackgroundRuns.getState().runs)
+    if (run.group?.id === groupId) stopBackgroundRun(run.id);
+  const blocked = startBestOf(first.instruction, first.source);
+  if (!blocked) {
+    useBackgroundRuns.setState((state) => ({
+      runs: state.runs.filter((run) => run.group?.id !== groupId),
+    }));
+    save();
+  }
+  return blocked;
 }
 
 export function stopBackgroundRun(id: string) {

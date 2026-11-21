@@ -9,6 +9,7 @@ import {
   Paperclip,
   Plus,
   Sparkles,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -138,6 +139,7 @@ export function PlusMenu({
   onAttach,
   onBackground,
   backgroundTitle,
+  onBestOf,
   children,
 }: {
   onContext: () => void;
@@ -145,6 +147,8 @@ export function PlusMenu({
   /** Runs the message in the background; left out when it cannot. */
   onBackground?: () => void;
   backgroundTitle?: string;
+  /** Runs the message three times in the background and lets the checks pick; left out when it cannot. */
+  onBestOf?: () => void;
   /** More, under the actions: the crew, the quick actions. */
   children?: ReactNode;
 }) {
@@ -192,6 +196,17 @@ export function PlusMenu({
               <span>
                 <span className="block font-medium text-fg">Run in the background</span>
                 <span className="block text-subtle">{backgroundTitle}</span>
+              </span>
+            </button>
+          )}
+          {onBestOf && (
+            <button type="button" role="menuitem" onClick={act(onBestOf)} className={ROW}>
+              <Trophy className="mt-0.5 size-3.5 shrink-0 text-muted" aria-hidden />
+              <span>
+                <span className="block font-medium text-fg">Best of 3</span>
+                <span className="block text-subtle">
+                  Three attempts in the background; the checks pick the best
+                </span>
               </span>
             </button>
           )}

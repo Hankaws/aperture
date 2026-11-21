@@ -17,16 +17,19 @@ export const Route = createFileRoute("/chat")({
 function Chat() {
   const { c } = Route.useSearch();
   const { user, isPending } = useCurrentUserState();
+  // Signed in, the chat is in the app's frame (`ChatPage`); signed out, on the site.
+  if (user)
+    return (
+      <PanelBoundary name="The chat" className="flex h-dvh flex-col bg-bg">
+        <ChatPage chat={c} />
+      </PanelBoundary>
+    );
   return (
     <div className="flex h-dvh flex-col bg-bg text-fg">
-      <SiteNav />
+      {!isPending && <SiteNav />}
       <main className="flex min-h-0 flex-1 flex-col border-t border-border">
         {isPending ? (
           <div className="m-4 flex-1 animate-pulse rounded-2xl bg-elevated" aria-hidden />
-        ) : user ? (
-          <PanelBoundary name="The chat" className="flex min-h-0 flex-1 flex-col">
-            <ChatPage chat={c} />
-          </PanelBoundary>
         ) : (
           <div className="mx-auto max-w-md px-4 py-16 text-center">
             <h1 className="text-2xl font-medium tracking-tight">Your own bot</h1>

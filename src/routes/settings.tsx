@@ -1,7 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { pageHead } from "@/lib/page-head";
-import { SiteNav } from "@/components/site/site-nav";
-import { SiteFooter } from "@/components/site/site-footer";
+import { AppShell } from "@/components/app/app-shell";
 import { ModelKeys } from "@/components/site/model-keys";
 import { GithubAccountCard } from "@/components/site/github-account";
 import { PricingTable } from "@/components/site/pricing-table";
@@ -54,7 +53,6 @@ function SettingsPage() {
   if (isPending) {
     return (
       <div className="min-h-dvh bg-bg">
-        <SiteNav />
         <div className="mx-auto mt-16 h-64 max-w-3xl animate-pulse rounded-2xl bg-elevated" />
       </div>
     );
@@ -67,8 +65,7 @@ function SettingsPage() {
   const plan = account ? planById(account.plan) : planById("hobby");
 
   return (
-    <div className="min-h-dvh bg-bg text-fg">
-      <SiteNav />
+    <AppShell landmark={false}>
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <p className="text-xs font-medium tracking-[0.16em] text-subtle uppercase">Account</p>
         <h1 className="mt-2 text-3xl font-medium tracking-tight">Settings</h1>
@@ -170,7 +167,6 @@ function SettingsPage() {
         )}
         {user && <DeleteAccount />}
       </main>
-      <SiteFooter />
-    </div>
+    </AppShell>
   );
 }

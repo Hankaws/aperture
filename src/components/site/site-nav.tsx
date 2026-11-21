@@ -5,7 +5,7 @@ import { AuthSlot } from "./auth-slot";
 import { SiteSearch } from "./site-search";
 import { SiteLinks, SiteTabs } from "./site-tabs";
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const [light, setLight] = useState(false);
   useEffect(() => {
     const sync = () => setLight(document.documentElement.dataset.theme === "light");

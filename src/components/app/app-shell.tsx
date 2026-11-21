@@ -22,6 +22,9 @@ import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import type { ChatMeta } from "@/lib/bot/my-bot";
 import { cn } from "@/lib/utils";
+import { pulseLine } from "@/lib/bot/board";
+import { usePulse } from "@/lib/bot/pulse-store";
+import { useBotsPulse } from "@/components/bot/use-bots-pulse";
 import { DrawerContext } from "./sidebar-context";
 
 /** Whether the sidebar is folded to its icons, remembered in this browser. */
@@ -66,6 +69,8 @@ export function AppShell({
 }) {
   const [folded, setFolded] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  // The dot on Bots: what the team is up to, read every few minutes from any page.
+  useBotsPulse(true);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const search = useRouterState({ select: (s) => s.location.searchStr });
 
@@ -235,6 +240,8 @@ function Sidebar({
 }) {
   const item =
     "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors hover:bg-elevated hover:text-fg";
+  const pulse = usePulse((s) => s.pulse);
+  const pulseText = pulse ? pulseLine(pulse) : null;
   return (
     <>
       <div
@@ -282,11 +289,32 @@ function Sidebar({
                   on ? "bg-elevated font-medium text-fg" : "text-muted",
                 )}
                 aria-current={on ? "page" : undefined}
-                aria-label={folded ? label : undefined}
-                title={folded ? label : undefined}
+                aria-label={
+                  to === "/bot" && pulseText ? `${label}: ${pulseText}` : folded ? label : undefined
+                }
+                title={
+                  to === "/bot" && pulseText ? `${label}: ${pulseText}` : folded ? label : undefined
+                }
               >
-                <Icon className="size-4 shrink-0" aria-hidden />
+                <span className="relative">
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  {/* Bots: amber when something needs you, a pulsing blue while one works. */}
+                  {to === "/bot" && pulse && (pulse.needs > 0 || pulse.working > 0) && (
+                    <span
+                      className={cn(
+                        "absolute -top-1 -right-1 size-2 rounded-full ring-2 ring-surface",
+                        pulse.needs > 0 ? "bg-warn" : "animate-pulse bg-accent",
+                      )}
+                      aria-hidden
+                    />
+                  )}
+                </span>
                 {!folded && label}
+                {!folded && to === "/bot" && pulse && pulse.needs > 0 && (
+                  <span className="ml-auto rounded-full bg-warn/15 px-1.5 text-[11px] font-medium text-warn tabular-nums">
+                    {pulse.needs}
+                  </span>
+                )}
               </Link>
             );
           })}

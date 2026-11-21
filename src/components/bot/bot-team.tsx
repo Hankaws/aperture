@@ -25,6 +25,9 @@ import { chatKey, clearSavedChat, lastLineOf, loadChat, type Entry } from "@/lib
 import { MASCOT_COLORS, mascotFor, suggestName, type Mascot, type MascotMood } from "@/lib/bot/mascot";
 import { activityFrom, statusOf, type BotStatus } from "@/lib/bot/activity";
 import { listBots, saveBotChat } from "@/lib/bot/team.api";
+import { pulseOf } from "@/lib/bot/board";
+import { usePulse } from "@/lib/bot/pulse-store";
+import { BotDashboard } from "./bot-dashboard";
 import { modelChoices, type ModelChoice } from "@/lib/bot/team-models";
 import { getAccount } from "@/lib/billing/api";
 import type { BotProfile } from "@/lib/bot/team";
@@ -108,6 +111,10 @@ export function BotTeam() {
     [bots],
   );
   const team = useTeamActivity(repoKey);
+  // What they are up to feeds the dot on the sidebar's Bots, on every page.
+  useEffect(() => {
+    if (team.loaded) usePulse.getState().set(pulseOf(team.items, team.pulls, team.now));
+  }, [team.loaded, team.items, team.pulls, team.now]);
   const [dismissed, setDismissed] = useDismissedIdeas();
   const waiting = useMemo(() => {
     const hidden = new Set(dismissed);
@@ -216,7 +223,22 @@ export function BotTeam() {
   const saved = (next: BotProfile[]) => setBots(next);
 
   return (
-    <div className="relative flex h-[calc(100dvh-9rem)] min-h-[32rem] sm:h-[calc(100dvh-12rem)] sm:min-h-[36rem] overflow-hidden rounded-2xl border border-border bg-surface">
+    <div className="space-y-4">
+    <BotDashboard
+      bots={bots}
+      items={team.items}
+      pulls={team.pulls}
+      now={team.now}
+      loaded={team.loaded}
+      onOpen={(id) => {
+        open({ kind: "bot", id });
+        document.getElementById("bot-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }}
+    />
+    <div
+      id="bot-workspace"
+      className="relative flex h-[calc(100dvh-9rem)] min-h-[32rem] sm:h-[calc(100dvh-12rem)] sm:min-h-[36rem] overflow-hidden rounded-2xl border border-border bg-surface"
+    >
       <aside
         className={cn(
           "w-full flex-col border-border lg:flex lg:w-72 lg:shrink-0 lg:border-r",
@@ -552,6 +574,7 @@ export function BotTeam() {
           </>
         )}
       </main>
+    </div>
     </div>
   );
 }

@@ -7,11 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.25.0 - 2026-11-21
+
 ### Changed
 
+- The front page stays the first thing you see, signed in or not, so everyone meets Aperture before using it. Open, Chat and Bot take you into the app, and About Aperture in the sidebar brings you back to it. ([#243](https://github.com/Hankaws/aperture/pull/243))
 - The Bot page opens on a dashboard, in the style of Grok Bot. At the top, each of your bots with what it is doing now (working on a task, stuck, done, idle) and how many of its tasks wait on you; click one to talk to it below. Under them, every task on one board in three columns: Working, Needs you (red checks, an error, a question with no answer, or a pull request to review) and Done this week, each opening on GitHub. The sidebar's Bots shows a dot from any page: amber with a count when something needs you, a pulsing blue while a bot works. Before GitHub is connected, the page shows a short two-step setup in place of the long explanation. ([#242](https://github.com/Hankaws/aperture/pull/242))
 - The editor's Composer box is one box, in the style of Grok. The tabs, the Plan first switch, the crew, the @ and paperclip buttons, the model and the cost no longer stack up above where you type. Inside the box: a + menu (add context, add files or screenshots, run in the background, the crew, and Explain this, Fix this and Find bugs), a mode switch (Ask, Plan to plan first and wait for Build it, or Edit to change the code straight away), the model, and send. Under it, one quiet line says what goes along and what a send costs, and why it cannot send only when it cannot. The mode you pick is remembered, and on a phone the box sits right above the tabs. ([#241](https://github.com/Hankaws/aperture/pull/241))
-- Aperture now looks and works like an app once you are signed in, in the style of Grok. Chat, Bots and Settings share one sidebar down the left: New chat at the top, then Chat, Bots and Editor, your chats (pinned first, then the newest; on the Chat page, with search, pin, rename and delete), and Settings, your account and the dark-mode switch at the foot. Fold it to a rail of icons when you want the room, and it stays folded; on a phone it slides in from the menu button. Signed in to an account, Aperture opens on your chat instead of the front page, which is still one click away under About Aperture. Signed out, the site is as it was. ([#240](https://github.com/Hankaws/aperture/pull/240))
+- Aperture now looks and works like an app once you are signed in, in the style of Grok. Chat, Bots and Settings share one sidebar down the left: New chat at the top, then Chat, Bots and Editor, your chats (pinned first, then the newest; on the Chat page, with search, pin, rename and delete), and Settings, your account and the dark-mode switch at the foot. Fold it to a rail of icons when you want the room, and it stays folded; on a phone it slides in from the menu button. Signed out, the site is as it was. ([#240](https://github.com/Hankaws/aperture/pull/240))
 
 ## 0.24.0 - 2026-11-20
 

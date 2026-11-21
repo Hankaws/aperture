@@ -340,7 +340,7 @@ function Sidebar({
           {!folded && "Settings"}
         </Link>
         {!folded && (
-          <Link to="/" search={{ about: true }} className={cn(item, "text-muted")}>
+          <Link to="/" className={cn(item, "text-muted")}>
             <Info className="size-4 shrink-0" aria-hidden />
             About Aperture
           </Link>

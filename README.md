@@ -99,6 +99,12 @@ local in-process database (PGlite), so nothing else needs setting up.
 
   A check that could not run says why. It never shows as a pass.
 
+  **Visual proof.** When a staged change touches a page, the check strip
+  shows it before and after, side by side, at desktop or phone width, with
+  what changed outlined and how much of the page moved. A change that makes
+  the page scroll sideways where it did not is said in so many words. The
+  pictures are drawn in your tab from the files: no model, nothing sent.
+
   **A fix starts from the evidence.** When a check is red, the fix turn
   (the automatic one, Send back, a background run's fix) gets what the
   editor saw, not only one line:

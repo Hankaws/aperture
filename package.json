@@ -31,6 +31,7 @@
     "bench": "node --experimental-strip-types scripts/bench.ts",
     "release-notes": "node --experimental-strip-types scripts/release-notes.ts",
     "release-url": "node --experimental-strip-types scripts/release-url.ts",
+    "release:verify": "node --experimental-strip-types scripts/release-verify.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

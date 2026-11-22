@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- Releases are checked every day, so Aperture Agent Check and Aperture Bot cannot quietly ship an old build. A new check (`npm run release:verify`, and a daily workflow) fails when an action's release is not on the commit its build made, when `@v1` is not on the newest release, or when an action was built from Aperture code older than Aperture's live release, and when an Aperture version was skipped or tagged on the wrong commit. Each failure says how to fix it. It found this week's two slips: Agent Check v1.3 tagged before its build finished, and Aperture Bot v1.15 published on the old build ([#255](https://github.com/Hankaws/aperture/pull/255)).
+
 ### Fixed
 
 - Import patch reads a patch with several files correctly, with or without `diff --git` lines between them. Before, a patch adding two new files without those lines put both into the first one. New files keep their last newline (unless the patch says `\ No newline at end of file`), a second hunk in a file lands where the first one moved it, a removed line starting with `--` no longer ends the hunk early, and `+++ /dev/null` deletes a file. External agents that send a diff get the same fixes ([#254](https://github.com/Hankaws/aperture/pull/254)).

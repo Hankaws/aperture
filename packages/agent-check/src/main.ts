@@ -1,7 +1,7 @@
 /**
  * Aperture Agent Check: the editor's checks on a pull request. Reads the
- * change from git, runs Parses, Imports resolve, Types and the project's
- * tests, and reports as GitHub annotations, a run summary and an exit code.
+ * change from git, runs Parses, Imports resolve, Types, the project's tests
+ * and Safety (which reads every changed text file, code or not), and reports as GitHub annotations, a run summary and an exit code.
  *
  * As a GitHub Action its settings arrive as INPUT_* variables; on a machine
  * they are flags (see `parseOptions`).
@@ -168,10 +168,12 @@ function testsFor(options: Options, rev: string): BrowserTests {
 export function check(options: Options): Result {
   const rev = mergeBase(options.base, options.cwd);
   const project = loadProject(options.cwd, rev);
+  const others = project.safetyOnly;
   const meta: Meta = {
-    changed: Object.keys(project.changes).length,
-    deleted: project.deleted.length,
+    changed: Object.keys(project.changes).length + others.filter((f) => !f.deleted).length,
+    deleted: project.deleted.length + others.filter((f) => f.deleted).length,
     notChecked: project.notChecked,
+    safetyOnly: others.map((f) => f.path),
   };
   if (project.tooLarge) {
     const text = `Aperture Agent Check: not checked. ${project.tooLarge}`;
@@ -179,9 +181,11 @@ export function check(options: Options): Result {
   }
   if (meta.changed === 0 && meta.deleted === 0) {
     const text =
-      "Aperture Agent Check: nothing to check. This change touches no JavaScript, TypeScript, JSON, HTML or CSS.";
+      "Aperture Agent Check: nothing to check. Every file this change touches is binary or over 1 MB.";
     return { rows: [], meta, verdict: "clear", exitCode: 0, text };
   }
+  // A change with no code in it (a workflow, a .env, docs) gets Safety; its tests are as they were.
+  const code = Object.keys(project.changes).length + project.deleted.length > 0;
   const rows = shownRows(
     staticChangeChecks({
       tsc: ts,
@@ -190,10 +194,13 @@ export function check(options: Options): Result {
       before: project.before,
       changes: project.changes,
       deleted: project.deleted,
-      tests: testsFor(options, rev),
+      tests: code
+        ? testsFor(options, rev)
+        : { state: "unsupported", reason: "this change touches no code." },
       description: "Pull request",
       tscLimits: RUNNER_TSC_LIMITS,
       installed: installedFiles(options.cwd),
+      safetyOnly: others,
     }),
   );
   const result = verdict(rows);

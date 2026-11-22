@@ -152,6 +152,13 @@ function names(list: string[], max = 4): string {
   return list.length > max ? `${shown} and ${list.length - max} more` : shown;
 }
 
+/** A finding is shown after its first file's path: the others, if any, follow it. */
+function alsoIn(paths: string[]): string {
+  const rest = paths.slice(1);
+  if (rest.length === 0) return "";
+  return `, and so ${rest.length === 1 ? "does" : "do"} ${names(rest)}`;
+}
+
 function keysIn(path: string, before: string, after: string): SafetyFinding[] {
   const out: SafetyFinding[] = [];
   for (const { text, line } of addedLines(before, after)) {
@@ -327,13 +334,13 @@ export function safetyFindings(files: Record<string, string>, edits: Edit[]): Sa
     out.push({
       level: "look",
       path: ci[0]!,
-      what: `edits the CI that checks your pull requests (${names(ci)})`,
+      what: `edits the CI that checks your pull requests${alsoIn(ci)}`,
     });
   if (lockfiles.length > 0 && !depsMoved)
     out.push({
       level: "look",
       path: lockfiles[0]!,
-      what: `changes ${names(lockfiles)} with no dependency change in package.json`,
+      what: `moves with no dependency change in package.json${alsoIn(lockfiles)}`,
     });
   return [...out.filter((f) => f.level === "red"), ...out.filter((f) => f.level === "look")];
 }

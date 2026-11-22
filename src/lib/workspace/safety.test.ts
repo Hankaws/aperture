@@ -181,7 +181,7 @@ test("a lockfile that moves with no dependency change is worth a look", () => {
   ]);
   assert.deepEqual(
     found.map((f) => f.what),
-    ["changes package-lock.json with no dependency change in package.json"],
+    ["moves with no dependency change in package.json"],
   );
 });
 
@@ -193,12 +193,7 @@ test("editing or deleting the CI that judges the change is worth a look", () => 
   ]);
   assert.deepEqual(
     found.map((f) => [f.level, f.what]),
-    [
-      [
-        "look",
-        "edits the CI that checks your pull requests (.github/workflows/ci.yml, .gitlab-ci.yml)",
-      ],
-    ],
+    [["look", "edits the CI that checks your pull requests, and so does .gitlab-ci.yml"]],
   );
 });
 

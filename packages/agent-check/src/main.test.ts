@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { baseFromEvent, check, main, parseOptions, type Options } from "./main.ts";
-import { workflowCommands } from "./report.ts";
+import { summaryMarkdown, workflowCommands } from "./report.ts";
 import { testEnv } from "./tests.ts";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -198,12 +198,94 @@ test("a project in a subfolder of its repository is checked there (working-direc
   );
 });
 
-test("a change to nothing it reads is not checked, and says so", () => {
-  const dir = repo(shop, { "README.md": "# Shop\n" });
+test("a change to nothing it can read is not checked, and says so", () => {
+  const dir = repo(shop, { "logo.png": "\u0089PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR" });
   const result = check(options(dir));
   assert.equal(result.rows.length, 0);
   assert.equal(result.exitCode, 0);
   assert.match(result.text, /nothing to check/);
+  assert.deepEqual(result.meta.notChecked, ["logo.png"]);
+});
+
+// Built at run time, so this file holds no key for a scanner to find.
+const GITHUB_TOKEN = ["ghp", "_", "a1B2c3D4e5F6g7H8i9J0".repeat(2)].join("");
+const AWS_KEY = ["AKIA", "Q2W3E4R5T6Y7U8I9"].join("");
+
+test("Safety reads changed files that are not code: a key in a workflow or a .env is red", () => {
+  const dir = repo(shop, {
+    ".github/workflows/deploy.yml": `on: push\njobs:\n  deploy:\n    env:\n      TOKEN: ${GITHUB_TOKEN}\n`,
+    ".env": "DATABASE_PASSWORD=hunter22\n",
+  });
+  const result = check(options(dir));
+  assert.equal(result.verdict, "red");
+  const safety = result.rows.find((row) => row.id === "safety")!;
+  assert.equal(safety.status, "fail");
+  assert.match(safety.detail, /^\.env: writes values into a \.env file.*\(\+2 more\)$/);
+  assert.match(safety.evidence!, /\.github\/workflows\/deploy\.yml: adds a GitHub token at line 5/);
+  assert.match(safety.evidence!, /edits the CI that checks your pull requests/);
+  assert.ok(!safety.evidence!.includes(GITHUB_TOKEN), "the key is never repeated");
+  assert.equal(result.meta.changed, 2);
+  assert.deepEqual(result.meta.safetyOnly, [".env", ".github/workflows/deploy.yml"]);
+  assert.match(result.text, /Safety only: \.env, \.github\/workflows\/deploy\.yml\./);
+  assert.match(result.text, /^Aperture Agent Check: 1 check red on 2 changed files\./);
+  assert.match(
+    summaryMarkdown(result.rows, result.meta),
+    /Safety only: `\.env`, `\.github\/workflows\/deploy\.yml`\. Not code, so the other checks do not read them\./,
+  );
+});
+
+test("a key in a Python file or a key file is red too; docs with none pass", () => {
+  const dir = repo(
+    { ...shop, "scripts/sync.py": "import os\n" },
+    { "scripts/sync.py": `import os\nKEY = "${AWS_KEY}"\n`, "README.md": "# Shop\n\nRun it.\n" },
+  );
+  const result = check(options(dir));
+  const safety = result.rows.find((row) => row.id === "safety")!;
+  assert.equal(safety.status, "fail");
+  assert.match(safety.detail, /^scripts\/sync\.py: adds an AWS access key at line 2/);
+
+  const docs = check(options(repo(shop, { "README.md": "# Shop\n" })));
+  assert.equal(docs.verdict, "clear");
+  assert.equal(docs.rows.find((row) => row.id === "safety")!.status, "pass");
+  const tests = docs.rows.find((row) => row.id === "tests")!;
+  assert.equal(tests.status, "skip");
+  assert.match(tests.detail, /touches no code/);
+});
+
+test("Safety judges a non-code file against its base: an old key is not blamed, a deleted workflow is a look", () => {
+  const dir = repo(
+    {
+      ...shop,
+      "deploy/config.yml": `token: ${GITHUB_TOKEN}\nregion: eu\n`,
+      ".github/workflows/ci.yml": "on: push\n",
+    },
+    {
+      "deploy/config.yml": `token: ${GITHUB_TOKEN}\nregion: us\n`,
+      ".github/workflows/ci.yml": null,
+    },
+  );
+  const result = check(options(dir));
+  assert.equal(result.verdict, "clear");
+  const safety = result.rows.find((row) => row.id === "safety")!;
+  assert.equal(safety.status, "warn");
+  assert.match(
+    safety.detail,
+    /^Worth a look: \.github\/workflows\/ci\.yml edits the CI that checks your pull requests$/,
+  );
+  assert.equal(result.meta.deleted, 1);
+});
+
+test("a YAML lockfile that moved with no dependency change is a look", () => {
+  const dir = repo(
+    { ...shop, "package.json": "{}\n", "pnpm-lock.yaml": "lockfileVersion: '9.0'\n" },
+    { "pnpm-lock.yaml": "lockfileVersion: '9.0'\npackages:\n  left-pad@1.3.0: {}\n" },
+  );
+  const safety = check(options(dir)).rows.find((row) => row.id === "safety")!;
+  assert.equal(safety.status, "warn");
+  assert.match(
+    safety.detail,
+    /^Worth a look: pnpm-lock\.yaml moves with no dependency change in package\.json$/,
+  );
 });
 
 test("with node_modules installed, Types uses the packages' real types", () => {

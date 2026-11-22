@@ -9,9 +9,19 @@ export type Meta = {
   /** Files the change adds or edits that the checks read. */
   changed: number;
   deleted: number;
-  /** Changed files the checks do not read. */
+  /** Changed files nothing reads: binary, or over 1 MB. */
   notChecked: string[];
+  /** Changed files that are not code: only Safety reads them. */
+  safetyOnly?: string[];
 };
+
+function listed(paths: string[], max: number, code = false): string {
+  const shown = paths
+    .slice(0, max)
+    .map((path) => (code ? `\`${path}\`` : path))
+    .join(", ");
+  return `${shown}${paths.length > max ? `, and ${paths.length - max} more` : ""}`;
+}
 
 const MARK: Record<string, string> = { pass: "✓", fail: "✗", warn: "!", skip: "–" };
 /** GitHub keeps this many error annotations per step; the summary lists everything. */
@@ -100,11 +110,14 @@ export function consoleText(rows: CheckRow[], meta: Meta): string {
     if (row.status === "fail" && row.evidence)
       lines.push(row.evidence.slice(0, 6_000).replace(/^/gm, "    "));
   }
-  if (meta.notChecked.length > 0)
+  const safetyOnly = meta.safetyOnly ?? [];
+  if (safetyOnly.length > 0 || meta.notChecked.length > 0) lines.push("");
+  if (safetyOnly.length > 0)
     lines.push(
-      "",
-      `Not checked: ${meta.notChecked.length} changed file(s) that are not JavaScript, TypeScript, JSON, HTML or CSS, or are over 1 MB.`,
+      `Safety only: ${listed(safetyOnly, 10)}. Not code, so the other checks do not read ${safetyOnly.length === 1 ? "it" : "them"}.`,
     );
+  if (meta.notChecked.length > 0)
+    lines.push(`Not checked: ${listed(meta.notChecked, 10)} (binary, or over 1 MB).`);
   return lines.join("\n");
 }
 
@@ -135,16 +148,14 @@ export function summaryMarkdown(rows: CheckRow[], meta: Meta): string {
       "</details>",
     );
   }
-  if (meta.notChecked.length > 0) {
-    const shown = meta.notChecked
-      .slice(0, 20)
-      .map((path) => `\`${path}\``)
-      .join(", ");
+  const safetyOnly = meta.safetyOnly ?? [];
+  if (safetyOnly.length > 0)
     lines.push(
       "",
-      `Not checked: ${shown}${meta.notChecked.length > 20 ? `, and ${meta.notChecked.length - 20} more` : ""}.`,
+      `Safety only: ${listed(safetyOnly, 20, true)}. Not code, so the other checks do not read ${safetyOnly.length === 1 ? "it" : "them"}.`,
     );
-  }
+  if (meta.notChecked.length > 0)
+    lines.push("", `Not checked: ${listed(meta.notChecked, 20, true)} (binary, or over 1 MB).`);
   lines.push(
     "",
     "Same checks as the [Aperture](https://aperturesais.grok.me/bot?tab=check) editor. Nothing left this runner.",

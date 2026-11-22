@@ -1,0 +1,36 @@
+# Checks that what is published is what was meant to ship: Aperture's
+# releases in order and on the right commits, and Aperture Agent Check and
+# Aperture Bot released on real builds, with v1 on them, built from Aperture
+# code as new as Aperture's live release. A red run here means people on
+# `@v1` are running an old build: the log says what to do.
+name: Release check
+
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: releases match what was meant to ship
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run -s release:verify
+        env:
+          # Reads public data only; the token raises GitHub's rate limit.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

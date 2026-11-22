@@ -13,6 +13,7 @@ release notes are every line from there down to the previous version.
 
 ### Fixed
 
+- Aperture Agent Check and Aperture Bot now look for keys in every changed text file, not only in code. Before, Safety skipped any file that was not JavaScript, TypeScript, JSON, HTML or CSS, so it missed a key in a workflow, a YAML config, a `.pem` or a Python script, values written into a `.env`, a deleted CI workflow and a YAML lockfile that moved, and it said "no CI changes" on a pull request that added a workflow. Those files are now read before and after for Safety only, a change with no code in it gets Safety instead of "nothing to check", and the summary lists which files only Safety read. A CI or lockfile finding also no longer names its file twice ([#256](https://github.com/Hankaws/aperture/pull/256)).
 - Import patch reads a patch with several files correctly, with or without `diff --git` lines between them. Before, a patch adding two new files without those lines put both into the first one. New files keep their last newline (unless the patch says `\ No newline at end of file`), a second hunk in a file lands where the first one moved it, a removed line starting with `--` no longer ends the hunk early, and `+++ /dev/null` deletes a file. External agents that send a diff get the same fixes ([#254](https://github.com/Hankaws/aperture/pull/254)).
 
 ## 0.28.0 - 2026-11-22

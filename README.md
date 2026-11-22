@@ -95,7 +95,7 @@ local in-process database (PGlite), so nothing else needs setting up.
     Check still reads it. `/benchmark` has the count.
   - **Preview renders**: the staged page renders, without errors and not blank.
   - **Tests**: the project's tests pass.
-  - **Safety**: red for a key or token written into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values written into a `.env` file, and for a check switched off: `// @ts-nocheck`, `strict` loosened in tsconfig, a lint or typecheck script emptied. Amber, to look at and not held, for a new dependency, one installed from a URL, an install script, an edited CI workflow, a lockfile that moved with no dependency change, and a new `@ts-ignore` or `eslint-disable`. A key is never repeated, only its kind and line.
+  - **Safety**: red for a key or token written into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values written into a `.env` file, and for a check switched off: `// @ts-nocheck`, `strict` loosened in tsconfig, a lint or typecheck script emptied. Amber, to look at and not held, for a new dependency, one installed from a URL, an install script, an edited CI workflow, a lockfile that moved with no dependency change, and a new `@ts-ignore` or `eslint-disable`. Safety reads every changed text file, code or not, so a key in a workflow, a YAML config, a `.pem` or a Python script is red too. A key is never repeated, only its kind and line.
 
   A check that could not run says why. It never shows as a pass.
 

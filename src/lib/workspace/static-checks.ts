@@ -9,7 +9,14 @@
  */
 import type ts from "typescript";
 import { isTestPath } from "../runner/tampering.ts";
-import { changeChecks, type BrowserTests, type CheckRow, type TscCheck } from "./checks.ts";
+import {
+  changeChecks,
+  safetyRow,
+  type BrowserTests,
+  type CheckRow,
+  type TscCheck,
+} from "./checks.ts";
+import { safetyFindings } from "./safety.ts";
 import { importersOf, importIssues } from "./module-graph.ts";
 
 export { importersOf };
@@ -159,6 +166,11 @@ export function staticChangeChecks(input: {
   tscLimits?: TscLimits;
   /** The installed packages, where there are some: their real types instead of `any`. */
   installed?: InstalledFiles;
+  /**
+   * Changed files that are not code (a `.env`, a CI workflow, a YAML
+   * lockfile): only the Safety row reads them, since the others cannot.
+   */
+  safetyOnly?: Array<{ path: string; oldText: string; newText: string; deleted?: boolean }>;
 }): CheckRow[] {
   const description = input.description ?? "Staged change";
   const deleted = (input.deleted ?? []).filter((path) => input.before[path] !== undefined);
@@ -207,5 +219,11 @@ export function staticChangeChecks(input: {
     tsc: tscCheck,
     parse: tsParseCheck(input.tsc),
   });
-  return withDeletedImports(rows, importers, input.before, after);
+  const checked = withDeletedImports(rows, importers, input.before, after);
+  const others = input.safetyOnly ?? [];
+  if (others.length === 0) return checked;
+  const files = { ...input.before };
+  for (const other of others) files[other.path] = other.oldText;
+  const safety = safetyRow(safetyFindings(files, [...edits, ...emptied, ...others]));
+  return checked.map((row) => (row.id === "safety" ? safety : row));
 }

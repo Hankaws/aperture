@@ -23,6 +23,7 @@ import {
 } from "@/lib/workspace/checks";
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
 import { VisualProof } from "./visual-proof";
+import { ReviewGuide } from "./review-guide";
 import { pageErrorEvidence, type PageError } from "@/lib/runner/stack";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
@@ -509,6 +510,7 @@ export function CheckResults({
         </div>
       </div>
       <VisualProof files={files} edits={edits} />
+      <ReviewGuide edits={edits} onOpen={onOpen} />
       {compare && failedAttempt && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2" aria-label="Attempt 1 and this fix">
           <AttemptPane title="Attempt 1" rows={failedAttempt.rows} edits={failedAttempt.edits} />

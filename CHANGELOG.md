@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- Import patch reads a patch with several files correctly, with or without `diff --git` lines between them. Before, a patch adding two new files without those lines put both into the first one. New files keep their last newline (unless the patch says `\ No newline at end of file`), a second hunk in a file lands where the first one moved it, a removed line starting with `--` no longer ends the hunk early, and `+++ /dev/null` deletes a file. External agents that send a diff get the same fixes ([#254](https://github.com/Hankaws/aperture/pull/254)).
+
 ## 0.28.0 - 2026-11-22
 
 ### Added

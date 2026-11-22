@@ -99,6 +99,14 @@ local in-process database (PGlite), so nothing else needs setting up.
 
   A check that could not run says why. It never shows as a pass.
 
+  **A review guide.** Under the checks, every staged change says where to
+  start reading and why: each file in order of risk (changes the tests, the
+  CI or the dependencies, touches sign-in or billing code, deletes a file,
+  changes what other files import, is large, or was edited without the agent
+  reading it first), with the plan step that made it, and the files the agent
+  read without changing. Open PR can add the same receipt to the pull
+  request's description.
+
   **Visual proof.** When a staged change touches a page, the check strip
   shows it before and after, side by side, at desktop or phone width, with
   what changed outlined and how much of the page moved. A change that makes

@@ -244,7 +244,7 @@ export const publishGithub = createServerFn({ method: "POST" })
           title: message,
           head,
           base: data.branch,
-          body: "Opened from Aperture.",
+          body: data.body?.trim() ? `${data.body.trim()}\n\n---\nOpened from Aperture.` : "Opened from Aperture.",
         }),
       });
       if (pr.status !== 201) return { ok: false, error: "The branch was created, but the pull request was not." };

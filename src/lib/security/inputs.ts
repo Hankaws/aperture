@@ -74,6 +74,8 @@ export const githubPublishInput = z.object({
   baseSha: text(64),
   mode: z.enum(["commit", "pr"]),
   message: text(2000),
+  /** The new pull request's description: the review receipt (workspace/receipt.ts), when it was ticked. */
+  body: text(20000).optional(),
   changes: z
     .array(
       z.union([

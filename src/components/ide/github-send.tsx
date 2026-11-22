@@ -9,6 +9,7 @@ import { publishGithub, mergeGithub, postGithubReview } from "@/lib/github/api";
 import { githubReview } from "@/lib/github/review";
 import { changesSince, LESSONS_FILE, readGithubToken, sendable, stampsAfterSend } from "@/lib/github/roundtrip";
 import { listPendingEdits } from "@/lib/workspace/edits";
+import { receiptMarkdown, receiptsForSend } from "@/lib/workspace/receipt";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useWorkspace } from "@/lib/workspace/store";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,9 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
   const all = useMemo(() => (github ? changesSince(github.stamps, files) : []), [github, files]);
   const { send: changes, held, secrets } = useMemo(() => sendable(all, { includeLessons }), [all, includeLessons]);
   const lessonsChanged = all.some((change) => change.path === LESSONS_FILE);
+  // What each Composer run behind these files did and where a reviewer should start (receipt.ts).
+  const receipts = useMemo(() => receiptsForSend(messages, changes), [messages, changes]);
+  const [withReceipt, setWithReceipt] = useState(true);
   const review = useMemo(() => githubReview(listPendingEdits(messages)), [messages]);
   const base = github?.defaultBranch || "main";
   const canMerge = Boolean(github && (github.pull || github.branch !== base));
@@ -47,6 +51,7 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
           mode,
           message,
           changes,
+          ...(mode === "pr" && withReceipt && receipts.length > 0 ? { body: receiptMarkdown(receipts) } : {}),
         },
       });
       if (!result.ok) {
@@ -197,6 +202,20 @@ export function GithubSendDialog({ onClose }: { onClose: () => void }) {
                 <span>
                   Include Composer&apos;s lessons ({LESSONS_FILE}). They are what it learned in this editor; leave them
                   out to keep them yours.
+                </span>
+              </label>
+            )}
+            {receipts.length > 0 && !github.pull && (
+              <label className="mt-2 flex items-start gap-2 text-[12px] text-muted" data-receipt-option>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={withReceipt}
+                  onChange={(e) => setWithReceipt(e.target.checked)}
+                />
+                <span>
+                  Add a review receipt to the pull request: for {receipts.length === 1 ? "the run" : `the ${receipts.length} runs`}{" "}
+                  behind these files, what was asked, where to start reading and why, file by file.
                 </span>
               </label>
             )}

@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.28.0 - 2026-11-22
+
 ### Added
 
 - **A review guide for every change, and a receipt in your pull requests.** Under the checks, a staged change now says where to start reading and why ("Start with tests/store.test.ts: it changes the tests"), then lists each file in order of risk: it changes the tests, the CI or the dependencies, touches sign-in, security or billing code, deletes a file, changes what other files import, is large, or was edited without the agent reading it first. Each file shows the plan step that made it, and the guide lists the files the agent read without changing. When you open a pull request from Aperture, a tick (on by default) adds the same receipt to its description, for the runs behind the files you send. Nothing is asked of a model ([#252](https://github.com/Hankaws/aperture/pull/252)).

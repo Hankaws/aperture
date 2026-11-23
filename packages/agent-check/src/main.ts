@@ -201,6 +201,7 @@ export function check(options: Options): Result {
       tscLimits: RUNNER_TSC_LIMITS,
       installed: installedFiles(options.cwd),
       safetyOnly: others,
+      outsidePackages: project.outsidePackages,
     }),
   );
   const result = verdict(rows);

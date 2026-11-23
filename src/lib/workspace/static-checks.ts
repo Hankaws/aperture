@@ -123,11 +123,15 @@ function withDeletedImports(
   importers: string[],
   before: Record<string, string>,
   after: Record<string, string>,
+  outside: readonly string[] = [],
 ): CheckRow[] {
   const broken = importers
     .map((path) => {
-      const was = new Set(importIssues(path, before));
-      return { path, issues: importIssues(path, after).filter((issue) => !was.has(issue)) };
+      const was = new Set(importIssues(path, before, outside));
+      return {
+        path,
+        issues: importIssues(path, after, outside).filter((issue) => !was.has(issue)),
+      };
     })
     .filter((row) => row.issues.length > 0);
   if (broken.length === 0) return rows;
@@ -171,6 +175,8 @@ export function staticChangeChecks(input: {
    * lockfile): only the Safety row reads them, since the others cannot.
    */
   safetyOnly?: Array<{ path: string; oldText: string; newText: string; deleted?: boolean }>;
+  /** Packages declared above the project's root (a package checked on its own in a monorepo). */
+  outsidePackages?: readonly string[];
 }): CheckRow[] {
   const description = input.description ?? "Staged change";
   const deleted = (input.deleted ?? []).filter((path) => input.before[path] !== undefined);
@@ -218,8 +224,9 @@ export function staticChangeChecks(input: {
     browser: input.tests,
     tsc: tscCheck,
     parse: tsParseCheck(input.tsc),
+    ...(input.outsidePackages ? { outsidePackages: input.outsidePackages } : {}),
   });
-  const checked = withDeletedImports(rows, importers, input.before, after);
+  const checked = withDeletedImports(rows, importers, input.before, after, input.outsidePackages);
   const others = input.safetyOnly ?? [];
   if (others.length === 0) return checked;
   const files = { ...input.before };

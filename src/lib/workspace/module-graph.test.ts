@@ -327,3 +327,119 @@ test("collectExports is kept per path and text too", () => {
   assert.equal(collectExports("src/memo-e.ts", text), collectExports("src/memo-e.ts", text));
   assert.ok(collectExports("src/memo-e.ts", "export const y = 2;\n").names.has("y"));
 });
+
+// From a study of 83 real pull requests opened by AI agents: each of these was reported, wrongly.
+
+test("an ESM import of the compiled name finds the TypeScript source", () => {
+  const files = {
+    "package.json": "{}",
+    "src/a.ts": "export const a = 1;\n",
+    "src/b.tsx": "export const B = 1;\n",
+    "src/c.mts": "export const c = 1;\n",
+    "src/types.d.ts": "export type T = 1;\n",
+    "src/x.ts": [
+      'import { a } from "./a.js";',
+      'import { B } from "./b.js";',
+      'import { c } from "./c.mjs";',
+      'import type { T } from "./types.js";',
+    ].join("\n"),
+  };
+  assert.deepEqual(importIssues("src/x.ts", files), []);
+  assert.deepEqual(resolveSpecifier("src/x.ts", "./a.js", files), { kind: "file", path: "src/a.ts" });
+  // A real `.js` file wins over a guess, and a name that is nowhere is still missing.
+  assert.deepEqual(resolveSpecifier("src/x.ts", "./a.js", { ...files, "src/a.js": "" }), {
+    kind: "file",
+    path: "src/a.js",
+  });
+  assert.deepEqual(importIssues("src/y.ts", { ...files, "src/y.ts": 'import { z } from "./z.js";' }), [
+    'imports "./z.js" at line 1, which does not exist in the project',
+  ]);
+  // The name check still reads the source it found.
+  assert.deepEqual(importIssues("src/y.ts", { ...files, "src/y.ts": 'import { nope } from "./a.js";' }), [
+    'imports { nope } from "./a.js" at line 1, which does not export it',
+  ]);
+});
+
+test("a built-in's own entry points and a package's # imports are not packages", () => {
+  const files = {
+    "package.json": "{}",
+    "src/x.ts": [
+      'import { readFile } from "fs/promises";',
+      'import { ReadableStream } from "stream/web";',
+      'import { helper } from "#test/helpers";',
+    ].join("\n"),
+  };
+  assert.deepEqual(importIssues("src/x.ts", files), []);
+});
+
+test("a package that comes with its types counts as declared: vscode, a scoped one", () => {
+  const src = 'import * as vscode from "vscode";\nimport { a } from "@scope/lib";\n';
+  const declared = {
+    "package.json": JSON.stringify({ devDependencies: { "@types/vscode": "^1", "@types/scope__lib": "^1" } }),
+    "src/x.ts": src,
+  };
+  assert.deepEqual(importIssues("src/x.ts", declared), []);
+  assert.deepEqual(importIssues("src/x.ts", { ...declared, "package.json": "{}" }), [
+    'imports "vscode" at line 1, which is not in package.json',
+    'imports "@scope/lib" at line 2, which is not in package.json',
+  ]);
+});
+
+test("in a monorepo, a package declared anywhere in it, or one of its own packages, is not missing", () => {
+  const files = {
+    "package.json": JSON.stringify({ private: true, devDependencies: { vitest: "^3" } }),
+    "packages/core/package.json": JSON.stringify({ name: "@acme/core" }),
+    "packages/server/package.json": JSON.stringify({
+      name: "@acme/server",
+      dependencies: { "@acme/core": "workspace:^", zod: "^3" },
+    }),
+    "packages/server/src/x.test.ts": [
+      'import { test } from "vitest";', // hoisted from the root
+      'import { z } from "zod";', // its own package.json
+      'import { core } from "@acme/core";', // a workspace package
+      'import { me } from "@acme/server";', // itself, by name
+    ].join("\n"),
+  };
+  assert.deepEqual(importIssues("packages/server/src/x.test.ts", files), []);
+  // A package no package.json in the project names is still reported.
+  const typo = { ...files, "packages/server/src/y.ts": 'import x from "lodsh";' };
+  assert.deepEqual(importIssues("packages/server/src/y.ts", typo), [
+    'imports "lodsh" at line 1, which is not in package.json',
+  ]);
+});
+
+test("a package checked on its own: packages declared above it and imports that climb out of it are not judged", () => {
+  const files = {
+    "package.json": JSON.stringify({ name: "@acme/web", dependencies: { react: "^19" } }),
+    "src/x.ts": 'import { test } from "vitest";\nimport { loc } from "../../locations";\n',
+  };
+  assert.deepEqual(importIssues("src/x.ts", files), [
+    'imports "vitest" at line 1, which is not in package.json',
+  ]);
+  assert.deepEqual(importIssues("src/x.ts", files, ["vitest"]), []);
+  assert.deepEqual(resolveSpecifier("src/x.ts", "../../locations", files), { kind: "unknown" });
+  // Climbing inside the project is still resolved.
+  assert.deepEqual(resolveSpecifier("src/a/x.ts", "../../locations", files), { kind: "missing" });
+});
+
+test("an export list with inline type names still lists every name", () => {
+  const index = [
+    "export {",
+    "  type RunnableFunc,",
+    "  type RunnableLike,",
+    "  Runnable,",
+    "  RunnableLambda,",
+    "  type RunnableToolLikeArgs,",
+    '} from "./base.js";',
+    'export { type RouterInput, RouterRunnable as Router } from "./router.js";',
+  ].join("\n");
+  const exported = collectExports("src/runnables/index.ts", index);
+  for (const name of ["RunnableFunc", "Runnable", "RunnableLambda", "RunnableToolLikeArgs", "RouterInput", "Router"])
+    assert.ok(exported.names.has(name), name);
+  const files = {
+    "package.json": "{}",
+    "src/runnables/index.ts": index,
+    "src/x.ts": 'import { RunnableLambda } from "./runnables/index.js";',
+  };
+  assert.deepEqual(importIssues("src/x.ts", files), []);
+});

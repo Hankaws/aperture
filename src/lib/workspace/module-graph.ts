@@ -40,7 +40,19 @@ const exportsMemo = new Map<string, { text: string; value: ExportSet }>();
 const MAX_ISSUES = 4;
 
 /** Tried in order against a relative specifier, longest-lived conventions first. */
-const EXTENSIONS = ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json"];
+const EXTENSIONS = ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".json", ".d.ts"];
+
+/**
+ * TypeScript written as ES modules imports `./x.js` for the source file
+ * `x.ts`: the compiled name, which is the one Node will load. These are the
+ * sources each compiled extension stands for.
+ */
+const SOURCE_FOR: Record<string, string[]> = {
+  ".js": [".ts", ".tsx", ".d.ts"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts", ".d.mts"],
+  ".cjs": [".cts", ".d.cts"],
+};
 
 /** Subtrees whose definitions are locals, not exports. */
 const OPAQUE = new Set([
@@ -220,6 +232,10 @@ function readExports(path: string, text: string): ExportSet {
       if (node.name === "ExportDeclaration") inExport -= 1;
     },
   });
+  // The grammar stops at `export { type A, B }` (inline `type`, TypeScript 4.5), so the list is read
+  // from the text as well. A name found this way can only quiet a report, never cause one.
+  for (const list of text.matchAll(/\bexport\s+(?:type\s+)?(\{[^}]*\})/g))
+    for (const name of groupNames(list[1]!, "right")) names.add(name);
   return { names, unknown: unknownShape };
 }
 
@@ -229,6 +245,17 @@ function dirOf(path: string): string {
 }
 
 /** Join and flatten `.`/`..` without touching the host filesystem. */
+/** Whether `rel`, taken from the folder `base`, climbs above the project's root. */
+function escapesRoot(base: string, rel: string): boolean {
+  let depth = 0;
+  for (const part of `${base}/${rel}`.split("/")) {
+    if (part === "" || part === ".") continue;
+    depth += part === ".." ? -1 : 1;
+    if (depth < 0) return true;
+  }
+  return false;
+}
+
 export function joinPath(base: string, rel: string): string {
   const out: string[] = [];
   for (const part of `${base}/${rel}`.split("/")) {
@@ -266,6 +293,13 @@ function resolveInWorkspace(candidate: string, files: Record<string, string>): s
     const withExt = `${candidate}${ext}`;
     if (files[withExt] !== undefined) return withExt;
   }
+  const compiled = /\.(?:m|c)?jsx?$/.exec(candidate)?.[0];
+  if (compiled) {
+    const stem = candidate.slice(0, -compiled.length);
+    for (const ext of SOURCE_FOR[compiled] ?? []) {
+      if (files[`${stem}${ext}`] !== undefined) return `${stem}${ext}`;
+    }
+  }
   for (const ext of EXTENSIONS.slice(1)) {
     const index = `${candidate}/index${ext}`;
     if (files[index] !== undefined) return index;
@@ -289,6 +323,8 @@ export function resolveSpecifier(
   const spec = rawSpec.split("?")[0]!;
   if (!spec) return { kind: "unknown" };
   if (spec.startsWith(".")) {
+    // Above the project's root (a package checked on its own in a monorepo): not in view, so not judged.
+    if (escapesRoot(dirOf(fromPath), spec)) return { kind: "unknown" };
     const hit = resolveInWorkspace(joinPath(dirOf(fromPath), spec), files);
     return hit ? { kind: "file", path: hit } : { kind: "missing" };
   }
@@ -297,7 +333,10 @@ export function resolveSpecifier(
     const hit = resolveInWorkspace(`${target}${spec.slice(prefix.length)}`, files);
     return hit ? { kind: "file", path: hit } : { kind: "missing" };
   }
-  if (spec.startsWith("node:") || NODE_BUILTINS.has(spec)) return { kind: "unknown" };
+  // `fs/promises`, `stream/web`: a built-in's own entry points.
+  if (spec.startsWith("node:") || NODE_BUILTINS.has(spec.split("/")[0]!)) return { kind: "unknown" };
+  // `#utils`: the package's own `imports` map, not a package.
+  if (spec.startsWith("#")) return { kind: "unknown" };
   if (spec.startsWith("/") || /^[a-z]+:/i.test(spec)) return { kind: "unknown" };
   // An npm scope is `@scope/name`; a bare `@/…` is someone's path alias that
   // this workspace did not declare, so there is nothing to check it against.
@@ -306,21 +345,49 @@ export function resolveSpecifier(
   return { kind: "external", pkg };
 }
 
-function declaredPackages(files: Record<string, string>): Set<string> | null {
-  const raw = files["package.json"];
-  if (!raw) return null;
-  try {
-    const pkg = JSON.parse(raw) as Record<string, Record<string, string> | undefined>;
-    const names = [
-      ...Object.keys(pkg.dependencies ?? {}),
-      ...Object.keys(pkg.devDependencies ?? {}),
-      ...Object.keys(pkg.peerDependencies ?? {}),
-      ...Object.keys(pkg.optionalDependencies ?? {}),
-    ];
-    return new Set(names);
-  } catch {
-    return null;
+/**
+ * Every package the project can import: the dependencies of every
+ * `package.json` in it (a monorepo hoists them to where any package can reach
+ * them), the names of its own workspace packages, and those `outside` it (the
+ * `package.json` files above a package checked on its own). Null when the
+ * project has no `package.json`: then nothing is known, and nothing is judged.
+ */
+const declaredMemo = new WeakMap<Record<string, string>, { texts: string[]; names: Set<string> | null }>();
+function declaredPackages(files: Record<string, string>, outside: readonly string[] = []): Set<string> | null {
+  const texts: string[] = [];
+  for (const [path, raw] of Object.entries(files)) {
+    if ((path === "package.json" || path.endsWith("/package.json")) && !path.includes("node_modules/")) texts.push(raw);
   }
+  // Read again only when a package.json changed: the editor asks on every keystroke.
+  const hit = declaredMemo.get(files);
+  let names: Set<string> | null;
+  if (hit && hit.texts.length === texts.length && hit.texts.every((t, i) => t === texts[i])) names = hit.names;
+  else {
+    names = null;
+    for (const raw of texts) {
+      try {
+        const pkg = JSON.parse(raw) as Record<string, unknown>;
+        names ??= new Set<string>();
+        if (typeof pkg.name === "string") names.add(pkg.name);
+        for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+          const deps = pkg[field];
+          if (deps && typeof deps === "object") for (const name of Object.keys(deps)) names.add(name);
+        }
+      } catch {
+        // An unreadable package.json lists nothing.
+      }
+    }
+    declaredMemo.set(files, { texts, names });
+  }
+  if (!names) return null;
+  return outside.length === 0 ? names : new Set([...names, ...outside]);
+}
+
+/** A package counts as declared through its types too: `vscode` comes with `@types/vscode`, `@a/b` with `@types/a__b`. */
+function isDeclared(pkg: string, names: Set<string>): boolean {
+  if (names.has(pkg)) return true;
+  const types = pkg.startsWith("@") ? `@types/${pkg.slice(1).replace("/", "__")}` : `@types/${pkg}`;
+  return names.has(types);
 }
 
 /**
@@ -328,11 +395,17 @@ function declaredPackages(files: Record<string, string>): Set<string> | null {
  *
  * Silent when it cannot be sure: no `package.json` means bare specifiers go
  * unchecked, and a target whose exports cannot be enumerated skips name checks.
+ * `outside` names packages declared above the project's root (see
+ * `declaredPackages`).
  */
-export function importIssues(path: string, files: Record<string, string>): string[] {
+export function importIssues(
+  path: string,
+  files: Record<string, string>,
+  outside: readonly string[] = [],
+): string[] {
   const text = files[path];
   if (text === undefined || !isScriptPath(path)) return [];
-  const packages = declaredPackages(files);
+  const packages = declaredPackages(files, outside);
   const issues: string[] = [];
   for (const ref of collectImports(path, text)) {
     if (ref.guarded) continue;
@@ -342,7 +415,7 @@ export function importIssues(path: string, files: Record<string, string>): strin
       continue;
     }
     if (resolved.kind === "external") {
-      if (packages && !packages.has(resolved.pkg)) {
+      if (packages && !isDeclared(resolved.pkg, packages)) {
         issues.push(`${ref.require ? "requires" : "imports"} "${resolved.pkg}" at line ${ref.line}, which is not in package.json`);
       }
       continue;

@@ -44,8 +44,13 @@ function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
 }
 
+/** Strings emptied, quotes kept: `"test.skip("` written as data (a fixture, a message) is not a skip. */
+function bare(text: string): string {
+  return text.replace(/(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g, "$1$1");
+}
+
 function count(re: RegExp, text: string): number {
-  return (code(text).match(re) ?? []).length;
+  return (bare(code(text)).match(re) ?? []).length;
 }
 
 /** Each test's title, as often as it is declared. */

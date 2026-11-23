@@ -232,3 +232,8 @@ test("a skip under a condition with its reason is worth a look, not tampering", 
     ["skips 1 test in tests/math.test.ts"],
   );
 });
+
+test("a skip written inside a string is data, not a skip", () => {
+  const fixture = `${TESTS}const sample = 'test.skip("adds", () => {})';\nconst other = "it.only(";\n`;
+  assert.deepEqual(testTampering(files, edit("tests/math.test.ts", fixture)), []);
+});

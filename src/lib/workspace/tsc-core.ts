@@ -56,15 +56,28 @@ declare var __dirname: string, __filename: string, global: any;
  * runner's, a `NodeJS.` namespace. They would fail every Node project here,
  * and installing the package would make them go away.
  */
-export function missingPackageTypes(diagnostic: ts.Diagnostic, text: string): boolean {
+export function missingPackageTypes(diagnostic: ts.Diagnostic, text: string, from?: string): boolean {
   // An import tsc cannot resolve is typed `any`. For a package that is all it can be
-  // here; a missing relative file is a real error (and the Imports check says so too).
+  // here; a missing relative file is a real error (and the Imports check says so too),
+  // unless it is above the project's root, where nothing is in view to check it against.
   if (diagnostic.code === 2307 || diagnostic.code === 2792) {
     const name = /module '([^']+)'/.exec(text)?.[1] ?? "";
+    if (name.startsWith(".") && from !== undefined) return climbsOut(from, name);
     return name !== "" && !name.startsWith(".") && !name.startsWith("/");
   }
   if ([2580, 2582, 2591, 2593, 2688, 2875, 7016].includes(diagnostic.code)) return true;
   return diagnostic.code === 2503 && /'NodeJS'/.test(text);
+}
+
+/** Whether `spec`, imported from the file `from`, points above the project's root. */
+function climbsOut(from: string, spec: string): boolean {
+  let depth = from.split("/").length - 1;
+  for (const part of spec.split("/")) {
+    if (part === "" || part === ".") continue;
+    depth += part === ".." ? -1 : 1;
+    if (depth < 0) return true;
+  }
+  return false;
 }
 
 const DEFAULTS = {
@@ -242,7 +255,7 @@ export function checkProject(
     const rows: TscDiagnostic[] = [];
     for (const diagnostic of found) {
       const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, " ");
-      if (missingPackageTypes(diagnostic, message)) continue;
+      if (missingPackageTypes(diagnostic, message, path)) continue;
       const line = diagnostic.start === undefined ? 1 : file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
       const syntax = syntactic.includes(diagnostic as ts.DiagnosticWithLocation) ? { syntax: true as const } : {};
       rows.push({ line, code: diagnostic.code, message: message.slice(0, 300), ...syntax });

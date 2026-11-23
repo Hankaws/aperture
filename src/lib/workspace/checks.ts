@@ -15,7 +15,7 @@ import { isTypePath, typeIssues } from "./type-check.ts";
 import type { TscOutcome } from "./tsc";
 import type { HookRun } from "./hooks.ts";
 import { excerpt } from "../runner/stack.ts";
-import { testTampering } from "../runner/tampering.ts";
+import { testChanges } from "../runner/tampering.ts";
 import { safetyFindings, type SafetyFinding } from "./safety.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
@@ -244,6 +244,8 @@ export function changeChecks(input: {
   hooks?: HookRun[];
   /** TypeScript's parser, where it is loaded: it overrules a parse error Lezer gets wrong. */
   parse?: ParseCheck;
+  /** Packages declared above the project's root, for a package checked on its own in a monorepo. */
+  outsidePackages?: readonly string[];
 }): CheckRow[] {
   const { files, edits, render, verify } = input;
   const snapshot = mergeEdits(files, edits);
@@ -274,7 +276,7 @@ export function changeChecks(input: {
   const unresolved = judgedRow(
     "imports",
     "Imports resolve",
-    judged(parsed, (path, set) => importIssues(path, set), snapshot, files),
+    judged(parsed, (path, set) => importIssues(path, set, input.outsidePackages), snapshot, files),
     snapshot,
   );
   const imports: CheckRow =
@@ -339,7 +341,7 @@ export function changeChecks(input: {
               ? { id: "preview", label: "Preview renders", status: "fail", detail: "The staged page renders blank." }
               : { id: "preview", label: "Preview renders", status: "pass", detail: "The staged page renders with no errors." };
 
-  const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testTampering(files, edits));
+  const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testChanges(files, edits));
   const safety = safetyRow(safetyFindings(files, edits));
   return [parsesRow, imports, types, preview, tests, safety, ...(input.hooks ?? []).map(hookRow), ...skillRows(verify ?? null)];
 }
@@ -404,8 +406,17 @@ export function skillRows(verify: VerifyReport | null): CheckRow[] {
  * it is judged by, so the row is red whatever the run said. The person can
  * still choose Apply anyway when that is what they asked for.
  */
-function tamperedRow(row: CheckRow, tampering: string[]): CheckRow {
-  if (tampering.length === 0) return row;
+function tamperedRow(row: CheckRow, changes: { red: string[]; look: string[] }): CheckRow {
+  const tampering = changes.red;
+  if (tampering.length === 0) {
+    // A skip with its condition and reason written down holds nothing; it is said, beside how the tests went.
+    if (changes.look.length === 0 || row.status === "fail" || row.status === "running") return row;
+    return {
+      ...row,
+      status: "warn",
+      detail: `Worth a look: this change ${changes.look.join("; ")}. ${row.detail}`,
+    };
+  }
   const ran = row.status === "pass" || row.status === "fail" ? ` (${row.detail})` : "";
   return {
     id: "tests",

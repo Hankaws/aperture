@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { testTampering, widensTestScript } from "./tampering.ts";
+import { testChanges, testTampering, widensTestScript } from "./tampering.ts";
 
 const TESTS = [
   'import { test, expect } from "vitest";',
@@ -170,4 +170,65 @@ test("a test file moved is judged at its new path, not as deleted", () => {
   assert.deepEqual(testTampering(files, [{ path: "tests/math.test.ts", newText: "" }]), [
     "deletes tests/math.test.ts and its 2 tests",
   ]);
+});
+
+// From a study of real pull requests opened by AI agents: a split and a written-down skip were held as tampering.
+
+test("tests moved to another file of the same change are not removed", () => {
+  const split = [
+    {
+      path: "tests/math.test.ts",
+      newText: TESTS.split("\n")
+        .filter((l) => !l.includes("subtracts"))
+        .join("\n"),
+    },
+    {
+      path: "tests/subtract.test.ts",
+      newText:
+        'import { test, expect } from "vitest";\ntest("subtracts", () => { expect(sub(3, 2)).toBe(1); });\n',
+    },
+  ];
+  assert.deepEqual(testTampering(files, split), []);
+  // A whole file whose tests all reappear elsewhere was moved too.
+  const spread = [
+    { path: "tests/math.test.ts", newText: "" },
+    { path: "tests/add.test.ts", newText: 'test("adds", () => {});\n' },
+    { path: "tests/sub.test.ts", newText: 'test("subtracts", () => {});\n' },
+  ];
+  assert.deepEqual(testTampering(files, spread), []);
+  // Only the ones that reappear count: the other is still removed.
+  assert.deepEqual(testTampering(files, [split[0]!]), ["removes 1 test from tests/math.test.ts"]);
+  // (A deleted file and a new one are read as a move, so what is missing is named at the new path.)
+  assert.deepEqual(testTampering(files, [spread[0]!, spread[1]!]), [
+    "removes 1 test from tests/add.test.ts",
+  ]);
+});
+
+test("a skip under a condition with its reason is worth a look, not tampering", () => {
+  const conditional = TESTS.replace(
+    'test("adds", () => {',
+    'test("adds", () => { test.skip(getRuntime() === "cloudflare", "No trace propagation on Cloudflare yet");',
+  );
+  assert.deepEqual(testChanges(files, edit("tests/math.test.ts", conditional)), {
+    red: [],
+    look: ["skips a test in tests/math.test.ts under a condition, and says why"],
+  });
+  // A plain skip is still held, and so is one with no reason.
+  assert.deepEqual(
+    testTampering(
+      files,
+      edit("tests/math.test.ts", TESTS.replace('test("adds"', 'test.skip("adds"')),
+    ),
+    ["skips 1 test in tests/math.test.ts"],
+  );
+  assert.deepEqual(
+    testTampering(
+      files,
+      edit(
+        "tests/math.test.ts",
+        TESTS.replace('test("adds", () => {', 'test("adds", () => { test.skip(isCI);'),
+      ),
+    ),
+    ["skips 1 test in tests/math.test.ts"],
+  );
 });

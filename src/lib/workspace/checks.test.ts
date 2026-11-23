@@ -243,6 +243,21 @@ test("a green run cannot vouch for a change that skips the tests it is judged by
   assert.equal(honest.status, "pass");
 });
 
+test("a skip under a condition with its reason is amber beside a green run, and holds nothing", () => {
+  const files = { ...FILES, "tests/b.test.ts": 'import { test } from "node:test";\ntest("b is 1", () => {});\n' };
+  const reasoned = edit(
+    "tests/b.test.ts",
+    'import { test } from "node:test";\ntest("b is 1", (t) => { test.skip(process.platform === "win32", "No symlinks on Windows"); });\n',
+  );
+  const passed: VerifyReport = { script: "test", status: "passed", detail: "npm run test passed." };
+  const tests = row(changeChecks({ files, edits: [reasoned], render: null, verify: passed }), "tests");
+  assert.equal(tests.status, "warn");
+  assert.equal(tests.detail, "Worth a look: this change skips a test in tests/b.test.ts under a condition, and says why. npm run test passed.");
+  // A failing run stays red: the note does not soften it.
+  const failed: VerifyReport = { script: "test", status: "failed", detail: "AssertionError" };
+  assert.equal(row(changeChecks({ files, edits: [reasoned], render: null, verify: failed }), "tests").status, "fail");
+});
+
 test("renderEntry: only a change that can alter the page is rendered", () => {
   assert.equal(renderEntry(FILES, [edit("src/a.ts", "")]), null);
   assert.equal(renderEntry(FILES, [edit("style.css", "")]), "index.html");

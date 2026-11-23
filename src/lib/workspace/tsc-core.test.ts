@@ -112,3 +112,14 @@ test("a project too big for the browser is left to the light check", () => {
   const result = check(files, ["src/f0.ts"]);
   assert.equal(result.ok, false);
 });
+
+test("a relative import above the project's root is not judged; a missing one inside it still is", () => {
+  const files = {
+    "config.test.ts": 'import { locations } from "../locations";\nimport { gone } from "./gone";\nexport const x = [locations, gone];\n',
+  };
+  const result = check(files, ["config.test.ts"]);
+  assert.ok(result.ok);
+  const issues = result.diagnostics["config.test.ts"]!.map(tscIssue);
+  assert.equal(issues.some((i) => i.includes("'../locations'")), false);
+  assert.ok(issues.some((i) => /TS2307 .*'\.\/gone'/.test(i)), issues.join("\n"));
+});

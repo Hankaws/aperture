@@ -6,7 +6,11 @@
  * end the run green) as well as the run in the browser tab.
  *
  * Counted per file, before against after, so a test file that already skipped
- * something is not blamed for it. Pure: tests import it directly.
+ * something is not blamed for it. Tests that leave one file and reappear, by
+ * name, in another file of the same change were moved, not removed. A skip
+ * that names its condition and its reason (`test.skip(isCloudflare, "no
+ * workers yet")`) is a decision written down: worth a look, not tampering.
+ * Pure: tests import it directly.
  */
 
 type Edit = { path: string; newText: string };
@@ -19,6 +23,11 @@ const TEST_SETUP =
 const DECLARED = /\b(?:it|test)\s*(?:\.\s*\w+\s*)*\(|\bx(?:it|test)\s*\(/g;
 const SKIPPED =
   /\b(?:it|test|describe|suite)\s*\.\s*(?:skip|todo)\b|\bx(?:it|test|describe)\s*\(|\b(?:skip|todo)\s*:\s*true|\b(?:t|ctx|context)\s*\.\s*skip\s*\(/g;
+/** `test.skip(condition, "reason")`: skipped only where the condition holds, and says why. */
+const CONDITIONAL_SKIP =
+  /\b(?:it|test|describe)\s*\.\s*skip\s*\(\s*(?!['"`])[^,()]*(?:\([^()]*\)[^,()]*)*,\s*['"`]/g;
+/** The title a test is declared with, when it is a plain string. */
+const TITLED = /\b(?:it|test)\s*(?:\.\s*\w+\s*)*\(\s*(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g;
 const FOCUSED =
   /\b(?:it|test|describe|suite)\s*\.\s*only\b|\bf(?:it|describe)\s*\(|\bonly\s*:\s*true/g;
 const EXITS = /\bprocess\s*\.\s*(?:exit\s*\(|exitCode\s*=|kill\s*\(\s*process\s*\.\s*pid)/g;
@@ -37,6 +46,16 @@ function code(text: string): string {
 
 function count(re: RegExp, text: string): number {
   return (code(text).match(re) ?? []).length;
+}
+
+/** Each test's title, as often as it is declared. */
+function titles(text: string): string[] {
+  return [...code(text).matchAll(TITLED)].map((m) => m[2]!);
+}
+
+/** Skips that are not conditional with a reason. */
+function bareSkips(text: string): number {
+  return count(SKIPPED, text) - count(CONDITIONAL_SKIP, text);
 }
 
 function plural(n: number, word: string): string {
@@ -120,12 +139,49 @@ function movedTests(files: Record<string, string>, edits: Edit[]): Map<string, s
   return moves;
 }
 
-/** What the change does to the tests, one clause each ("skips 1 test in tests/a.test.ts"); empty when nothing. */
-export function testTampering(files: Record<string, string>, edits: Edit[]): string[] {
-  const found: string[] = [];
+/** What the change does to the tests: what holds it (`red`) and what is worth a look (`look`). One clause each. */
+export function testChanges(
+  files: Record<string, string>,
+  edits: Edit[],
+): { red: string[]; look: string[] } {
+  const red: string[] = [];
+  const look: string[] = [];
   const entryPoints = executables(files);
   const moves = movedTests(files, edits);
   const movedTo = new Set(moves.values());
+  // Titles each test file gains, to match against the ones another file loses.
+  const gained = new Map<string, number>();
+  for (const edit of edits) {
+    if (!isTestPath(edit.path)) continue;
+    const had = new Map<string, number>();
+    for (const t of titles(files[edit.path] ?? "")) had.set(t, (had.get(t) ?? 0) + 1);
+    for (const t of titles(edit.newText)) {
+      const n = had.get(t) ?? 0;
+      if (n > 0) had.set(t, n - 1);
+      else gained.set(t, (gained.get(t) ?? 0) + 1);
+    }
+  }
+  /** How many of `lost` reappear in another file of the change; those are used up. */
+  const reappear = (lost: string[]) => {
+    let found = 0;
+    for (const t of lost) {
+      const n = gained.get(t) ?? 0;
+      if (n > 0) {
+        gained.set(t, n - 1);
+        found += 1;
+      }
+    }
+    return found;
+  };
+  const lostTitles = (was: string, now: string) => {
+    const left = new Map<string, number>();
+    for (const t of titles(now)) left.set(t, (left.get(t) ?? 0) + 1);
+    return titles(was).filter((t) => {
+      const n = left.get(t) ?? 0;
+      if (n > 0) left.set(t, n - 1);
+      return n === 0;
+    });
+  };
   for (const edit of edits) {
     if (movedTo.has(edit.path)) continue;
     // A test file moved is judged at its new path, against the text it had.
@@ -137,7 +193,7 @@ export function testTampering(files: Record<string, string>, edits: Edit[]): str
       const was = testScript(before);
       const now = testScript(newText);
       if (was !== null && now !== was && !(now !== null && widensTestScript(was, now)))
-        found.push(`changes the test script in ${path} from "${was}" to "${now ?? "nothing"}"`);
+        red.push(`changes the test script in ${path} from "${was}" to "${now ?? "nothing"}"`);
       continue;
     }
     if (!isTestPath(path)) {
@@ -147,21 +203,33 @@ export function testTampering(files: Record<string, string>, edits: Edit[]): str
         !executable &&
         count(CLEAN_EXIT, newText) > count(CLEAN_EXIT, before)
       )
-        found.push(`calls process.exit(0) in ${path}, which ends a test run early as a pass`);
+        red.push(`calls process.exit(0) in ${path}, which ends a test run early as a pass`);
       continue;
     }
     if (newText === "" && before !== "") {
-      const tests = count(DECLARED, before);
-      found.push(`deletes ${path}${tests ? ` and its ${plural(tests, "test")}` : ""}`);
+      const tests = count(DECLARED, before) - reappear(titles(before));
+      if (tests > 0 || count(DECLARED, before) === 0)
+        red.push(`deletes ${path}${tests ? ` and its ${plural(tests, "test")}` : ""}`);
       continue;
     }
-    const removed = count(DECLARED, before) - count(DECLARED, newText);
-    if (removed > 0) found.push(`removes ${plural(removed, "test")} from ${path}`);
-    const skipped = count(SKIPPED, newText) - count(SKIPPED, before);
-    if (skipped > 0) found.push(`skips ${plural(skipped, "test")} in ${path}`);
+    const fewer = count(DECLARED, before) - count(DECLARED, newText);
+    const removed = fewer > 0 ? fewer - Math.min(fewer, reappear(lostTitles(before, newText))) : 0;
+    if (removed > 0) red.push(`removes ${plural(removed, "test")} from ${path}`);
+    const skipped = bareSkips(newText) - bareSkips(before);
+    if (skipped > 0) red.push(`skips ${plural(skipped, "test")} in ${path}`);
+    const conditional = count(CONDITIONAL_SKIP, newText) - count(CONDITIONAL_SKIP, before);
+    if (conditional > 0)
+      look.push(
+        `skips ${conditional === 1 ? "a test" : `${conditional} tests`} in ${path} under a condition, and says why`,
+      );
     if (count(FOCUSED, newText) > count(FOCUSED, before))
-      found.push(`marks tests .only in ${path}, so the rest do not run`);
-    if (count(EXITS, newText) > count(EXITS, before)) found.push(`calls process.exit in ${path}`);
+      red.push(`marks tests .only in ${path}, so the rest do not run`);
+    if (count(EXITS, newText) > count(EXITS, before)) red.push(`calls process.exit in ${path}`);
   }
-  return found;
+  return { red, look };
+}
+
+/** What the change does to the tests that holds it, one clause each ("skips 1 test in tests/a.test.ts"); empty when nothing. */
+export function testTampering(files: Record<string, string>, edits: Edit[]): string[] {
+  return testChanges(files, edits).red;
 }

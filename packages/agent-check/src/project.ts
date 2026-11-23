@@ -11,7 +11,7 @@
  */
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { changedFiles, filesAt, readAt, type Change } from "./git.ts";
+import { changedFiles, filesAt, git, readAt, repoPrefix, type Change } from "./git.ts";
 
 export const LOAD_LIMITS = { files: 5_000, fileBytes: 1_000_000, totalBytes: 50_000_000 } as const;
 
@@ -34,6 +34,12 @@ export type Project = {
   notChecked: string[];
   /** Set when the project is over LOAD_LIMITS: nothing is checked, and this says why. */
   tooLarge: string | null;
+  /**
+   * Packages declared outside this folder, when it is one package of a bigger
+   * repository: the dependencies and names in every other `package.json` there.
+   * A monorepo hoists them, so an import of one is not a missing package.
+   */
+  outsidePackages: string[];
 };
 
 export function isRelevant(path: string): boolean {
@@ -64,6 +70,7 @@ export function loadProject(cwd: string, rev: string): Project {
       deleted,
       safetyOnly,
       notChecked: changed.map((change) => change.path),
+      outsidePackages: [],
       tooLarge: `The project has ${listed.length.toLocaleString("en-US")} files to read (${Math.round(total / 1_000_000)} MB); the limit is ${LOAD_LIMITS.files.toLocaleString("en-US")} files and ${LOAD_LIMITS.totalBytes / 1_000_000} MB.`,
     };
   }
@@ -120,7 +127,55 @@ export function loadProject(cwd: string, rev: string): Project {
     }
     changes[change.path] = readFileSync(full, "utf8");
   }
-  return { before, changes, deleted, safetyOnly, notChecked, tooLarge: null };
+  return {
+    before,
+    changes,
+    deleted,
+    safetyOnly,
+    notChecked,
+    tooLarge: null,
+    outsidePackages: outsidePackages(cwd, rev),
+  };
+}
+
+/** At most this many `package.json` files are read from the rest of the repository. */
+const OUTSIDE_LIMIT = 2_000;
+
+/** What every `package.json` outside `cwd` (in the same repository, at `rev`) declares; empty at the repository's root. */
+function outsidePackages(cwd: string, rev: string): string[] {
+  const prefix = repoPrefix(cwd);
+  if (!prefix) return [];
+  const root = git(["rev-parse", "--show-toplevel"], cwd).trim();
+  const paths = git(["ls-tree", "-r", "--name-only", "-z", rev], root)
+    .split("\0")
+    .filter(
+      (path) =>
+        (path === "package.json" || path.endsWith("/package.json")) &&
+        !path.startsWith(prefix) &&
+        !SKIPPED_DIR.test(path),
+    )
+    .slice(0, OUTSIDE_LIMIT);
+  // readAt reads relative to the folder it is given; from the root these are the repository's paths.
+  const texts = readAt(rev, paths, root);
+  const names = new Set<string>();
+  for (const raw of Object.values(texts)) {
+    try {
+      const pkg = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof pkg.name === "string") names.add(pkg.name);
+      for (const field of [
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+      ]) {
+        const deps = pkg[field];
+        if (deps && typeof deps === "object") for (const name of Object.keys(deps)) names.add(name);
+      }
+    } catch {
+      // An unreadable package.json declares nothing.
+    }
+  }
+  return [...names].sort();
 }
 
 /** A changed file that is not code, as Safety reads it; null when it is binary or too big to read. */

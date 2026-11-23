@@ -275,6 +275,42 @@ test("Safety judges a non-code file against its base: an old key is not blamed, 
   assert.equal(result.meta.deleted, 1);
 });
 
+test("one package of a monorepo, checked from its folder: hoisted, sibling and ESM imports resolve", () => {
+  const dir = repo(
+    {
+      "package.json": JSON.stringify({ private: true, devDependencies: { vitest: "^3" } }),
+      "packages/core/package.json": JSON.stringify({ name: "@acme/core" }),
+      "packages/core/src/index.ts": "export const core = 1;\n",
+      "packages/server/package.json": JSON.stringify({ name: "@acme/server" }),
+      "packages/server/tsconfig.json": TSCONFIG,
+      "packages/server/src/serve.ts": "export const serve = (): number => 1;\n",
+    },
+    {
+      "packages/server/src/serve.test.ts": [
+        'import { test } from "vitest";',
+        'import { core } from "@acme/core";',
+        'import { serve } from "./serve.js";',
+        'import { readFile } from "fs/promises";',
+        "test('serves', () => { serve(); });",
+        "",
+      ].join("\n"),
+    },
+  );
+  const result = check(options(join(dir, "packages/server")));
+  const imports = result.rows.find((row) => row.id === "imports")!;
+  assert.equal(imports.status, "pass", imports.detail);
+  // A package nothing in the repository declares is still caught.
+  const typo = repo(
+    { "package.json": "{}", "packages/server/package.json": "{}" },
+    { "packages/server/src/a.ts": 'import x from "lodsh";\nexport const a = x;\n' },
+  );
+  const caught = check(options(join(typo, "packages/server"))).rows.find(
+    (row) => row.id === "imports",
+  )!;
+  assert.equal(caught.status, "fail");
+  assert.match(caught.detail, /imports "lodsh" at line 1, which is not in package\.json/);
+});
+
 test("a YAML lockfile that moved with no dependency change is a look", () => {
   const dir = repo(
     { ...shop, "package.json": "{}\n", "pnpm-lock.yaml": "lockfileVersion: '9.0'\n" },

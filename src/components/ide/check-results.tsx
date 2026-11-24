@@ -31,6 +31,7 @@ import type { TscCheck } from "@/lib/workspace/checks";
 import { isScriptPath } from "@/lib/workspace/syntax-check";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
 import { HOOKS_PATH, hookRunCommand, hooksFor, parseHooks, type HookRun } from "@/lib/workspace/hooks";
+import { CHECKS_PATH, checkFromMistakePrompt, mistakeRow } from "@/lib/workspace/project-checks";
 import { runHooks } from "@/lib/workspace/hook-runner";
 import { attemptDiff, noteStrip, secondTryFailed, takeAttempt } from "@/lib/workspace/attempt";
 import { verificationId } from "@/lib/workspace/verify-id";
@@ -449,6 +450,19 @@ export function CheckResults({
   }, [output, hooks]);
   const shownOutput = openOutput ? outputs[openOutput] : undefined;
   const ready = checksReady(result, browser, tsc, hooks);
+  // A mistake one line can show can become the project's own check, caught by itself from then on.
+  const mistake = ready ? mistakeRow(rows) : null;
+  const agentRunning = useWorkspace((s) => s.agentRunning);
+  const makeCheck = () => {
+    const state = useWorkspace.getState();
+    if (!mistake || state.agentRunning) return;
+    const message = pendingSource(state.messages);
+    void submitAgent(`Make a project check so this does not happen again (${mistake.label}).`, "composer", message?.modelSource, {
+      apiInstruction: checkFromMistakePrompt(mistake, files[CHECKS_PATH]),
+      pendingEdits: edits,
+      ...(message?.copyId ? { copyId: message.copyId } : {}),
+    });
+  };
   useEffect(() => {
     if (!ready) return;
     const state = useWorkspace.getState();
@@ -499,6 +513,18 @@ export function CheckResults({
               onClick={() => setShowAll((on) => !on)}
             >
               {showAll ? "Show only what needs a look" : `Show all ${rows.length} checks`}
+            </button>
+          )}
+          {mistake && (
+            <button
+              type="button"
+              data-make-check
+              disabled={agentRunning}
+              onClick={makeCheck}
+              title={`Ask Composer to write a check into ${CHECKS_PATH} that catches this mistake from now on, here and in Agent Check.`}
+              className="h-8 rounded-sm underline-offset-2 hover:text-fg hover:underline disabled:opacity-50"
+            >
+              Make it a check
             </button>
           )}
           <span

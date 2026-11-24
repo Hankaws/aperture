@@ -61,16 +61,12 @@ export function annotationsFor(rows: CheckRow[]): Annotation[] {
       const match = /^([^\s:][^:]*?): (.*?\bat line (\d+)\b.*)$/.exec(raw);
       if (!match) continue;
       found = true;
-      const key = `${level}|${match[1]}|${match[3]}|${match[2]}`;
+      // The detail line repeats the first finding with "(+N more)": the same annotation.
+      const message = match[2]!.replace(/ \(\+\d+ more\)$/, "");
+      const key = `${level}|${match[1]}|${match[3]}|${message}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({
-        level,
-        file: match[1]!,
-        line: Number(match[3]),
-        title,
-        message: match[2]!.replace(/ \(\+\d+ more\)$/, ""),
-      });
+      out.push({ level, file: match[1]!, line: Number(match[3]), title, message });
     }
     if (!found && row.path) out.push({ level, file: row.path, title, message: row.detail });
   }

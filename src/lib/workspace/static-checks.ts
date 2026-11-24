@@ -16,6 +16,7 @@ import {
   type CheckRow,
   type TscCheck,
 } from "./checks.ts";
+import { projectChecksRow } from "./project-checks.ts";
 import { safetyFindings } from "./safety.ts";
 import { importersOf, importIssues } from "./module-graph.ts";
 
@@ -232,5 +233,9 @@ export function staticChangeChecks(input: {
   const files = { ...input.before };
   for (const other of others) files[other.path] = other.oldText;
   const safety = safetyRow(safetyFindings(files, [...edits, ...emptied, ...others]));
-  return checked.map((row) => (row.id === "safety" ? safety : row));
+  // The project's own checks can name any file, a workflow or a Python script as well as code.
+  const project = projectChecksRow(files, [...edits, ...others]);
+  return checked.map((row) =>
+    row.id === "safety" ? safety : row.id === "project" && project ? project : row,
+  );
 }

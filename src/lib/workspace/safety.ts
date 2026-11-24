@@ -11,7 +11,8 @@
  *   script that no longer checks). Holds Apply, and goes back to the agent.
  * - `look`: worth a person's eye, not wrong by itself: a new dependency, one
  *   installed from a URL, an install script, an edited CI workflow, a lockfile
- *   that moved with no dependency change, a new `@ts-ignore` or
+ *   that moved with no dependency change, a project check removed or
+ *   changed (`.aperture/checks.json`), a new `@ts-ignore` or
  *   `eslint-disable`.
  *
  * A key is never repeated in what this says: only its kind and where it is.
@@ -129,7 +130,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 /** The lines `after` has that `before` did not, counted, with their line numbers in `after`. */
-function addedLines(before: string, after: string): Array<{ text: string; line: number }> {
+export function addedLines(before: string, after: string): Array<{ text: string; line: number }> {
   const left = new Map<string, number>();
   for (const line of before.split("\n")) left.set(line, (left.get(line) ?? 0) + 1);
   const out: Array<{ text: string; line: number }> = [];
@@ -307,6 +308,46 @@ function packageChanges(
   return { findings, deps };
 }
 
+const PROJECT_CHECKS = ".aperture/checks.json";
+
+/** The project's own checks (project-checks.ts), by name, as written. */
+function projectChecks(text: string | undefined): Map<string, string> {
+  const data = json(text);
+  const entries = Array.isArray(data?.checks) ? (data.checks as unknown[]) : [];
+  const out = new Map<string, string>();
+  entries.forEach((entry, i) => {
+    const item = record(entry);
+    const name =
+      typeof item.name === "string" && item.name.trim() ? item.name.trim() : `check ${i + 1}`;
+    out.set(name, JSON.stringify(item));
+  });
+  return out;
+}
+
+/** A check the change takes out or rewrites. Adding one is what the file is for; it proves itself on its own row. */
+function projectChecksEdited(before: string | undefined, after: string): SafetyFinding[] {
+  const was = projectChecks(before);
+  const now = projectChecks(after);
+  const removed = [...was.keys()].filter((name) => !now.has(name));
+  const changed = [...was.keys()].filter(
+    (name) => now.has(name) && now.get(name) !== was.get(name),
+  );
+  const out: SafetyFinding[] = [];
+  if (removed.length > 0)
+    out.push({
+      level: "look",
+      path: PROJECT_CHECKS,
+      what: `removes the project ${removed.length === 1 ? "check" : "checks"} ${names(removed.map((n) => `"${n}"`))}`,
+    });
+  if (changed.length > 0)
+    out.push({
+      level: "look",
+      path: PROJECT_CHECKS,
+      what: `changes the project ${changed.length === 1 ? "check" : "checks"} ${names(changed.map((n) => `"${n}"`))}`,
+    });
+  return out;
+}
+
 /** Everything worth saying about a change, red first, in the order of the files. */
 export function safetyFindings(files: Record<string, string>, edits: Edit[]): SafetyFinding[] {
   const out: SafetyFinding[] = [];
@@ -326,6 +367,7 @@ export function safetyFindings(files: Record<string, string>, edits: Edit[]): Sa
       out.push(...pkg.findings);
       depsMoved ||= pkg.deps;
     }
+    if (edit.path === PROJECT_CHECKS) out.push(...projectChecksEdited(before, after));
     if (LOCKFILE.test(edit.path)) lockfiles.push(edit.path);
     if (CI_FILE.test(edit.path)) ci.push(edit.path);
   }

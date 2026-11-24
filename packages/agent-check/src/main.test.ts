@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { baseFromEvent, check, main, parseOptions, type Options } from "./main.ts";
-import { summaryMarkdown, workflowCommands } from "./report.ts";
+import { annotationsFor, summaryMarkdown, workflowCommands } from "./report.ts";
 import { testEnv } from "./tests.ts";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -309,6 +309,62 @@ test("one package of a monorepo, checked from its folder: hoisted, sibling and E
   )!;
   assert.equal(caught.status, "fail");
   assert.match(caught.detail, /imports "lodsh" at line 1, which is not in package\.json/);
+});
+
+test("the project's own checks hold a pull request, code or not, and the pull request cannot remove one to get past it", () => {
+  const checks = JSON.stringify({
+    checks: [
+      {
+        name: "no print in scripts",
+        files: ["scripts/**"],
+        forbid: "^\\s*print\\(",
+        example: "print(rows)",
+        why: "Use the logging module.",
+      },
+      {
+        name: "no console.log in src",
+        files: ["src/**"],
+        forbid: "\\bconsole\\.log\\(",
+        example: "console.log(user);",
+        why: "Use the logger.",
+      },
+    ],
+  });
+  const dir = repo(
+    { ...shop, ".aperture/checks.json": checks, "scripts/sync.py": "import os\n" },
+    {
+      "scripts/sync.py": "import os\nprint(os.environ)\n",
+      "src/cart.ts":
+        'import { formatPrice } from "./price";\n\nexport const label = formatPrice(100);\nconsole.log(label);\n',
+      // The pull request deletes the checks it breaks: the base's checks still judge it.
+      ".aperture/checks.json": JSON.stringify({ checks: [] }),
+    },
+  );
+  const result = check(options(dir));
+  assert.equal(result.verdict, "red");
+  const project = result.rows.find((row) => row.id === "project")!;
+  assert.equal(project.status, "fail");
+  assert.match(
+    project.evidence!,
+    /scripts\/sync\.py: breaks the project check "no print in scripts" at line 2: Use the logging module\./,
+  );
+  assert.match(
+    project.evidence!,
+    /src\/cart\.ts: breaks the project check "no console\.log in src" at line 4: Use the logger\./,
+  );
+  const safety = result.rows.find((row) => row.id === "safety")!;
+  assert.match(
+    safety.detail,
+    /removes the project checks "no print in scripts", "no console\.log in src"/,
+  );
+  // Each break is an annotation on its own line of the pull request.
+  assert.deepEqual(
+    annotationsFor(result.rows).map((a) => [a.file, a.line, a.title]),
+    [
+      ["src/cart.ts", 4, "Aperture Agent Check: Project checks"],
+      ["scripts/sync.py", 2, "Aperture Agent Check: Project checks"],
+    ],
+  );
 });
 
 test("a YAML lockfile that moved with no dependency change is a look", () => {

@@ -16,13 +16,14 @@ import type { TscOutcome } from "./tsc";
 import type { HookRun } from "./hooks.ts";
 import { excerpt } from "../runner/stack.ts";
 import { testChanges } from "../runner/tampering.ts";
+import { projectChecksRow } from "./project-checks.ts";
 import { safetyFindings, type SafetyFinding } from "./safety.ts";
 
 /** Real `tsc` on the staged change: running, its findings, or why it could not run. Null: not asked. */
 export type TscCheck = null | { state: "running" } | TscOutcome;
 
-/** `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). `skill:<script>`: a loaded skill's check (`agent/skill-checks.ts`). */
-export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | "safety" | `hook:${string}` | `skill:${string}`;
+/** `project`: the project's own checks, from `.aperture/checks.json` (project-checks.ts). `hook:<id>`: a script from `.aperture/hooks.json` (see hooks.ts). `skill:<script>`: a loaded skill's check (`agent/skill-checks.ts`). */
+export type CheckId = "parse" | "imports" | "types" | "preview" | "tests" | "safety" | "project" | `hook:${string}` | `skill:${string}`;
 /** `warn`: failing, but failing the same way before this change. On the Safety row: worth a look, not wrong by itself. */
 export type CheckStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
@@ -343,7 +344,18 @@ export function changeChecks(input: {
 
   const tests = tamperedRow(testsRow(verify ?? null, input.browser ?? null), testChanges(files, edits));
   const safety = safetyRow(safetyFindings(files, edits));
-  return [parsesRow, imports, types, preview, tests, safety, ...(input.hooks ?? []).map(hookRow), ...skillRows(verify ?? null)];
+  const project = projectChecksRow(files, edits);
+  return [
+    parsesRow,
+    imports,
+    types,
+    preview,
+    tests,
+    safety,
+    ...(project ? [project] : []),
+    ...(input.hooks ?? []).map(hookRow),
+    ...skillRows(verify ?? null),
+  ];
 }
 
 /**

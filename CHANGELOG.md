@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- Aperture Agent Check releases itself, like Aperture Bot: its "Build from Aperture" run, given a version, tags the build, publishes the release and moves `v1`, with nothing left to do by hand. Both actions' builds now refuse a version that is not `vX.Y`, one that is not newer than the newest release, and Aperture code older than Aperture's live release, the three slips behind Agent Check v1.3, `v.1.4` and v1.6 ([#262](https://github.com/Hankaws/aperture/pull/262)).
+
 ## 0.31.0 - 2026-11-24
 
 ### Added

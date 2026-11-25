@@ -50,18 +50,17 @@ Each is published from its own repository, `Hankaws/aperture-bot` and
 workflows (`.github/workflows/`): the build copies `action.yml` and the README
 over, but not the workflows, so a change to a workflow is made in both places.
 
-- **Aperture Bot.** Once the change is merged here, run the bot repository's
-  workflow with `aperture-ref` set to the merge commit and `release` set to
-  the next version (`v1.15`). It builds, runs the smoke test, commits `dist/`,
-  tags that commit, publishes the release, and moves `v1` to it. Never publish
-  the release or push the tag by hand first: the workflow refuses a version
-  that already exists, and a tag made before the build lands on the previous
-  build (v1.14 had to be redone on 2026-11-17).
-- **Agent Check.** Its workflow only builds. Run it with `aperture-ref`, wait
-  until it is green, then publish `vX.Y` on the commit it made (not before:
-  a release made while it runs lands on the old commit, as v1.3 first did on
-  2026-11-22), and move `v1` to it
-  (`git tag -f v1 vX.Y && git push -f origin v1`).
+Both workflows work the same way. Once the change is merged here, run the
+repository's "Build from Aperture" with `aperture-ref` set to `main` (or the
+merge commit) and `release` set to the next version (`v1.8`). It builds, runs
+the smoke test, commits `dist/`, tags that commit, publishes the release (title
+= tag), and moves `v1` to it. Nothing is left to do by hand: never publish the
+release, push a tag or move `v1` yourself first. The workflow refuses:
+
+- a `release` that is not `vX.Y` or `vX.Y.Z` (`v.1.4` slipped through by hand on 2026-11-23);
+- a `release` that exists or is not newer than the newest release;
+- Aperture code older than Aperture's live release (v1.6 and v1.7 were first
+  built from an old commit on 2026-11-24).
 
 When an Aperture release ships a change that needs one of them, release it
 first, so the release notes can link it.

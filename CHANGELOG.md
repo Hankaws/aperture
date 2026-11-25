@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Added
 
+- **How agents' pull requests held up.** The Bot page's Check tab scores a repository: for each agent (Copilot, Codex, Devin, Jules, Claude, Claude Code, Cursor, Aperture Bot), the pull requests it merged in the last 90 days, how many were reverted, and how many needed a fix within 14 days, with people's for comparison and links to each one. It is the number the teams shipping the most agent code judge it by. A revert counts when a pull request says "Reverts …#N" or is titled Revert "…"; a fix only when a pull request says in its own words that it fixes #N, not in a quote or code. On Aperture's own 254 pull requests, a looser rule counted fixes that were never there; this one counts none, and the page says what it cannot see ([#262](https://github.com/Hankaws/aperture/pull/262)).
 - **A check offered when a mistake keeps happening.** The check strip now notes the kind of each red finding (a type error by its code, an import of a file that is not there, a skipped test, a key in the code), once per staged change. When the same kind turns up in three changes within a week, it says so ("This keeps happening: TS1308 …, in 3 changes this week") and offers **Make it a check**, or **Not now**, which keeps it quiet for a month. Kept in your browser, per project ([#262](https://github.com/Hankaws/aperture/pull/262)).
 
 ### Changed

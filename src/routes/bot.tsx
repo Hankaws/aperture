@@ -10,6 +10,7 @@ import { SampleFeed } from "@/components/bot/activity-feed";
 import { AgentsGuide } from "@/components/bot/agents-guide";
 import { CheckGuide } from "@/components/bot/check-guide";
 import { CheckPull } from "@/components/bot/check-pull";
+import { AgentScorecard } from "@/components/bot/agent-scorecard";
 import { BotAvatar } from "@/components/bot/bot-avatar";
 import { BotTeam, TeamPreview } from "@/components/bot/bot-team";
 import { MyBotCard } from "@/components/bot/my-bot-card";
@@ -80,9 +81,14 @@ function BotPage() {
             {tab === "check" ? (
               <CheckGuide>
                 {user && github?.connected && (
-                  <PanelBoundary name="Check a pull request" className="rounded-2xl">
-                    <CheckPull />
-                  </PanelBoundary>
+                  <>
+                    <PanelBoundary name="Check a pull request" className="rounded-2xl">
+                      <CheckPull />
+                    </PanelBoundary>
+                    <PanelBoundary name="Agent scorecard" className="rounded-2xl">
+                      <AgentScorecard />
+                    </PanelBoundary>
+                  </>
                 )}
               </CheckGuide>
             ) : (

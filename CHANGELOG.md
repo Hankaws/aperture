@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.31.0 - 2026-11-24
+
 ### Added
 
 - **Turn a mistake into a check.** A project can now keep its own checks in `.aperture/checks.json`: for each mistake, a pattern for one line, the files it applies to, the line it was made to catch, and what to write instead. Each line a change adds is read against them, code or not, in the editor (a Project checks row, red holds Apply), in Aperture Agent Check and Aperture Bot (with an annotation on the line), and in `check_change`. Under a red check, **Make it a check** asks Composer to write the check for that mistake. A new check must catch its own example, and says how many lines it already matches in the project; the checks in force are the ones already there, so a change cannot remove one to get past it, and Safety says when one is removed or changed. This is how the teams shipping the most agent code keep it trustworthy: each mistake becomes a check, not one more line in a prompt. Agent Check also no longer puts two annotations on the first line it reports ([#260](https://github.com/Hankaws/aperture/pull/260)).

@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- **A check offered when a mistake keeps happening.** The check strip now notes the kind of each red finding (a type error by its code, an import of a file that is not there, a skipped test, a key in the code), once per staged change. When the same kind turns up in three changes within a week, it says so ("This keeps happening: TS1308 …, in 3 changes this week") and offers **Make it a check**, or **Not now**, which keeps it quiet for a month. Kept in your browser, per project ([#262](https://github.com/Hankaws/aperture/pull/262)).
+
 ### Changed
 
 - Aperture Agent Check releases itself, like Aperture Bot: its "Build from Aperture" run, given a version, tags the build, publishes the release and moves `v1`, with nothing left to do by hand. Both actions' builds now refuse a version that is not `vX.Y`, one that is not newer than the newest release, and Aperture code older than Aperture's live release, the three slips behind Agent Check v1.3, `v.1.4` and v1.6 ([#262](https://github.com/Hankaws/aperture/pull/262)).

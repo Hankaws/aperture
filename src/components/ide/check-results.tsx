@@ -32,6 +32,15 @@ import { isScriptPath } from "@/lib/workspace/syntax-check";
 import type { ProposedEdit, VerifyReport } from "@/lib/workspace/types";
 import { HOOKS_PATH, hookRunCommand, hooksFor, parseHooks, type HookRun } from "@/lib/workspace/hooks";
 import { CHECKS_PATH, checkFromMistakePrompt, mistakeRow } from "@/lib/workspace/project-checks";
+import {
+  EMPTY_LOG,
+  mistakeKinds,
+  parseMistakeLog,
+  quietMistake,
+  recordMistakes,
+  repeatedMistake,
+  type MistakeLog,
+} from "@/lib/workspace/mistake-log";
 import { runHooks } from "@/lib/workspace/hook-runner";
 import { attemptDiff, noteStrip, secondTryFailed, takeAttempt } from "@/lib/workspace/attempt";
 import { verificationId } from "@/lib/workspace/verify-id";
@@ -453,12 +462,53 @@ export function CheckResults({
   // A mistake one line can show can become the project's own check, caught by itself from then on.
   const mistake = ready ? mistakeRow(rows) : null;
   const agentRunning = useWorkspace((s) => s.agentRunning);
-  const makeCheck = () => {
+  // Kinds of mistake this project keeps making, noted once per change, kept in this browser.
+  const project = useWorkspace((s) => s.name);
+  const logKey = `aperture:mistakes:v1:${project}`;
+  const [log, setLog] = useState<MistakeLog>(EMPTY_LOG);
+  useEffect(() => {
+    try {
+      setLog(parseMistakeLog(window.localStorage.getItem(logKey)));
+    } catch {
+      setLog(EMPTY_LOG);
+    }
+  }, [logKey]);
+  const saveLog = (next: MistakeLog) => {
+    setLog(next);
+    try {
+      window.localStorage.setItem(logKey, JSON.stringify(next));
+    } catch {
+      // Private windows and full storage: the offer is a nudge, nothing depends on it.
+    }
+  };
+  useEffect(() => {
+    if (!ready) return;
+    setLog((current) => {
+      const next = recordMistakes(current, rows, liveId, Date.now());
+      if (next !== current) {
+        try {
+          window.localStorage.setItem(logKey, JSON.stringify(next));
+        } catch {
+          // As above.
+        }
+      }
+      return next;
+    });
+  }, [ready, rows, liveId, logKey]);
+  const redKinds = ready ? rows.flatMap((row) => mistakeKinds(row).map((kind) => ({ ...kind, row }))) : [];
+  const repeat = repeatedMistake(
+    log,
+    redKinds.map((kind) => kind.key),
+    Date.now(),
+  );
+  const repeatRow = repeat ? redKinds.find((kind) => kind.key === repeat.key)?.row : undefined;
+  const makeCheck = (row = mistake) => {
     const state = useWorkspace.getState();
-    if (!mistake || state.agentRunning) return;
+    if (!row || state.agentRunning) return;
+    if (repeat) saveLog(quietMistake(log, repeat.key, Date.now()));
     const message = pendingSource(state.messages);
-    void submitAgent(`Make a project check so this does not happen again (${mistake.label}).`, "composer", message?.modelSource, {
-      apiInstruction: checkFromMistakePrompt(mistake, files[CHECKS_PATH]),
+    void submitAgent(`Make a project check so this does not happen again (${row.label}).`, "composer", message?.modelSource, {
+      apiInstruction: checkFromMistakePrompt(row, files[CHECKS_PATH]),
       pendingEdits: edits,
       ...(message?.copyId ? { copyId: message.copyId } : {}),
     });
@@ -504,6 +554,33 @@ export function CheckResults({
             />
           ))}
         </ul>
+        {repeat && repeatRow && (
+          <div
+            role="note"
+            data-repeat-mistake={repeat.key}
+            className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border px-2 py-1.5 text-[11px]"
+          >
+            <span className="min-w-0 flex-1 text-muted">
+              <span className="text-fg">This keeps happening:</span> {repeat.label.replace(/\.$/, "")}, in {repeat.times} changes this
+              week.
+            </span>
+            <button
+              type="button"
+              disabled={agentRunning}
+              onClick={() => makeCheck(repeatRow)}
+              className="h-8 rounded-sm px-1.5 text-fg underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              Make it a check
+            </button>
+            <button
+              type="button"
+              onClick={() => saveLog(quietMistake(log, repeat.key, Date.now()))}
+              className="h-8 rounded-sm px-1.5 text-subtle hover:text-fg"
+            >
+              Not now
+            </button>
+          </div>
+        )}
         <div className="mt-0.5 flex items-center gap-2 px-1 text-[11px] text-subtle">
           {quiet > 0 && (
             <button
@@ -515,12 +592,12 @@ export function CheckResults({
               {showAll ? "Show only what needs a look" : `Show all ${rows.length} checks`}
             </button>
           )}
-          {mistake && (
+          {mistake && !repeat && (
             <button
               type="button"
               data-make-check
               disabled={agentRunning}
-              onClick={makeCheck}
+              onClick={() => makeCheck()}
               title={`Ask Composer to write a check into ${CHECKS_PATH} that catches this mistake from now on, here and in Agent Check.`}
               className="h-8 rounded-sm underline-offset-2 hover:text-fg hover:underline disabled:opacity-50"
             >

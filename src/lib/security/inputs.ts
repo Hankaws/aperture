@@ -219,6 +219,8 @@ export const botChatSaveInput = z.object({
 const repoFull = z.string().regex(REPO_FULL_NAME);
 /** `repos`: the team's repositories; without them, the most recently pushed. */
 export const botActivityInput = z.object({ repos: z.array(repoFull).max(15).optional() });
+/** One repository's agent scorecard (`bot/scorecard.ts`). */
+export const agentScorecardInput = z.object({ repo: repoFull });
 /** The team's repositories, for the Automation view: each one's daily brief. */
 export const botTeamInput = z.object({ repos: z.array(repoFull).min(1).max(15) });
 export const botTeamBriefInput = z.object({ repos: z.array(repoFull).min(1).max(15), on: z.boolean() });

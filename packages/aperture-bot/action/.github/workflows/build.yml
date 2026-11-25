@@ -2,6 +2,9 @@
 # with no install. Run it by hand with the Aperture tag or branch to build.
 # Give it a release (v1.5) and it also tags the build, publishes a release,
 # and moves the major tag (v1) to it, which is what `@v1` workflows run.
+#
+# It refuses Aperture code older than Aperture's live release, a release name
+# that is not a version, and one not newer than the newest release.
 name: Build from Aperture
 
 on:
@@ -34,11 +37,43 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: The release is newer than the newest one
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$RELEASE" >/dev/null; then
+            echo "::error::$RELEASE already exists: pick the next version."; exit 1
+          fi
+          newest="$(gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)"
+          if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$RELEASE" | sort -V | tail -1)" != "$RELEASE" ]; then
+            echo "::error::$RELEASE is not newer than the newest release, $newest."; exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           repository: Hankaws/aperture
           ref: ${{ inputs.aperture-ref }}
           path: aperture
+          fetch-depth: 0
+
+      # Aperture's own release comes after this build, so the code built is the
+      # live release or newer: never older, which would ship without fixes users
+      # already have.
+      - name: Not older than Aperture's live release
+        working-directory: aperture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASKED: ${{ inputs.aperture-ref }}
+        run: |
+          live="$(gh release view --repo Hankaws/aperture --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -z "$live" ]; then echo "Aperture has no release yet."; exit 0; fi
+          if ! git merge-base --is-ancestor "refs/tags/$live" HEAD; then
+            echo "::error::Hankaws/aperture@$(git rev-parse --short HEAD) (\"$ASKED\") is older than Aperture's live release $live. Build from main or a commit after $live."
+            exit 1
+          fi
+          echo "Building Hankaws/aperture@$(git rev-parse --short HEAD), which includes $live."
 
       - uses: actions/setup-node@v4
         with:

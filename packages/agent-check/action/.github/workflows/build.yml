@@ -1,14 +1,26 @@
 # Builds dist/ from the Aperture source and commits it, so `uses:` runs it
-# with no install. Run it by hand with the Aperture tag or branch to build.
+# with no install. Run it by hand with the Aperture commit to build (main,
+# usually). Give it a release (v1.8) and it also tags that build, publishes
+# the release, and moves the major tag (v1) to it, which is what `@v1`
+# workflows run: nothing is left to do by hand.
+#
+# It refuses what has gone wrong before: Aperture code older than Aperture's
+# live release (v1.6 was built from an old commit), a release name that is
+# not a version (v.1.4), one not newer than the newest release, and a tag made
+# before the build (v1.3): the tag is made here, on the build's own commit.
 name: Build from Aperture
 
 on:
   workflow_dispatch:
     inputs:
       aperture-ref:
-        description: Tag, branch or commit of Hankaws/aperture to build
+        description: Commit, branch or tag of Hankaws/aperture to build (main, usually)
         required: true
         default: main
+      release:
+        description: "Version to release, such as v1.8 (empty: build only, nothing tagged)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -17,13 +29,56 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: The release is a version
+        if: inputs.release != ''
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          if ! [[ "$RELEASE" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::release must look like v1.8 or v1.8.1, not \"$RELEASE\"."; exit 1
+          fi
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The release is newer than the newest one
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$RELEASE" >/dev/null; then
+            echo "::error::$RELEASE already exists: pick the next version."; exit 1
+          fi
+          newest="$(gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)"
+          if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$RELEASE" | sort -V | tail -1)" != "$RELEASE" ]; then
+            echo "::error::$RELEASE is not newer than the newest release, $newest."; exit 1
+          fi
 
       - uses: actions/checkout@v4
         with:
           repository: Hankaws/aperture
           ref: ${{ inputs.aperture-ref }}
           path: aperture
+          fetch-depth: 0
+
+      # Aperture's own release comes after this build, so the code built is the
+      # live release or newer: never older, which would ship without fixes users
+      # already have.
+      - name: Not older than Aperture's live release
+        working-directory: aperture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASKED: ${{ inputs.aperture-ref }}
+        run: |
+          live="$(gh release view --repo Hankaws/aperture --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -z "$live" ]; then echo "Aperture has no release yet."; exit 0; fi
+          if ! git merge-base --is-ancestor "refs/tags/$live" HEAD; then
+            echo "::error::Hankaws/aperture@$(git rev-parse --short HEAD) (\"$ASKED\") is older than Aperture's live release $live. Build from main or a commit after $live."
+            exit 1
+          fi
+          echo "Building Hankaws/aperture@$(git rev-parse --short HEAD), which includes $live."
 
       - uses: actions/setup-node@v4
         with:
@@ -42,7 +97,10 @@ jobs:
 
       # action.yml and the README come along, so the inputs the bundle reads are the ones declared.
       - name: Commit dist/, action.yml and README.md
+        id: commit
         run: |
+          source="$(git -C aperture rev-parse HEAD)"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
           rm -rf dist
           cp -r aperture/packages/agent-check/dist dist
           cp aperture/packages/agent-check/action/action.yml action.yml
@@ -52,5 +110,26 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add dist action.yml README.md
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
-          git commit -m "Build dist from Hankaws/aperture@${{ inputs.aperture-ref }}"
+          git commit -m "Build dist from Hankaws/aperture@$source" -m "Asked for: ${{ inputs.aperture-ref }}"
           git push
+
+      # The version's own tag never moves; the major tag (v1) moves to it.
+      - name: Tag, release, and move the major tag
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          SOURCE: ${{ steps.commit.outputs.source }}
+        run: |
+          major="${RELEASE%%.*}"
+          git tag -a "$RELEASE" -m "Aperture Agent Check $RELEASE"
+          git push origin "refs/tags/$RELEASE"
+          gh release create "$RELEASE" --title "$RELEASE" --verify-tag \
+            --notes "Built from [Hankaws/aperture@${SOURCE:0:7}](https://github.com/Hankaws/aperture/commit/$SOURCE). See its [changelog](https://github.com/Hankaws/aperture/blob/$SOURCE/CHANGELOG.md)."
+          git tag -f -a "$major" -m "Aperture Agent Check $RELEASE"
+          git push --force origin "refs/tags/$major"
+          {
+            echo "### Released $RELEASE"
+            echo ""
+            echo "Built from Hankaws/aperture@${SOURCE:0:7}. \`$major\` now points at it."
+          } >> "$GITHUB_STEP_SUMMARY"

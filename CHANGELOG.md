@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.32.0 - 2026-11-25
+
 ### Added
 
 - **How agents' pull requests held up.** The Bot page's Check tab scores a repository: for each agent (Copilot, Codex, Devin, Jules, Claude, Claude Code, Cursor, Aperture Bot), the pull requests it merged in the last 90 days, how many were reverted, and how many needed a fix within 14 days, with people's for comparison and links to each one. It is the number the teams shipping the most agent code judge it by. A revert counts when a pull request says "Reverts …#N" or is titled Revert "…"; a fix only when a pull request says in its own words that it fixes #N, not in a quote or code. On Aperture's own 254 pull requests, a looser rule counted fixes that were never there; this one counts none, and the page says what it cannot see ([#262](https://github.com/Hankaws/aperture/pull/262)).

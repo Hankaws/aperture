@@ -233,10 +233,18 @@ try {
       ["/app", "Editor · Aperture"],
       ["/benchmark", "Benchmark · Aperture"],
       ["/editor", "What the editor knows · Aperture"],
+      ["/check", "Check a pull request · Aperture"],
     ]) {
       await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
       check((await page.title()) === title, `${path} is titled "${title}" (${await page.title()})`);
     }
+    // The check page reads a link before it asks GitHub anything: a wrong one is answered on the page.
+    await page.getByLabel("Pull request link").fill("https://github.com/acme/shop/issues/4");
+    await page.getByRole("button", { name: "Check it" }).click();
+    check(
+      await page.getByRole("alert").filter({ hasText: "That is not a pull request link" }).isVisible(),
+      "the check page says when a link is not a pull request's",
+    );
     const missing = await page.goto(`${base}/no-such-page`, { waitUntil: "networkidle" });
     check(missing?.status() === 404, `an unknown address answers 404 (${missing?.status()})`);
     check((await page.title()) === "Page not found · Aperture", `the 404 page is titled (${await page.title()})`);

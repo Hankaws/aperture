@@ -27,6 +27,10 @@ export const LIMITS = {
   billing: 10,
   /** Replay runs from signed-out visitors, all together: they cost no model, only server time. */
   demo: 60,
+  /** Checks of a public pull request, per person or address. */
+  publicCheck: 6,
+  /** The same from everyone signed out, together: they share one GitHub allowance. */
+  publicCheckAll: 40,
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -48,6 +52,8 @@ const WHAT: Record<LimitName, string> = {
   botChat: "messages to Aperture Bot",
   billing: "checkouts",
   demo: "demo runs from signed-out visitors",
+  publicCheck: "pull request checks",
+  publicCheckAll: "pull request checks from signed-out visitors",
 };
 
 const WINDOW_MS = 60_000;

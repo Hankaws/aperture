@@ -78,3 +78,31 @@ export const agentCallerMiddleware = createMiddleware({ type: "function" })
     }
     return next({ context: caller });
   });
+
+/**
+ * For a server function anyone may call, such as checking a public pull
+ * request: the caller's user id when they are signed in, else null. Same-site
+ * only, as the others. A handler using it must touch no per-user data for a
+ * null caller.
+ */
+export const publicCallerMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const { getBearerToken } = await import("./client");
+    return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+  })
+  .server(async ({ next, context }) => {
+    // Only `*.server` modules here, as in authMiddleware above.
+    const { assertSameSiteRequest } = await import("./isolation.server");
+    const { requireUserId, UnauthorizedError } = await import("./verify.server");
+    assertSameSiteRequest();
+    let userId: string | null = null;
+    try {
+      userId = await requireUserId(context.bearerToken);
+    } catch (error) {
+      const unauthorized =
+        error instanceof UnauthorizedError ||
+        (error instanceof Error && error.message === "Unauthorized");
+      if (!unauthorized) throw error;
+    }
+    return next({ context: { userId } });
+  });

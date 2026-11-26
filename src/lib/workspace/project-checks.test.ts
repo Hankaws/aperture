@@ -231,3 +231,15 @@ test("Make it a check asks for one proven entry, from a red row a line can show"
     /keeping every check already there exactly as it is/,
   );
 });
+
+test("Aperture's own checks parse, and each one catches its own example", async () => {
+  const { readFileSync } = await import("node:fs");
+  const raw = readFileSync(new URL("../../../.aperture/checks.json", import.meta.url), "utf8");
+  const parsed = parseChecks(raw);
+  assert.equal(parsed.error, null);
+  assert.ok(parsed.checks.length >= 6);
+  for (const check of parsed.checks) {
+    assert.ok(check.example, `${check.name} has an example`);
+    assert.ok(check.forbid.test(check.example!), `${check.name} catches its example`);
+  }
+});

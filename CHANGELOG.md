@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- Aperture uses its own project checks. `.aperture/checks.json` turns six rules this project learned the hard way into checks on every change and pull request: no `@/` import in a test file (bare node cannot resolve it), a server function's input is a zod schema, no `enum` (Node's type stripping cannot run one), a look at parameter properties for the same reason, and the editor kept out of the landing page's download (`codeSplitGroupings: []`, `splitBehavior`). Each catches its own example, matches nothing in the code as it is (the parameter-property look names its 6 existing lines), and a test keeps it that way ([#264](https://github.com/Hankaws/aperture/pull/264)).
+
 ## 0.32.0 - 2026-11-25
 
 ### Added

@@ -164,7 +164,7 @@ const marker = `// smoke ${stamp}: saved to the account`;
 try {
   // 1. Every public page, signed out, on a laptop and a phone.
   const pages = [
-    ["/", /Checked before you apply it\./],
+    ["/", /Agent mistakes, caught\. Never twice\./],
     ["/benchmark", new RegExp(`with ${benchCases} edits an agent might stage`)],
     ["/pricing", /Hobby is free\. Pro and Team add a server sandbox/],
     ["/agents", /Your agent writes the change\. Aperture checks it first\./],

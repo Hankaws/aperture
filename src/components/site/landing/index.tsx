@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import type { BenchResults } from "@/lib/bench/run";
 import benchData from "@/lib/bench/results.json";
-import { ProductDemo } from "./demo";
+import { CatchDemo } from "./catch-demo";
 import { AgentCheckStory, AgentsStory } from "./beyond";
 import { AskStory, ChecksStory, Vision } from "./story";
 import { EditorStory } from "./editor-story";
@@ -90,9 +90,12 @@ export function Landing() {
         <section className="px-4 pt-24 pb-8 sm:px-5 sm:pt-28">
           <div className="mx-auto flex w-full max-w-6xl flex-col">
             <h1 className="max-w-5xl text-[clamp(3.4rem,8vw,7rem)] leading-[0.88] font-medium tracking-[-0.03em] text-balance">
-              Checked before you apply it.
+              Agent mistakes, caught. Never twice.
             </h1>
-            <p className="mt-6 text-lg text-muted sm:text-xl">Nothing is written until you press Apply.</p>
+            <p className="mt-6 max-w-3xl text-lg text-pretty text-muted sm:text-xl">
+              Every change an AI agent makes is checked before you apply it, in the editor and on every pull request.
+              Each mistake can become a check, so it is caught by itself from then on.
+            </p>
             <p className="mt-3 text-base text-muted">
               Stopped {stopped} of {visible} mistakes a check can see.{" "}
               {unseen > 0 ? `${unseen} that no check can see got through. ` : ""}
@@ -100,9 +103,14 @@ export function Landing() {
                 See the list →
               </Link>
             </p>
-            <OpenLink className="mt-8 w-fit text-lg text-fg" label="Open the editor →" />
+            <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 text-lg">
+              <OpenLink className="w-fit text-fg" label="Open the editor →" />
+              <Link to="/bot" search={{ tab: "check" }} className="w-fit text-muted hover:text-fg">
+                Add it to your pull requests →
+              </Link>
+            </div>
             <div className="mt-12">
-              <ProductDemo />
+              <CatchDemo />
             </div>
           </div>
         </section>

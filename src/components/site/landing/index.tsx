@@ -105,6 +105,9 @@ export function Landing() {
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 text-lg">
               <OpenLink className="w-fit text-fg" label="Open the editor →" />
+              <Link to="/check" className="w-fit text-muted hover:text-fg">
+                Check any pull request →
+              </Link>
               <Link to="/bot" search={{ tab: "check" }} className="w-fit text-muted hover:text-fg">
                 Add it to your pull requests →
               </Link>

@@ -288,21 +288,40 @@ export function readAliases(files: Record<string, string>): Array<[string, strin
   return out;
 }
 
-function resolveInWorkspace(candidate: string, files: Record<string, string>): string | null {
-  for (const ext of EXTENSIONS) {
-    const withExt = `${candidate}${ext}`;
-    if (files[withExt] !== undefined) return withExt;
-  }
+/** The paths an import of `candidate` could be, in the order resolution tries them. */
+export function candidatePaths(candidate: string): string[] {
+  const out = EXTENSIONS.map((ext) => `${candidate}${ext}`);
   const compiled = /\.(?:m|c)?jsx?$/.exec(candidate)?.[0];
   if (compiled) {
     const stem = candidate.slice(0, -compiled.length);
-    for (const ext of SOURCE_FOR[compiled] ?? []) {
-      if (files[`${stem}${ext}`] !== undefined) return `${stem}${ext}`;
-    }
+    for (const ext of SOURCE_FOR[compiled] ?? []) out.push(`${stem}${ext}`);
   }
-  for (const ext of EXTENSIONS.slice(1)) {
-    const index = `${candidate}/index${ext}`;
-    if (files[index] !== undefined) return index;
+  for (const ext of EXTENSIONS.slice(1)) out.push(`${candidate}/index${ext}`);
+  return out;
+}
+
+function resolveInWorkspace(candidate: string, files: Record<string, string>): string | null {
+  return candidatePaths(candidate).find((path) => files[path] !== undefined) ?? null;
+}
+
+/**
+ * Where an import from `fromPath` could point in the project, in the order
+ * resolution tries them: for a relative path or a tsconfig alias. Null for a
+ * package, a built-in, or anything else resolution does not look for as a file.
+ */
+export function importCandidates(
+  fromPath: string,
+  rawSpec: string,
+  files: Record<string, string>,
+): string[] | null {
+  const spec = rawSpec.split("?")[0]!;
+  if (!spec) return null;
+  if (spec.startsWith(".")) {
+    if (escapesRoot(dirOf(fromPath), spec)) return null;
+    return candidatePaths(joinPath(dirOf(fromPath), spec));
+  }
+  for (const [prefix, target] of readAliases(files)) {
+    if (spec.startsWith(prefix)) return candidatePaths(`${target}${spec.slice(prefix.length)}`);
   }
   return null;
 }

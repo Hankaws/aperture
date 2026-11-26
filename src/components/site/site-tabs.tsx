@@ -13,6 +13,7 @@ type Item = { label: string; href?: string; to?: string; wide?: boolean; menu?: 
 const ITEMS: Item[] = [
   { label: "How", href: "/#how" },
   { label: "Checks", href: "/#checks" },
+  { label: "Check a PR", to: "/check" },
   { label: "Benchmark", to: "/benchmark" },
   { label: "Chat", to: "/chat" },
   { label: "Bot", to: "/bot" },

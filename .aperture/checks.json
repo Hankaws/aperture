@@ -1,0 +1,47 @@
+{
+  "checks": [
+    {
+      "name": "no @/ import in a test file",
+      "files": ["src/**/*.test.ts", "packages/**/*.test.ts"],
+      "forbid": "^\\s*import\\s+(?!type\\b)[^'\"]*\\bfrom\\s+[\"']@/",
+      "example": "import { planById } from \"@/lib/billing/plans\";",
+      "why": "npm test runs test files under bare node, which does not resolve the @/ alias: import with a relative path and the .ts extension (see AGENTS.project.md, Imports in src/lib that tests reach)."
+    },
+    {
+      "name": "server function input is a zod schema",
+      "files": ["src/**/*.ts", "src/**/*.tsx"],
+      "forbid": "\\.validator\\(\\s*\\(",
+      "example": "  .validator((input: { repo: string }) => input)",
+      "why": "A TypeScript type says what the editor sends, not what reaches the endpoint: put a zod schema in src/lib/security/inputs.ts and pass it to .validator()."
+    },
+    {
+      "name": "no enum",
+      "files": ["src/**/*.ts", "packages/**/*.ts"],
+      "forbid": "^\\s*(?:export\\s+)?(?:const\\s+)?enum\\s+\\w+\\s*\\{",
+      "example": "export enum Plan {",
+      "why": "Node's type stripping, which npm test uses, cannot run an enum: use a union of string literals, or an object with as const."
+    },
+    {
+      "name": "parameter properties where a test may reach",
+      "files": ["src/**/*.ts", "packages/**/*.ts"],
+      "forbid": "constructor\\(\\s*(?:private|public|protected|readonly)\\b",
+      "example": "  constructor(private readonly client: Client) {}",
+      "why": "Node's type stripping, which npm test uses, cannot run parameter properties: if a test reaches this file, declare the field and assign it in the constructor's body.",
+      "level": "look"
+    },
+    {
+      "name": "the editor stays out of the landing page (route)",
+      "files": ["src/routes/**"],
+      "forbid": "codeSplitGroupings:\\s*\\[\\s*\\]",
+      "example": "  codeSplitGroupings: [],",
+      "why": "Unsplit, every page downloads the whole editor (about 1.7 MB): keep every route code-split (see AGENTS.project.md, The landing page must not download the editor)."
+    },
+    {
+      "name": "the editor stays out of the landing page (vite)",
+      "files": ["vite.config.ts"],
+      "forbid": "\\bsplitBehavior\\b",
+      "example": "      splitBehavior: ({ routeId }) => (routeId === \"/app\" ? [] : undefined),",
+      "why": "A splitBehavior exception puts the editor back in every page's download (about 1.7 MB): keep every route code-split (see AGENTS.project.md, The landing page must not download the editor)."
+    }
+  ]
+}

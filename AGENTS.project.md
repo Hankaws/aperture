@@ -65,6 +65,19 @@ release, push a tag or move `v1` yourself first. The workflow refuses:
 When an Aperture release ships a change that needs one of them, release it
 first, so the release notes can link it.
 
+## A mistake that bites twice becomes a check
+
+`.aperture/checks.json` holds this repository's own project checks: the
+editor's Project checks row, Agent Check on every pull request, and
+`check_change` all read it. Each one is a rule written down below (the `@/`
+import in a test file, a validator without a schema, an enum, the editor in the
+landing page's download) as a pattern for one line, with the line it was made
+to catch and what to write instead. When a mistake here costs a second round,
+add a check for it rather than another paragraph, and run `npm test`: a test
+holds every check to catching its own example. Keep a check narrow; one that
+matches code the project needs is worse than none, which is why "`@/` in
+`src/lib`" is not a check (208 lines use it, in modules no test reaches).
+
 ## Imports in `src/lib` that tests reach
 
 `npm test` runs `src/**/*.test.ts` under bare node (`--experimental-strip-types`),

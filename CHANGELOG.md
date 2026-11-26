@@ -9,6 +9,7 @@ release notes are every line from there down to the previous version.
 
 ### Changed
 
+- The landing page tells the catch story instead of a generic demo. The headline is "Agent mistakes, caught. Never twice.", and the hero plays four steps from a real pull request: Copilot writes `await test(...)` inside a describe that is not async, the checks hold it (Types goes red, Apply waits), one click makes it a project check that proves it catches its own example, and a week later Codex writes the same mistake and Project checks catches it before anyone reviews it. Each step can be clicked; with reduced motion it shows the end. A second button sends people straight to adding it to their pull requests ([#265](https://github.com/Hankaws/aperture/pull/265)).
 - Aperture uses its own project checks. `.aperture/checks.json` turns six rules this project learned the hard way into checks on every change and pull request: no `@/` import in a test file (bare node cannot resolve it), a server function's input is a zod schema, no `enum` (Node's type stripping cannot run one), a look at parameter properties for the same reason, and the editor kept out of the landing page's download (`codeSplitGroupings: []`, `splitBehavior`). Each catches its own example, matches nothing in the code as it is (the parameter-property look names its 6 existing lines), and a test keeps it that way ([#264](https://github.com/Hankaws/aperture/pull/264)).
 
 ## 0.32.0 - 2026-11-25

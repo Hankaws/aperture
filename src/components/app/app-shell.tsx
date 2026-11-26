@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Bot,
   Code2,
+  ShieldCheck,
   Info,
   Menu,
   MessageCircle,
@@ -32,11 +33,14 @@ const FOLD_KEY = "aperture-sidebar-folded";
 /** Chats the sidebar lists outside the chat page, after the pinned ones. */
 const RECENT = 12;
 
-type NavItem = { to: "/chat" | "/bot" | "/app"; label: string; icon: LucideIcon };
+type NavItem = { to: "/app" | "/check" | "/bot" | "/chat"; label: string; icon: LucideIcon };
+// Checks first, as the site says: the editor that checks agent changes, then a pull request's check,
+// then the bots. Chat, your own bot, is still here, last.
 const NAV: NavItem[] = [
-  { to: "/chat", label: "Chat", icon: MessageCircle },
-  { to: "/bot", label: "Bots", icon: Bot },
   { to: "/app", label: "Editor", icon: Code2 },
+  { to: "/check", label: "Check a PR", icon: ShieldCheck },
+  { to: "/bot", label: "Bots", icon: Bot },
+  { to: "/chat", label: "Chat", icon: MessageCircle },
 ];
 
 /**
@@ -153,7 +157,7 @@ export function AppShell({
               >
                 <Menu className="size-5" />
               </button>
-              <Link to="/chat" className="flex items-center gap-2 text-sm font-medium">
+              <Link to="/app" className="flex items-center gap-2 text-sm font-medium">
                 <ApertureMark className="size-4" />
                 Aperture
               </Link>
@@ -184,15 +188,23 @@ function NewChat({
   className,
   icon = false,
   folded = false,
+  plain = false,
 }: {
   onNewChat?: () => void;
   className?: string;
   icon?: boolean;
   folded?: boolean;
+  /** A row like the places above it, not the sidebar's lead button. */
+  plain?: boolean;
 }) {
   const look = icon
     ? "grid place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg"
-    : cn(
+    : plain
+      ? cn(
+          "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm text-muted transition-colors hover:bg-elevated hover:text-fg",
+          folded && "justify-center px-0",
+        )
+      : cn(
         "flex h-10 items-center gap-2.5 rounded-xl border border-border bg-bg px-3 text-sm font-medium hover:bg-elevated",
         folded && "justify-center px-0",
       );
@@ -252,7 +264,7 @@ function Sidebar({
       >
         {!folded && (
           <Link
-            to="/chat"
+            to="/app"
             className="flex min-w-0 items-center gap-2 text-sm font-medium tracking-tight"
           >
             <ApertureMark className="size-4 shrink-0" />
@@ -275,7 +287,7 @@ function Sidebar({
         )}
       </div>
       <div className={cn("shrink-0 space-y-1 px-2", folded && "px-1.5")}>
-        <NewChat onNewChat={onNewChat} folded={folded} className="mb-2 w-full" />
+        {/* The places lead, checks first; New chat is a row under them, not the sidebar's headline. */}
         <nav aria-label="Places" className="space-y-0.5">
           {NAV.map(({ to, label, icon: Icon }) => {
             const on = path === to || path.startsWith(`${to}/`);
@@ -319,6 +331,7 @@ function Sidebar({
             );
           })}
         </nav>
+        <NewChat onNewChat={onNewChat} folded={folded} plain className="w-full" />
       </div>
       <div className="mt-3 flex min-h-0 flex-1 flex-col border-t border-border">
         {!folded && (section ?? <RecentChats />)}
@@ -326,7 +339,7 @@ function Sidebar({
       <div className={cn("shrink-0 space-y-0.5 border-t border-border p-2", folded && "px-1.5")}>
         <Link
           to="/settings"
-          search={{ tab: "plan" }}
+          search={{ tab: "models" }}
           className={cn(
             item,
             folded && "justify-center px-0",

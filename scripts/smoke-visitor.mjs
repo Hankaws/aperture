@@ -270,7 +270,7 @@ try {
       await waitForText(page, /Paid plans are not available on this deployment yet/, 10_000),
       "the server refuses Pro when the button is forced",
     );
-    await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=plan`, { waitUntil: "networkidle" });
     check(/Current plan\s+Hobby/.test(await bodyText(page)), "Settings still shows Hobby");
     clean(errors, "plans");
 

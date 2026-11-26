@@ -75,3 +75,12 @@ export function applyBlockReason(input: {
   if (input.notes > 0) return "Send or dismiss notes first";
   return null;
 }
+
+/**
+ * Apply anyway on a held change asks once, naming what you would be keeping,
+ * so the override is a choice rather than a slip.
+ */
+export function applyAnywayQuestion(failed: number): string {
+  const n = Math.max(1, failed);
+  return `Apply with ${n} failing ${plural(n, "check", "checks")}? The change goes into your files as it is.`;
+}

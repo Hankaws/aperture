@@ -20,9 +20,11 @@ import { BillingCard } from "@/components/site/billing-card";
 
 type SettingsTab = "plan" | "models" | "limits" | "agents";
 
+// Models first: it is what a new account needs (a key, or the hosted model), and while paid plans
+// are not for sale, Plan is the least useful place to land.
 const TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: "plan", label: "Plan" },
   { id: "models", label: "Models" },
+  { id: "plan", label: "Plan" },
   { id: "limits", label: "Limits" },
   { id: "agents", label: "Agents" },
 ];
@@ -39,7 +41,7 @@ function switchTarget(value: SwitchedTo | undefined) {
 
 export const Route = createFileRoute("/settings")({
   validateSearch: (s: Record<string, unknown>): { tab: SettingsTab; checkout?: "done"; switched?: SwitchedTo } => ({
-    tab: s.tab === "models" || s.tab === "limits" || s.tab === "agents" ? (s.tab as SettingsTab) : ("plan" as const),
+    tab: s.tab === "plan" || s.tab === "limits" || s.tab === "agents" ? (s.tab as SettingsTab) : ("models" as const),
     ...(s.checkout === "done" ? { checkout: "done" as const } : {}),
     ...(isSwitchedTo(s.switched) ? { switched: s.switched } : {}),
   }),

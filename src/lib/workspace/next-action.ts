@@ -8,6 +8,8 @@ export type NextAction = {
   /** A second choice, when the main one is not the only sensible move. */
   altKind?: NextKind;
   altCta?: string;
+  /** Set when the title is the check verdict: green for safe, red for held. */
+  tone?: "ok" | "danger";
 };
 
 export function nextAction(input: {
@@ -26,7 +28,13 @@ export function nextAction(input: {
   copies?: number;
   /** Every staged edit has already had its review pass. */
   reviewed?: boolean;
+  /**
+   * The check strip's verdict headline ("Safe to apply: …", "Held back: …").
+   * Composer says the same sentence as the strip instead of a second, vaguer one.
+   */
+  verdict?: string;
 }): NextAction {
+  const verdict = input.verdict?.trim() || undefined;
   if (input.running) {
     return { kind: "wait", title: "Composer is working", detail: "Steer in the box if you want to add a follow-up.", cta: "Wait" };
   }
@@ -53,8 +61,9 @@ export function nextAction(input: {
   if (input.pending > 0 && input.checks === "failed") {
     return {
       kind: "fix",
-      title: "A check failed — send it back, or remember it",
+      title: verdict ?? "A check failed — send it back, or remember it",
       detail: "Send it back to Composer, or apply and remember the failure.",
+      ...(verdict ? { tone: "danger" as const } : {}),
       cta: "Send back",
       altKind: "apply",
       altCta: "Apply anyway",
@@ -63,7 +72,8 @@ export function nextAction(input: {
   if (input.pending > 0 && input.checks === "clear" && !input.reviewed) {
     return {
       kind: "reviewer",
-      title: "Checks done. Review the diff?",
+      title: verdict ? `${verdict}. Review the diff?` : "Checks done. Review the diff?",
+      ...(verdict ? { tone: "ok" as const } : {}),
       detail: "One pass. A comment only where something is wrong. Dismiss it and it will not come back.",
       cta: "Review",
       // The checks are in, so skipping the review is not a risk: "anyway" is kept for a red check.
@@ -82,8 +92,9 @@ export function nextAction(input: {
     }
     return {
       kind: "apply",
-      title: `Apply ${input.pending} staged ${input.pending === 1 ? "file" : "files"}`,
+      title: verdict ?? `Apply ${input.pending} staged ${input.pending === 1 ? "file" : "files"}`,
       detail: "Checks are in. Amber means that failure was already there.",
+      ...(verdict ? { tone: "ok" as const } : {}),
       cta: "Apply",
     };
   }

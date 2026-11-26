@@ -49,6 +49,8 @@ export function ReviewGuide({
           >
             <span
               className={cn("mt-1.5 size-1.5 rounded-full", DOT[file.risk])}
+              // A label on a bare span is not announced (aria-prohibited-attr); as an image it is.
+              role="img"
               title={SAID[file.risk]}
               aria-label={SAID[file.risk]}
             />

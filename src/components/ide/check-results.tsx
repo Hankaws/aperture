@@ -263,8 +263,9 @@ function CheckRowItem({
   const Icon = ICON[row.status];
   const problem = row.status === "fail" || row.status === "warn";
   return (
-    // On a phone, passing and skipped rows wait behind "Show all": the diff needs the room.
-    <li className={cn(!problem && row.status !== "running" && "max-md:group-data-[all=off]:hidden")}>
+    // Passing and skipped rows wait behind "Show all", on a phone and beside the editor alike: the verdict
+    // above already says they passed, and the diff needs the room.
+    <li className={cn(!problem && row.status !== "running" && "group-data-[all=off]:hidden")}>
       <button
         type="button"
         disabled={!onClick}
@@ -437,16 +438,16 @@ export function CheckResults({
   useEffect(() => {
     useIdeUi.getState().setCheckHint(
       failed
-        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt, verificationId: liveId }
-        : { state: checkState, path: failedPath, verificationId: liveId },
+        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt, verificationId: liveId, headline: verdict.headline }
+        : { state: checkState, path: failedPath, verificationId: liveId, headline: verdict.headline },
     );
     return () => useIdeUi.getState().setCheckHint(null);
-  }, [checkState, failed, failedPath, failedDetail, fixPrompt, liveId]);
+  }, [checkState, failed, failedPath, failedDetail, fixPrompt, liveId, verdict.headline]);
   useEffect(() => {
     if (checkState === "clear" && useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(null);
   }, [checkState]);
   useEffect(() => () => useIdeUi.getState().setFailedAttempt(null), []);
-  // On a phone, the rows that passed or could not run fold away until asked for.
+  // The rows that passed or could not run fold away until asked for.
   const [showAll, setShowAll] = useState(false);
   const quiet = rows.filter((r) => r.status === "pass" || r.status === "skip").length;
   const outputs = useMemo(() => {
@@ -585,7 +586,7 @@ export function CheckResults({
           {quiet > 0 && (
             <button
               type="button"
-              className="h-8 rounded-sm underline-offset-2 hover:text-fg hover:underline md:hidden"
+              className="h-8 rounded-sm underline-offset-2 hover:text-fg hover:underline"
               aria-expanded={showAll}
               onClick={() => setShowAll((on) => !on)}
             >

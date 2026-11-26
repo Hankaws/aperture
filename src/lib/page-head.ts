@@ -6,6 +6,8 @@
  * Titles read "<page> · Aperture", the page first so a row of tabs stays
  * readable. Kept in one table so a test can check that none repeat.
  */
+import { canonicalLink } from "./seo.ts";
+
 export const SITE_NAME = "Aperture";
 
 export type PageKey =
@@ -81,12 +83,30 @@ export function pageTitle(key: PageKey): string {
   return `${PAGES[key].title} · ${SITE_NAME}`;
 }
 
-/** The `head()` of a route: its own title and description. */
+/** Pages that search engines may list, with the one address each answers to. */
+export const CANONICAL_PATH: Partial<Record<PageKey, string>> = {
+  app: "/app",
+  editor: "/editor",
+  bot: "/bot",
+  botCheck: "/bot?tab=check",
+  botAgents: "/bot?tab=agents",
+  check: "/check",
+  benchmark: "/benchmark",
+  changelog: "/changelog",
+  pricing: "/pricing",
+  privacy: "/privacy",
+  security: "/security",
+  terms: "/terms",
+};
+
+/** The `head()` of a route: its own title, description and canonical address. */
 export function pageHead(key: PageKey) {
+  const path = CANONICAL_PATH[key];
   return {
     meta: [
       { title: pageTitle(key) },
       { name: "description", content: PAGES[key].description },
     ],
+    links: path ? [canonicalLink(path)] : [],
   };
 }

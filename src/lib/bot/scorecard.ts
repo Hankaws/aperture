@@ -26,6 +26,12 @@ export type PullSummary = {
   authorType?: string;
   createdAt: string;
   mergedAt: string | null;
+  /**
+   * The agent, when the source already knows it (git history tells it from
+   * the commit, not the pull request): `null` for a person. Unset, `agentOf`
+   * decides.
+   */
+  agent?: string | null;
 };
 
 export type AgentScore = {
@@ -102,7 +108,10 @@ function ownWords(text: string): string {
 
 export function scorecard(pulls: PullSummary[], now: number, days = 90): Scorecard {
   const since = now - days * DAY;
-  const inWindow = pulls.filter((p) => p.mergedAt !== null && Date.parse(p.mergedAt) >= since);
+  // A number below 1 is a commit pushed straight to the branch: read for the reverts and fixes it names, not counted.
+  const inWindow = pulls.filter(
+    (p) => p.number > 0 && p.mergedAt !== null && Date.parse(p.mergedAt) >= since,
+  );
   const byNumber = new Map(pulls.map((p) => [p.number, p]));
   const byTitle = new Map(pulls.map((p) => [p.title.trim(), p.number]));
   const reverted = new Set<number>();
@@ -127,7 +136,7 @@ export function scorecard(pulls: PullSummary[], now: number, days = 90): Scoreca
   const scores = new Map<string, AgentScore>();
   const people: AgentScore = { agent: "People", merged: 0, reverted: [], fixedAfter: [] };
   for (const p of inWindow) {
-    const agent = agentOf(p);
+    const agent = p.agent !== undefined ? p.agent : agentOf(p);
     const score = agent
       ? (scores.get(agent) ?? { agent, merged: 0, reverted: [], fixedAfter: [] })
       : people;
@@ -151,5 +160,5 @@ export function share(count: number, of: number): string {
   if (of === 0) return "none";
   if (count === 0) return `none of ${of}`;
   const pct = (count / of) * 100;
-  return `${count} of ${of} (${pct < 1 ? pct.toFixed(1) : Math.round(pct)}%)`;
+  return `${count} of ${of} (${pct < 0.1 ? pct.toFixed(2) : pct < 1 ? pct.toFixed(1) : Math.round(pct)}%)`;
 }

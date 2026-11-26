@@ -96,6 +96,8 @@ test("share reads as a person would say it", () => {
   assert.equal(share(0, 40), "none of 40");
   assert.equal(share(2, 40), "2 of 40 (5%)");
   assert.equal(share(1, 400), "1 of 400 (0.3%)");
+  // Below a tenth of a percent, one decimal would read as none.
+  assert.equal(share(1, 6342), "1 of 6342 (0.02%)");
 });
 
 test("a fix counts only in the description's own words, not in a quoted example", () => {

@@ -31,6 +31,8 @@ const TITLED = /\b(?:it|test)\s*(?:\.\s*\w+\s*)*\(\s*(['"])((?:\\.|(?!\1)[^\\\n]
 const FOCUSED =
   /\b(?:it|test|describe|suite)\s*\.\s*only\b|\bf(?:it|describe)\s*\(|\bonly\s*:\s*true/g;
 const EXITS = /\bprocess\s*\.\s*(?:exit\s*\(|exitCode\s*=|kill\s*\(\s*process\s*\.\s*pid)/g;
+/** An exit that can only fail the run (`process.exit(1)`, `process.exitCode = 1`): never a way to pass. */
+const FAILING_EXIT = /\bprocess\s*\.\s*(?:exit\s*\(\s*[1-9]\d*\s*\)|exitCode\s*=\s*[1-9]\d*\b)/g;
 /** Outside test files only a clean exit is suspect: it ends a real Node test run early, green. */
 const CLEAN_EXIT = /\bprocess\s*\.\s*exit\s*\(\s*0?\s*\)/g;
 const SCRIPT = /\.[cm]?[jt]sx?$/i;
@@ -122,6 +124,28 @@ export function widensTestScript(was: string, now: string): boolean {
   return added.length > 0 && added.every(isPathArg);
 }
 
+/** Shell that can turn a failing step into a pass, or end the run early. */
+const MASKS =
+  /\|\||;|(^|[^&])&(?!&)|(^|[^|])\|(?!\|)|\bexit\b|\btrue\b|passWithNoTests|--bail\s*=?\s*0|\bskip\b/;
+
+/**
+ * Whether `now` only adds steps to a `a && b && c` script: every step it had
+ * is still there, in order and unchanged, and each new step is a plain
+ * command. With `&&` a step that fails still fails the whole run, so more
+ * steps run more checks, never fewer.
+ */
+export function addsTestSteps(was: string, now: string): boolean {
+  if (now === was || MASKS.test(was.replace(/&&/g, " ")) || MASKS.test(now.replace(/&&/g, " ")))
+    return false;
+  const steps = (script: string) => script.split("&&").map((step) => step.trim());
+  const old = steps(was);
+  const next = steps(now);
+  if (next.some((step) => step === "")) return false;
+  let at = 0;
+  for (const step of next) if (at < old.length && step === old[at]) at += 1;
+  return at === old.length && next.length > old.length;
+}
+
 /**
  * Test files the change moves: each one it removes, paired with a test file it
  * creates, the same name first. The pair is judged as one edit, so a move is
@@ -197,12 +221,19 @@ export function testChanges(
     if (path === "package.json" || path.endsWith("/package.json")) {
       const was = testScript(before);
       const now = testScript(newText);
-      if (was !== null && now !== was && !(now !== null && widensTestScript(was, now)))
+      // Added steps run more checks, never fewer, but each is code the run now depends on: worth a look.
+      if (was !== null && now !== null && addsTestSteps(was, now))
+        look.push(
+          `adds ${plural(now.split("&&").length - was.split("&&").length, "step")} to the test script in ${path}`,
+        );
+      else if (was !== null && now !== was && !(now !== null && widensTestScript(was, now)))
         red.push(`changes the test script in ${path} from "${was}" to "${now ?? "nothing"}"`);
       continue;
     }
     if (!isTestPath(path)) {
-      const executable = entryPoints.has(path) || /(^|\/)bin\//.test(path);
+      // A file with a `#!` line is a program run on its own (a CLI, a Claude Code hook), not a module tests import.
+      const executable =
+        entryPoints.has(path) || /(^|\/)bin\//.test(path) || newText.startsWith("#!");
       if (
         SCRIPT.test(path) &&
         !executable &&
@@ -229,7 +260,8 @@ export function testChanges(
       );
     if (count(FOCUSED, newText) > count(FOCUSED, before))
       red.push(`marks tests .only in ${path}, so the rest do not run`);
-    if (count(EXITS, newText) > count(EXITS, before)) red.push(`calls process.exit in ${path}`);
+    const exits = (text: string) => count(EXITS, text) - count(FAILING_EXIT, text);
+    if (exits(newText) > exits(before)) red.push(`calls process.exit in ${path}`);
   }
   return { red, look };
 }

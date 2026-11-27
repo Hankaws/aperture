@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- **`/check` stops calling valid code broken.** Before a parse error turns a check red, TypeScript's own parser must agree, so `catch (e: unknown)`, `let x!: T`, `<Form<Dto>>`, generic arrow functions, `export default interface`, import attributes and JSX in `.js` files pass; a real syntax error still goes red and now says what is wrong ("Merge conflict marker encountered", "'catch' or 'finally' expected"). Imports resolve the way TypeScript does: tsconfig `paths` are read from the package's own tsconfig, relative to its `baseUrl` (`@/x.js` finds `src/x.ts`), and a bare import is looked for under `baseUrl` before it is called an undeclared package. An imported image is there even though its bytes are not text, a name declared in the `.d.ts` beside a `.js` file is exported, and a file in a build or code generator's output (`dist/`, `__generated__/`) is not called missing. Past the import limit, a missing import is not judged at all. The light Types check reads `let a = 0, c: string[] = []` one name at a time and no longer reports `string` in a generic call as a missing name. The tests rule lets a `&&` test script gain a step (worth a look, not red), and no longer holds `process.exit(1)` in a test or a clean exit in a script with a `#!` line. The page reads the whole description, so Claude Code's pull requests are named as its, and a draft shows as open. Re-run on the same 137 agent pull requests as the proof run: 6 red instead of 32, with the same 5 real catches ([#276](https://github.com/Hankaws/aperture/pull/276)).
+
 ## 0.34.0 - 2026-11-27
 
 ### Added

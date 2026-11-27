@@ -49,7 +49,7 @@ export type PullFacts = {
   owner: string;
   repo: string;
   state: "open" | "closed" | "merged" | null;
-  /** The description's opening, as the page's summary gives it. */
+  /** The description: in full from the page's "Copy Markdown", else its opening from the summary. */
   body: string;
 };
 
@@ -74,17 +74,33 @@ export function pullPageFacts(html: string, number: number): PullFacts | null {
     `^(.*) by (\\S+) · Pull Request #${number} · ([\\w.-]+)/([\\w.-]+)(?: · GitHub)?$`,
   ).exec(decode(title.trim()));
   if (!parts) return null;
-  const state = new RegExp(`"number":${number},[^{}]*?"state":"(OPEN|CLOSED|MERGED)"`).exec(
+  // A draft is an open pull request.
+  const state = new RegExp(`"number":${number},[^{}]*?"state":"(OPEN|CLOSED|MERGED|DRAFT)"`).exec(
     html,
   )?.[1];
-  const body = /<meta property="og:description" content="([^"]*)"/.exec(html)?.[1] ?? "";
+  // The whole description, as the page's "Copy Markdown" holds it; the summary is cut short,
+  // which loses a footer such as "Generated with Claude Code".
+  const markdown =
+    /data-dd-action-name="pr\.description\.copy_markdown"[^>]*?\bvalue="([^"]*)"/.exec(html)?.[1] ??
+    /\bvalue="([^"]*)"[^>]*?data-dd-action-name="pr\.description\.copy_markdown"/.exec(html)?.[1];
+  const summary = /<meta property="og:description" content="([^"]*)"/.exec(html)?.[1];
+  const body =
+    markdown !== undefined
+      ? decode(markdown)
+      : summary !== undefined
+        ? decode(decode(summary))
+        : "";
   return {
     title: parts[1]!,
     author: parts[2]!,
     owner: parts[3]!,
     repo: parts[4]!,
-    state: state ? (state.toLowerCase() as "open" | "closed" | "merged") : null,
+    state: !state
+      ? null
+      : /^draft$/i.test(state)
+        ? "open"
+        : (state.toLowerCase() as "open" | "closed" | "merged"),
     // The summary is escaped twice: once as markdown text, once as an attribute.
-    body: decode(decode(body)),
+    body,
   };
 }

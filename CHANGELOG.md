@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- The release check reads what an action's release was built from in the release's own notes, which "Build from Aperture" writes from the commit it built. A build that changes no file makes no commit, so its tag lands on the previous build commit, and reading that commit's message called Agent Check v1.9 and Aperture Bot v1.21, built from v0.34.0, stale on every daily run. A tag that is not on a build commit is still a failure ([#274](https://github.com/Hankaws/aperture/pull/274)).
+
 ## 0.34.0 - 2026-11-27
 
 ### Added

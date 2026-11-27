@@ -28,8 +28,18 @@ test("a red check holds the change back and says how many failed", () => {
   assert.equal(checkVerdict(rows("fail", "fail", "pass")).headline, "Held back: this change fails 2 of 3 checks");
 });
 
-test("red wins over running: a failed check is already a verdict", () => {
-  assert.equal(checkVerdict(rows("fail", "running")).state, "held");
+test("red wins over running for Apply, but the headline waits for the last check before counting", () => {
+  const v = checkVerdict(rows("pass", "fail", "running", "warn", "pass", "skip"));
+  assert.equal(v.state, "held");
+  assert.equal(v.settled, false);
+  assert.equal(v.headline, "Checking: 4 of 5 done, 1 failing so far");
+  assert.doesNotMatch(v.headline, /Held back|fails \d+ of/);
+  assert.match(v.detail, /Apply is held/);
+  assert.match(v.detail, /1 still checking/);
+  const done = checkVerdict(rows("pass", "fail", "fail", "warn", "pass", "skip"));
+  assert.equal(done.settled, true);
+  assert.equal(done.headline, "Held back: this change fails 2 of 5 checks");
+  assert.doesNotMatch(done.detail, /still checking/);
 });
 
 test("while checks run it counts what is done, and Apply is not promised", () => {

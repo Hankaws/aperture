@@ -5,12 +5,26 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { CopyBlock } from "@/components/site/copy-block";
 import { checkPublicPull, type PublicCheckResult } from "@/lib/github/public-pull";
-import { headline, shareMarkdown } from "@/lib/github/check-summary";
+import { headline, shareMarkdown, verdictSentence } from "@/lib/github/check-summary";
 import { parsePullLink, pullLinkFromPath, pullLinkPath, pullUrl } from "@/lib/github/pull-link";
 import type { CheckRow } from "@/lib/workspace/checks";
 import { cn } from "@/lib/utils";
 
-const EXAMPLES = ["Hankaws/aperture#265", "Hankaws/aperture#255"];
+/**
+ * Real agent pull requests, red first: the first thing a visitor sees is a catch. Picked from the
+ * proof run (137 agent pull requests, PR #276) for verdicts that are the same before and after
+ * the parse fix, on merged pull requests, so the label stays true.
+ */
+const EXAMPLES: ReadonlyArray<{
+  pr: string;
+  agent: string;
+  verdict: "red" | "clear" | "look";
+  label: string;
+}> = [
+  { pr: "Julieisbaka/Tagline#43", agent: "Copilot", verdict: "red", label: "1 red" },
+  { pr: "langfuse/langfuse#20929", agent: "Cursor", verdict: "clear", label: "nothing red" },
+  { pr: "compulim/onvif-camera#10", agent: "Copilot", verdict: "look", label: "1 to look at" },
+];
 
 type Ok = Extract<PublicCheckResult, { ok: true }>;
 
@@ -84,22 +98,36 @@ export function PullCheck({ pr }: { pr?: string }) {
         </Button>
       </form>
       {!pr && (
-        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-subtle">
-          Try one:
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-subtle" data-examples>
+          <span>Try one:</span>
           {EXAMPLES.map((example) => (
             <button
-              key={example}
+              key={example.pr}
               type="button"
+              data-example={example.verdict}
+              aria-label={`${example.pr}, by ${example.agent}: ${example.label}`}
               onClick={() => {
-                setText(example);
-                submit(example);
+                setText(example.pr);
+                submit(example.pr);
               }}
-              className="rounded-md border border-border px-2 py-1 font-mono text-muted hover:bg-elevated hover:text-fg"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-muted hover:bg-elevated hover:text-fg"
             >
-              {example}
+              <span className="font-mono">{example.pr}</span>
+              <span
+                className={cn(
+                  "font-medium",
+                  example.verdict === "red"
+                    ? "text-danger"
+                    : example.verdict === "look"
+                      ? "text-warn"
+                      : "text-ok",
+                )}
+              >
+                {example.agent} · {example.label}
+              </span>
             </button>
           ))}
-        </p>
+        </div>
       )}
       {error && (
         <p
@@ -109,13 +137,24 @@ export function PullCheck({ pr }: { pr?: string }) {
           {error}
         </p>
       )}
-      {busy && (
-        <p className="mt-6 flex items-center gap-2 text-sm text-muted" aria-live="polite">
-          <Loader2 className="size-4 animate-spin" /> Reading the pull request from GitHub and
-          checking it…
-        </p>
-      )}
-      {result && <Result result={result} />}
+      {/* Always mounted, so a screen reader hears the verdict when it arrives, not only the wait. */}
+      <p className="sr-only" aria-live="polite" data-check-announce>
+        {busy
+          ? "Reading the pull request from GitHub and checking it."
+          : result
+            ? `${verdictSentence(result.rows).headline}.`
+            : ""}
+      </p>
+      {/* A shared ?pr= link fills this in after load: hold a screen's height so the footer does not jump. */}
+      <div className={cn(pr && "min-h-[100svh]")} data-check-slot>
+        {busy && (
+          <p className="mt-6 flex items-center gap-2 text-sm text-muted">
+            <Loader2 className="size-4 animate-spin" /> Reading the pull request from GitHub and
+            checking it…
+          </p>
+        )}
+        {result && <Result result={result} />}
+      </div>
     </div>
   );
 }
@@ -137,6 +176,7 @@ function Result({ result }: { result: Ok }) {
   const shareUrl = `${origin}/check?pr=${pullLinkPath(link)}`;
   const setupUrl = `${origin}/bot?tab=check`;
   const said = headline(rows);
+  const sentence = verdictSentence(rows);
   const post = `Aperture checked ${pull.owner}/${pull.repo}#${pull.number}${pull.agent ? `, written by ${pull.agent}` : ""}: ${said}.`;
 
   return (
@@ -162,25 +202,31 @@ function Result({ result }: { result: Ok }) {
               </span>
             )}
           </p>
-          <p
+          {/* The answer first, in the editor's words; the rows under it are the evidence. */}
+          <div
             className={cn(
-              "mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",
-              verdict === "red"
-                ? "bg-danger/10 text-danger"
-                : verdict === "look"
-                  ? "bg-warn/10 text-warn"
-                  : "bg-ok/10 text-ok",
+              "mt-4 rounded-xl px-3 py-2.5",
+              verdict === "red" ? "bg-danger/10" : verdict === "look" ? "bg-warn/10" : "bg-ok/10",
             )}
+            data-check-verdict={verdict}
           >
-            {verdict === "red" ? (
-              <X className="size-4" />
-            ) : verdict === "look" ? (
-              <AlertTriangle className="size-4" />
-            ) : (
-              <Check className="size-4" />
-            )}
-            {said}
-          </p>
+            <p
+              className={cn(
+                "flex items-start gap-2 text-lg leading-snug font-semibold tracking-tight sm:text-xl",
+                verdict === "red" ? "text-danger" : verdict === "look" ? "text-warn" : "text-ok",
+              )}
+            >
+              {verdict === "red" ? (
+                <X className="mt-1 size-5 shrink-0" aria-hidden />
+              ) : verdict === "look" ? (
+                <AlertTriangle className="mt-1 size-5 shrink-0" aria-hidden />
+              ) : (
+                <Check className="mt-1 size-5 shrink-0" aria-hidden />
+              )}
+              {sentence.headline}
+            </p>
+            {sentence.detail && <p className="mt-1 text-sm text-muted">{sentence.detail}</p>}
+          </div>
         </header>
         {rows.length === 0 ? (
           <p className="p-5 text-sm text-muted">
@@ -211,7 +257,7 @@ function Result({ result }: { result: Ok }) {
                       <summary className="cursor-pointer text-xs text-subtle hover:text-fg">
                         What it saw
                       </summary>
-                      <pre className="mt-2 max-h-64 overflow-auto rounded-md border border-border bg-bg p-3 font-mono text-[11px] leading-5 whitespace-pre-wrap text-muted">
+                      <pre className="mt-2 max-h-64 overflow-auto rounded-md border border-border bg-bg p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-muted">
                         {row.evidence}
                       </pre>
                     </details>

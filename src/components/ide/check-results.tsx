@@ -450,11 +450,11 @@ export function CheckResults({
   useEffect(() => {
     useIdeUi.getState().setCheckHint(
       failed
-        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt, verificationId: liveId, headline: verdict.headline }
-        : { state: checkState, path: failedPath, verificationId: liveId, headline: verdict.headline },
+        ? { state: "failed", path: failedPath, detail: failedDetail, prompt: fixPrompt, verificationId: liveId, headline: verdict.headline, settled: verdict.settled }
+        : { state: checkState, path: failedPath, verificationId: liveId, headline: verdict.headline, settled: verdict.settled },
     );
     return () => useIdeUi.getState().setCheckHint(null);
-  }, [checkState, failed, failedPath, failedDetail, fixPrompt, liveId, verdict.headline]);
+  }, [checkState, failed, failedPath, failedDetail, fixPrompt, liveId, verdict.headline, verdict.settled]);
   useEffect(() => {
     if (checkState === "clear" && useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(null);
   }, [checkState]);

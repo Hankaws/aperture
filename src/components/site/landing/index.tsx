@@ -7,6 +7,7 @@ import { CatchDemo } from "./catch-demo";
 import { AgentCheckStory, AgentsStory } from "./beyond";
 import { AskStory, ChecksStory, Vision } from "./story";
 import { EditorStory } from "./editor-story";
+import { HeroCheck } from "./hero-check";
 
 const bench = benchData as BenchResults;
 const stopped = bench.summary.caughtCatchable;
@@ -112,6 +113,7 @@ export function Landing() {
                 Add it to your pull requests →
               </Link>
             </div>
+            <HeroCheck />
             <div className="mt-12">
               <CatchDemo />
             </div>

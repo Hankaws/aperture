@@ -1149,7 +1149,10 @@ function PlanChrome({
     copies: copyCount,
     reviewed: pendingCount > 0 && pendingEdits.every((edit) => edit.reviewed),
     // The strip's own sentence, once every check is in.
-    verdict: pendingCount > 0 && checkHint && checkHint.state !== "running" ? checkHint.headline : undefined,
+    verdict:
+      pendingCount > 0 && checkHint && checkHint.state !== "running" && checkHint.settled !== false
+        ? checkHint.headline
+        : undefined,
   });
 
   function actOnHint() {
@@ -1655,6 +1658,7 @@ const MessageBlock = memo(function MessageBlock({
   // The staged change's verdict, said here too, so the answer is where you are reading.
   const verdictState = useIdeUi((s) => s.checkHint?.state);
   const verdictHeadline = useIdeUi((s) => s.checkHint?.headline);
+  const verdictSettled = useIdeUi((s) => s.checkHint?.settled !== false);
   const content = typeof message.content === "string" ? message.content : "";
   if (message.role === "user") {
     if (message.automatic) {
@@ -1685,7 +1689,11 @@ const MessageBlock = memo(function MessageBlock({
   const plan = Array.isArray(message.plan) ? message.plan : [];
   const noteCount = notesOn(edits);
   const stagedVerdict =
-    edits.some((e) => e.status === "pending") && verdictHeadline && verdictState && verdictState !== "running"
+    edits.some((e) => e.status === "pending") &&
+    verdictHeadline &&
+    verdictState &&
+    verdictState !== "running" &&
+    verdictSettled
       ? { state: verdictState, headline: verdictHeadline }
       : null;
   const empty = !content.trim();

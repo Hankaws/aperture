@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Fixed
+
+- On a phone, a red result no longer crowds out the code. The check strip is capped at under half the screen and scrolls on its own, so the code and the bar with the verdict and **Send back** stay on screen above the tab bar; before, the code shrank to nothing and the bar was pushed under the tabs. Three text colours now clear 4.5:1: function names in the light theme's code on a deleted line, the caption under the landing page's demo, and the line under "Make your first bot" on the Bot page. The test of the /agent-check example no longer depends on whether Node prints a failing test as `not ok` or `✖`, so it passes on Node 22 and 24 ([#275](https://github.com/Hankaws/aperture/pull/275)).
+
 ## 0.34.0 - 2026-11-27
 
 ### Added

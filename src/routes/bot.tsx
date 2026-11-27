@@ -219,13 +219,14 @@ function SetUpSteps({ children }: { children: React.ReactNode }) {
             <div className="mt-3">{children}</div>
           </div>
         </li>
-        <li className="flex gap-3 opacity-60">
-          <span className={cn(step, "bg-elevated text-muted ring-1 ring-border")} aria-hidden>
+        {/* Not yet: dimmed by colour (muted, subtle), not by opacity, which dropped the text under 4.5:1. */}
+        <li className="flex gap-3">
+          <span className={cn(step, "bg-elevated text-muted opacity-60 ring-1 ring-border")} aria-hidden>
             2
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Make your first bot</p>
-            <p className="mt-0.5 text-xs text-pretty text-muted">
+            <p className="text-sm font-medium text-muted">Make your first bot</p>
+            <p className="mt-0.5 text-xs text-pretty text-subtle">
               Give it a name and a repository. It opens with the next step done.
             </p>
           </div>

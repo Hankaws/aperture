@@ -96,6 +96,7 @@ export const CANONICAL_PATH: Partial<Record<PageKey, string>> = {
   botCheck: "/bot?tab=check",
   botAgents: "/bot?tab=agents",
   check: "/check",
+  scoreboard: "/scoreboard",
   benchmark: "/benchmark",
   changelog: "/changelog",
   pricing: "/pricing",

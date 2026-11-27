@@ -9,6 +9,7 @@ export const SITE_ORIGIN = "https://aperturesais.grok.me";
 export const SITEMAP_PATHS = [
   "/",
   "/check",
+  "/scoreboard",
   "/bot",
   "/bot?tab=check",
   "/bot?tab=agents",

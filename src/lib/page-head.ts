@@ -17,6 +17,7 @@ export type PageKey =
   | "chat"
   | "botCheck"
   | "check"
+  | "scoreboard"
   | "botAgents"
   | "benchmark"
   | "changelog"
@@ -53,6 +54,10 @@ export const PAGES: Record<PageKey, { title: string; description: string }> = {
   check: {
     title: "Check a pull request",
     description: "Paste any public GitHub pull request and see Aperture's checks on it: imports, keys, switched-off tests and the project's own rules. No sign-in, nothing installed.",
+  },
+  scoreboard: {
+    title: "Agent scoreboard",
+    description: "How agents' pull requests held up in busy open-source projects: merged, reverted and fixed soon after, by Copilot, Claude, Claude Code and people, read from git history.",
   },
   botAgents: {
     title: "Connect an agent",

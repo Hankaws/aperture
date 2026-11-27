@@ -233,6 +233,8 @@ try {
       ["/app", "Editor · Aperture"],
       ["/benchmark", "Benchmark · Aperture"],
       ["/editor", "What the editor knows · Aperture"],
+      ["/scoreboard", "Agent scoreboard · Aperture"],
+      // Last: the check page's own test below starts on it.
       ["/check", "Check a pull request · Aperture"],
     ]) {
       await page.goto(`${base}${path}`, { waitUntil: "networkidle" });

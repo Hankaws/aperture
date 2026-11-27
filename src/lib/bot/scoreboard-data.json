@@ -1,0 +1,641 @@
+{
+ "generatedAt": "2026-11-26T20:09:40.950Z",
+ "days": 90,
+ "fixDays": 14,
+ "repos": [
+  {
+   "repo": "dotnet/runtime",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 117,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 30,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 1712,
+     "reverted": [
+      136934,
+      134919,
+      135029,
+      133128,
+      132732
+     ],
+     "fixedAfter": [
+      136433,
+      136388,
+      135293,
+      134779,
+      133703,
+      133610,
+      133542
+     ]
+    },
+    "days": 90,
+    "read": 2507
+   }
+  },
+  {
+   "repo": "dotnet/aspire",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 24,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 14,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 826,
+     "reverted": [],
+     "fixedAfter": [
+      21914,
+      21524,
+      21186,
+      20910,
+      20307,
+      20116
+     ]
+    },
+    "days": 90,
+    "read": 1187
+   }
+  },
+  {
+   "repo": "dotnet/aspnetcore",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 12,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 438,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 799
+   }
+  },
+  {
+   "repo": "dotnet/roslyn",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 18,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 10,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 391,
+     "reverted": [
+      86452,
+      86056
+     ],
+     "fixedAfter": [
+      82294
+     ]
+    },
+    "days": 90,
+    "read": 615
+   }
+  },
+  {
+   "repo": "dotnet/sdk",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 4,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 170,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 185
+   }
+  },
+  {
+   "repo": "microsoft/vscode",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 6,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 5,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 1684,
+     "reverted": [
+      349670,
+      348526,
+      348269,
+      345739
+     ],
+     "fixedAfter": [
+      348123
+     ]
+    },
+    "days": 90,
+    "read": 1747
+   }
+  },
+  {
+   "repo": "microsoft/vscode-python-environments",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 15,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 117,
+     "reverted": [],
+     "fixedAfter": [
+      1979,
+      1788
+     ]
+    },
+    "days": 90,
+    "read": 178
+   }
+  },
+  {
+   "repo": "microsoft/playwright",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 2,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Copilot",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 585,
+     "reverted": [
+      43713,
+      43692,
+      43342,
+      43335,
+      43056,
+      42995,
+      42979,
+      42886,
+      42547,
+      42635,
+      42365
+     ],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 987
+   }
+  },
+  {
+   "repo": "microsoft/semantic-kernel",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 5,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Copilot",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 118,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 150
+   }
+  },
+  {
+   "repo": "Azure/azure-sdk-for-net",
+   "card": {
+    "agents": [
+     {
+      "agent": "Copilot",
+      "merged": 28,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 536,
+     "reverted": [
+      63137,
+      63032
+     ],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 1587
+   }
+  },
+  {
+   "repo": "vercel/ai",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 36,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 1034,
+     "reverted": [
+      22342,
+      20043
+     ],
+     "fixedAfter": [
+      12968,
+      24415,
+      22535
+     ]
+    },
+    "days": 90,
+    "read": 2114
+   }
+  },
+  {
+   "repo": "PostHog/posthog",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 6342,
+      "reverted": [
+       135451
+      ],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude",
+      "merged": 12,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 12697,
+     "reverted": [
+      105555,
+      92714
+     ],
+     "fixedAfter": [
+      136616
+     ]
+    },
+    "days": 90,
+    "read": 26419
+   }
+  },
+  {
+   "repo": "getsentry/sentry",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 670,
+      "reverted": [
+       131874,
+       126993,
+       127562,
+       123256,
+       123563,
+       123362
+      ],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 4849,
+     "reverted": [
+      131961,
+      130721,
+      129686,
+      129261,
+      128564,
+      127577,
+      127557,
+      127846,
+      127207,
+      126189,
+      126619,
+      126032,
+      125863,
+      126069,
+      125637,
+      125342,
+      124971,
+      124363,
+      124544,
+      124414,
+      124232,
+      123840,
+      123944,
+      123872,
+      123451,
+      123090
+     ],
+     "fixedAfter": [
+      130889,
+      130283,
+      129424,
+      126567,
+      126758,
+      126552,
+      126159,
+      123671
+     ]
+    },
+    "days": 90,
+    "read": 8539
+   }
+  },
+  {
+   "repo": "supabase/supabase",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 242,
+      "reverted": [
+       50001
+      ],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude",
+      "merged": 65,
+      "reverted": [
+       51445
+      ],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 1673,
+     "reverted": [
+      52000,
+      51996,
+      51995,
+      50209
+     ],
+     "fixedAfter": [
+      53751,
+      51067,
+      51800,
+      50820,
+      50270,
+      50269,
+      49763
+     ]
+    },
+    "days": 90,
+    "read": 2646
+   }
+  },
+  {
+   "repo": "n8n-io/n8n",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 1836,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 2281,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 5762
+   }
+  },
+  {
+   "repo": "langchain-ai/langchainjs",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 9,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 160,
+     "reverted": [
+      11940
+     ],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 311
+   }
+  },
+  {
+   "repo": "modelcontextprotocol/typescript-sdk",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude",
+      "merged": 38,
+      "reverted": [],
+      "fixedAfter": []
+     },
+     {
+      "agent": "Claude Code",
+      "merged": 3,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 33,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 89
+   }
+  },
+  {
+   "repo": "calcom/cal.com",
+   "card": {
+    "agents": [
+     {
+      "agent": "Claude Code",
+      "merged": 1,
+      "reverted": [],
+      "fixedAfter": []
+     }
+    ],
+    "people": {
+     "agent": "People",
+     "merged": 31,
+     "reverted": [],
+     "fixedAfter": []
+    },
+    "days": 90,
+    "read": 38
+   }
+  }
+ ],
+ "totals": [
+  {
+   "agent": "Claude Code",
+   "merged": 9208,
+   "reverted": [
+    135451,
+    131874,
+    126993,
+    127562,
+    123256,
+    123563,
+    123362,
+    50001
+   ],
+   "fixedAfter": []
+  },
+  {
+   "agent": "Copilot",
+   "merged": 226,
+   "reverted": [],
+   "fixedAfter": []
+  },
+  {
+   "agent": "Claude",
+   "merged": 115,
+   "reverted": [
+    51445
+   ],
+   "fixedAfter": []
+  }
+ ],
+ "people": {
+  "merged": 33661,
+  "reverted": 59,
+  "fixedAfter": 36
+ },
+ "read": [
+  "dotnet/runtime",
+  "dotnet/aspire",
+  "dotnet/aspnetcore",
+  "dotnet/roslyn",
+  "dotnet/sdk",
+  "microsoft/vscode",
+  "microsoft/vscode-python-environments",
+  "microsoft/playwright",
+  "microsoft/semantic-kernel",
+  "Azure/azure-sdk-for-net",
+  "vercel/ai",
+  "PostHog/posthog",
+  "getsentry/sentry",
+  "supabase/supabase",
+  "n8n-io/n8n",
+  "langchain-ai/langchainjs",
+  "modelcontextprotocol/typescript-sdk",
+  "calcom/cal.com",
+  "openai/codex"
+ ]
+}

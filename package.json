@@ -32,6 +32,7 @@
     "release-notes": "node --experimental-strip-types scripts/release-notes.ts",
     "release-url": "node --experimental-strip-types scripts/release-url.ts",
     "release:verify": "node --experimental-strip-types scripts/release-verify.ts",
+    "scoreboard": "node --experimental-strip-types scripts/agent-scoreboard.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

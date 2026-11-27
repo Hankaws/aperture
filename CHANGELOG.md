@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- **Checked by Aperture, on the pull request.** Agent Check's run summary now opens with a badge, green "nothing red" or red "held back", that links the pull request on Aperture's public checker. With `comment: true` (and `pull-requests: write`), it also keeps one comment on the pull request with the badge, the verdict and a line per check, updated in place on every push so it never piles up. It is off by default, being the one thing the action sends anywhere, to GitHub's own API with the workflow's token; without the permission, or on a fork's pull request, the run says so and the checks stand. The Bot page's Check tab hands out the workflow with the comment on, saying what each line does ([#277](https://github.com/Hankaws/aperture/pull/277)).
+
+### Changed
+
+- The release check reads what an action's release was built from in the release's own notes, which "Build from Aperture" writes from the commit it built. A build that changes no file makes no commit, so its tag lands on the previous build commit, and reading that commit's message called Agent Check v1.9 and Aperture Bot v1.21, built from v0.34.0, stale on every daily run. A tag that is not on a build commit is still a failure ([#274](https://github.com/Hankaws/aperture/pull/274)).
+
 ### Fixed
 
 - On a phone, a red result no longer crowds out the code. The check strip is capped at under half the screen and scrolls on its own, so the code and the bar with the verdict and **Send back** stay on screen above the tab bar; before, the code shrank to nothing and the bar was pushed under the tabs. Three text colours now clear 4.5:1: function names in the light theme's code on a deleted line, the caption under the landing page's demo, and the line under "Make your first bot" on the Bot page. The test of the /agent-check example no longer depends on whether Node prints a failing test as `not ok` or `✖`, so it passes on Node 22 and 24 ([#275](https://github.com/Hankaws/aperture/pull/275)).

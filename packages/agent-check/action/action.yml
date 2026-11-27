@@ -34,6 +34,14 @@ inputs:
   baseline-dir:
     description: Where a cached baseline is written. Ignored when baseline is recompute.
     required: false
+  comment:
+    description: '"true" keeps one comment on the pull request with the badge and the result, updated on every push. Needs "permissions: pull-requests: write". Off by default: it is the only thing the action sends anywhere.'
+    required: false
+    default: "false"
+  github-token:
+    description: The token the comment is posted with. The workflow's own is enough.
+    required: false
+    default: ${{ github.token }}
 outputs:
   verdict:
     description: '"red" or "clear".'

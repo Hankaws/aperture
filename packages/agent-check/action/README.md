@@ -11,7 +11,11 @@ Copilot, Codex, Claude Code, Grok Bot and other agents now open pull requests on
 - **Safety**: red for a key or token written into the code (GitHub, AWS, xAI, OpenAI, Anthropic, Google, Slack, Stripe, a private key) or values written into a `.env` file, and for a check switched off: `// @ts-nocheck`, `strict` loosened in tsconfig, a lint or typecheck script emptied. Amber, to look at and not held, for a new dependency, one installed from a URL, an install script, an edited CI workflow, a lockfile that moved with no dependency change, and a new `@ts-ignore` or `eslint-disable`. Safety reads every changed text file, code or not, so a key in a workflow, a YAML config, a `.pem` or a Python script is red too. A key is never repeated, only its kind and line.
 - **Project checks**: your project's own rules, in `.aperture/checks.json`: a pattern for one line, the files it applies to, the line it was made to catch, and what to write instead. Each line a pull request adds is read against them, code or not, so a mistake you have seen once is red every time after. The checks come from the base branch, so a pull request cannot remove one to get past it, and Safety says when one is removed or changed. In the Aperture editor, **Make it a check** under a red check asks Composer to write the check for that mistake, and a new check must catch its own example before it is kept.
 
-A red check puts an annotation on the line in the pull request's **Files changed** tab and fails the step; the run's summary lists everything.
+A red check puts an annotation on the line in the pull request's **Files changed** tab and fails the step; the run's summary lists everything, under a badge that says how it went:
+
+[![Checked by Aperture: nothing red](https://aperturesais.grok.me/badges/agent-check-clear.svg)](https://aperturesais.grok.me/check) [![Checked by Aperture: held back](https://aperturesais.grok.me/badges/agent-check-red.svg)](https://aperturesais.grok.me/check)
+
+The badge links the pull request on [Aperture's public checker](https://aperturesais.grok.me/check), so anyone reviewing it can open it there.
 
 ## Use it
 
@@ -36,6 +40,26 @@ jobs:
 
 Make it a required check in the branch's protection rules, and a red check blocks the merge.
 
+### The result on the pull request itself
+
+With `comment: true`, Agent Check keeps one comment on the pull request: the badge, the verdict and a line per check, updated in place on every push, so it never piles up. The job needs permission to write it:
+
+```yaml
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # … as above
+      - uses: hankaws/aperture-agent-check@v1
+        with:
+          comment: true
+```
+
+Without the permission, or on a pull request from a fork (whose token GitHub keeps read-only), the run says it could not post and the checks stand as they are.
+
 | Input               | Default                 |                                              |
 | ------------------- | ----------------------- | -------------------------------------------- |
 | `run-tests`         | `true`                  | Run `npm run <test-script>`.                 |
@@ -46,12 +70,14 @@ Make it a required check in the branch's protection rules, and a red check block
 | `working-directory` | repository root         | The project's folder in a monorepo.          |
 | `baseline`          | `recompute`             | `cache` stores the base test result by commit and reuses it while that commit stays the base. |
 | `baseline-dir`      | `.aperture/check-baseline` | Where the cache is written, when `baseline` is `cache`. |
+| `comment`           | `false`                 | `true` keeps one comment on the pull request with the result. |
+| `github-token`      | the workflow's token    | What the comment is posted with. |
 
 Output: `verdict`, `red` or `clear`.
 
 ## What leaves the runner
 
-Nothing. The checks run in this step: no token, no network, no account. Free.
+Nothing, unless you turn on `comment`. The checks run in this step: no network, no account. Free. With `comment: true`, the one comment goes to GitHub's own API with the workflow's token, and nowhere else. The badge is a picture GitHub loads from aperturesais.grok.me when someone views the page, through GitHub's image proxy; the runner sends nothing for it.
 
 **Use it on `pull_request`, not `pull_request_target`.** With tests on, it runs the pull request's code, as any test step does. Under `pull_request_target` that code would run with your repository's secrets.
 

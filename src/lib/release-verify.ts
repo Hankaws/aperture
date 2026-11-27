@@ -37,6 +37,11 @@ export type ActionFacts = {
   major: { tag: string; commit: string } | null;
   /** The message of the commit the newest release is on. */
   message: string | null;
+  /**
+   * The newest release's notes. "Build from Aperture" writes the commit it built there, which is
+   * the truth even when the build changed nothing and the tag went on the previous build commit.
+   */
+  notes?: string | null;
   /** Bundled Aperture files that changed between the commit it was built from and Aperture's live release. Null: not compared. */
   staleFiles: string[] | null;
   /** The Aperture release it was compared with. */
@@ -44,6 +49,23 @@ export type ActionFacts = {
 };
 
 const BUILT_FROM = /^Build dist from Hankaws\/aperture@([0-9a-f]{7,40})\b/;
+
+const NOTES_FROM =
+  /Built from \[Hankaws\/aperture@[0-9a-f]{7,40}\]\(https:\/\/github\.com\/Hankaws\/aperture\/commit\/([0-9a-f]{40})\)/;
+
+/** The Aperture commit a release's notes say it was built from. */
+export function builtFromNotes(notes: string | null | undefined): string | null {
+  return notes ? (NOTES_FROM.exec(notes)?.[1] ?? null) : null;
+}
+
+/**
+ * What the newest release was built from: its notes first, then its commit. A build that changes
+ * no file makes no commit, so its tag lands on the previous build commit, whose message names the
+ * older Aperture commit; the notes name the one it was built from, which gave the same files.
+ */
+export function releaseBuiltFrom(facts: Pick<ActionFacts, "message" | "notes">): string | null {
+  return builtFromNotes(facts.notes) ?? builtFrom(facts.message);
+}
 
 /** The Aperture commit a build commit says it was built from. */
 export function builtFrom(message: string | null): string | null {
@@ -124,7 +146,8 @@ export function judgeAction(facts: ActionFacts): Finding[] {
   const { name, latest, major } = facts;
   if (!latest) return [{ level: "warn", text: `${name}: no published release to check.` }];
   const out: Finding[] = [];
-  const from = builtFrom(facts.message);
+  // The tag must be on a build commit; what it was built from, the notes say best.
+  const from = builtFrom(facts.message) ? releaseBuiltFrom(facts) : null;
 
   if (!from) {
     out.push({

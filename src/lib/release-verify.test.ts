@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   builtFrom,
+  builtFromNotes,
+  releaseBuiltFrom,
   compareVersions,
   judgeAction,
   judgeApp,
@@ -162,4 +164,51 @@ test("Aperture: old versions that never went out are said once, as a warning, no
     "Older Aperture versions in CHANGELOG.md were never published: 0.23.0, 0.21.0, 0.3.0. Publish them with npm run -s release-url -- <version>, or leave them.",
   );
   assert.equal(report(findings).failed, false);
+});
+
+// Agent Check v1.9: built from v0.34.0, whose only bundled change the bundler dropped, so the build
+// made no commit and the tag went on the v0.33.0 build commit. Its notes say what it was built from.
+const NOTES =
+  "Built from [Hankaws/aperture@6b8809a](https://github.com/Hankaws/aperture/commit/6b8809aaf7b70515786b35ed5d29c0835156c4f0). See its [changelog](https://github.com/Hankaws/aperture/blob/6b8809aaf7b70515786b35ed5d29c0835156c4f0/CHANGELOG.md).";
+
+test("a release's notes say what it was built from, before its commit does", () => {
+  assert.equal(builtFromNotes(NOTES), "6b8809aaf7b70515786b35ed5d29c0835156c4f0");
+  assert.equal(builtFromNotes("Fixes a typo."), null);
+  assert.equal(builtFromNotes(null), null);
+  const old =
+    "Build dist from Hankaws/aperture@1b367670a34cd6efbfea1666c0cb2a6c024de6ad\n\nAsked for: v0.33.0";
+  assert.equal(
+    releaseBuiltFrom({ message: old, notes: NOTES }),
+    "6b8809aaf7b70515786b35ed5d29c0835156c4f0",
+  );
+  // An older release, from before the notes said so: its commit.
+  assert.equal(
+    releaseBuiltFrom({ message: old, notes: "v1.2" }),
+    "1b367670a34cd6efbfea1666c0cb2a6c024de6ad",
+  );
+});
+
+test("a build that changed no file is current when its notes name the live release", () => {
+  const findings = judgeAction(
+    action({
+      latest: { tag: "v1.9", commit: "39312e3aaaaaaaa" },
+      major: { tag: "v1", commit: "39312e3aaaaaaaa" },
+      message: "Build dist from Hankaws/aperture@1b367670a34cd6efbfea1666c0cb2a6c024de6ad",
+      notes: NOTES,
+      against: "v0.34.0",
+    }),
+  );
+  assert.deepEqual(findings, [
+    {
+      level: "ok",
+      text: "Aperture Agent Check: v1.9 is a build of aperture@6b8809a, current with v0.34.0, and v1 is on it.",
+    },
+  ]);
+  // Notes do not excuse a tag that is not on a build commit.
+  assert.match(
+    judgeAction(
+      action({ message: "Merge pull request #4 from Hankaws/claude/x", notes: NOTES }),
+    )[0]!.text,
+    /which is not a build commit/,
+  );
 });

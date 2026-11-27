@@ -11,6 +11,10 @@ release notes are every line from there down to the previous version.
 
 - **An agent scoreboard.** `/scoreboard` shows how agents' pull requests held up in 18 busy open-source projects over 90 days (dotnet/runtime, VS Code, PostHog, Sentry, Supabase, n8n, the Vercel AI SDK and more): for Copilot, the Claude GitHub app, Claude Code and people, how many merged, how many were reverted and how many needed a fix within 14 days, with each reverted or fixed pull request linked to GitHub and to its check on `/check`. It is read from each project's git history, so anyone can read it again with git alone (`npm run scoreboard`), and kept as a dated snapshot. The page says what it cannot see: an agent that commits as its person (Codex does) counts as that person, Claude Code is a person working with it, and fixes rarely name what they fix. Bots that are not agents count as neither side ([#271](https://github.com/Hankaws/aperture/pull/271)).
 
+### Changed
+
+- The check verdict leads the editor. It is larger, says plainly whether the change is safe ("Safe to apply: nothing new fails (5 passed, 1 already failing)" instead of "5 of 6 passed", or "Held back: this change fails 2 of 6 checks"), and Composer says the same sentence, in green or red, under the staged change and in its bar above the input. Passing checks fold under "Show all N checks" on a computer too, as on a phone. The empty Composer says what Aperture promises (every change is checked before it touches your files) and offers "Make listTasks return a number", a demo a check holds back. The selected file in the review strip is readable in the light theme, and the review guide's risk dot is announced to screen readers ([#268](https://github.com/Hankaws/aperture/pull/268)).
+
 ## 0.33.0 - 2026-11-26
 
 ### Added

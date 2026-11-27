@@ -35,16 +35,20 @@ export function checkVerdict(rows: Array<{ status: CheckStatus }>): Verdict {
   const state: Verdict["state"] = failed > 0 ? "held" : running > 0 ? "checking" : "safe";
   const noun = plural(total, "check", "checks");
 
+  // An amber check was failing before this change, so the headline never counts it
+  // against the change: "5 of 6 passed" read as if the change broke the sixth.
   let headline: string;
-  if (state === "held") headline = `Held back: ${failed} of ${total} ${noun} failed`;
+  if (state === "held") headline = `Held back: this change fails ${failed} of ${total} ${noun}`;
   else if (state === "checking") headline = `Checking: ${total - running} of ${total} done`;
   else if (total === 0) headline = "Nothing to check here";
-  else headline = `Safe to apply: ${passed} of ${total} ${noun} passed`;
+  else if (alreadyFailing > 0) headline = `Safe to apply: nothing new fails (${passed} passed, ${alreadyFailing} already failing)`;
+  else if (total === 1) headline = "Safe to apply: the 1 check passed";
+  else headline = `Safe to apply: all ${total} checks passed`;
 
   const notes: string[] = [];
   if (state === "held") notes.push("Apply is held until it is fixed.");
   if (state === "checking") notes.push("Apply unlocks when every check is in.");
-  if (alreadyFailing > 0) notes.push(`${alreadyFailing} already failing before this change`);
+  if (alreadyFailing > 0) notes.push(`${alreadyFailing} already failing before this change, not caused by it`);
   if (skipped > 0) notes.push(`${skipped} could not run`);
 
   return { state, total, passed, failed, alreadyFailing, running, skipped, headline, detail: notes.join(" · ") };

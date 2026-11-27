@@ -7,7 +7,7 @@ import { QuestionCard } from "./question-card";
 import { isSkillPath, projectSkills, skillName } from "@/lib/workspace/skills";
 import { isLastReplyOfRun, repeatOf, requestOf, skillFromRun } from "@/lib/workspace/skill-draft";
 import { useAttachedImages } from "./use-attached-images";
-import { ArrowUp, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, RotateCcw, FileDiff, FileSearch, FlaskConical, History, LayoutGrid, ListTodo, MessageSquare, MousePointer2, Play, ScrollText, Search, Sparkles, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { ApertureMark } from "./logo";
@@ -61,8 +61,13 @@ import { activeSlash, expandSlash, filterSlash, parseSkillSlash, parseSlash, ski
 import { autoContextPaths } from "@/lib/agent/auto-context";
 import { LearnMore } from "@/components/ui/learn-more";
 
+/** A recorded change the checks refuse (`list-bad-return` in replay.ts): its words must match that tape. */
+const HELD_DEMO = "Make listTasks return a number";
+
 const DEMO_SUGGESTIONS = [
   "Fix the off-by-one in listTasks",
+  // The demo's bad change: the checks hold it back, so the Held back / Send back path is one click.
+  HELD_DEMO,
   "Return 404 from getTask when the id is missing",
   "Reject titles longer than 80 characters",
   "Explain @src/store.ts",
@@ -1004,11 +1009,11 @@ function EmptyComposer({
   return (
     <div className="flex h-full min-h-0 flex-col justify-end gap-3 py-2">
       <div>
-        <p className="text-sm font-medium text-fg">
-          {planFirst ? "Composer plans first. You click Build it." : "Composer edits straight away. You Apply."}
-        </p>
-        <p className="mt-1 text-xs leading-relaxed text-subtle">
-          Type @ to add a file, or click part of the Preview.
+        {/* The promise first: what Aperture does with an agent's change. How Composer works comes second. */}
+        <p className="text-sm font-medium text-fg">Every change the agent makes is checked before it touches your files.</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          {planFirst ? "Composer plans first and waits for Build it." : "Composer edits straight away; you Apply."} Type @
+          to add a file, or click part of the Preview.
         </p>
       </div>
       <ul className="space-y-1">
@@ -1016,10 +1021,15 @@ function EmptyComposer({
           <li key={s}>
             <button
               type="button"
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-left text-[13px] text-fg hover:bg-elevated"
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-left text-[13px] text-fg hover:bg-elevated"
               onClick={() => onPick(s)}
             >
-              {s}
+              <span className="min-w-0 flex-1">{s}</span>
+              {s === HELD_DEMO && (
+                <span className="shrink-0 rounded-full border border-danger/40 px-1.5 py-px text-[11px] text-danger">
+                  a check holds this
+                </span>
+              )}
             </button>
           </li>
         ))}
@@ -1138,6 +1148,8 @@ function PlanChrome({
     checks: pendingCount > 0 ? (checkHint?.state ?? "running") : undefined,
     copies: copyCount,
     reviewed: pendingCount > 0 && pendingEdits.every((edit) => edit.reviewed),
+    // The strip's own sentence, once every check is in.
+    verdict: pendingCount > 0 && checkHint && checkHint.state !== "running" ? checkHint.headline : undefined,
   });
 
   function actOnHint() {
@@ -1515,7 +1527,7 @@ function TaskStrip({
   onAlt,
   actDisabled,
 }: {
-  hint: { title: string; cta: string; kind: string; altKind?: string; altCta?: string };
+  hint: { title: string; cta: string; kind: string; altKind?: string; altCta?: string; tone?: "ok" | "danger" };
   onAct: () => void;
   onAlt?: () => void;
   actDisabled?: boolean;
@@ -1526,6 +1538,9 @@ function TaskStrip({
   const designOpen = useIdeUi((s) => s.designOpen);
   const task = resolveAgentTask({ running: agentRunning, indexing, preview: designOpen, messages });
   const pct = task.total > 0 ? Math.round((task.done / task.total) * 100) : task.kind === "running" ? 40 : 0;
+  // Nothing asked yet: the empty Composer says what to do, so a second "Describe the change" above it is noise.
+  if (hint.kind === "compose" && messages.length === 0 && !agentRunning) return null;
+  const VerdictIcon = hint.tone === "ok" ? Check : hint.tone === "danger" ? X : null;
 
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2.5">
@@ -1535,8 +1550,18 @@ function TaskStrip({
           <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${pct}%` }} />
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={hint.title}>
-        {hint.title}
+      <span
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1",
+          hint.tone ? "text-[12px] font-medium" : "text-[11px] text-muted",
+          hint.tone === "ok" && "text-ok",
+          hint.tone === "danger" && "text-danger",
+        )}
+        title={hint.title}
+        data-verdict={hint.tone}
+      >
+        {VerdictIcon && <VerdictIcon className="size-3.5 shrink-0" aria-hidden />}
+        <span className="truncate">{hint.title}</span>
       </span>
       {hint.kind !== "wait" && hint.altCta && (
         <Button
@@ -1604,6 +1629,24 @@ function CommitLine({ messageId }: { messageId: string }) {
   );
 }
 
+/** The check strip's verdict, echoed on the Composer message that staged the change. */
+function StagedVerdict({ hint }: { hint: { state: "clear" | "failed"; headline: string } }) {
+  const held = hint.state === "failed";
+  const Icon = held ? X : Check;
+  return (
+    <p
+      data-staged-verdict={held ? "held" : "safe"}
+      className={cn(
+        "flex items-start gap-1.5 rounded-xl border px-3 py-2 text-[13px] leading-snug font-medium",
+        held ? "border-danger/40 text-danger" : "border-ok/40 text-ok",
+      )}
+    >
+      <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <span>{hint.headline}</span>
+    </p>
+  );
+}
+
 const MessageBlock = memo(function MessageBlock({
   message,
   running,
@@ -1623,6 +1666,9 @@ const MessageBlock = memo(function MessageBlock({
   onAnswer?: (text: string) => void;
 }) {
   const runningMode = useWorkspace((s) => s.runningMode);
+  // The staged change's verdict, said here too, so the answer is where you are reading.
+  const verdictState = useIdeUi((s) => s.checkHint?.state);
+  const verdictHeadline = useIdeUi((s) => s.checkHint?.headline);
   const content = typeof message.content === "string" ? message.content : "";
   if (message.role === "user") {
     if (message.automatic) {
@@ -1652,6 +1698,10 @@ const MessageBlock = memo(function MessageBlock({
   const edits = Array.isArray(message.edits) ? message.edits : [];
   const plan = Array.isArray(message.plan) ? message.plan : [];
   const noteCount = notesOn(edits);
+  const stagedVerdict =
+    edits.some((e) => e.status === "pending") && verdictHeadline && verdictState && verdictState !== "running"
+      ? { state: verdictState, headline: verdictHeadline }
+      : null;
   const empty = !content.trim();
   const live = running && empty && plan.length === 0;
   const waiting = Boolean(message.awaitingBuild && plan.length > 0);
@@ -1774,6 +1824,7 @@ const MessageBlock = memo(function MessageBlock({
               {edits.map((e) => e.path.split("/").pop()).slice(0, 3).join(" · ")}
             </span>
           </button>
+          {stagedVerdict && <StagedVerdict hint={stagedVerdict} />}
           {noteCount > 0 && (
             <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-bg px-3 py-2">
               <p className="min-w-0 text-xs text-muted">

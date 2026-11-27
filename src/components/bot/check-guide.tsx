@@ -19,6 +19,9 @@ on: pull_request
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # for the one comment with the result
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,7 +30,9 @@ jobs:
         with:
           node-version: 22
       - run: npm ci # for the tests, and your packages' real types
-      - uses: ${ACTION_USES}`;
+      - uses: ${ACTION_USES}
+        with:
+          comment: true # one comment on the pull request, updated on each push`;
 
 const BADGE =
   "[![Checked by Aperture Agent Check](https://img.shields.io/badge/checked%20by-Aperture%20Agent%20Check-7c3aed)](https://aperturesais.grok.me/bot?tab=check)";
@@ -57,6 +62,8 @@ const INPUTS: Array<[name: string, fallback: string, what: string]> = [
   ["working-directory", "the repository root", "The project's folder in a monorepo."],
   ["baseline", "recompute", "cache stores the base test result by commit and reuses it while that commit stays the base. A GitHub-hosted runner starts empty each time: keep baseline-dir with actions/cache, keyed on the base commit."],
   ["baseline-dir", ".aperture/check-baseline", "Where the cache is written, when baseline is cache."],
+  ["comment", "false", "true keeps one comment on the pull request: a Checked by Aperture badge, the verdict and a line per check, updated on every push. Needs pull-requests: write. It is the only thing the action sends anywhere, to GitHub's API."],
+  ["github-token", "the workflow's token", "What the comment is posted with."],
 ];
 
 const MARK: Record<string, string> = { pass: "✓", fail: "✗", warn: "!", skip: "–" };
@@ -211,7 +218,10 @@ export function CheckGuide({ children }: { children?: ReactNode }) {
 
       <h3 className="mt-14 text-xl font-medium tracking-tight">What leaves the runner</h3>
       <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">
-        Nothing. The checks run in the step, with no network. With tests on, it runs the pull
+        The checks run in the step, with no network. The one exception is the comment, when the
+        workflow turns it on: it goes to GitHub&apos;s own API with the workflow&apos;s token, and
+        nowhere else. Leave <span className="font-mono text-xs">comment</span> off and nothing
+        leaves the runner. With tests on, it runs the pull
         request&apos;s code, as any test step does, so use it on{" "}
         <span className="font-mono text-xs">pull_request</span>, never{" "}
         <span className="font-mono text-xs">pull_request_target</span>, where that code would run

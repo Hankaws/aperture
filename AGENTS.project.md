@@ -54,7 +54,13 @@ Both workflows work the same way. Once the change is merged here, run the
 repository's "Build from Aperture" with `aperture-ref` set to `main` (or the
 merge commit) and `release` set to the next version (`v1.8`). It builds, runs
 the smoke test, commits `dist/`, tags that commit, publishes the release (title
-= tag), and moves `v1` to it. Nothing is left to do by hand: never publish the
+= tag, notes "Built from Hankaws/aperture@<commit>"), and moves `v1` to it.
+When the build changes no file (the Aperture change it was asked for is not
+in its bundle after all), there is nothing to commit: the tag goes on the
+previous build commit, whose message names the older Aperture commit. That is
+fine: the files are the same. `release:verify` reads what a release was built
+from in its notes first, for that reason (Agent Check v1.9 and Bot v1.21, on
+2026-11-27). Nothing is left to do by hand: never publish the
 release, push a tag or move `v1` yourself first. The workflow refuses:
 
 - a `release` that is not `vX.Y` or `vX.Y.Z` (`v.1.4` slipped through by hand on 2026-11-23);

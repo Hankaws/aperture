@@ -49,3 +49,10 @@ test("the root route has a not-found page of its own", () => {
   const root = readFileSync(new URL("../routes/__root.tsx", import.meta.url), "utf8");
   assert.match(root, /notFoundComponent: NotFound/);
 });
+
+test("pageHead names a canonical address on the public origin for every listed page", () => {
+  const head = pageHead("check");
+  assert.deepEqual(head.links, [{ rel: "canonical", href: "https://aperturesais.grok.me/check" }]);
+  assert.deepEqual(pageHead("login").links, []);
+  assert.deepEqual(pageHead("settings").links, []);
+});

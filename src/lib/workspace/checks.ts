@@ -177,6 +177,14 @@ export function canApply(state: "running" | "clear" | "failed" | null | undefine
 }
 
 /**
+ * Apply, or Apply anyway: the person's own override on a red result, asked once on screen. It
+ * keeps a change whose checks have all finished and one failed; never one still being checked.
+ */
+export function mayApply(state: "running" | "clear" | "failed" | null | undefined, anyway = false): boolean {
+  return canApply(state) || (anyway && state === "failed");
+}
+
+/**
  * Why Ctrl/Cmd+Enter in the editor may not apply a staged change yet, or null
  * when it may. The same rules as the Apply buttons, which a shortcut must not
  * get around: a red check is applied only through "Apply anyway".

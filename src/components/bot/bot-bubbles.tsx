@@ -25,7 +25,6 @@ import { MascotAvatar } from "./mascot";
 import { useLocalBot } from "./use-my-bot";
 import { useRepoBot } from "./use-repo-bot";
 import { useSummon } from "@/lib/bot/summon-store";
-import { useTour } from "./use-tour";
 
 /** Pages with a chat of their own: the editor has its agent, sign-in has nothing to chat about yet. */
 const HIDDEN = new Set(["/app", "/login"]);
@@ -61,7 +60,6 @@ export function BotBubbles() {
   const [unread, setUnread] = useState<Record<string, { count: number; text: string }>>({});
   /** Which chat is open, for answers that come while it is not. */
   const openNow = useRef<string | null>(null);
-  const tour = useTour();
   /** The person's own bot (`my-bot.ts`): its face on Aperture Bot's bubble, once it is named. */
   const myBot = useLocalBot();
 
@@ -103,15 +101,8 @@ export function BotBubbles() {
   // The chat page is the person's own bot, whole: its bubble steps aside there too.
   const onChatPage = path === "/chat";
 
-  // Someone new: Aperture Bot says hello once, a moment after a page shows (not the Bot page).
-  useEffect(() => {
-    if (!loaded || state.greeted || onBotPage || onChatPage) return;
-    const timer = window.setTimeout(() => {
-      setPeek(PRIVATE_BUBBLE);
-      change((s) => ({ ...s, greeted: true }));
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [loaded, state.greeted, onBotPage, onChatPage, change]);
+  // Aperture Bot no longer pops up a hello on its own: the app leads with the checks, and the bot
+  // waits, small, in the corner until it is wanted. A team bot's bubble still says hello when it is made.
 
   // The bots the bubbles stand for; a bot deleted since loses its bubble.
   const ids = state.ids.join(",");
@@ -275,14 +266,14 @@ export function BotBubbles() {
               useSummon.getState().toggle();
             }}
             onDismissGreeting={() => setPeek(null)}
-            badge={
-              tour.show && tour.progress ? tour.progress.total - tour.progress.done : undefined
-            }
+            // No count of tour steps on it: a number on every page read as unread messages. The tour's
+            // card is still in the chat itself.
+            small
           >
             {myBot ? (
-              <MascotAvatar mascot={myBot.mascot} size={52} label="" />
+              <MascotAvatar mascot={myBot.mascot} size={36} label="" />
             ) : (
-              <BotAvatar size="lg" />
+              <BotAvatar size="md" />
             )}
           </Bubble>
         )}
@@ -315,6 +306,7 @@ function Bubble({
   onClose,
   badge,
   unread,
+  small = false,
   children,
 }: {
   name: string;
@@ -327,6 +319,8 @@ function Bubble({
   badge?: number;
   /** Answers that came while it was minimized: a count, before the tour's. */
   unread?: number;
+  /** Quieter: Aperture Bot's own bubble, present on every page but not the page's focus. */
+  small?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -360,7 +354,8 @@ function Bubble({
         aria-expanded={open}
         title={name}
         className={cn(
-          "bubble-pop relative grid size-14 shrink-0 place-items-center rounded-full bg-surface shadow-lg ring-1 ring-border transition-transform hover:scale-105",
+          "bubble-pop relative grid shrink-0 place-items-center rounded-full bg-surface ring-1 ring-border transition-transform hover:scale-105",
+          small ? "size-11 opacity-80 shadow-md hover:opacity-100 focus-visible:opacity-100" : "size-14 shadow-lg",
           open && "ring-2 ring-accent",
         )}
       >

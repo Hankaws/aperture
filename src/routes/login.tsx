@@ -56,7 +56,7 @@ function Login() {
     );
   }
   if (user) {
-    if (next === "/settings") return <Navigate to="/settings" search={{ tab: "plan" }} />;
+    if (next === "/settings") return <Navigate to="/settings" search={{ tab: "models" }} />;
     return <Navigate to={next} />;
   }
 

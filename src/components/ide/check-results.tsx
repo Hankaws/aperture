@@ -24,6 +24,7 @@ import {
 import { renderProbeDocument } from "@/lib/workspace/design-mode";
 import { VisualProof } from "./visual-proof";
 import { ReviewGuide } from "./review-guide";
+import { sendBack } from "./send-back";
 import { pageErrorEvidence, type PageError } from "@/lib/runner/stack";
 import { mergeEdits } from "@/lib/workspace/preview-check";
 import { isTsPath } from "@/lib/workspace/tsc-core";
@@ -398,6 +399,14 @@ function AttemptPane({
   );
 }
 
+/** What to do with a held change, offered beside the verdict. Absent when it does not apply. */
+export type HeldActions = {
+  /** Back to Composer with the failing check's evidence. */
+  sendBack?: () => void;
+  /** Turn the mistake into one of the project's own checks ("never twice"). */
+  makeCheck?: () => void;
+};
+
 export function CheckResults({
   files,
   edits,
@@ -409,8 +418,11 @@ export function CheckResults({
   edits: ProposedEdit[];
   verify: VerifyReport | null;
   onOpen: (path: string, detail?: string) => void;
-  /** Rendered first, with the verdict the rows add up to: the headline and the one Apply. */
-  header?: (verdict: Verdict) => ReactNode;
+  /**
+   * Rendered first, with the verdict the rows add up to: the headline and the one Apply. On a red
+   * result it also gets the next steps, so they sit beside the verdict instead of under the rows.
+   */
+  header?: (verdict: Verdict, next: HeldActions) => ReactNode;
 }) {
   const { result, frame } = useRenderCheck(files, edits);
   const { tests: browser, output } = useBrowserTests(files, edits, verify);
@@ -534,7 +546,10 @@ export function CheckResults({
   }, [ready, rows, edits]);
   return (
     <div className="border-t border-border px-2.5 py-1.5">
-      {header?.(verdict)}
+      {header?.(verdict, {
+        sendBack: failed && !agentRunning ? () => sendBack(pendingSource(useWorkspace.getState().messages)?.modelSource, edits) : undefined,
+        makeCheck: mistake && !repeat && !agentRunning ? () => makeCheck() : undefined,
+      })}
       <div className="group" data-all={showAll ? "on" : "off"}>
         <ul aria-label="Check results" className="space-y-px">
           {rows.map((row) => (
@@ -593,7 +608,8 @@ export function CheckResults({
               {showAll ? "Show only what needs a look" : `Show all ${rows.length} checks`}
             </button>
           )}
-          {mistake && !repeat && (
+          {/* With a header, the verdict beside it offers this as a button. */}
+          {mistake && !repeat && !header && (
             <button
               type="button"
               data-make-check

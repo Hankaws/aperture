@@ -120,6 +120,10 @@ jobs:
     name: Aperture Agent Check (bundle + this PR)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # The one "Checked by Aperture" comment on the pull request, kept up to date.
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,11 +143,20 @@ jobs:
       - name: The bundle catches a broken change and passes a correct one
         run: node packages/agent-check/smoke.mjs packages/agent-check/dist/index.cjs
 
-      # Aperture's own pull requests are checked by it. The tests run in the
-      # job above, so this step only parses, resolves imports and type-checks.
+      # Aperture's own pull requests are checked by it, run the way users run
+      # it: through its action.yml, with the comment on, so the inputs and the
+      # comment are tried on every pull request. The tests run in the job
+      # above, so this step only parses, resolves imports and type-checks.
+      - name: Put the bundle beside its action.yml
+        if: ${{ github.event_name == 'pull_request' }}
+        run: cp -r packages/agent-check/dist packages/agent-check/action/dist
+
       - name: Check this pull request
         if: ${{ github.event_name == 'pull_request' }}
-        run: node packages/agent-check/dist/index.cjs --no-tests
+        uses: ./packages/agent-check/action
+        with:
+          run-tests: false
+          comment: true
 
   aperture-bot:
     name: Aperture Bot (bundle)

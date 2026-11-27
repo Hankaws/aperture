@@ -127,3 +127,26 @@ test("nextAction keeps reviewing while checks are still running", () => {
   });
   assert.equal(next.kind, "review");
 });
+
+test("nextAction says the check verdict itself once the checks are in, not a second vaguer line", () => {
+  const base = { running: false, awaiting: false, pending: 1, workerCount: 0, crewModels: 1, keyReady: 1, messages: 3, noteCount: 0 };
+  const safe = nextAction({ ...base, checks: "clear", verdict: "Safe to apply: all 5 checks passed" });
+  assert.equal(safe.kind, "reviewer");
+  assert.equal(safe.title, "Safe to apply: all 5 checks passed. Review the diff?");
+  assert.equal(safe.tone, "ok");
+  const held = nextAction({ ...base, checks: "failed", verdict: "Held back: this change fails 2 of 6 checks" });
+  assert.equal(held.kind, "fix");
+  assert.equal(held.title, "Held back: this change fails 2 of 6 checks");
+  assert.equal(held.tone, "danger");
+  assert.equal(held.altCta, "Apply anyway");
+  const applied = nextAction({ ...base, checks: "clear", reviewed: true, verdict: "Safe to apply: all 5 checks passed" });
+  assert.equal(applied.kind, "apply");
+  assert.equal(applied.title, "Safe to apply: all 5 checks passed");
+});
+
+test("nextAction keeps its own words when there is no verdict yet", () => {
+  const base = { running: false, awaiting: false, pending: 1, workerCount: 0, crewModels: 1, keyReady: 1, messages: 3, noteCount: 0 };
+  const safe = nextAction({ ...base, checks: "clear" });
+  assert.equal(safe.title, "Checks done. Review the diff?");
+  assert.equal(safe.tone, undefined);
+});

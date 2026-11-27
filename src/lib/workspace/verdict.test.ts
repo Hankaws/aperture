@@ -8,23 +8,24 @@ const rows = (...statuses: CheckStatus[]) => statuses.map((status) => ({ status 
 test("all clear reads Safe to apply, counting the checks that passed out of those that ran", () => {
   const v = checkVerdict(rows("pass", "pass", "pass", "pass", "pass"));
   assert.equal(v.state, "safe");
-  assert.equal(v.headline, "Safe to apply: 5 of 5 checks passed");
+  assert.equal(v.headline, "Safe to apply: all 5 checks passed");
   assert.equal(v.detail, "");
 });
 
-test("an already-failing check is not a pass and not a block: it is said under the headline", () => {
+test("an already-failing check is not a pass and not a block, and the headline does not count it against the change", () => {
   const v = checkVerdict(rows("pass", "pass", "pass", "skip", "warn", "pass"));
   assert.equal(v.state, "safe");
-  assert.equal(v.headline, "Safe to apply: 4 of 5 checks passed");
-  assert.equal(v.detail, "1 already failing before this change · 1 could not run");
+  assert.equal(v.headline, "Safe to apply: nothing new fails (4 passed, 1 already failing)");
+  assert.doesNotMatch(v.headline, /\d+ of \d+/);
+  assert.equal(v.detail, "1 already failing before this change, not caused by it · 1 could not run");
 });
 
 test("a red check holds the change back and says how many failed", () => {
   const v = checkVerdict(rows("pass", "fail", "pass", "pass", "warn"));
   assert.equal(v.state, "held");
-  assert.equal(v.headline, "Held back: 1 of 5 checks failed");
+  assert.equal(v.headline, "Held back: this change fails 1 of 5 checks");
   assert.match(v.detail, /Apply is held/);
-  assert.equal(checkVerdict(rows("fail", "fail", "pass")).headline, "Held back: 2 of 3 checks failed");
+  assert.equal(checkVerdict(rows("fail", "fail", "pass")).headline, "Held back: this change fails 2 of 3 checks");
 });
 
 test("red wins over running: a failed check is already a verdict", () => {
@@ -39,8 +40,8 @@ test("while checks run it counts what is done, and Apply is not promised", () =>
 });
 
 test("singular and empty cases read cleanly", () => {
-  assert.equal(checkVerdict(rows("pass")).headline, "Safe to apply: 1 of 1 check passed");
-  assert.equal(checkVerdict(rows("fail")).headline, "Held back: 1 of 1 check failed");
+  assert.equal(checkVerdict(rows("pass")).headline, "Safe to apply: the 1 check passed");
+  assert.equal(checkVerdict(rows("fail")).headline, "Held back: this change fails 1 of 1 check");
   assert.equal(checkVerdict(rows("skip", "skip")).headline, "Nothing to check here");
   assert.equal(checkVerdict([]).headline, "Nothing to check here");
 });

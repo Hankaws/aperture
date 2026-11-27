@@ -27,6 +27,8 @@ export type CheckHint = {
   detail?: string;
   prompt?: string;
   verificationId?: string;
+  /** The verdict's headline, so Composer can say the same sentence as the strip. */
+  headline?: string;
 };
 
 const CREW_KEY = "aperture-crew";
@@ -330,7 +332,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
         s.checkHint?.path === hint?.path &&
         s.checkHint?.detail === hint?.detail &&
         s.checkHint?.prompt === hint?.prompt &&
-        s.checkHint?.verificationId === hint?.verificationId
+        s.checkHint?.verificationId === hint?.verificationId &&
+        s.checkHint?.headline === hint?.headline
       )
         return s;
       return { checkHint: hint };

@@ -95,23 +95,25 @@ function VerdictBar({
     verdict.detail,
   ].filter(Boolean);
   return (
-    <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+    // The verdict is the answer to "can I keep this?", so it is the largest thing in the strip, and the strip
+    // sits above the code (it does not scroll with it), so the verdict stays in view while the diff scrolls.
+    <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 bg-elevated" data-verdict-bar>
       <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
         <p
           role="status"
           className={cn(
             // On a phone the bar under the code shows the headline; this copy stays for screen readers.
-            "flex items-center gap-1.5 text-sm font-medium",
+            "flex items-center gap-2 text-[17px] leading-snug font-semibold tracking-tight",
             dock && "max-md:sr-only",
             verdict.state === "safe" && "text-ok",
             verdict.state === "held" && "text-danger",
             verdict.state === "checking" && "text-fg",
           )}
         >
-          <Icon className={cn("size-4 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
+          <Icon className={cn("size-5 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
           {verdict.headline}
         </p>
-        <p className="mt-0.5 text-[12px] leading-snug text-muted">{sub.join(" · ")}</p>
+        <p className="mt-0.5 text-[13px] leading-snug text-muted">{sub.join(" · ")}</p>
       </div>
       <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onReport}>
         <FileDiff className="size-3.5" />
@@ -248,7 +250,13 @@ export function ReviewStrip() {
           const active = edit.path === activePath;
           const blocked = (edit.notes?.length ?? 0) > 0;
           return (
-            <li key={edit.id} className={cn("flex items-center gap-1 px-1.5", active && "bg-list-selected")}>
+            // The open file's row: the page colour and an accent edge, not bg-list-selected, on which the row's
+            // small grey and green text fell under 4.5:1 in the light theme.
+            <li
+              key={edit.id}
+              className={cn("flex items-center gap-1 px-1.5", active && "bg-bg shadow-[inset_2px_0_0_var(--color-accent)]")}
+              aria-current={active ? "true" : undefined}
+            >
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left"

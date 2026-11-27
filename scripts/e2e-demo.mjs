@@ -131,7 +131,7 @@ try {
       "the rule for src/store.ts is given to the agent and listed on the message",
     );
     // The verdict first, and one Apply: the editor beside the diff offers a single button that writes the change.
-    check(/Safe to apply: \d+ of \d+ checks? passed/.test(await bodyText(page)), "the result opens with a verdict: Safe to apply, N of M checks passed");
+    check(/Safe to apply: (all \d+ checks passed|the 1 check passed|nothing new fails \(\d+ passed, \d+ already failing\))/.test(await bodyText(page)), "the result opens with a verdict: Safe to apply, without counting an already-failing check against the change");
     const applyButtons = await page.getByRole("button", { name: /^(Apply \d+ files?|Keep this copy|Apply now|Apply all|Apply)$/ }).all();
     let visibleApply = 0;
     for (const button of applyButtons) if (await button.isVisible()) visibleApply += 1;

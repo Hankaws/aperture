@@ -1,6 +1,6 @@
 import { useContext, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, FileDiff, LoaderCircle, MessageSquare, X } from "lucide-react";
+import { Check, FileDiff, LoaderCircle, MessageSquare, Sparkles, Undo2, X } from "lucide-react";
 import { diffStats } from "@/lib/agent/apply-edit";
 import { Button } from "@/components/ui/button";
 import { basename, cn, modSymbol } from "@/lib/utils";
@@ -12,9 +12,9 @@ import { notesOn } from "@/lib/workspace/diff-notes";
 import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report";
 import { lineOfIssue } from "@/lib/editor/marks";
 import { useWorkspace } from "@/lib/workspace/store";
-import { applyBlockReason, applyLabel, type Verdict } from "@/lib/workspace/verdict";
+import { applyAnywayQuestion, applyBlockReason, applyLabel, type Verdict } from "@/lib/workspace/verdict";
 import { ApplyDockContext } from "./apply-dock";
-import { CheckResults } from "./check-results";
+import { CheckResults, type HeldActions } from "./check-results";
 
 /**
  * The verdict and the one Apply, pinned under the code on a phone, so the
@@ -27,11 +27,14 @@ function ApplyDock({
   label,
   blocked,
   onApply,
+  onSendBack,
 }: {
   verdict: Verdict;
   label: string;
   blocked: string | null;
   onApply: () => void;
+  /** Held: the one thing to do is send it back, so that replaces a greyed-out Apply. */
+  onSendBack?: () => void;
 }) {
   const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
   return (
@@ -48,12 +51,19 @@ function ApplyDock({
           <Icon className={cn("mt-px size-3.5 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
           <span className="line-clamp-2">{verdict.headline}</span>
         </p>
-        {blocked && <p className="truncate text-[11px] text-muted">{blocked}</p>}
+        {blocked && !onSendBack && <p className="truncate text-[11px] text-muted">{blocked}</p>}
       </div>
-      <Button size="sm" className="h-11 shrink-0 px-4" disabled={blocked !== null} data-apply="dock" onClick={onApply}>
-        <Check className="size-3.5" />
-        {label}
-      </Button>
+      {onSendBack ? (
+        <Button size="sm" className="h-11 shrink-0 px-4" data-send-back="dock" onClick={onSendBack}>
+          <Undo2 className="size-3.5" />
+          Send back
+        </Button>
+      ) : (
+        <Button size="sm" className="h-11 shrink-0 px-4" disabled={blocked !== null} data-apply="dock" onClick={onApply}>
+          <Check className="size-3.5" />
+          {label}
+        </Button>
+      )}
     </div>
   );
 }
@@ -73,6 +83,8 @@ function VerdictBar({
   onRejectAll,
   onDismissNotes,
   onReport,
+  onApplyAnyway,
+  next,
 }: {
   verdict: Verdict;
   fileCount: number;
@@ -84,11 +96,16 @@ function VerdictBar({
   onRejectAll: () => void;
   onDismissNotes: () => void;
   onReport: () => void;
+  onApplyAnyway: () => void;
+  next: HeldActions;
 }) {
   const blocked = applyBlockReason({ agentRunning: running, checks: checkState, notes: noteCount });
   const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
   const dock = useContext(ApplyDockContext);
   const label = applyLabel(fileCount, copyCount);
+  // Held, with a way forward: Send back leads, Make it a check is a real button beside it, and
+  // Apply anyway is a quiet override that asks once. One primary action instead of three.
+  const held = verdict.state === "held" && next.sendBack !== undefined;
   const sub = [
     `${fileCount} ${fileCount === 1 ? "file" : "files"} staged${running ? " · still writing" : ""}`,
     noteCount > 0 ? `${noteCount} ${noteCount === 1 ? "note" : "notes"}` : "",
@@ -98,7 +115,8 @@ function VerdictBar({
     // The verdict is the answer to "can I keep this?", so it is the largest thing in the strip, and the strip
     // sits above the code (it does not scroll with it), so the verdict stays in view while the diff scrolls.
     <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 bg-elevated" data-verdict-bar>
-      <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
+      {/* Held, the actions take a row of their own under the sentence, so the sentence keeps one line. */}
+      <div className={cn("min-w-0 basis-full", !held && "sm:flex-1 sm:basis-0")}>
         <p
           role="status"
           className={cn(
@@ -129,20 +147,62 @@ function VerdictBar({
         <X className="size-3.5" />
         Reject all
       </Button>
-      <Button
-        size="sm"
-        // With the phone's bar under the code, this one hides there: one Apply on screen.
-        className={cn("ml-auto h-8 px-3 pointer-coarse:h-11", dock && "max-md:hidden")}
-        disabled={blocked !== null}
-        title={blocked ?? `${modSymbol()}+Enter`}
-        aria-keyshortcuts="Control+Enter Meta+Enter"
-        data-apply="primary"
-        onClick={onApply}
-      >
-        <Check className="size-3.5" />
-        {label}
-      </Button>
-      {dock && createPortal(<ApplyDock verdict={verdict} label={label} blocked={blocked} onApply={onApply} />, dock)}
+      {held ? (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2 text-muted"
+            title="Keep the change with its failing checks"
+            data-apply="anyway"
+            onClick={() => {
+              if (window.confirm(applyAnywayQuestion(verdict.failed))) onApplyAnyway();
+            }}
+          >
+            Apply anyway…
+          </Button>
+          {next.makeCheck && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-3 pointer-coarse:h-11"
+              data-make-check
+              title="Ask Composer to write a project check that catches this mistake from now on, here and in Agent Check."
+              onClick={next.makeCheck}
+            >
+              <Sparkles className="size-3.5 text-accent" />
+              Make it a check
+            </Button>
+          )}
+          <Button
+            size="sm"
+            className={cn("ml-auto h-8 px-3 pointer-coarse:h-11", dock && "max-md:hidden")}
+            data-send-back="primary"
+            onClick={next.sendBack}
+          >
+            <Undo2 className="size-3.5" />
+            Send back
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="sm"
+          // With the phone's bar under the code, this one hides there: one Apply on screen.
+          className={cn("ml-auto h-8 px-3 pointer-coarse:h-11", dock && "max-md:hidden")}
+          disabled={blocked !== null}
+          title={blocked ?? `${modSymbol()}+Enter`}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
+          data-apply="primary"
+          onClick={onApply}
+        >
+          <Check className="size-3.5" />
+          {label}
+        </Button>
+      )}
+      {dock && createPortal(
+          <ApplyDock verdict={verdict} label={label} blocked={blocked} onApply={onApply} onSendBack={held ? next.sendBack : undefined} />,
+          dock,
+        )}
     </div>
   );
 }
@@ -223,15 +283,17 @@ export function ReviewStrip() {
         edits={rows}
         verify={verify}
         onOpen={jump}
-        header={(verdict) => (
+        header={(verdict, next) => (
           <VerdictBar
             verdict={verdict}
+            next={next}
             fileCount={rows.length}
             copyCount={openIds.length}
             noteCount={noteCount}
             running={running}
             checkState={checkState}
             onApply={() => applyAllPending()}
+            onApplyAnyway={() => applyAllPending({ anyway: true })}
             onRejectAll={() => rejectAllPending()}
             onDismissNotes={() => rows.forEach((edit) => clearPendingNotes(edit.id))}
             onReport={() =>

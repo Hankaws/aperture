@@ -51,6 +51,15 @@ export function SummonBot() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // Escape closes it from anywhere focus is not: the box takes focus a frame after opening, and a
+      // click on the page leaves focus on nothing. Inside the panel, its own handler closes it.
+      if (event.key === "Escape") {
+        const away = !document.activeElement || document.activeElement === document.body;
+        if (away && !event.defaultPrevented && useSummon.getState().open) {
+          useSummon.getState().setOpen(false);
+        }
+        return;
+      }
       if (!isModEvent(event) || event.shiftKey || event.altKey) return;
       if (event.key.toLowerCase() !== "j") return;
       if (NOT_HERE.has(window.location.pathname)) return;

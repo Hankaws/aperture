@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTO_FIX_WINDOW_MS, applyHeldBecause, canApply, changeChecks, checksReady, checkStripState, importersOfRemoved, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
+import { AUTO_FIX_WINDOW_MS, applyHeldBecause, canApply, mayApply, changeChecks, checksReady, checkStripState, importersOfRemoved, inTurnCheckPrompt, lookPrompt, newIssues, renderEntry, shouldAutoFix, shouldLookAgain, verifyForPending, type BrowserTests, type CheckRow } from "./checks.ts";
 import { RENDER_PROBE_SCRIPT, renderProbeDocument } from "./design-mode.ts";
 import type { ProposedEdit, VerifyReport } from "./types.ts";
 
@@ -427,4 +427,13 @@ test("a removed file still imported fails Imports in the file that imports it, t
   const fixed = edit("src/a.ts", "export const a = 2;\n", FILES["src/a.ts"]);
   assert.deepEqual(importersOfRemoved(FILES, [removal, fixed]), []);
   assert.equal(row(changeChecks({ files: FILES, edits: [removal, fixed], render: null }), "imports").status, "pass");
+});
+
+test("Apply anyway keeps a red change, never one still being checked", () => {
+  assert.equal(mayApply("failed"), false);
+  assert.equal(mayApply("failed", true), true);
+  assert.equal(mayApply("clear"), true);
+  assert.equal(mayApply("clear", true), true);
+  assert.equal(mayApply("running", true), false);
+  assert.equal(mayApply(null, true), false);
 });

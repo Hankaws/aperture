@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyBlockReason, applyLabel, checkVerdict } from "./verdict.ts";
+import { applyAnywayQuestion, applyBlockReason, applyLabel, checkVerdict } from "./verdict.ts";
 import { canApply, checkStripState, type CheckStatus } from "./checks.ts";
 
 const rows = (...statuses: CheckStatus[]) => statuses.map((status) => ({ status }));
@@ -81,4 +81,10 @@ test("the Apply button is blocked for the same reasons the store refuses", () =>
   for (const checks of ["running", "failed", null, undefined] as const) {
     assert.equal(canApply(checks), applyBlockReason({ ...open, checks }) === null);
   }
+});
+
+test("Apply anyway asks once, naming how many checks fail", () => {
+  assert.equal(applyAnywayQuestion(2), "Apply with 2 failing checks? The change goes into your files as it is.");
+  assert.equal(applyAnywayQuestion(1), "Apply with 1 failing check? The change goes into your files as it is.");
+  assert.match(applyAnywayQuestion(0), /1 failing check\?/);
 });

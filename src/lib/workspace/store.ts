@@ -14,7 +14,7 @@ import { dropHunk, hunksFromDiff, hunkLines } from "@/lib/agent/apply-edit";
 import { hunkAnchorLines, hunkIndexAt } from "@/lib/editor/review-nav";
 import { mergeEdits as overlayEdits, needsTheRest, previewNotesForEdit } from "./preview-check";
 import { fileListOf, keepFileList, withFiles } from "./file-list";
-import { canApply } from "./checks";
+import { canApply, mayApply } from "./checks";
 import { checksMatch } from "./verify-id";
 import { editsUnderCheck } from "./edits";
 import { keepSecrets, withoutSecrets, workspaceHash, type SyncState } from "./sync";
@@ -84,7 +84,8 @@ type WorkspaceState = {
   setAgentRunning: (running: boolean, mode?: AgentMode | null) => void;
   applyEdit: (edit: ProposedEdit) => void;
   rejectEdit: (editId: string) => void;
-  applyAllPending: () => void;
+  /** `anyway`: the person chose to keep a red change (Apply anyway); a running check still blocks. */
+  applyAllPending: (opts?: { anyway?: boolean }) => void;
   rejectAllPending: () => void;
   dropHunkAt: (editId: string, line: number) => void;
   clearPendingNotes: (editId?: string) => void;
@@ -864,8 +865,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       schedulePersist();
     },
 
-    applyAllPending: () => {
-      if (!canApply(useIdeUi.getState().checkHint?.state)) return;
+    applyAllPending: (opts) => {
+      if (!mayApply(useIdeUi.getState().checkHint?.state, opts?.anyway)) return;
       const judged = editsUnderCheck(get().messages, get().activeCopyId);
       if (!checksMatch(useIdeUi.getState().checkHint?.verificationId, get().files, judged)) return;
       const flat = get().messages.flatMap((m) => m.edits ?? []);

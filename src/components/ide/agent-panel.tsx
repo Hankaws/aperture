@@ -22,7 +22,7 @@ import { ModeMenu, PlusMenu } from "./composer-menu";
 import { McpCallList } from "@/components/ide/mcp-call";
 import { abortAgent, agentPayload, retrySend, submitAgent, wirePayload } from "@/lib/agent/run";
 import { RESEND_FILES } from "@/lib/agent/wire";
-import { takeAttempt } from "@/lib/workspace/attempt";
+import { sendBack } from "./send-back";
 import { startBackgroundRun, startBestOf } from "@/lib/agent/background-runner";
 import { BEST_OF } from "@/lib/agent/best-of";
 import { BackgroundTray } from "./background-runs";
@@ -1190,21 +1190,7 @@ function PlanChrome({
       return;
     }
     if (hint.kind === "fix") {
-      const hint = useIdeUi.getState().checkHint;
-      const detail = hint?.detail ?? "A check failed.";
-      const path = hint?.path;
-      const snap = takeAttempt();
-      if (snap && !useIdeUi.getState().failedAttempt) useIdeUi.getState().setFailedAttempt(snap);
-      if (path) useWorkspace.getState().openFile(path);
-      useIdeUi.getState().setMobilePane("editor");
-      void submitAgent("Fix the failing checks", "composer", source, {
-        phase: "skip",
-        apiInstruction:
-          hint?.prompt ??
-          `${detail}\nFix only this with propose_edit. Pass confidence from 0 to 1. Below 0.8 the edit is dropped and the turn stops.`,
-        pendingEdits,
-        copyId: useWorkspace.getState().activeCopyId ?? undefined,
-      });
+      sendBack(source, pendingEdits);
       return;
     }
     if (hint.kind === "review") {
@@ -1227,7 +1213,7 @@ function PlanChrome({
       <TaskStrip
         hint={hint}
         onAct={actOnHint}
-        onAlt={() => useWorkspace.getState().applyAllPending()}
+        onAlt={() => useWorkspace.getState().applyAllPending({ anyway: hint.kind === "fix" })}
         actDisabled={actDisabled}
       />
       {awaitingMsg && !agentRunning && proposed.length > 0 && (
@@ -1568,9 +1554,9 @@ function TaskStrip({
           type="button"
           size="sm"
           variant="ghost"
-          // Beside the editor, the one Apply is in the verdict above the diff. This copy stays for the phone,
-          // where Composer is its own screen. "Apply anyway" (a red check) is only ever here.
-          className={cn("h-6 shrink-0 px-2", hint.kind !== "fix" && hint.altKind === "apply" && "md:hidden")}
+          // Beside the editor, the one Apply, and on a red check Send back and Apply anyway, are in the verdict
+          // above the diff. This copy stays for the phone, where Composer is its own screen.
+          className={cn("h-6 shrink-0 px-2", hint.altKind === "apply" && "md:hidden")}
           disabled={actDisabled && hint.kind !== "fix"}
           onClick={onAlt}
         >
@@ -1581,7 +1567,7 @@ function TaskStrip({
         <Button
           type="button"
           size="sm"
-          className={cn("h-6 shrink-0 px-2", hint.kind === "apply" && "md:hidden")}
+          className={cn("h-6 shrink-0 px-2", (hint.kind === "apply" || hint.kind === "fix") && "md:hidden")}
           disabled={actDisabled && hint.kind !== "apply" && hint.kind !== "fix" && hint.kind !== "review"}
           onClick={onAct}
         >

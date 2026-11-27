@@ -17,14 +17,17 @@ import { baseFromCacheOrRun, type BaselineMode } from "./baseline.ts";
 import { mergeBase, repoPrefix } from "./git.ts";
 import { installedFiles } from "./installed.ts";
 import { loadProject } from "./project.ts";
+import { upsertComment } from "./comment.ts";
 import {
   annotationsFor,
+  commentMarkdown,
   consoleText,
   shownRows,
   summaryMarkdown,
   verdict,
   workflowCommands,
   type Meta,
+  type PullRef,
 } from "./report.ts";
 import { runTests, runTestsAtBase, type TestRunner } from "./tests.ts";
 
@@ -47,6 +50,10 @@ export type Options = {
   baseline: BaselineMode;
   /** Where a cached baseline is written. Ignored when `baseline` is `recompute`. */
   baselineDir: string;
+  /** Keep one comment on the pull request with the result (off unless asked: it is the only thing sent anywhere). */
+  comment?: boolean;
+  /** The token the comment is posted with: the workflow's own. */
+  token?: string;
 };
 
 /** The runner can afford a bigger project than a browser tab. */
@@ -76,6 +83,22 @@ export function libReader(): (name: string) => string | undefined {
     }
     return texts.get(name);
   };
+}
+
+/** The pull request a GitHub event is for, or null for a push. */
+export function pullFromEvent(eventPath: string | undefined, repository?: string): PullRef | null {
+  if (!eventPath) return null;
+  try {
+    const event = JSON.parse(readFileSync(eventPath, "utf8")) as {
+      pull_request?: { number?: number };
+      repository?: { full_name?: string };
+    };
+    const number = event.pull_request?.number;
+    const repo = event.repository?.full_name ?? repository;
+    return typeof number === "number" && repo ? { repo, number } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The base a GitHub event names: the pull request's base, or the commit before a push. */
@@ -129,6 +152,8 @@ export function parseOptions(argv: string[], env: NodeJS.ProcessEnv): Options {
     failOn,
     baseline,
     baselineDir: resolve(flag(argv, "baseline-dir") ?? input(env, "baseline-dir") ?? join(cwd, ".aperture", "check-baseline")),
+    comment: argv.includes("--comment") || input(env, "comment") === "true",
+    token: input(env, "github-token"),
   };
 }
 
@@ -214,8 +239,12 @@ export function check(options: Options): Result {
   };
 }
 
+/** The pull request comment being posted, if one is: the CLI waits for it before it exits. */
+export let pendingComment: Promise<void> | null = null;
+
 /** Runs the check and reports it where it runs: a GitHub runner, or a terminal. */
 export function main(argv: string[], env: NodeJS.ProcessEnv): number {
+  pendingComment = null;
   let options: Options;
   let result: Result;
   try {
@@ -240,13 +269,30 @@ export function main(argv: string[], env: NodeJS.ProcessEnv): number {
     }));
     for (const line of workflowCommands(annotations)) console.log(line);
   }
+  const pull = env.GITHUB_ACTIONS ? pullFromEvent(env.GITHUB_EVENT_PATH, env.GITHUB_REPOSITORY) : null;
   if (env.GITHUB_STEP_SUMMARY) {
     const summary =
       result.rows.length > 0
-        ? summaryMarkdown(result.rows, result.meta)
+        ? summaryMarkdown(result.rows, result.meta, pull)
         : `### Aperture Agent Check\n\n${result.text.replace(/^Aperture Agent Check: /, "")}\n`;
     appendFileSync(env.GITHUB_STEP_SUMMARY, summary);
   }
   if (env.GITHUB_OUTPUT) appendFileSync(env.GITHUB_OUTPUT, `verdict=${result.verdict}\n`);
+  if (options.comment && result.rows.length > 0) {
+    if (!pull) console.log("Comment: not posted, this run is not for a pull request.");
+    else if (!options.token) console.log('Comment: not posted, no token. Pass "github-token" (the default is the workflow\'s own).');
+    else {
+      const runUrl =
+        env.GITHUB_SERVER_URL && env.GITHUB_REPOSITORY && env.GITHUB_RUN_ID
+          ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
+          : null;
+      pendingComment = upsertComment(
+        { api: env.GITHUB_API_URL ?? "https://api.github.com", token: options.token, ...pull },
+        commentMarkdown(result.rows, result.meta, pull, runUrl),
+      ).then((outcome) =>
+        console.log(outcome.ok ? `Comment: ${outcome.action} on #${pull.number}.` : `Comment: ${outcome.note}`),
+      );
+    }
+  }
   return result.exitCode;
 }

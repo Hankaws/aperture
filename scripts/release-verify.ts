@@ -20,6 +20,7 @@ import {
   judgeApp,
   report,
   builtFrom,
+  releaseBuiltFrom,
   compareVersions,
   type ActionFacts,
   type Finding,
@@ -118,7 +119,9 @@ async function actionFindings(
   spec: (typeof ACTIONS)[number],
   live: { tag: string; commit: string } | null,
 ): Promise<Finding[]> {
-  const latest = await gh<{ tag_name: string }>(`repos/${spec.repo}/releases/latest`);
+  const latest = await gh<{ tag_name: string; body?: string | null }>(
+    `repos/${spec.repo}/releases/latest`,
+  );
   const latestCommit = latest ? await tagCommit(spec.repo, latest.tag_name) : null;
   const majorTag = latest?.tag_name.replace(/^(v\d+).*$/, "$1") ?? "v1";
   const majorCommit = await tagCommit(spec.repo, majorTag);
@@ -128,7 +131,8 @@ async function actionFindings(
   const message = commit?.commit.message ?? null;
 
   let staleFiles: string[] | null = null;
-  const from = builtFrom(message);
+  const notes = latest?.body ?? null;
+  const from = builtFrom(message) ? releaseBuiltFrom({ message, notes }) : null;
   if (from && live) {
     const compare = await gh<{ status: string; files?: Array<{ filename: string }> }>(
       `repos/${APERTURE}/compare/${from}...${live.commit}`,
@@ -147,6 +151,7 @@ async function actionFindings(
     latest: latest && latestCommit ? { tag: latest.tag_name, commit: latestCommit } : null,
     major: majorCommit ? { tag: majorTag, commit: majorCommit } : null,
     message,
+    notes,
     staleFiles,
     against: live?.tag ?? null,
   };

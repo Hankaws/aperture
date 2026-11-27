@@ -119,11 +119,68 @@ export function consoleText(rows: CheckRow[], meta: Meta): string {
 
 const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
+const SITE = "https://aperturesais.grok.me";
+
+/** The pull request a run is for: its repository and number. */
+export type PullRef = { repo: string; number: number };
+
+/** The pull request's page on Aperture's public checker, which anyone can open. */
+export function checkLink(pull: PullRef): string {
+  return `${SITE}/check?pr=${pull.repo}/${pull.number}`;
+}
+
+/** "Checked by Aperture", green or red, linked to the pull request on Aperture. */
+export function badgeMarkdown(result: "red" | "clear", pull: PullRef | null): string {
+  const image = `${SITE}/badges/agent-check-${result}.svg`;
+  const alt = `Checked by Aperture: ${result === "red" ? "held back" : "nothing red"}`;
+  return `[![${alt}](${image})](${pull ? checkLink(pull) : SITE})`;
+}
+
+/** Marks Agent Check's own comment, so a later run updates it instead of adding another. */
+export const COMMENT_MARKER = "<!-- aperture-agent-check -->";
+
+/**
+ * The one comment on the pull request: the badge, the verdict, a line per
+ * check, and where the whole report is. Updated in place on every push.
+ */
+export function commentMarkdown(
+  rows: CheckRow[],
+  meta: Meta,
+  pull: PullRef,
+  runUrl: string | null,
+): string {
+  const lines = [
+    COMMENT_MARKER,
+    badgeMarkdown(verdict(rows), pull),
+    "",
+    `**${headline(rows, meta)}**`,
+    "",
+    "| | Check | Result |",
+    "|---|---|---|",
+  ];
+  for (const row of shownRows(rows))
+    lines.push(
+      `| ${MARK[row.status] ?? "?"} | ${cell(row.label)} | ${cell(row.detail.slice(0, 300))} |`,
+    );
+  lines.push(
+    "",
+    [
+      runUrl ? `[Everything it found](${runUrl})` : null,
+      `[Check any pull request on Aperture](${checkLink(pull)})`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 /** Markdown for the run's summary page. */
-export function summaryMarkdown(rows: CheckRow[], meta: Meta): string {
+export function summaryMarkdown(rows: CheckRow[], meta: Meta, pull: PullRef | null = null): string {
   const lines = [
     `### Aperture Agent Check`,
     "",
+    // On a pull request, the badge that links it on Aperture; a push, or the bot's reply, has none.
+    ...(pull ? [badgeMarkdown(verdict(rows), pull), ""] : []),
     headline(rows, meta),
     "",
     "| | Check | Result |",

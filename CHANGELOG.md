@@ -15,6 +15,10 @@ release notes are every line from there down to the previous version.
 
 - The release check reads what an action's release was built from in the release's own notes, which "Build from Aperture" writes from the commit it built. A build that changes no file makes no commit, so its tag lands on the previous build commit, and reading that commit's message called Agent Check v1.9 and Aperture Bot v1.21, built from v0.34.0, stale on every daily run. A tag that is not on a build commit is still a failure ([#274](https://github.com/Hankaws/aperture/pull/274)).
 
+### Fixed
+
+- On a phone, a red result no longer crowds out the code. The check strip is capped at under half the screen and scrolls on its own, so the code and the bar with the verdict and **Send back** stay on screen above the tab bar; before, the code shrank to nothing and the bar was pushed under the tabs. Three text colours now clear 4.5:1: function names in the light theme's code on a deleted line, the caption under the landing page's demo, and the line under "Make your first bot" on the Bot page. The test of the /agent-check example no longer depends on whether Node prints a failing test as `not ok` or `✖`, so it passes on Node 22 and 24 ([#275](https://github.com/Hankaws/aperture/pull/275)).
+
 ## 0.34.0 - 2026-11-27
 
 ### Added

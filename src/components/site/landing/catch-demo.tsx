@@ -167,7 +167,7 @@ export function CatchDemo() {
         <span className="size-2 rounded-full bg-border" />
         <span className="size-2 rounded-full bg-border" />
         <span className="ml-2 truncate font-mono text-xs text-subtle">
-          {file} <span className="hidden text-subtle/80 sm:inline">· written by {author}</span>
+          {file} <span className="hidden text-subtle sm:inline">· written by {author}</span>
         </span>
         <span className="ml-auto inline-flex shrink-0 items-center gap-2 font-mono text-xs text-subtle">
           <span className={cn("size-1.5 rounded-full", statusTone)} />

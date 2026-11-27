@@ -8,6 +8,16 @@ import { check } from "./main.ts";
 import { annotationsFor, workflowCommands } from "./report.ts";
 import { ACTION_USES, RUN_EXAMPLE } from "./run-example.ts";
 
+/**
+ * The line Node's test runner prints for a failing test depends on the Node version and on how the run
+ * is started: `not ok 2 - name` (TAP, Node 22 in CI) or `✖ name (60.3ms)` (spec, Node 24, or under
+ * `npm test`). The tool quotes whichever line it reads, so the page's example and this test compare
+ * the failing test's name, not the reporter's decoration around it.
+ */
+function sameFailureLine(detail: string): string {
+  return detail.replace(/(: )(?:not ok \d+ - |[✖✗×] )(.*?)(?: \(\d+(?:\.\d+)?ms\))?$/u, "$1<failing test> $2");
+}
+
 test("the run on /agent-check is what the tool prints today, tests and all", () => {
   const dir = mkdtempSync(join(tmpdir(), "agent-check-run-example-"));
   const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
@@ -41,8 +51,8 @@ test("the run on /agent-check is what the tool prints today, tests and all", () 
     "the tool prints something else now: update RUN_EXAMPLE in packages/agent-check/src/run-example.ts";
   assert.equal(result.text.split("\n")[0], RUN_EXAMPLE.headline, update);
   assert.deepEqual(
-    result.rows.map((row) => ({ status: row.status, label: row.label, detail: row.detail })),
-    RUN_EXAMPLE.rows,
+    result.rows.map((row) => ({ status: row.status, label: row.label, detail: sameFailureLine(row.detail) })),
+    RUN_EXAMPLE.rows.map((row) => ({ ...row, detail: sameFailureLine(row.detail) })),
     update,
   );
   assert.deepEqual(workflowCommands(annotationsFor(result.rows)), RUN_EXAMPLE.annotations, update);

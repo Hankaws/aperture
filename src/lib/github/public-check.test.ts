@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import ts from "typescript";
+import { tsParseCheck } from "../workspace/ts-parse.ts";
 import { headline, shareMarkdown, verdictOf } from "./check-summary.ts";
 import { assemble, firstReads, importProbes, isMonorepo, publicRows } from "./public-check.ts";
 import { addedText, parseDiff, removedText, reverseApply, type DiffFile } from "./pull-diff.ts";
@@ -151,6 +153,7 @@ test("what is read first: the changed files the diff does not hold, and what des
     "src/basket.ts",
     "package.json",
     "src/package.json",
+    "src/tsconfig.json",
     "tsconfig.json",
     ".aperture/checks.json",
     "pnpm-workspace.yaml",
@@ -180,7 +183,8 @@ test("the texts come together, and an import nothing read resolves is looked for
     "src/cart.ts",
     "src/new.ts",
   ]);
-  assert.deepEqual(assembled.known, { "package.json": PKG });
+  // The image is not read, but it is there to import.
+  assert.deepEqual(assembled.known, { "package.json": PKG, "logo.png": "" });
   assert.deepEqual(assembled.notChecked, ["logo.png"]);
   // `./cart` resolves to the changed file; nothing to look for.
   assert.deepEqual(importProbes(assembled), []);
@@ -235,6 +239,7 @@ const CART_TEST = [
 function check(
   changes: Array<[string, string | null, string | null]>,
   known: Record<string, string> = {},
+  parse?: ReturnType<typeof tsParseCheck>,
 ) {
   const diff = parseDiff(
     changes.map(([path, before, after]) => diffOf(path, before, after)).join("\n"),
@@ -242,7 +247,7 @@ function check(
   const read: Record<string, string> = { "package.json": PKG, "src/cart.ts": CART_AFTER, ...known };
   for (const [path, , after] of changes) if (after !== null) read[path] = after;
   const assembled = assemble(diff, read);
-  return publicRows({ diff, assembled });
+  return publicRows({ diff, assembled, ...(parse ? { parse } : {}) });
 }
 
 test("a clean change passes the checks that can run here and says which cannot", () => {
@@ -412,4 +417,207 @@ test("the pull request's page gives its title, author, state and description", (
     )?.state,
     null,
   );
+});
+
+/**
+ * Valid code the fast parser rejects, each cut down from a real agent pull
+ * request /check called red (the proof run of 27 Nov 2026). TypeScript's own
+ * parser reads every one cleanly.
+ */
+const VALID_BUT_REJECTED: Array<[string, string, string]> = [
+  [
+    "AlizSaas/TicketAI#7: a typed catch binding",
+    "src/inngest/function.ts",
+    'export async function analyze() {\n  try {\n    return await fetch("/x");\n  } catch (error: unknown) {\n    console.error(error);\n    return null;\n  }\n}\n',
+  ],
+  [
+    "bjohnson1279/js-ddd-inventory#957: catch (e: any)",
+    "src/application/useCases/DisassembleKit.ts",
+    "export function f() {\n  try {\n    return 1;\n  } catch (e: any) {\n    return e.message;\n  }\n}\n",
+  ],
+  [
+    "abOOd-Hj-DeV/akina-admin-dashboard-#11: a definite assignment",
+    "src/screens/Therapists.test.tsx",
+    'export async function pending() {\n  let resolve!: (response: Response) => void;\n  const p = new Promise<Response>((r) => {\n    resolve = r;\n  });\n  resolve(new Response("ok"));\n  return p;\n}\n',
+  ],
+  [
+    "beresdowds-afk/CurriculumServer-#19: a generic arrow function",
+    "server/authorization/authorizationRepository.test.ts",
+    "interface QueryResultRow { [k: string]: unknown }\nexport const db = {\n  query: async <R extends QueryResultRow>(text: string, values?: unknown[]) => {\n    return { rows: [] as R[], text, values };\n  },\n};\n",
+  ],
+  [
+    "camp-candor/000.camp-candor-cauldron#10: export default interface",
+    "packages/001.cauldron/05.drift.unit/fce/drift.bit.ts",
+    "export default interface DriftBit {\n  idx: string;\n  val?: number;\n}\n",
+  ],
+  [
+    "edmundlaabs/schlutte#55: a destructuring swap",
+    "lib/abnahme/logic.ts",
+    "export function swap(liste: number[], a: number, b: number) {\n  [liste[a], liste[b]] = [liste[b], liste[a]];\n  return liste;\n}\n",
+  ],
+  [
+    "elainemay84/Money-Honey-Clean#12: a swap after a leading semicolon",
+    "src/Accounts.jsx",
+    "export function move(list, index, target) {\n  const reordered = [...list]\n  ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]\n  return reordered\n}\n",
+  ],
+  [
+    "grafana/grafana#138983: a JSX element with a type argument",
+    "public/app/features/org/NewOrgPage.tsx",
+    'import { Form } from "./Form";\ninterface CreateOrgFormDTO { name: string }\nexport const NewOrgPage = ({ createOrg }: { createOrg: (d: CreateOrgFormDTO) => void }) => (\n  <div>\n    <Form<CreateOrgFormDTO> onSubmit={createOrg}>\n      {() => <input />}\n    </Form>\n  </div>\n);\n',
+  ],
+  [
+    "timmo001/ha-bridge#171: an import attribute",
+    "src/index.ts",
+    'import packageJson from "../package.json" with { type: "json" };\nexport const version = packageJson.version;\n',
+  ],
+  [
+    "aroragarvit666-hue/testingRepo#10: JSX in a .js file",
+    "src/components/App.js",
+    'import { ErrorBoundary } from "./ErrorBoundary.js";\nexport function App({ onError, fallbackComponent }) {\n  return (\n    <ErrorBoundary onError={onError} FallbackComponent={fallbackComponent}>\n      <main />\n    </ErrorBoundary>\n  );\n}\n',
+  ],
+];
+
+const TS_PARSE = tsParseCheck(ts);
+
+test("a parse error the fast parser reports is red only when TypeScript's parser agrees", () => {
+  const known = {
+    "src/components/ErrorBoundary.js": "export const ErrorBoundary = () => null;\n",
+    "public/app/features/org/Form.tsx": "export const Form = () => null;\n",
+    "package.json": JSON.stringify({ name: "x", version: "1.0.0" }),
+  };
+  for (const [name, path, text] of VALID_BUT_REJECTED) {
+    // Without TypeScript at hand the fast parser's word stands: these were the false alarms.
+    const alone = check([[path, null, text]], known);
+    assert.equal(
+      alone.find((row) => row.id === "parse")!.status,
+      "fail",
+      `${name} (fast parser alone)`,
+    );
+    const rows = check([[path, null, text]], known, TS_PARSE);
+    assert.equal(rows.find((row) => row.id === "parse")!.status, "pass", name);
+    // And once it parses, its imports are judged rather than skipped.
+    assert.notEqual(rows.find((row) => row.id === "imports")!.status, "skip", name);
+  }
+});
+
+test("a real syntax error and committed conflict markers are still red, and say what is wrong", () => {
+  // Julieisbaka/Tagline#43: an unbalanced brace in the try block the agent edited.
+  const broken = [
+    "async function run() {",
+    "  try {",
+    "    if (upgrade) {",
+    "      await js(\"document.querySelector('.note-title').value\");",
+    "      session.flush();",
+    "  } else {",
+    "    await other();",
+    "  }",
+    "}",
+    "run();",
+    "",
+  ].join("\n");
+  const tagline = check([["tests/installation-smoke.cjs", null, broken]], {}, TS_PARSE);
+  const parse = tagline.find((row) => row.id === "parse")!;
+  assert.equal(parse.status, "fail");
+  assert.match(
+    parse.detail,
+    /tests\/installation-smoke\.cjs: parse error at line \d+: 'catch' or 'finally' expected/,
+  );
+  assert.equal(verdictOf(tagline), "red");
+  // AbdullahKhetran/celestial-archives#2: a merge's conflict markers committed in a component.
+  const conflicted = [
+    "export function Explorer() {",
+    "  return (",
+    "<<<<<<< HEAD",
+    '    <ArchiveExplorer initial="all" />',
+    "=======",
+    "    <ArchiveExplorer />",
+    ">>>>>>> origin/main",
+    "  );",
+    "}",
+    "",
+  ].join("\n");
+  const archives = check([["app/page.tsx", null, conflicted]], {}, TS_PARSE);
+  assert.equal(archives.find((row) => row.id === "parse")!.status, "fail");
+  assert.match(
+    archives.find((row) => row.id === "parse")!.detail,
+    /Merge conflict marker encountered/,
+  );
+});
+
+test("an image the change imports is there, read or not", () => {
+  // dxxpcode/dxxpcode#389: `./assets/art/starry-night_van-gogh.jpg` is in the repository; its bytes are not text.
+  const app =
+    'import art from "./assets/art/starry-night_van-gogh.jpg";\nexport const src = art;\n';
+  const rows = check([["apps/desktop/src/App.tsx", null, app]], {
+    "apps/desktop/src/assets/art/starry-night_van-gogh.jpg": "",
+  });
+  assert.equal(rows.find((row) => row.id === "imports")!.status, "pass");
+  // One the change adds in the same pull request counts too.
+  const diff = parseDiff(
+    [
+      diffOf("src/App.tsx", null, 'import logo from "./logo.png";\nexport const l = logo;\n'),
+      "diff --git a/src/logo.png b/src/logo.png",
+      "new file mode 100644",
+      "Binary files /dev/null and b/src/logo.png differ",
+    ].join("\n"),
+  );
+  const assembled = assemble(diff, { "package.json": PKG });
+  assert.equal(assembled.known["src/logo.png"], "");
+  assert.equal(publicRows({ diff, assembled }).find((row) => row.id === "imports")!.status, "pass");
+});
+
+test("an undeclared bare import is looked for under the package's tsconfig `baseUrl`", () => {
+  // Official-MoonDao/MoonDAO#1913: `const/abis/…` is a folder under `ui/`, whose tsconfig sets `"baseUrl": "./"`.
+  const diff = parseDiff(
+    diffOf(
+      "ui/lib/picks.ts",
+      null,
+      'import ABI from "const/abis/ConditionalTokens.json";\nimport { z } from "zod";\nexport const a = [ABI, z];\n',
+    ),
+  );
+  assert.ok(firstReads(diff).includes("ui/tsconfig.json"));
+  const assembled = assemble(diff, {
+    "package.json": "{}",
+    "ui/package.json": PKG,
+    "ui/tsconfig.json": '{"compilerOptions":{"baseUrl":"./"}}',
+  });
+  const probes = importProbes(assembled);
+  assert.deepEqual(
+    probes.map((probe) => [probe.spec, probe.candidates[0]]),
+    [["const/abis/ConditionalTokens.json", "ui/const/abis/ConditionalTokens.json"]],
+  );
+  assembled.known["ui/const/abis/ConditionalTokens.json"] = "[]";
+  assert.equal(publicRows({ diff, assembled }).find((row) => row.id === "imports")!.status, "pass");
+});
+
+test("past the import limit, an import already missing before the change is not judged either", () => {
+  // FelipeTavaresCE/rpg-crazy#8: `./quests` exists as quests.ts, but was past the 60 files looked for.
+  const before = 'import { quests } from "./quests";\nexport const q = quests;\n';
+  const diff = parseDiff(diffOf("src/engine.ts", before, `${before}export const more = 1;\n`));
+  const assembled = assemble(diff, {
+    "package.json": PKG,
+    "src/engine.ts": `${before}export const more = 1;\n`,
+  });
+  assert.equal(publicRows({ diff, assembled }).find((row) => row.id === "imports")!.status, "warn");
+  const imports = publicRows({ diff, assembled, partial: true }).find(
+    (row) => row.id === "imports",
+  )!;
+  assert.equal(imports.status, "skip");
+});
+
+test("the page's full description names the agent, and a draft is open", () => {
+  // JesusFilm/core#10664: the summary stops before the "Generated with Claude Code" footer.
+  const html = [
+    "<html><head><title>Media validation form by tataihono · Pull Request #10664 · JesusFilm/core · GitHub</title>",
+    '<meta property="og:description" content="Closes #10628 Adds the Media Validation form (Formik + yup) to videos-admin…">',
+    '</head><body><clipboard-copy role="menuitem" data-dd-action-name="pr.description.copy_markdown" value="Closes #10628',
+    "",
+    "Adds the Media Validation form.",
+    "",
+    '🤖 Generated with [Claude Code](https://claude.com/claude-code)" data-view-component="true" class="dropdown-item btn-link">',
+    '<script>{"number":10664,"relayId":"PR_x","state":"DRAFT","title":"Media validation form"}</script></body></html>',
+  ].join("\n");
+  const facts = pullPageFacts(html, 10664)!;
+  assert.match(facts.body, /Generated with \[Claude Code\]/);
+  assert.equal(facts.state, "open");
 });

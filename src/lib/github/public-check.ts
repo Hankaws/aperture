@@ -15,8 +15,14 @@
  * Pure: the server function fetches, this decides what to fetch and judges.
  */
 import { changeChecks, type CheckRow } from "../workspace/checks.ts";
-import { collectImports, importCandidates, resolveSpecifier } from "../workspace/module-graph.ts";
+import {
+  collectImports,
+  importCandidates,
+  packageDeclared,
+  resolveSpecifier,
+} from "../workspace/module-graph.ts";
 import { CHECKS_PATH } from "../workspace/project-checks.ts";
+import type { ParseCheck } from "../workspace/ts-parse.ts";
 import type { ProposedEdit } from "../workspace/types.ts";
 import { addedText, removedText, reverseApply, type DiffFile } from "./pull-diff.ts";
 
@@ -59,7 +65,11 @@ export function firstReads(diff: DiffFile[]): string[] {
     for (let dir = dirOf(file.path); dir && dirs.size < PUBLIC_LIMITS.packageDirs; dir = dirOf(dir))
       dirs.add(dir);
   }
-  for (const dir of dirs) reads.add(dir ? `${dir}/package.json` : "package.json");
+  // The nearest tsconfig.json says how a package's imports resolve (`paths`, `baseUrl`).
+  for (const dir of dirs) {
+    reads.add(dir ? `${dir}/package.json` : "package.json");
+    if (dir) reads.add(`${dir}/tsconfig.json`);
+  }
   for (const path of ["tsconfig.json", CHECKS_PATH, ...WORKSPACE_FILES]) reads.add(path);
   return [...reads];
 }
@@ -69,6 +79,7 @@ function describes(path: string): boolean {
   return (
     path === "package.json" ||
     path.endsWith("/package.json") ||
+    path.endsWith("/tsconfig.json") ||
     ["tsconfig.json", CHECKS_PATH, ...WORKSPACE_FILES].includes(path)
   );
 }
@@ -89,6 +100,7 @@ export function assemble(diff: DiffFile[], read: Record<string, string>): Assemb
   const base: Record<string, string> = {};
   const head: Record<string, string> = {};
   const notChecked: string[] = [];
+  const assets: string[] = [];
   const changed = new Set<string>();
   const scoped = new Set(inScope(diff));
   for (const file of diff) {
@@ -97,6 +109,8 @@ export function assemble(diff: DiffFile[], read: Record<string, string>): Assemb
     if (SKIPPED_DIR.test(file.path)) continue;
     if (!scoped.has(file) || file.binary) {
       notChecked.push(file.path);
+      // An image or font the change adds is there to import, even though its bytes are not read.
+      if (file.binary && file.status !== "removed") assets.push(file.path);
       continue;
     }
     if (file.status === "added") head[file.path] = addedText(file.hunks);
@@ -116,6 +130,7 @@ export function assemble(diff: DiffFile[], read: Record<string, string>): Assemb
   for (const [path, text] of Object.entries(read)) {
     if (!changed.has(path) && text.length <= PUBLIC_LIMITS.fileBytes) known[path] = text;
   }
+  for (const path of assets) known[path] ??= "";
   // A changed package.json, tsconfig or checks file describes the project as it was.
   for (const path of firstReads(diff)) {
     if (describes(path) && base[path] !== undefined && known[path] === undefined)
@@ -138,7 +153,10 @@ export function importProbes(assembled: Assembled): Probe[] {
   for (const [path, text] of Object.entries(head)) {
     if (!SCRIPT.test(path)) continue;
     for (const ref of collectImports(path, text)) {
-      if (resolveSpecifier(path, ref.spec, after).kind !== "missing") continue;
+      const hit = resolveSpecifier(path, ref.spec, after);
+      // A package the project does not declare may be a folder under tsconfig's `baseUrl`.
+      const undeclared = hit.kind === "external" && packageDeclared(hit.pkg, after) === false;
+      if (hit.kind !== "missing" && !undeclared) continue;
       const candidates = (importCandidates(path, ref.spec, after) ?? []).filter(
         (candidate) => after[candidate] === undefined && !SKIPPED_DIR.test(candidate),
       );
@@ -183,12 +201,16 @@ const TESTS_HERE =
 
 /**
  * The check rows for the change. `partial`: some imports could not be looked
- * for (past the limit), so a missing one is not called red.
+ * for (past the limit), so a missing one is not called red. `parse`:
+ * TypeScript's own parser, which has the last word on a parse error the fast
+ * parser reports (it lags behind the language: `catch (e: unknown)`, JSX
+ * generics, `let x!: T`, …).
  */
 export function publicRows(input: {
   diff: DiffFile[];
   assembled: Assembled;
   partial?: boolean;
+  parse?: ParseCheck;
 }): CheckRow[] {
   const { base, head, known } = input.assembled;
   const files: Record<string, string> = { ...known, ...base };
@@ -229,6 +251,7 @@ export function publicRows(input: {
     edits,
     render: null,
     browser: { state: "unsupported", reason: TESTS_HERE },
+    ...(input.parse ? { parse: input.parse } : {}),
     // In a monorepo the packages beside this one are not in view: an import of one is not called missing.
     ...(monorepo ? { outsidePackages: importedPackages(head, { ...files, ...head }) } : {}),
   });
@@ -237,7 +260,8 @@ export function publicRows(input: {
     .map((row): CheckRow => {
       if (row.id === "types" && row.status === "pass")
         return { id: "types", label: "Types", status: "skip", detail: TYPES_HERE };
-      if (row.id === "imports" && input.partial && row.status === "fail")
+      // Unlooked-for files are absent here, so "does not exist" can be wrong either way: not judged.
+      if (row.id === "imports" && input.partial && (row.status === "fail" || row.status === "warn"))
         return {
           id: "imports",
           label: "Imports resolve",

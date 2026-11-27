@@ -266,26 +266,66 @@ export function joinPath(base: string, rel: string): string {
   return out.join("/");
 }
 
-/** tsconfig `paths` in its common single-wildcard form, e.g. `{"@/*": ["./src/*"]}`. */
-export function readAliases(files: Record<string, string>): Array<[string, string]> {
-  const raw = files["tsconfig.json"];
-  if (!raw) return [];
-  let parsed: { compilerOptions?: { paths?: Record<string, string[]> } };
+type TsResolve = {
+  /** `paths` in their common single-wildcard form, as [prefix, folder prefix in the project]. */
+  aliases: Array<[string, string]>;
+  /** The folder bare specifiers are looked for in first (`baseUrl`), or null when none is set. */
+  baseDir: string | null;
+};
+
+const NO_RESOLVE: TsResolve = { aliases: [], baseDir: null };
+const tsconfigMemo = new Map<string, { text: string; value: TsResolve }>();
+
+/** The `tsconfig.json` nearest `fromPath`, walking up to the project's root: the one TypeScript uses for it. */
+function nearestTsconfig(files: Record<string, string>, fromPath: string): string | null {
+  for (let dir = fromPath ? dirOf(fromPath) : ""; ; dir = dirOf(dir)) {
+    const path = dir ? `${dir}/tsconfig.json` : "tsconfig.json";
+    if (files[path] !== undefined) return path;
+    if (!dir) return null;
+  }
+}
+
+function readTsconfig(path: string, raw: string): TsResolve {
+  let parsed: { compilerOptions?: { paths?: Record<string, string[]>; baseUrl?: string } };
   try {
     // tsconfig carries comments far more often than not; a strict parse here
     // silently drops every alias and turns `@/lib/x` into a phantom package.
     parsed = JSON.parse(stripJsonc(raw)) as typeof parsed;
   } catch {
-    return [];
+    return NO_RESOLVE;
   }
-  const paths = parsed.compilerOptions?.paths ?? {};
-  const out: Array<[string, string]> = [];
-  for (const [pattern, targets] of Object.entries(paths)) {
+  const options = parsed.compilerOptions ?? {};
+  const here = dirOf(path);
+  // `paths` are relative to `baseUrl` when it is set, else to the tsconfig's own folder.
+  const base = typeof options.baseUrl === "string" ? joinPath(here, options.baseUrl) : here;
+  const aliases: Array<[string, string]> = [];
+  for (const [pattern, targets] of Object.entries(options.paths ?? {})) {
     const target = targets?.[0];
-    if (!pattern.endsWith("/*") || !target?.endsWith("/*")) continue;
-    out.push([pattern.slice(0, -1), target.slice(0, -1).replace(/^\.\//, "")]);
+    if (!pattern.endsWith("/*") || !(target === "*" || target?.endsWith("/*"))) continue;
+    const folder = joinPath(base, target.slice(0, -1));
+    aliases.push([pattern.slice(0, -1), folder ? `${folder}/` : ""]);
   }
-  return out;
+  return { aliases, baseDir: typeof options.baseUrl === "string" ? base : null };
+}
+
+/** How the tsconfig nearest `fromPath` resolves non-relative imports. */
+function tsResolveFor(files: Record<string, string>, fromPath: string): TsResolve {
+  const path = nearestTsconfig(files, fromPath);
+  return path ? memoByText(tsconfigMemo, path, files[path]!, () => readTsconfig(path, files[path]!)) : NO_RESOLVE;
+}
+
+/**
+ * tsconfig `paths` in their common single-wildcard form, e.g. `{"@/*": ["./src/*"]}`,
+ * from the tsconfig nearest `fromPath` (the root one by default), relative to its `baseUrl`.
+ */
+export function readAliases(files: Record<string, string>, fromPath = ""): Array<[string, string]> {
+  return tsResolveFor(files, fromPath).aliases;
+}
+
+/** Where a bare specifier would be under the tsconfig's `baseUrl`, which TypeScript looks in before packages. */
+function underBaseUrl(fromPath: string, spec: string, files: Record<string, string>): string | null {
+  const { baseDir } = tsResolveFor(files, fromPath);
+  return baseDir === null ? null : joinPath(baseDir, spec);
 }
 
 /** The paths an import of `candidate` could be, in the order resolution tries them. */
@@ -320,10 +360,33 @@ export function importCandidates(
     if (escapesRoot(dirOf(fromPath), spec)) return null;
     return candidatePaths(joinPath(dirOf(fromPath), spec));
   }
-  for (const [prefix, target] of readAliases(files)) {
+  for (const [prefix, target] of readAliases(files, fromPath)) {
     if (spec.startsWith(prefix)) return candidatePaths(`${target}${spec.slice(prefix.length)}`);
   }
-  return null;
+  const based = isBare(spec) ? underBaseUrl(fromPath, spec, files) : null;
+  return based === null ? null : candidatePaths(based);
+}
+
+/** A specifier that names a package or a `baseUrl` path rather than a file, a built-in or a URL. */
+function isBare(spec: string): boolean {
+  return !(
+    spec.startsWith(".") ||
+    spec.startsWith("/") ||
+    spec.startsWith("#") ||
+    spec.startsWith("@/") ||
+    spec.startsWith("node:") ||
+    /^[a-z]+:/i.test(spec) ||
+    NODE_BUILTINS.has(spec.split("/")[0]!)
+  );
+}
+
+/**
+ * A path in a build's output folder (`dist/`, `build/`, `out/`) or a code
+ * generator's (`__generated__/client/` from Prisma): made by a build step and
+ * usually not committed, so its absence proves nothing.
+ */
+function builtOutput(path: string): boolean {
+  return /(^|\/)(dist|build|out|__generated__|generated)\//.test(path);
 }
 
 export type Resolution =
@@ -344,13 +407,21 @@ export function resolveSpecifier(
   if (spec.startsWith(".")) {
     // Above the project's root (a package checked on its own in a monorepo): not in view, so not judged.
     if (escapesRoot(dirOf(fromPath), spec)) return { kind: "unknown" };
-    const hit = resolveInWorkspace(joinPath(dirOf(fromPath), spec), files);
-    return hit ? { kind: "file", path: hit } : { kind: "missing" };
+    const target = joinPath(dirOf(fromPath), spec);
+    const hit = resolveInWorkspace(target, files);
+    return hit ? { kind: "file", path: hit } : builtOutput(target) ? { kind: "unknown" } : { kind: "missing" };
   }
-  for (const [prefix, target] of readAliases(files)) {
+  for (const [prefix, target] of readAliases(files, fromPath)) {
     if (!spec.startsWith(prefix)) continue;
-    const hit = resolveInWorkspace(`${target}${spec.slice(prefix.length)}`, files);
-    return hit ? { kind: "file", path: hit } : { kind: "missing" };
+    const where = `${target}${spec.slice(prefix.length)}`;
+    const hit = resolveInWorkspace(where, files);
+    return hit ? { kind: "file", path: hit } : builtOutput(where) ? { kind: "unknown" } : { kind: "missing" };
+  }
+  // `baseUrl`: `lib/x` or `const/abis/A.json` is a project file before it is a package.
+  const based = isBare(spec) ? underBaseUrl(fromPath, spec, files) : null;
+  if (based !== null) {
+    const hit = resolveInWorkspace(based, files);
+    if (hit) return { kind: "file", path: hit };
   }
   // `fs/promises`, `stream/web`: a built-in's own entry points.
   if (spec.startsWith("node:") || NODE_BUILTINS.has(spec.split("/")[0]!)) return { kind: "unknown" };
@@ -402,6 +473,12 @@ function declaredPackages(files: Record<string, string>, outside: readonly strin
   return outside.length === 0 ? names : new Set([...names, ...outside]);
 }
 
+/** Whether the project declares `pkg`; null when it has no package.json, so nothing is known. */
+export function packageDeclared(pkg: string, files: Record<string, string>): boolean | null {
+  const names = declaredPackages(files);
+  return names ? isDeclared(pkg, names) : null;
+}
+
 /** A package counts as declared through its types too: `vscode` comes with `@types/vscode`, `@a/b` with `@types/a__b`. */
 function isDeclared(pkg: string, names: Set<string>): boolean {
   if (names.has(pkg)) return true;
@@ -445,13 +522,26 @@ export function importIssues(
     if (target === undefined || !isScriptPath(resolved.path)) continue;
     const exported = collectExports(resolved.path, target);
     if (exported.unknown) continue;
+    // A JavaScript file's types are declared beside it (`server.js` and `server.d.ts`): TypeScript reads both.
+    const typings = declarationFor(resolved.path, files);
+    const declared = typings ? collectExports(typings, files[typings]!) : null;
+    if (declared?.unknown) continue;
     for (const name of ref.names) {
-      if (!exported.names.has(name)) {
+      if (!exported.names.has(name) && !declared?.names.has(name)) {
         issues.push(`imports { ${name} } from "${ref.spec}" at line ${ref.line}, which does not export it`);
       }
     }
   }
   return [...new Set(issues)].slice(0, MAX_ISSUES);
+}
+
+/** The declaration file beside a JavaScript module, when the snapshot has one. */
+export function declarationFor(path: string, files: Record<string, string>): string | null {
+  const ext = /\.(?:m|c)?jsx?$/.exec(path)?.[0];
+  if (!ext) return null;
+  const stem = path.slice(0, -ext.length);
+  const typings = ext === ".mjs" ? `${stem}.d.mts` : ext === ".cjs" ? `${stem}.d.cts` : `${stem}.d.ts`;
+  return files[typings] !== undefined ? typings : null;
 }
 
 /** Files that still exist after the change and imported one of `deleted` before it. */

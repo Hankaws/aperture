@@ -102,3 +102,52 @@ test("the same checks still catch the errors they are for", () => {
   assert.match(issues, /add expects 2 arguments, got 1/);
   assert.match(issues, /cannot find name nowhere/);
 });
+
+test("each name in a multi-name declaration is judged by its own annotation", () => {
+  // From a real pull request (FelipeTavaresCE/rpg-crazy#8): `c`'s annotation is not `a`'s.
+  assert.deepEqual(typeIssues("src/a.ts", "let a = 0, b = 0, c: string[] = [];\nexport { a, b, c };\n", {}), []);
+  assert.match(typeIssues("src/a.ts", "let a = 0, c: string = 1;\n", {})[0] ?? "", /number is not assignable to string/);
+});
+
+test("a built-in type in a generic call the parser reads as a value is not a missing name", () => {
+  // From a real pull request (nightly-labs/openbot#16967), cut down: `Effect.callback<string | undefined>(…)`.
+  const text = [
+    'import { Effect } from "effect";',
+    'import { spawn, type ChildProcess } from "node:child_process";',
+    'import { cliSpawnTarget, registerProviderProcess, logger, LIMIT, TIMEOUT_MS, FAILURE } from "./sandbox";',
+    "",
+    'const linuxSandboxFailure = Effect.fn("CodexAppServer.linuxSandboxFailure")(function* (',
+    "  executable: string,",
+    "  env: NodeJS.ProcessEnv,",
+    "  cwd: string,",
+    ") {",
+    '  const target = cliSpawnTarget(executable, ["sandbox", "--", "/bin/true"]);',
+    "  const output = yield* Effect.callback<string | undefined>((resume) => {",
+    "    let child: ChildProcess;",
+    "    try {",
+    '      child = spawn(target.command, target.args, { stdio: ["ignore", "ignore", "pipe"], env, cwd, windowsHide: true });',
+    "    } catch {",
+    "      resume(Effect.succeed(undefined));",
+    "      return;",
+    "    }",
+    '    registerProviderProcess(child, "codex");',
+    '    let stderr = "";',
+    '    child.stderr?.on("data", (chunk: Buffer) => {',
+    '      if (stderr.length < LIMIT) stderr += chunk.toString("utf8");',
+    "    });",
+    '    child.once("error", () => resume(Effect.succeed(undefined)));',
+    '    child.once("close", () => resume(Effect.succeed(stderr)));',
+    "    return Effect.sync(() => {",
+    '      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");',
+    "    });",
+    "  }).pipe(Effect.timeoutOrElse({ duration: TIMEOUT_MS, orElse: () => Effect.succeed(undefined) }));",
+    "  if (output === undefined) return undefined;",
+    '  const failure = output.split("\\n").find((line) => FAILURE.test(line)) ?? null;',
+    '  if (failure !== null) logger.warn("The Codex sandbox cannot start on this computer.", { detail: failure.trim() });',
+    "  return failure;",
+    "});",
+    "export { linuxSandboxFailure };",
+    "",
+  ].join("\n");
+  assert.doesNotMatch(typeIssues("src/backend/app-server-client.ts", text, {}).join("\n"), /cannot find name string/);
+});

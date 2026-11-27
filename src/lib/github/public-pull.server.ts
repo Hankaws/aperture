@@ -16,6 +16,7 @@ import { verdictOf, type Verdict } from "./check-summary";
 import { assemble, firstReads, importProbes, PUBLIC_LIMITS, publicRows } from "./public-check";
 import { parseDiff } from "./pull-diff";
 import { pullPageFacts, type PullLink } from "./pull-link";
+import { tsParseCheck, type ParseCheck } from "@/lib/workspace/ts-parse";
 
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
@@ -112,11 +113,25 @@ async function readDiff(link: PullLink, token: string | null): Promise<DiffGot> 
   return { error: "failed" };
 }
 
-function readOne(link: PullLink, path: string): Promise<string | null> {
+function rawUrl(link: PullLink, path: string): string {
   const file = path.split("/").map(encodeURIComponent).join("/");
-  return get(`${RAW}/${link.owner}/${link.repo}/refs/pull/${link.number}/head/${file}`).then(
-    (res) => textOf(res, PUBLIC_LIMITS.fileBytes),
-  );
+  return `${RAW}/${link.owner}/${link.repo}/refs/pull/${link.number}/head/${file}`;
+}
+
+function readOne(link: PullLink, path: string): Promise<string | null> {
+  return get(rawUrl(link, path)).then((res) => textOf(res, PUBLIC_LIMITS.fileBytes));
+}
+
+/** A script's text to judge it by; any other file only needs to be there (an image is imported, not read). */
+const SCRIPT_PATH = /\.(?:[cm]?[jt]sx?|json)$/i;
+
+/** What an import finds at `path`: the text, "" for a file that is there but not text (an image), or null. */
+async function lookFor(link: PullLink, path: string): Promise<string | null> {
+  const res = await get(rawUrl(link, path));
+  if (!res || res.status !== 200) return null;
+  if (SCRIPT_PATH.test(path)) return textOf(res, PUBLIC_LIMITS.fileBytes);
+  await res.body?.cancel();
+  return "";
 }
 
 /** Each path's text at the pull request's head; a path that is not there, or not text, is left out. */
@@ -138,11 +153,21 @@ async function readAll(link: PullLink, paths: string[]): Promise<Record<string, 
 async function firstThere(link: PullLink, candidates: string[]): Promise<[string, string] | null> {
   for (let i = 0; i < candidates.length; i += 4) {
     const batch = candidates.slice(i, i + 4);
-    const texts = await Promise.all(batch.map((path) => readOne(link, path)));
+    const texts = await Promise.all(batch.map((path) => lookFor(link, path)));
     const at = texts.findIndex((text) => text !== null);
     if (at !== -1) return [batch[at]!, texts[at]!];
   }
   return null;
+}
+
+let tsParser: Promise<ParseCheck | undefined> | undefined;
+/** TypeScript's parser, loaded once and only when the fast parser reports an error: the compiler is large. */
+function loadParser(): Promise<ParseCheck | undefined> {
+  tsParser ??= import("typescript").then(
+    (mod) => tsParseCheck(mod.default ?? mod),
+    () => undefined,
+  );
+  return tsParser;
 }
 
 const kept = new Map<string, { at: number; result: PublicCheckResult }>();
@@ -156,12 +181,11 @@ export async function readAndCheck(
   const hit = kept.get(key);
   if (hit && now - hit.at < KEEP_MS) return hit.result;
 
-  const [page, diffGot] = await Promise.all([
-    get(`https://github.com/${asked.owner}/${asked.repo}/pull/${asked.number}`).then((res) =>
-      textOf(res, 5_000_000),
-    ),
-    readDiff(asked, token),
-  ]);
+  const pageUrl = `https://github.com/${asked.owner}/${asked.repo}/pull/${asked.number}`;
+  const readPage = () => get(pageUrl).then((res) => textOf(res, 5_000_000));
+  const [first, diffGot] = await Promise.all([readPage(), readDiff(asked, token)]);
+  // The page is only for the title, author and state: one more try when GitHub did not serve it.
+  const page = first ?? (await readPage());
   const facts = page ? pullPageFacts(page, asked.number) : null;
   if ("error" in diffGot) {
     const error =
@@ -184,8 +208,21 @@ export async function readAndCheck(
   const looked = probes.slice(0, PUBLIC_LIMITS.importProbes);
   const found = await Promise.all(looked.map((probe) => firstThere(link, probe.candidates)));
   for (const hit of found) if (hit) assembled.known[hit[0]] = hit[1];
+  // A JavaScript module's types may be declared beside it (`server.js`, `server.d.ts`): read those too.
+  const typings = found
+    .map((hit) => hit && /\.(?:m|c)?jsx?$/.exec(hit[0]) && hit[0])
+    .filter((path): path is string => Boolean(path))
+    .map((path) =>
+      path.replace(/\.(m|c)?jsx?$/, (_, kind: string | undefined) => `.d.${kind ?? ""}ts`),
+    );
+  Object.assign(assembled.known, await readAll(link, typings));
   const partial = probes.length > looked.length;
-  const rows = publicRows({ diff, assembled, partial });
+  let rows = publicRows({ diff, assembled, partial });
+  // The fast parser lags behind TypeScript; before a parse error is called red, TypeScript's own parser must agree.
+  if (rows.some((row) => row.id === "parse" && row.status === "fail")) {
+    const parse = await loadParser();
+    if (parse) rows = publicRows({ diff, assembled, partial, parse });
+  }
 
   const notes: string[] = [];
   if (diff.length > PUBLIC_LIMITS.changedFiles)

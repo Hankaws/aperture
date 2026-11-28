@@ -237,3 +237,57 @@ test("a skip written inside a string is data, not a skip", () => {
   const fixture = `${TESTS}const sample = 'test.skip("adds", () => {})';\nconst other = "it.only(";\n`;
   assert.deepEqual(testTampering(files, edit("tests/math.test.ts", fixture)), []);
 });
+
+test("a step added to an `a && b` test script is worth a look, not tampering", () => {
+  // From a real pull request (reputationly/dsh-imagegen-video#11): one smoke step slotted into a long chain.
+  const was =
+    "node scripts/verify-tracked.mjs && pnpm build && node scripts/smoke-canvas-auto-link.mjs && node scripts/smoke-canvas-group.mjs";
+  const now =
+    "node scripts/verify-tracked.mjs && pnpm build && node scripts/smoke-canvas-auto-link.mjs && node scripts/smoke-canvas-annotation-composer.mjs && node scripts/smoke-canvas-group.mjs";
+  const pkg = (test: string) => JSON.stringify({ scripts: { test } });
+  assert.deepEqual(testChanges({ "package.json": pkg(was) }, edit("package.json", pkg(now))), {
+    red: [],
+    look: ["adds 1 step to the test script in package.json"],
+  });
+  // A step that can turn a failure into a pass, or one that drops or rewrites a step, is still held.
+  for (const masked of [
+    `${was} || true`,
+    `${was}; exit 0`,
+    `${was} && true`,
+    "node scripts/verify-tracked.mjs && pnpm build",
+  ])
+    assert.equal(
+      testChanges({ "package.json": pkg(was) }, edit("package.json", pkg(masked))).red.length,
+      1,
+      masked,
+    );
+});
+
+test("an exit that can only fail a test run is not tampering", () => {
+  // From a real pull request (HeartWise-AI/PACS-AI#573): a deliberately failing spec exits 1 when its promise rejects.
+  const failing = `${TESTS}main().catch((error) => {\n  console.error(error);\n  process.exit(1);\n});\nif (failures.length) process.exitCode = 1;\n`;
+  assert.deepEqual(testTampering(files, edit("tests/math.test.ts", failing)), []);
+  // A clean exit, or one whose code is not written down, still ends a run early.
+  assert.deepEqual(
+    testTampering(files, edit("tests/math.test.ts", `${TESTS}process.exit(code);\n`)),
+    ["calls process.exit in tests/math.test.ts"],
+  );
+  assert.deepEqual(
+    testTampering(files, edit("tests/math.test.ts", `${TESTS}process.exitCode = 0;\n`)),
+    ["calls process.exit in tests/math.test.ts"],
+  );
+});
+
+test("a script with a `#!` line is a program of its own and may exit cleanly", () => {
+  // From a real pull request (lagowski/ClaudeAutoPM#885): a Claude Code hook exits 0 to let a tool call through.
+  const hook = "#!/usr/bin/env node\nconst fs = require('fs');\nif (!blocked) process.exit(0);\n";
+  assert.deepEqual(
+    testTampering(files, edit("packages/plugin-core/hooks/enforce-agents.cjs", hook)),
+    [],
+  );
+  // The same exit in a module the tests import still ends their run early.
+  assert.equal(
+    testTampering(files, edit("src/math.ts", hook.replace("#!/usr/bin/env node\n", ""))).length,
+    1,
+  );
+});

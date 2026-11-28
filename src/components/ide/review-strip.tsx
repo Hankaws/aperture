@@ -121,7 +121,7 @@ function VerdictBar({
   return (
     // The verdict is the answer to "can I keep this?", so it is the largest thing in the strip, and the strip
     // sits above the code (it does not scroll with it), so the verdict stays in view while the diff scrolls.
-    <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 bg-elevated" data-verdict-bar>
+    <div className="z-10 mb-1.5 flex md:sticky md:top-0 flex-wrap items-center gap-x-2 gap-y-1.5 bg-elevated" data-verdict-bar>
       {/* Held, the actions take a row of their own under the sentence, so the sentence keeps one line. */}
       <div className={cn("min-w-0 basis-full", !held && "sm:flex-1 sm:basis-0")}>
         <p
@@ -276,7 +276,10 @@ export function ReviewStrip() {
   }
 
   return (
-    <div className="border-b border-border bg-elevated">
+    // On a phone the strip is capped and scrolls on its own: uncapped, a red result (verdict actions, three
+    // rows, the guide, the legend) pushed the code to a single line and the Apply/Send back bar off the
+    // bottom, under the tab bar.
+    <div className="border-b border-border bg-elevated max-md:max-h-[44dvh] max-md:overflow-y-auto max-md:overscroll-contain">
       {openIds.length > 1 && (
         <div className="flex gap-1 overflow-x-auto px-2.5 pt-1.5">
           {openIds.map((id) => {

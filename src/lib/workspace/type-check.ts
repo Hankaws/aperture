@@ -57,8 +57,24 @@ const TYPE_PARAM = /^[A-Z]$/;
 /** Contextual keywords the parser can leave as names (`async <T>(…)`, `yield` in a generator). */
 const KEYWORDS = new Set(["async", "await", "yield", "of", "as", "satisfies", "from"]);
 
+/**
+ * TypeScript's built-in type names, which the parser can read as values in a
+ * generic call it does not know (`Effect.callback<string | undefined>(…)`).
+ * None is ever a value, so none is ever "not found".
+ */
+const TYPE_WORDS = new Set([
+  "string", "number", "boolean", "bigint", "symbol", "object", "any", "unknown", "never", "void",
+  "keyof", "typeof", "readonly", "infer",
+]);
+
 function isGlobal(name: string): boolean {
-  return GLOBALS.has(name) || GLOBAL_FAMILY.test(name) || TYPE_PARAM.test(name) || KEYWORDS.has(name);
+  return (
+    GLOBALS.has(name) ||
+    GLOBAL_FAMILY.test(name) ||
+    TYPE_PARAM.test(name) ||
+    KEYWORDS.has(name) ||
+    TYPE_WORDS.has(name)
+  );
 }
 
 type Sig = { required: number; total: number; rest: boolean };
@@ -154,6 +170,31 @@ function annotationText(node: SyntaxNode, text: string): string | null {
   const ann = kids(node).find((child) => child.name === "TypeAnnotation");
   if (!ann) return null;
   return text.slice(ann.from, ann.to).replace(/^:\s*/, "");
+}
+
+/**
+ * Each name a declaration binds, with its own annotation and initializer:
+ * `let a = 0, b = 0, c: string[] = []` is three, and `c`'s type is not `a`'s.
+ */
+function declarators(node: SyntaxNode, text: string): Array<{ ann: string | null; init: SyntaxNode | null }> {
+  const out: Array<{ ann: string | null; init: SyntaxNode | null }> = [];
+  let part: SyntaxNode[] = [];
+  const close = () => {
+    if (part.length === 0) return;
+    const ann = part.find((child) => child.name === "TypeAnnotation");
+    const eq = part.findIndex((child) => child.name === "Equals");
+    out.push({
+      ann: ann ? text.slice(ann.from, ann.to).replace(/^:\s*/, "") : null,
+      init: eq < 0 ? null : (part[eq + 1] ?? null),
+    });
+    part = [];
+  };
+  for (const child of kids(node)) {
+    if (child.name === ",") close();
+    else part.push(child);
+  }
+  close();
+  return out;
 }
 
 function initializer(node: SyntaxNode): SyntaxNode | null {
@@ -360,13 +401,13 @@ export function typeIssues(path: string, input: string, files: Record<string, st
     enter(node) {
       if (issues.length >= MAX_ISSUES) return;
       if (node.name === "VariableDeclaration" || node.name === "PropertyDeclaration") {
-        const ann = annotationText(node.node, text);
-        const init = initializer(node.node);
-        if (!ann || !init || init.name === "BinaryExpression") return;
-        const expected = checkableType(ann);
-        const got = literalKind(init, text);
-        if (expected && got && expected !== got) {
-          pushIssue(issues, starts, node.from, `${got} is not assignable to ${expected}`);
+        for (const { ann, init } of declarators(node.node, text)) {
+          if (!ann || !init || init.name === "BinaryExpression") continue;
+          const expected = checkableType(ann);
+          const got = literalKind(init, text);
+          if (expected && got && expected !== got) {
+            pushIssue(issues, starts, init.from, `${got} is not assignable to ${expected}`);
+          }
         }
         return;
       }

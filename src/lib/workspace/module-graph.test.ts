@@ -443,3 +443,65 @@ test("an export list with inline type names still lists every name", () => {
   };
   assert.deepEqual(importIssues("src/x.ts", files), []);
 });
+
+test("tsconfig `paths` are relative to its `baseUrl`, and `x.js` is the source `x.ts`", () => {
+  // From a real pull request (codemie-ai/codemie-code#915): `"baseUrl": "./src"`, `"@/*": ["./*"]`.
+  const files = {
+    "tsconfig.json": '{"compilerOptions":{"baseUrl":"./src","paths":{"@/*":["./*"]}}}',
+    "src/utils/header-value.ts": "export const headerValue = 1;",
+  };
+  assert.deepEqual(readAliases(files), [["@/", "src/"]]);
+  assert.deepEqual(resolveSpecifier("src/a/b.ts", "@/utils/header-value.js", files), {
+    kind: "file",
+    path: "src/utils/header-value.ts",
+  });
+  assert.deepEqual(resolveSpecifier("src/a/b.ts", "@/utils/gone.js", files), { kind: "missing" });
+});
+
+test("a package's own tsconfig resolves its imports, `baseUrl` folders before packages", () => {
+  // From a real pull request (Official-MoonDao/MoonDAO#1913): `ui/tsconfig.json` has `"baseUrl": "./"`,
+  // so `const/abis/X.json` is `ui/const/abis/X.json`, not an npm package named "const".
+  const files = {
+    "package.json": "{}",
+    "ui/package.json": '{"name":"moondao-app","dependencies":{"react":"18"}}',
+    "ui/tsconfig.json": '{\n  // comments\n  "compilerOptions": { "baseUrl": "./", "paths": { "@/lib/*": ["lib/*"] } },\n}',
+    "ui/const/abis/ConditionalTokens.json": "[]",
+    "ui/lib/picks.ts": 'import ABI from "const/abis/ConditionalTokens.json";\nimport { useState } from "react";\nimport { x } from "@/lib/x";\nexport const a = [ABI, useState, x];\n',
+    "ui/lib/x.ts": "export const x = 1;",
+  };
+  assert.deepEqual(readAliases(files, "ui/lib/picks.ts"), [["@/lib/", "ui/lib/"]]);
+  assert.deepEqual(resolveSpecifier("ui/lib/picks.ts", "const/abis/ConditionalTokens.json", files), {
+    kind: "file",
+    path: "ui/const/abis/ConditionalTokens.json",
+  });
+  assert.deepEqual(resolveSpecifier("ui/lib/picks.ts", "react", files), { kind: "external", pkg: "react" });
+  assert.deepEqual(importIssues("ui/lib/picks.ts", files), []);
+  // Without the folder, it is a package the project does not declare, as before.
+  const gone = Object.fromEntries(Object.entries(files).filter(([path]) => !path.startsWith("ui/const/")));
+  assert.match(importIssues("ui/lib/picks.ts", gone).join("\n"), /"const" .* not in package\.json/);
+});
+
+test("a name declared in the `.d.ts` beside a JavaScript module is exported", () => {
+  // From a real pull request (jefersonreinert/bklit-ui#132): Convex's `_generated/server.js` and `server.d.ts`.
+  const files = {
+    "convex/_generated/server.js": "export const mutation = mutationGeneric;\nexport const query = queryGeneric;\n",
+    "convex/_generated/server.d.ts": "export declare const mutation: MutationBuilder;\nexport type MutationCtx = GenericMutationCtx<DataModel>;\n",
+    "convex/media.ts": 'import { mutation, type MutationCtx } from "./_generated/server";\nexport const m = (ctx: MutationCtx) => mutation;\n',
+  };
+  assert.deepEqual(importIssues("convex/media.ts", files), []);
+  const bare = Object.fromEntries(Object.entries(files).filter(([path]) => !path.endsWith(".d.ts")));
+  assert.match(importIssues("convex/media.ts", bare).join("\n"), /does not export it/);
+});
+
+test("a missing file in a build's output folder is not called missing", () => {
+  // From a real pull request (kerbaras/deckpress#192): `../dist/*.js` is built in CI and gitignored.
+  const files = { "src/print.ts": 'import init from "../dist/deckpress_core_wasm.js";\nexport const go = init;\n' };
+  assert.deepEqual(resolveSpecifier("src/print.ts", "../dist/deckpress_core_wasm.js", files), { kind: "unknown" });
+  assert.deepEqual(importIssues("src/print.ts", files), []);
+  assert.deepEqual(resolveSpecifier("src/print.ts", "./nowhere.js", files), { kind: "missing" });
+  // JesusFilm/core#10664: Prisma writes `__generated__/client/` at build time.
+  assert.deepEqual(
+    resolveSpecifier("libs/media/src/__generated__/pothos-types.ts", "./client/client.js", {}),
+    { kind: "unknown" },
+  );
+});

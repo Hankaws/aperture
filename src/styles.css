@@ -198,7 +198,8 @@ html[data-theme="light"] {
   --syn-match: #cfe2fb;
   --syn-keyword: #0550ae;
   --syn-string: #116329;
-  --syn-fn: #8250df;
+  /* Was #8250df: 4.25:1 on the deleted-line tint. This clears 4.5:1 on every editor surface, selection included. */
+  --syn-fn: #6639ba;
   --syn-type: #953800;
   --syn-comment: #656d76;
   --syn-number: #0a6b72;

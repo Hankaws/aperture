@@ -15,6 +15,11 @@ export type Verdict = {
   alreadyFailing: number;
   running: number;
   skipped: number;
+  /**
+   * Every check that runs has finished. A red row already holds Apply back ("held"), but
+   * until the rest are in the headline does not say how many fail: that count would change.
+   */
+  settled: boolean;
   headline: string;
   /** The line under the headline: amber and skipped checks, or why Apply is waiting. */
   detail: string;
@@ -38,7 +43,10 @@ export function checkVerdict(rows: Array<{ status: CheckStatus }>): Verdict {
   // An amber check was failing before this change, so the headline never counts it
   // against the change: "5 of 6 passed" read as if the change broke the sixth.
   let headline: string;
-  if (state === "held") headline = `Held back: this change fails ${failed} of ${total} ${noun}`;
+  const settled = running === 0;
+  if (state === "held" && !settled)
+    headline = `Checking: ${total - running} of ${total} done, ${failed} failing so far`;
+  else if (state === "held") headline = `Held back: this change fails ${failed} of ${total} ${noun}`;
   else if (state === "checking") headline = `Checking: ${total - running} of ${total} done`;
   else if (total === 0) headline = "Nothing to check here";
   else if (alreadyFailing > 0) headline = `Safe to apply: nothing new fails (${passed} passed, ${alreadyFailing} already failing)`;
@@ -48,10 +56,11 @@ export function checkVerdict(rows: Array<{ status: CheckStatus }>): Verdict {
   const notes: string[] = [];
   if (state === "held") notes.push("Apply is held until it is fixed.");
   if (state === "checking") notes.push("Apply unlocks when every check is in.");
+  if (state === "held" && !settled) notes.push(`${running} still checking`);
   if (alreadyFailing > 0) notes.push(`${alreadyFailing} already failing before this change, not caused by it`);
   if (skipped > 0) notes.push(`${skipped} could not run`);
 
-  return { state, total, passed, failed, alreadyFailing, running, skipped, headline, detail: notes.join(" · ") };
+  return { state, total, passed, failed, alreadyFailing, running, skipped, settled, headline, detail: notes.join(" · ") };
 }
 
 /** The one Apply button's words: how many files it writes, or which copy it keeps. */

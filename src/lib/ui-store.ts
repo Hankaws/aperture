@@ -29,6 +29,8 @@ export type CheckHint = {
   verificationId?: string;
   /** The verdict's headline, so Composer can say the same sentence as the strip. */
   headline?: string;
+  /** Every check is in. A red row can arrive first; Composer waits for this before it repeats the verdict. */
+  settled?: boolean;
 };
 
 const CREW_KEY = "aperture-crew";
@@ -333,7 +335,8 @@ export const useIdeUi = create<IdeUiState>((set) => ({
         s.checkHint?.detail === hint?.detail &&
         s.checkHint?.prompt === hint?.prompt &&
         s.checkHint?.verificationId === hint?.verificationId &&
-        s.checkHint?.headline === hint?.headline
+        s.checkHint?.headline === hint?.headline &&
+        s.checkHint?.settled === hint?.settled
       )
         return s;
       return { checkHint: hint };

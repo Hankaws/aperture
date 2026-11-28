@@ -13,6 +13,11 @@ import { downloadDiffReport, filesFromEdits } from "@/lib/workspace/diff-report"
 import { lineOfIssue } from "@/lib/editor/marks";
 import { useWorkspace } from "@/lib/workspace/store";
 import { applyAnywayQuestion, applyBlockReason, applyLabel, type Verdict } from "@/lib/workspace/verdict";
+
+/** How the headline looks: a red row that came in before the rest still reads as checking, not as a verdict. */
+function verdictLook(verdict: Verdict): Verdict["state"] {
+  return verdict.state === "held" && !verdict.settled ? "checking" : verdict.state;
+}
 import { ApplyDockContext } from "./apply-dock";
 import { CheckResults, type HeldActions } from "./check-results";
 
@@ -36,19 +41,20 @@ function ApplyDock({
   /** Held: the one thing to do is send it back, so that replaces a greyed-out Apply. */
   onSendBack?: () => void;
 }) {
-  const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
+  const look = verdictLook(verdict);
+  const Icon = look === "safe" ? Check : look === "held" ? X : LoaderCircle;
   return (
     <div className="flex items-center gap-2 border-t border-border bg-elevated px-3 py-2" aria-label="Verdict and Apply" role="group">
       <div className="min-w-0 flex-1">
         <p
           className={cn(
             "flex items-start gap-1.5 text-[13px] leading-tight font-medium",
-            verdict.state === "safe" && "text-ok",
-            verdict.state === "held" && "text-danger",
-            verdict.state === "checking" && "text-fg",
+            look === "safe" && "text-ok",
+            look === "held" && "text-danger",
+            look === "checking" && "text-fg",
           )}
         >
-          <Icon className={cn("mt-px size-3.5 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
+          <Icon className={cn("mt-px size-3.5 shrink-0", look === "checking" && "animate-spin")} aria-hidden />
           <span className="line-clamp-2">{verdict.headline}</span>
         </p>
         {blocked && !onSendBack && <p className="truncate text-[11px] text-muted">{blocked}</p>}
@@ -100,7 +106,8 @@ function VerdictBar({
   next: HeldActions;
 }) {
   const blocked = applyBlockReason({ agentRunning: running, checks: checkState, notes: noteCount });
-  const Icon = verdict.state === "safe" ? Check : verdict.state === "held" ? X : LoaderCircle;
+  const look = verdictLook(verdict);
+  const Icon = look === "safe" ? Check : look === "held" ? X : LoaderCircle;
   const dock = useContext(ApplyDockContext);
   const label = applyLabel(fileCount, copyCount);
   // Held, with a way forward: Send back leads, Make it a check is a real button beside it, and
@@ -123,12 +130,12 @@ function VerdictBar({
             // On a phone the bar under the code shows the headline; this copy stays for screen readers.
             "flex items-center gap-2 text-[17px] leading-snug font-semibold tracking-tight",
             dock && "max-md:sr-only",
-            verdict.state === "safe" && "text-ok",
-            verdict.state === "held" && "text-danger",
-            verdict.state === "checking" && "text-fg",
+            look === "safe" && "text-ok",
+            look === "held" && "text-danger",
+            look === "checking" && "text-fg",
           )}
         >
-          <Icon className={cn("size-5 shrink-0", verdict.state === "checking" && "animate-spin")} aria-hidden />
+          <Icon className={cn("size-5 shrink-0", look === "checking" && "animate-spin")} aria-hidden />
           {verdict.headline}
         </p>
         <p className="mt-0.5 text-[13px] leading-snug text-muted">{sub.join(" · ")}</p>
@@ -161,6 +168,20 @@ function VerdictBar({
           >
             Apply anyway…
           </Button>
+          {/* Until the last check is in, hold Make it a check's place so the row does not shift when it arrives. */}
+          {!next.makeCheck && !verdict.settled && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-3 pointer-coarse:h-11"
+              disabled
+              data-make-check="pending"
+              title="Waits for the last check"
+            >
+              <Sparkles className="size-3.5 text-accent" />
+              Make it a check
+            </Button>
+          )}
           {next.makeCheck && (
             <Button
               size="sm"

@@ -189,6 +189,7 @@ export function CommandPalette() {
               </Command.Item>
             </Command.Group>
           )}
+          {paths.length > 0 && (
           <Command.Group heading="Files" className="px-1 pb-2 text-[11px] text-subtle">
             {paths.slice(0, 12).map((path) => (
               <Command.Item
@@ -206,6 +207,7 @@ export function CommandPalette() {
               </Command.Item>
             ))}
           </Command.Group>
+          )}
           <Command.Group heading="Workspace" className="px-1 text-[11px] text-subtle">
             <Command.Item
               onSelect={() => {

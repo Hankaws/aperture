@@ -255,6 +255,74 @@ try {
     check(errors.length === 0, `404 console is clean${errors.length ? `: ${errors[0]}` : ""}`);
     await page.close();
   }
+
+  // 7. The palette marks one row, a red row that comes in early does not read as the verdict, and a deleted line keeps its tint under the cursor.
+  {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = watch(page);
+    await page.goto(`${base}/app`, { waitUntil: "networkidle" });
+    await page.keyboard.press("Control+p");
+    await page.locator(".cmdk-item").first().waitFor({ timeout: 10_000 });
+    const marked = await page.locator('.cmdk-item[data-selected="true"]').count();
+    const painted = await page.locator(".cmdk-item").evaluateAll((items) => {
+      const backgrounds = items.map((item) => getComputedStyle(item).backgroundColor);
+      return backgrounds.filter((bg) => bg !== backgrounds[backgrounds.length - 1]).length;
+    });
+    check(marked === 1 && painted === 1, `the palette highlights the one selected row, not all of them (${marked} selected, ${painted} stand out)`);
+    await page.keyboard.type(">");
+    check((await page.locator("[cmdk-group-heading]", { hasText: /^Files$/ }).count()) === 0, "no empty Files heading when no file matches");
+    await page.keyboard.press("Escape");
+
+    await page.getByText("Make listTasks return a number", { exact: true }).first().click();
+    const build = page.locator("button:visible", { hasText: /^Build it$/ });
+    await build.first().waitFor({ timeout: 60_000 });
+    await build.last().click();
+    const early = [];
+    const until = Date.now() + 90_000;
+    while (Date.now() < until) {
+      const statuses = await page.locator("[data-check]").evaluateAll((rows) => rows.map((row) => row.dataset.status));
+      if (statuses.length && !statuses.includes("running") && statuses.includes("fail")) break;
+      if (statuses.includes("fail") && statuses.includes("running")) {
+        const echoed = await page.locator('[data-staged-verdict="held"]').count();
+        early.push(`${await page.locator("[data-verdict-bar] [role=status]").innerText()}${echoed ? " (Composer already says held)" : ""}`);
+      }
+      await page.waitForTimeout(200);
+    }
+    check(early.every((text) => !/Held back|fails \d+ of|already says held/.test(text)), `while a check still runs, neither the strip nor Composer counts failures yet (${early[0] ?? "no early red seen"})`);
+    check(
+      await waitForText(page, /Held back: this change fails \d+ of \d+ checks/, 30_000),
+      "once every check is in, the red change is held back with its count",
+    );
+    // The cursor lands on the first changed line, so in this demo the deleted line is the active one.
+    const tint = await page.evaluate(() => {
+      const active = document.querySelector(".cm-activeLine.cm-aperture-del");
+      if (active) return getComputedStyle(active).backgroundImage.includes("gradient") ? "tinted" : "plain (active line paints over it)";
+      const line = document.querySelector(".cm-aperture-del");
+      if (!line) return "none";
+      return getComputedStyle(line).backgroundColor !== "rgba(0, 0, 0, 0)" ? "tinted" : "plain";
+    });
+    check(tint === "tinted", `a deleted line keeps its red tint, also as the cursor line (${tint})`);
+    check(errors.length === 0, `red demo console is clean${errors.length ? `: ${errors[0]}` : ""}`);
+    await page.close();
+  }
+
+  // 8. The check page leads with a real catch, and the landing page takes a link straight to it.
+  {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await page.goto(`${base}/check`, { waitUntil: "networkidle" });
+    const first = page.locator("[data-example]").first();
+    check(
+      (await first.getAttribute("data-example")) === "red" && /Copilot · 1 red/.test(await first.innerText()),
+      `the first example on /check is a labelled red catch (${(await first.innerText()).replace(/\s+/g, " ")})`,
+    );
+    check((await page.locator("[data-check-announce]").count()) === 1, "the check page has one live region for its verdict, there before any result");
+    await page.goto(`${base}/`, { waitUntil: "networkidle" });
+    await page.getByLabel("Pull request link to check").fill("https://github.com/acme/shop/pull/42/files");
+    await page.locator("[data-hero-check]").getByRole("button", { name: "Check it" }).click();
+    await page.waitForURL(/\/check\?pr=/, { timeout: 10_000 }).catch(() => {});
+    check(new URL(page.url()).searchParams.get("pr") === "acme/shop/42", `the landing paste box opens the check for that link (${page.url()})`);
+    await page.close();
+  }
 } finally {
   await browser.close();
 }

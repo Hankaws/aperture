@@ -62,6 +62,11 @@ const theme = EditorView.theme(
       padding: "0 8px 0 6px",
     },
     ".cm-activeLine": { backgroundColor: SYN.activeLine },
+    // The cursor lands on the first changed line, so a deleted line is often the active
+    // one: keep its red tint on top of the active-line colour instead of losing it.
+    ".cm-activeLine.cm-aperture-del": {
+      backgroundImage: "linear-gradient(var(--color-diff-del), var(--color-diff-del))",
+    },
     ".cm-activeLineGutter": { backgroundColor: SYN.activeLine, color: ED.activeLineGutter },
     ".cm-cursor": { borderLeftColor: SYN.caret, borderLeftWidth: "2px" },
     ".cm-selectionBackground": { backgroundColor: ED.selectionInactive },

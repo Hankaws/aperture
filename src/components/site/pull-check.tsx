@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { CopyBlock } from "@/components/site/copy-block";
 import { checkPublicPull, type PublicCheckResult } from "@/lib/github/public-pull";
+import {
+  AGENT_CHECK_WORKFLOW_PATH,
+  agentCheckWorkflow,
+  installUrl,
+  type Install,
+} from "@/lib/github/agent-check-workflow";
 import { headline, shareMarkdown, verdictSentence } from "@/lib/github/check-summary";
 import { parsePullLink, pullLinkFromPath, pullLinkPath, pullUrl } from "@/lib/github/pull-link";
 import type { CheckRow } from "@/lib/workspace/checks";
@@ -289,7 +295,8 @@ function Result({ result }: { result: Ok }) {
         Agent Check runs them in the repository&apos;s own CI.
       </p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-8 grid items-start gap-4 sm:grid-cols-2">
+        <AddAgentCheck pull={pull} setup={result.setup} />
         <div className="rounded-2xl border border-border bg-surface p-4">
           <p className="flex items-center gap-2 text-sm font-medium">
             <Link2 className="size-4 text-subtle" /> Share this check
@@ -306,24 +313,73 @@ function Result({ result }: { result: Ok }) {
             Post it on X
           </a>
         </div>
-        <div className="rounded-2xl border border-border bg-surface p-4">
-          <p className="text-sm font-medium">Check every pull request, not just this one</p>
-          <p className="mt-1 text-sm text-muted">
-            Agent Check runs these rows and Types and the tests on each pull request, with notes on
-            the lines that fail.
-          </p>
-          <Link
-            to="/bot"
-            search={{ tab: "check" }}
-            className={cn(buttonVariants({ size: "sm" }), "mt-3")}
-          >
-            Add Agent Check →
-          </Link>
-        </div>
       </div>
       <CopyBlock title="A comment for the pull request" className="mt-4">
         {shareMarkdown(rows, shareUrl, setupUrl)}
       </CopyBlock>
     </section>
+  );
+}
+
+/** How the workflow installs the repository's packages, in a few words. */
+function installNote(install: Install): string {
+  if (!install) return "There is no package.json at the root, so it runs without the tests.";
+  const how =
+    install.manager === "npm"
+      ? install.locked
+        ? "npm ci"
+        : "npm install, as there is no lockfile"
+      : install.manager;
+  return `It installs with ${how}, as this repository does.`;
+}
+
+/** Turns one check into every check: GitHub's new-file page in that repository, the workflow written for it. */
+function AddAgentCheck({ pull, setup }: { pull: Ok["pull"]; setup: Ok["setup"] }) {
+  const { install } = setup;
+  const workflow = agentCheckWorkflow(install);
+  const url = installUrl(pull, setup.branch, workflow);
+  return (
+    <div className="min-w-0 rounded-2xl border border-accent/40 bg-surface p-4" data-add-agent-check>
+      <p className="text-sm font-medium text-pretty">
+        Check every pull request in {pull.owner}/{pull.repo}
+      </p>
+      <p className="mt-1 text-sm text-pretty text-muted">
+        Agent Check runs these rows, Types and the tests in the repository&apos;s own CI, and keeps
+        one comment like the one below on each pull request. {installNote(install)}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ size: "sm" }))}
+            data-install-link
+          >
+            Add it to {pull.repo}
+            <ExternalLink className="size-3.5" />
+          </a>
+        ) : null}
+        <Link
+          to="/bot"
+          search={{ tab: "check" }}
+          className={cn(buttonVariants({ variant: url ? "ghost" : "default", size: "sm" }))}
+        >
+          {url ? "How it works" : "Add Agent Check →"}
+        </Link>
+      </div>
+      {url && (
+        <p className="mt-2 text-xs text-pretty text-subtle">
+          Opens GitHub with the workflow filled in: you read it, then commit it or open a pull
+          request. Not your repository? GitHub offers a fork, or send the comment below.
+        </p>
+      )}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-subtle hover:text-fg">The workflow</summary>
+        <CopyBlock title={AGENT_CHECK_WORKFLOW_PATH} className="mt-2" wrap={false}>
+          {workflow}
+        </CopyBlock>
+      </details>
+    </div>
   );
 }

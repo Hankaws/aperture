@@ -11,10 +11,13 @@ export function CopyBlock({
   title,
   children,
   className,
+  wrap = true,
 }: {
   title: string;
   children: string;
   className?: string;
+  /** False keeps each line whole and scrolls sideways: for YAML, where a wrapped line reads as a new key. */
+  wrap?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -42,7 +45,12 @@ export function CopyBlock({
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="mt-1 rounded-lg border border-border bg-surface p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <pre
+        className={cn(
+          "mt-1 rounded-lg border border-border bg-surface p-3 font-mono text-xs leading-relaxed",
+          wrap ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "overflow-x-auto whitespace-pre",
+        )}
+      >
         {children}
       </pre>
     </div>

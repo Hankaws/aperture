@@ -12,6 +12,7 @@
 import { getRequest } from "@tanstack/react-start/server";
 import type { CheckRow } from "@/lib/workspace/checks";
 import { agentOf } from "@/lib/bot/scorecard";
+import { installOf, LOCKFILES, type Install } from "./agent-check-workflow";
 import { verdictOf, type Verdict } from "./check-summary";
 import { assemble, firstReads, importProbes, PUBLIC_LIMITS, publicRows } from "./public-check";
 import { parseDiff } from "./pull-diff";
@@ -38,10 +39,14 @@ export type PublicPull = {
   changedFiles: number;
 };
 
+/** What adding Agent Check to the repository takes: how it installs, and the branch to commit to. */
+export type PublicSetup = { install: Install; branch: string | null };
+
 export type PublicCheckResult =
   | {
       ok: true;
       pull: PublicPull;
+      setup: PublicSetup;
       rows: CheckRow[];
       verdict: Verdict;
       notChecked: string[];
@@ -134,6 +139,13 @@ async function lookFor(link: PullLink, path: string): Promise<string | null> {
   return "";
 }
 
+/** Whether a file is at the pull request's head, without reading it (a lockfile can be megabytes). */
+async function isThere(link: PullLink, path: string): Promise<boolean> {
+  const res = await get(rawUrl(link, path));
+  await res?.body?.cancel();
+  return res?.status === 200;
+}
+
 /** Each path's text at the pull request's head; a path that is not there, or not text, is left out. */
 async function readAll(link: PullLink, paths: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
@@ -206,6 +218,14 @@ export async function readAndCheck(
   const assembled = assemble(diff, await readAll(link, firstReads(diff)));
   const probes = importProbes(assembled);
   const looked = probes.slice(0, PUBLIC_LIMITS.importProbes);
+  // The root package.json as the pull request leaves it; its lockfile says how to install.
+  const packageJson = assembled.head["package.json"] ?? assembled.known["package.json"];
+  const lockfiles =
+    packageJson === undefined
+      ? Promise.resolve([])
+      : Promise.all(
+          LOCKFILES.map(([path]) => isThere(link, path).then((yes) => (yes ? [path] : []))),
+        );
   const found = await Promise.all(looked.map((probe) => firstThere(link, probe.candidates)));
   for (const hit of found) if (hit) assembled.known[hit[0]] = hit[1];
   // A JavaScript module's types may be declared beside it (`server.js`, `server.d.ts`): read those too.
@@ -244,6 +264,10 @@ export async function readAndCheck(
       agent: facts ? agentOf({ author: facts.author, body: facts.body }) : null,
       state: facts?.state ?? null,
       changedFiles: diff.length,
+    },
+    setup: {
+      install: installOf(packageJson, (await lockfiles).flat()),
+      branch: facts?.defaultBranch ?? null,
     },
     rows,
     verdict: verdictOf(rows),

@@ -7,6 +7,14 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Added
+
+- **Add Agent Check to a repository from its check.** Every result on `/check` now offers **Add it to** the repository: it opens GitHub's new-file page there on the default branch, with `.github/workflows/aperture-agent-check.yml` filled in, and you read it and commit it or open a pull request (GitHub offers a fork to someone who cannot write to it). The workflow is written for that repository: it installs with `npm ci`, `npm install` when there is no lockfile, pnpm, yarn or bun, as the root `package.json` and lockfile say, and with no `package.json` at the root it runs without the tests. The workflow is shown beside the button to read first, scrolling sideways on a phone instead of wrapping lines into what looks like new keys ([#282](https://github.com/Hankaws/aperture/pull/282)).
+
+### Fixed
+
+- **The Agent Check workflow uses the newest release.** The Bot page, the landing page and the action's README told people to write `hankaws/aperture-agent-check@v1.2`, nine releases old: it ignored `comment: true`, so no badge or comment, and it ran the checks from before `/check` stopped calling valid TypeScript broken. They now say `@v1`, which the daily release check keeps on the newest release ([#282](https://github.com/Hankaws/aperture/pull/282)).
+
 ## 0.36.0 - 2026-11-28
 
 ### Changed

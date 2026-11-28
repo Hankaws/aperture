@@ -8,7 +8,8 @@
  */
 
 /** What a workflow writes to use the action. */
-export const ACTION_USES = "hankaws/aperture-agent-check@v1.2";
+/** `@v1` follows the newest release: `npm run release:verify` fails the day it does not. */
+export const ACTION_USES = "hankaws/aperture-agent-check@v1";
 export const ACTION_REPO = "https://github.com/Hankaws/aperture-agent-check";
 
 export const RUN_EXAMPLE = {

@@ -6,33 +6,10 @@ import { CopyBlock } from "@/components/site/copy-block";
 import { summary as bench } from "@/lib/bench/results.json";
 import { AGENT_STOPS } from "@/lib/mcp-server/example";
 import { cn } from "@/lib/utils";
-import {
-  ACTION_REPO,
-  ACTION_USES,
-  RUN_EXAMPLE,
-} from "../../../packages/agent-check/src/run-example.ts";
+import { agentCheckWorkflow } from "@/lib/github/agent-check-workflow";
+import { ACTION_REPO, RUN_EXAMPLE } from "../../../packages/agent-check/src/run-example.ts";
 
-const WORKFLOW = `# .github/workflows/aperture-agent-check.yml
-name: Aperture Agent Check
-on: pull_request
-
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write # for the one comment with the result
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # it compares against the pull request's base
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci # for the tests, and your packages' real types
-      - uses: ${ACTION_USES}
-        with:
-          comment: true # one comment on the pull request, updated on each push`;
+const WORKFLOW = agentCheckWorkflow();
 
 const BADGE =
   "[![Checked by Aperture Agent Check](https://img.shields.io/badge/checked%20by-Aperture%20Agent%20Check-7c3aed)](https://aperturesais.grok.me/bot?tab=check)";

@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.36.0 - 2026-11-28
+
 ### Changed
 
 - **Check a PR says its verdict in a sentence, and the editor waits for the last check.** `/check` shows "Held back: this pull request fails 1 of 2 checks" or "Nothing fails: all 3 checks passed", the editor's wording, and announces it to screen readers; a shared `?pr=` link keeps its space while it loads, so the page no longer jumps (layout shift 0.18 to 0.01 on a phone), and its smallest text is 12px. "Try one" leads with a red catch labelled with its agent (Copilot · 1 red, Tagline#43), then one clear and one to look at, and the landing page takes a pasted link under its headline. In the editor, the verdict says "Checking: 5 of 6 done, 1 failing so far" until every check is in, instead of "Held back: fails 1 of 6" that changed under you, and Composer waits too; "Make it a check" keeps its place meanwhile. The command palette highlights only the selected row (it painted every row), hover shows, and typing `>` no longer leaves an empty Files heading. A deleted line keeps its red tint as the cursor line, and the light theme's "look" colour clears 4.5:1 on its tint (was 4.39:1) ([#278](https://github.com/Hankaws/aperture/pull/278)).

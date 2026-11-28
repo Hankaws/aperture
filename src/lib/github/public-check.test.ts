@@ -397,7 +397,7 @@ test("the pull request's page gives its title, author, state and description", (
   const html = [
     "<html><head><title>Fix the cart &amp; the &quot;total&quot; by copilot-swe-agent · Pull Request #42 · Acme/Shop · GitHub</title>",
     '<meta property="og:description" content="Fixes #12. 🤖 Generated with [Claude Code](https://claude.com/claude-code)">',
-    '</head><body><script>{"number":42,"relayId":"PR_x","state":"MERGED","title":"Fix the cart"}</script></body></html>',
+    '</head><body><script>{"number":42,"relayId":"PR_x","state":"MERGED","title":"Fix the cart","baseBranch":"release"},"repository":{"defaultBranch":"trunk","name":"Shop"}</script></body></html>',
   ].join("\n");
   assert.deepEqual(pullPageFacts(html, 42), {
     title: 'Fix the cart & the "total"',
@@ -406,7 +406,20 @@ test("the pull request's page gives its title, author, state and description", (
     repo: "Shop",
     state: "merged",
     body: "Fixes #12. 🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+    defaultBranch: "trunk",
   });
+  // With no repository data the pull request's base is the branch; with neither, none is known.
+  assert.equal(
+    pullPageFacts(html.replace(/,"repository":\{[^}]*\}/, ""), 42)?.defaultBranch,
+    "release",
+  );
+  assert.equal(
+    pullPageFacts(
+      html.replace(/,"repository":\{[^}]*\}/, "").replace(',"baseBranch":"release"', ""),
+      42,
+    )?.defaultBranch,
+    null,
+  );
   // Another number's page, or a page with no such title, says nothing.
   assert.equal(pullPageFacts(html, 43), null);
   assert.equal(pullPageFacts("<title>Page not found · GitHub</title>", 42), null);

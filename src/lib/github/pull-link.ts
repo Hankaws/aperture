@@ -51,6 +51,8 @@ export type PullFacts = {
   state: "open" | "closed" | "merged" | null;
   /** The description: in full from the page's "Copy Markdown", else its opening from the summary. */
   body: string;
+  /** The repository's default branch, from the page's data; the pull request's base when it says none. */
+  defaultBranch: string | null;
 };
 
 function decode(text: string): string {
@@ -90,6 +92,9 @@ export function pullPageFacts(html: string, number: number): PullFacts | null {
       : summary !== undefined
         ? decode(decode(summary))
         : "";
+  const branch =
+    /"repository":\{[^{}]*?"defaultBranch":"([^"\\]{1,200})"/.exec(html)?.[1] ??
+    /"baseBranch":"([^"\\]{1,200})"/.exec(html)?.[1];
   return {
     title: parts[1]!,
     author: parts[2]!,
@@ -102,5 +107,6 @@ export function pullPageFacts(html: string, number: number): PullFacts | null {
         : (state.toLowerCase() as "open" | "closed" | "merged"),
     // The summary is escaped twice: once as markdown text, once as an attribute.
     body,
+    defaultBranch: branch ?? null,
   };
 }

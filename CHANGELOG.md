@@ -7,6 +7,10 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+### Changed
+
+- **Aperture's own pull requests carry the Checked by Aperture comment.** Its CI now runs Agent Check the way users run it, through the action's own `action.yml` with `comment: true` and `pull-requests: write`, so the inputs, the default token and the comment are tried on every pull request, and anyone browsing the repository sees what it looks like ([#280](https://github.com/Hankaws/aperture/pull/280)).
+
 ## 0.35.0 - 2026-11-27
 
 ### Added

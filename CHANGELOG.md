@@ -7,6 +7,8 @@ release notes are every line from there down to the previous version.
 
 ## Unreleased
 
+## 0.37.0 - 2026-11-28
+
 ### Added
 
 - **Add Agent Check to a repository from its check.** Every result on `/check` now offers **Add it to** the repository: it opens GitHub's new-file page there on the default branch, with `.github/workflows/aperture-agent-check.yml` filled in, and you read it and commit it or open a pull request (GitHub offers a fork to someone who cannot write to it). The workflow is written for that repository: it installs with `npm ci`, `npm install` when there is no lockfile, pnpm, yarn or bun, as the root `package.json` and lockfile say, and with no `package.json` at the root it runs without the tests. The workflow is shown beside the button to read first, scrolling sideways on a phone instead of wrapping lines into what looks like new keys ([#282](https://github.com/Hankaws/aperture/pull/282)).
